@@ -107,6 +107,25 @@ double MeanField::get_band_gap()
     return gap;
 }
 
+double MeanField::get_total_weight() const
+{
+    double total_electrons = 0.0;
+
+    for (int is = 0; is < this->get_n_spins(); ++is)
+    {
+        for (int ik = 0; ik < this->get_n_kpoints(); ++ik)
+        {
+            for (int ib = 0; ib < this->get_n_bands(); ++ib)
+            {
+                total_electrons += this->get_weight()[is](ik, ib);
+            }
+        }
+    }
+
+    return total_electrons;
+}
+
+
 ComplexMatrix MeanField::get_dmat_cplx(int ispin, int ikpt) const
 {
     assert(ispin < this->n_spins);

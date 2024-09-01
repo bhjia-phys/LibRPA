@@ -15,12 +15,14 @@ list(APPEND exe_sources
   task_exx.cpp
   task_gw.cpp
   task_gw_band.cpp
+  task_qsgw.cpp
   task_screened_coulomb.cpp
   )
 
 target_include_directories(rpa_exe
   PUBLIC
     ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/qsgw
   )
 
 target_sources(rpa_exe PRIVATE ${exe_sources})
@@ -33,6 +35,6 @@ if(USE_LIBRI)
     )
 endif()
 
-target_link_libraries(rpa_exe PRIVATE rpa_lib ${math_libs} ${parallel_libs})
+target_link_libraries(rpa_exe PRIVATE rpa_lib qsgw_lib ${math_libs} ${parallel_libs})
 
 install(TARGETS rpa_exe DESTINATION ${CMAKE_INSTALL_BINDIR})

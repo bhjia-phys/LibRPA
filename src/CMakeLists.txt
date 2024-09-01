@@ -19,7 +19,7 @@ set_target_properties(rpa_lib PROPERTIES
 )
 
 configure_file(envs_dir.cpp.in envs_dir.cpp)
-list(APPEND lib_sources
+list(APPEND src_sources
         # aperiodic_chi0.cpp
         analycont.cpp
         app_rpa.cpp
@@ -57,13 +57,13 @@ list(APPEND lib_sources
         )
 
 if(USE_GREENX_API)
-  list(APPEND lib_sources get_minimax_gx.cpp gx_minimax_wrp.f90)
+  list(APPEND src_sources get_minimax_gx.cpp gx_minimax_wrp.f90)
   target_link_libraries(rpa_lib PRIVATE GXCommon LibGXMiniMax)
   target_include_directories(rpa_lib
     PRIVATE ${PROJECT_BINARY_DIR}/thirdparty/greenX-6ff8a00/modules
     )
 else()
-  list(APPEND lib_sources get_minimax_local.cpp)
+  list(APPEND src_sources get_minimax_local.cpp)
 endif()
 
 target_include_directories(rpa_lib
@@ -82,7 +82,7 @@ if(USE_LIBRI)
 endif()
 
 # source must be PRIVATE to avoid recompilation when linking driver to this library
-target_sources(rpa_lib PRIVATE ${lib_sources})
+target_sources(rpa_lib PRIVATE ${src_sources})
 target_link_libraries(rpa_lib PUBLIC ${math_libs} ${parallel_libs})
 
 install(TARGETS rpa_lib

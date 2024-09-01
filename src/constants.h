@@ -9,4 +9,5 @@ extern const double HA2EV;
 extern const double RY2EV;
 extern const double ANG2BOHR;
 extern const double BOHR2ANG;
+extern const double K_B;
 #endif

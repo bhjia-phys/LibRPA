@@ -4,7 +4,6 @@
 #include <map>              // 用于std::map容器
 #include <string>           // 用于std::string类
 #include <regex>            // 用于正则表达式操作
-#include <Eigen/Dense>      // 用于Eigen库的矩阵和向量操作
 
 // 自定义头文件
 #include "task_qsgw.h"              // 任务调度相关
@@ -22,17 +21,13 @@
 #include "coulmat.h"                // 库仑矩阵相关
 #include "profiler.h"               // 性能分析工具
 #include "ri.h"                     // RI相关
+#include "matrix.h"                     // RI相关
 #include "read_data.h"              // 数据读取相关
-#include "convert_csc.h"            // CSC文件转换相关
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
+#include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
-#include "dielecmodel.h"            // 介电模型相关
-#include "interpolate.h"            // 插值方法相关
-#include "utils.h"                  // 包含 process_csc 和其他实用工具函数
-
-namespace fs = std::filesystem;
-using namespace Eigen;
-using namespace std;
+#include "driver_utils.h"                  // 包含 process_csc 和其他实用工具函数
+#include "read_data.h"
 
 void task_qsgw()
 {
@@ -58,35 +53,13 @@ void task_qsgw()
                TFGrids::get_grid_type(Params::tfgrids_type), true);
     Profiler::stop("chi0_build");
 
-    if (Params::debug)
-    { 
-        char fn[80];
-        for (const auto &chi0q: chi0.get_chi0_q())
-        {
-            const int ifreq = chi0.tfg.get_freq_index(chi0q.first);
-            for (const auto &q_IJchi0: chi0q.second)
-            {
-                const int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q_IJchi0.first));
-                for (const auto &I_Jchi0: q_IJchi0.second)
-                {
-                    const auto &I = I_Jchi0.first;
-                    for (const auto &J_chi0: I_Jchi0.second)
-                    {
-                        const auto &J = J_chi0.first;
-                        sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%zu_J_%zu_id_%d.mtx", ifreq, iq, I, J, mpi_comm_global_h.myid);
-                        print_complex_matrix_mm(J_chi0.second, Params::output_dir + "/" + fn, 1e-15);
-                    }
-                }
-            }
-        }
-    }
 
     // 初始化并读取当前文件夹中的所有 .csc 文件
     Profiler::start("read_vxc_vexx_HKS");
 
-    std::map<int, std::map<int, MatrixXcd>> vxc;  // 当前vxc
-    std::map<int, std::map<int, MatrixXcd>> vxc0; // 存储初始vxc
-    std::map<int, std::map<int, MatrixXcd>> H_KS; // H_KS矩阵
+    std::map<int, std::map<int, Matz>> vxc;  // 当前vxc
+    std::map<int, std::map<int, Matz>> vxc0; // 存储初始vxc
+    std::map<int, std::map<int, Matz>> H_KS; // H_KS矩阵
 
     bool all_files_processed_successfully = true;
 
@@ -96,15 +69,18 @@ void task_qsgw()
             // 初始化格式化字符串和文件路径
             std::map<std::string, std::string> format_fn = {
                 {"xc", "xc_matr_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"},
-                {"H", "H_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"},
-                {"C", "C_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"}
+                // FIXME: you are not supposed to read H and C matrices, only xc.
+                // C has been read and stored in the MeanField object
+                // H should be constructed using eigenvalues and eigenvectors of Meanfield.
+                // {"H", "H_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"},
+                // {"C", "C_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"}
             };
 
-            std::map<std::string, MatrixXcd> arrays;
+            std::map<std::string, Matz> arrays;
 
             // 遍历所有格式化的文件路径，并读取对应的矩阵
             for (const auto& pair : format_fn) {
-                if (!process_csc(pair.second, arrays)) {
+                if (!convert_csc(pair.second, arrays)) {
                     all_files_processed_successfully = false;
                     cerr << "Failed to process file: " << pair.second << endl;
                 }
@@ -116,21 +92,22 @@ void task_qsgw()
             }
 
             // 获取状态限制
-            int lb, ub;
-            tie(lb, ub) = read_aims_state_limits();
+            // int lb, ub;
+            // tie(lb, ub) = read_aims_state_limits();
 
             // 将NHO哈密顿量转换为Kohn-Sham空间
-            arrays["H_KS"] = arrays["C"].adjoint() * arrays["H"] * arrays["C"];
-            arrays["H_KS"] = arrays["H_KS"].block(lb, lb, ub - lb, ub - lb);
+            // arrays["H_KS"] = arrays["C"].adjoint() * arrays["H"] * arrays["C"];
+            // arrays["H_KS"] = arrays["H_KS"].block(lb, lb, ub - lb, ub - lb);
 
             // 存储初始的vxc0，构建哈密顿量时有用
             vxc0[ispin][ikpt] = arrays["xc"];
 
             // 初始化vxc为vxc0
-            vxc[ispin][ikpt] = vxc0[ispin][ikpt];
+            vxc[ispin][ikpt] = vxc0[ispin][ikpt].copy();
 
             // 存储 H_KS 矩阵
-            H_KS[ispin][ikpt] = arrays["H_KS"];
+            // TODO: construct H_KS using eigenvluaes and eigenvectors stored in MeanField
+            // H_KS[ispin][ikpt] = arrays["H_KS"];
         }
     }
 
@@ -148,7 +125,7 @@ void task_qsgw()
     // 初始化费米能，单位为hatree
     const auto efermi = meanfield.get_efermi() * 0.5;
     //计算体系总电子数/初始总占据数
-    double total_electrons = calculate_total_electrons(meanfield);
+    double total_electrons = meanfield.get_total_weight();
     // 读取库伦相互作用
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
     read_Vq_full("./", "coulomb_cut_", true);
@@ -157,28 +134,16 @@ void task_qsgw()
 
     // 读取和处理介电函数
     std::vector<double> epsmac_LF_imagfreq_re;
-    if (Params::replace_w_head) {
+    if (Params::replace_w_head)
+    {
         std::vector<double> omegas_dielect;
         std::vector<double> dielect_func;
         read_dielec_func("dielecfunc_out", omegas_dielect, dielect_func);
 
-        switch(Params::option_dielect_func) {
-            case 0:
-                assert(omegas_dielect.size() == chi0.tfg.size());
-                epsmac_LF_imagfreq_re = dielect_func;
-                break;
-            case 1:
-                epsmac_LF_imagfreq_re = LIBRPA::utils::interp_cubic_spline(omegas_dielect, dielect_func, chi0.tfg.get_freq_nodes());
-                break;
-            case 2:
-                LIBRPA::utils::LevMarqFitting levmarq;
-                std::vector<double> pars(DoubleHavriliakNegami::d_npar, 1);
-                pars[0] = pars[4] = dielect_func[0];
-                epsmac_LF_imagfreq_re = levmarq.fit_eval(pars, omegas_dielect, dielect_func, DoubleHavriliakNegami::func_imfreq, DoubleHavriliakNegami::grad_imfreq, chi0.tfg.get_freq_nodes());
-                break;
-            default:
-                throw std::logic_error("Unsupported value for option_dielect_func");
-        }
+        epsmac_LF_imagfreq_re = interpolate_dielec_func(
+                Params::option_dielect_func, omegas_dielect, dielect_func,
+                chi0.tfg.get_freq_nodes());
+
 
         if (Params::debug) {
             if (mpi_comm_global_h.is_root()) {
@@ -197,24 +162,20 @@ void task_qsgw()
     bool converged = false;
 
     // 定义存储前一轮的本征值以检查收敛性
-    std::vector<Matrix> previous_eigenvalues;
+    std::vector<matrix> previous_eigenvalues;
 
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations) {
         iteration++;
 
         // 更新前一轮的本征值
-        previous_eigenvalues.clear();
-        for (int ispin = 0; ispin < n_spins; ++ispin) {
-            for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
-                previous_eigenvalues.push_back(meanfield.get_eigenvals()[ispin].row(ikpt));
-            }
-        }
+        previous_eigenvalues = meanfield.get_eigenvals();
 
         // 构建V^{exx}矩阵,得到Hexx_nband_nband
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list);
-        exx.build_exx_orbital_energy(Cs_data, Rlist, period, VR);
+        exx.build(Cs_data, Rlist, period, VR);
+        exx.build_KS_kgrid();
         Profiler::stop("qsgw_exx");
 
         // Build screened interaction
@@ -228,65 +189,36 @@ void task_qsgw()
         }
         Profiler::stop("qsgw_wc");
 
-        if (Params::debug)
-        { 
-            char fn[80];
-            for (const auto &Wc: Wc_freq_q)
-            {
-                const int ifreq = chi0.tfg.get_freq_index(Wc.first);
-                for (const auto &I_JqWc: Wc.second)
-                {
-                    const auto &I = I_JqWc.first;
-                    for (const auto &J_qWc: I_JqWc.second)
-                    {
-                        const auto &J = J_qWc.first;
-                        for (const auto &q_Wc: J_qWc.second)
-                        {
-                            const int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q_Wc.first));
-                            sprintf(fn, "Wcfq_ifreq_%d_iq_%d_I_%zu_J_%zu_id_%d.mtx", ifreq, iq, I, J, mpi_comm_global_h.myid);
-                            print_matrix_mm_file(q_Wc.second, Params::output_dir + "/" + fn, 1e-15);
-                        }
-                    }
-                }
-            }
-        }
+        // if (Params::debug)
+        // { 
+        //     char fn[80];
+        //     for (const auto &Wc: Wc_freq_q)
+        //     {
+        //         const int ifreq = chi0.tfg.get_freq_index(Wc.first);
+        //         for (const auto &I_JqWc: Wc.second)
+        //         {
+        //             const auto &I = I_JqWc.first;
+        //             for (const auto &J_qWc: I_JqWc.second)
+        //             {
+        //                 const auto &J = J_qWc.first;
+        //                 for (const auto &q_Wc: J_qWc.second)
+        //                 {
+        //                     const int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q_Wc.first));
+        //                     sprintf(fn, "Wcfq_ifreq_%d_iq_%d_I_%zu_J_%zu_id_%d.mtx", ifreq, iq, I, J, mpi_comm_global_h.myid);
+        //                     print_matrix_mm_file(q_Wc.second, Params::output_dir + "/" + fn, 1e-15);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         LIBRPA::G0W0 s_g0w0(meanfield, kfrac_list, chi0.tfg);
         Profiler::start("qsgw_sigc_IJ", "Build correlation self-energy");
-        s_g0w0.build_spacetime_LibRI(Cs_data, Wc_freq_q, Rlist, period);
+        s_g0w0.build_spacetime(Cs_data, Wc_freq_q, Rlist, period);
         Profiler::stop("qsgw_sigc_IJ");
 
-        if (Params::debug)
-        { 
-            char fn[80];
-            for (const auto &is_sigc: s_g0w0.sigc_is_f_k_IJ)
-            {
-                const int ispin = is_sigc.first;
-                for (const auto &f_sigc: is_sigc.second)
-                {
-                    const auto ifreq = chi0.tfg.get_freq_index(f_sigc.first);
-                    for (const auto &k_sigc: f_sigc.second)
-                    {
-                        const auto &k = k_sigc.first;
-                        const int ik = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), k));
-                        for (const auto &I_sigc: k_sigc.second)
-                        {
-                            const auto &I = I_sigc.first;
-                            for (const auto &J_sigc: I_sigc.second)
-                            {
-                                const auto &J = J_sigc.first;
-                                sprintf(fn, "Sigcfq_ispin_%d_ifreq_%d_ik_%d_I_%zu_J_%zu_id_%d.mtx",
-                                        ispin, ifreq, ik, I, J, mpi_comm_global_h.myid);
-                                print_matrix_mm_file(J_sigc.second, Params::output_dir + "/" + fn, 1e-15);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         Profiler::start("qsgw_sigc_rotate_KS", "Rotate self-energy, IJ -> ij -> KS");
-        s_g0w0.build_sigc_matrix_KS();
+        s_g0w0.build_sigc_matrix_KS_kgrid();
         Profiler::stop("qsgw_sigc_rotate_KS");
 
         // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
@@ -311,6 +243,7 @@ void task_qsgw()
                 map<int, map<int, map<int, map<double, cplxdb>>>> sigc_real_all;
 
                 // 定义实频点数组
+                // MYZ: Why do you need this?
                 std::vector<double> real_freqs = {/* 实频点数组，例如：-10.0, -5.0, 0.0, 5.0, 10.0 */};
 
                 // 遍历自旋、k点和能带状态
@@ -321,9 +254,10 @@ void task_qsgw()
                         for (int i_state_row = 0; i_state_row < meanfield.get_n_bands(); i_state_row++) {
                             for (int i_state_col = 0; i_state_col < meanfield.get_n_bands(); i_state_col++) {
 
-                                const auto &eks_state_row = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row) * 0.5;
-                                const auto &exx_state_row = exx.Eexx[i_spin][i_kpoint][i_state_row];
-                                const auto &vxc_state_row = vxc[i_spin][ikpt](i_state_row, i_state_row);
+                                // FIXME: eks_state_mn is wrong: it is always the diagonal element. Should extend to any element
+                                const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                                const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row, i_state_col);
+                                const auto &vxc_mn = vxc[i_spin][i_kpoint](i_state_row, i_state_col);
 
                                 // 获取自能的虚频值
                                 std::vector<cplxdb> sigc_state;
@@ -388,18 +322,16 @@ void task_qsgw()
 
         // 第四步：存储新矩阵到 MeanField 对象的 wfc 矩阵中
         std::vector<std::vector<std::vector<std::vector<double>>>> newMatrix(n_spins, std::vector<std::vector<std::vector<double>>>(n_kpoints, std::vector<std::vector<double>>(n_bands, std::vector<double>(n_aos, 0.0))));
-        
+        // MYZ: Now you ARE saving zeros to meanfield.
         store_newMatrix_to_wfc(meanfield, newMatrix, n_spins, n_kpoints, n_bands, n_aos);
 
         // 计算全局费米能和占据数
-    
-        double temperature = 0.0001;  // 温度，接近于零K
     
         // 计算费米能级并更新占据数
         double efermi = calculate_fermi_energy_and_occupations(meanfield, temperature, total_electrons);
 
         // 将费米能级更新到 MeanField 对象中
-        meanfield.set_efermi(efermi);
+        meanfield.get_efermi() = efermi;
 
         // 更新vxc数据
         for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {

@@ -12,10 +12,6 @@ using namespace std;
 #include "matrix.h"
 #include "utils_io.h"
 
-//#ifdef _MCD_CHECK
-//#include "src_parallel/mcd.h"
-//#endif
-
 class ComplexMatrix
 {
 

@@ -54,6 +54,7 @@ class MeanField
         const std::vector<matrix> & get_eigenvals() const { return eskb; }
         std::vector<matrix> & get_weight() { return wg; }
         const std::vector<matrix> & get_weight() const { return wg; }
+        double get_total_weight() const;
         //! get the density matrix of a particular spin and kpoint
         ComplexMatrix get_dmat_cplx(int ispin, int ikpt) const;
         ComplexMatrix get_dmat_cplx_R(int ispin, const std::vector<Vector3_Order<double>>& kfrac_list, const Vector3_Order<int>& R) const;
