@@ -56,7 +56,6 @@ void task_qsgw()
     Profiler::start("read_vxc_vexx_HKS");
 
     std::map<int, std::map<int, Matz>> vxc;  // 当前vxc
-    std::map<int, std::map<int, Matz>> vxc0; // 存储初始vxc
     std::map<int, std::map<int, Matz>> H_KS; // H_KS矩阵
 
     bool all_files_processed_successfully = true;
@@ -92,11 +91,8 @@ void task_qsgw()
             // arrays["H_KS"] = arrays["C"].adjoint() * arrays["H"] * arrays["C"];
             // arrays["H_KS"] = arrays["H_KS"].block(lb, lb, ub - lb, ub - lb);
 
-            // 存储初始的vxc0，构建哈密顿量时有用
-            vxc0[ispin][ikpt] = arrays["xc"];
-
-            // 初始化vxc为vxc0
-            vxc[ispin][ikpt] = vxc0[ispin][ikpt].copy();
+            // 存储初始的vxc，构建哈密顿量时有用
+            vxc[ispin][ikpt] = arrays["xc"];
 
             // 存储 H_KS 矩阵
             H_KS[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
@@ -322,7 +318,7 @@ void task_qsgw()
         //     }
         // }
 
-        auto H0_GW_all = construct_H0_GW(H_KS, vxc0, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
+        auto H0_GW_all = construct_H0_GW(H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
 
         // 第三步：对 Hamiltonian 进行对角化并存储本征值
         diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
@@ -334,11 +330,11 @@ void task_qsgw()
 
         // 计算全局费米能和占据数
     
-        // 计算费米能级并更新占据数
+        // 计算费米能级
         const double temperature = 0.00001;
         double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
-
-        // 将费米能级更新到 MeanField 对象中
+        // 将占据数和费米能级更新到 MeanField 对象中
+        update_fermi_energy_and_occupations(meanfield, temperature, efermi);
 
         // 更新vxc数据
         for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
@@ -347,6 +343,16 @@ void task_qsgw()
                 const auto& Vc_matrix = Vc_all[ispin][ikpt];
 
                 vxc[ispin][ikpt] = Hexx_matrix + Vc_matrix;
+            }
+        }
+
+        // 更新 H_KS
+        for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
+            for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
+                for (int i_band = 0; i_band < n_bands; i_band++)
+                {
+                    H_KS[ispin][ikpt](i_band, i_band) = meanfield.get_eigenvals()[ispin](ikpt, i_band);
+                }
             }
         }
 

@@ -66,12 +66,10 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
             // 取出相应的哈密顿量矩阵
             const auto &h = H0_GW_all.at(ispin).at(ikpt).copy();
 
-            // 对角化哈密顿量
-            // MYZ: we don't use Eigen3, so avoid using their classes.
-            // For matrix, use the matrix_m template
+            // 对角化哈密顿量，得到 QP 波函数在 KS 表象下的表示
             std::vector<double> w;
-            Matz eigvec_spin_k;
-            eigsh(h, w, eigvec_spin_k);
+            Matz eigvec_KS;
+            eigsh(h, w, eigvec_KS);
 
             // 将本征值存储到 MeanField 的 eskb 矩阵
             for (int ib = 0; ib < dimension; ++ib)
@@ -79,7 +77,26 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
                 meanfield.get_eigenvals()[ispin](ikpt, ib) = w[ib];
             }
 
-            // TODO: rotate H0_GW eigenvectors and store in meanfield
+            // Rotate H0_GW eigenvectors and store in meanfield
+            Matz wfc(dimension, nao, MAJOR::COL);
+            for (int ib = 0; ib < dimension; ++ib)
+            {
+                for (int iao = 0; iao < nao; iao++)
+                {
+                    wfc(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
+                }
+            }
+            auto eigvec_NAO = transpose(eigvec_KS) * wfc;
+
+            // 将 KS 表示旋转到 NAO 表示
+
+            for (int ib = 0; ib < dimension; ++ib)
+            {
+                for (int iao = 0; iao < nao; iao++)
+                {
+                    meanfield.get_eigenvectors()[ispin][ikpt](ib, iao) = eigvec_NAO(ib, iao);
+                }
+            }
         }
     }
     std::cout << "所有本征值已存储到 MeanField 对象。" << std::endl;
