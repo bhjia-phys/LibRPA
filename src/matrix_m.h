@@ -707,6 +707,7 @@ public:
 
 //! typedef of double matrix
 typedef matrix_m<double> Matd;
+
 //! typedef of complex double matrix
 typedef matrix_m<std::complex<double>> Matz;
 

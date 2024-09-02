@@ -8,6 +8,7 @@ enum class task_t {
     EXX,
     G0W0,
     G0W0_band,
+    QSGW,
     Wc_Rf,
     print_minimax,
 };

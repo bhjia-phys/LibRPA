@@ -28,7 +28,7 @@ static double calculate_total_occupation(const MeanField &mf, double mu, double 
 }
 
 // 调整化学势以匹配总占据数，并计算HOMO和LUMO能级
-double calculate_fermi_energy_and_occupations(MeanField &mf, double temperature, double total_electrons) {
+double calculate_fermi_energy(const MeanField &mf, double temperature, double total_electrons) {
     double mu_min = -1e6;
     double mu_max = 1e6;
     double mu = 0.0;
@@ -36,7 +36,9 @@ double calculate_fermi_energy_and_occupations(MeanField &mf, double temperature,
     double homo = -1e6, lumo = 1e6;
 
     // 初始二分法寻找使总占据数等于总电子数的费米能级
-    while (true)
+    int iters_max = 1000;
+    int iters = 0;
+    while (++iters < iters_max)
     {
         mu = 0.5 * (mu_min + mu_max);
         double total_occupation = calculate_total_occupation(mf, mu, temperature);
@@ -97,6 +99,12 @@ double calculate_fermi_energy_and_occupations(MeanField &mf, double temperature,
     // 计算费米能级为HOMO和LUMO的平均值
     double fermi_energy = 0.5 * (homo + lumo);
 
+
+    return fermi_energy;
+}
+
+void update_fermi_energy_and_occupations(MeanField &mf, const double temperature, const double efermi)
+{
     // 更新占据数
     for (int ispin = 0; ispin < mf.get_n_spins(); ++ispin)
     {
@@ -104,11 +112,11 @@ double calculate_fermi_energy_and_occupations(MeanField &mf, double temperature,
         {
             for (int ib = 0; ib < mf.get_n_bands(); ++ib)
             {
-                double energy = mf.get_eigenvals()[ispin](ikpt, ib);
-                mf.get_weight()[ispin](ikpt, ib) = fermi_dirac(energy, fermi_energy, temperature);
+                const double energy = mf.get_eigenvals()[ispin](ikpt, ib);
+                mf.get_weight()[ispin](ikpt, ib) = fermi_dirac(energy, efermi, temperature) / mf.get_n_kpoints();
             }
         }
     }
 
-    return fermi_energy;
+    meanfield.get_efermi() = efermi;
 }

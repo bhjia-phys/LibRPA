@@ -1,13 +1,13 @@
+#include "task_qsgw.h"
+
 // 标准库头文件
 #include <iostream>         // 用于输入输出操作
-#include <filesystem>       // 用于文件系统操作
 #include <map>              // 用于std::map容器
 #include <string>           // 用于std::string类
-#include <regex>            // 用于正则表达式操作
 
 // 自定义头文件
-#include "task_qsgw.h"              // 任务调度相关
 #include "envs_mpi.h"               // MPI环境相关
+#include "utils_io.h"
 #include "meanfield.h"              // MeanField类相关
 #include "params.h"                 // 参数设置相关
 #include "pbc.h"                    // 周期性边界条件相关
@@ -21,18 +21,20 @@
 #include "coulmat.h"                // 库仑矩阵相关
 #include "profiler.h"               // 性能分析工具
 #include "ri.h"                     // RI相关
-#include "matrix.h"                     // RI相关
+#include "matrix.h"
 #include "read_data.h"              // 数据读取相关
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
-#include "driver_utils.h"                  // 包含 process_csc 和其他实用工具函数
+#include "driver_utils.h"
 #include "read_data.h"
 
 void task_qsgw()
 {
     using LIBRPA::envs::mpi_comm_global_h;
     using LIBRPA::utils::lib_printf;
+
+    // WARNING: QSGW currently only works with single MPI task.
 
     Profiler::start("qsgw", "QSGW quasi-particle calculation");
 
@@ -45,14 +47,10 @@ void task_qsgw()
         qlist.push_back(q_weight.first);
     }
 
-    Chi0 chi0(meanfield, klist, Params::nfreq);
-    chi0.gf_R_threshold = Params::gf_R_threshold;
-
-    Profiler::start("chi0_build", "Build response function chi0");
-    chi0.build(Cs_data, Rlist, period, local_atpair, qlist,
-               TFGrids::get_grid_type(Params::tfgrids_type), true);
-    Profiler::stop("chi0_build");
-
+    const auto n_spins = meanfield.get_n_spins();
+    const auto n_bands = meanfield.get_n_bands();
+    const auto n_kpoints = meanfield.get_n_kpoints();
+    const auto n_aos = meanfield.get_n_aos();
 
     // 初始化并读取当前文件夹中的所有 .csc 文件
     Profiler::start("read_vxc_vexx_HKS");
@@ -69,11 +67,6 @@ void task_qsgw()
             // 初始化格式化字符串和文件路径
             std::map<std::string, std::string> format_fn = {
                 {"xc", "xc_matr_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"},
-                // FIXME: you are not supposed to read H and C matrices, only xc.
-                // C has been read and stored in the MeanField object
-                // H should be constructed using eigenvalues and eigenvectors of Meanfield.
-                // {"H", "H_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"},
-                // {"C", "C_spin_" + to_string(ispin + 1) + "_kpt_" + to_string(ikpt + 1) + ".csc"}
             };
 
             std::map<std::string, Matz> arrays;
@@ -106,10 +99,15 @@ void task_qsgw()
             vxc[ispin][ikpt] = vxc0[ispin][ikpt].copy();
 
             // 存储 H_KS 矩阵
-            // TODO: construct H_KS using eigenvluaes and eigenvectors stored in MeanField
-            // H_KS[ispin][ikpt] = arrays["H_KS"];
+            H_KS[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
+            for (int i_band = 0; i_band < n_bands; i_band++)
+            {
+                H_KS[ispin][ikpt](i_band, i_band) = meanfield.get_eigenvals()[ispin](ikpt, i_band);
+            }
         }
     }
+
+    return;
 
     // 判断是否所有文件都成功处理
     if (mpi_comm_global_h.myid == 0) {
@@ -123,7 +121,7 @@ void task_qsgw()
     Profiler::stop("read_vxc_vexx_HKS");
 
     // 初始化费米能，单位为hatree
-    const auto efermi = meanfield.get_efermi() * 0.5;
+    const auto efermi = meanfield.get_efermi();
     //计算体系总电子数/初始总占据数
     double total_electrons = meanfield.get_total_weight();
     // 读取库伦相互作用
@@ -134,26 +132,26 @@ void task_qsgw()
 
     // 读取和处理介电函数
     std::vector<double> epsmac_LF_imagfreq_re;
-    if (Params::replace_w_head)
-    {
-        std::vector<double> omegas_dielect;
-        std::vector<double> dielect_func;
-        read_dielec_func("dielecfunc_out", omegas_dielect, dielect_func);
-
-        epsmac_LF_imagfreq_re = interpolate_dielec_func(
-                Params::option_dielect_func, omegas_dielect, dielect_func,
-                chi0.tfg.get_freq_nodes());
-
-
-        if (Params::debug) {
-            if (mpi_comm_global_h.is_root()) {
-                lib_printf("Dielectric function parsed:\n");
-                for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
-                    lib_printf("%d %f %f\n", i+1, chi0.tfg.get_freq_nodes()[i], epsmac_LF_imagfreq_re[i]);
-            }
-            mpi_comm_global_h.barrier();
-        }
-    }
+    // if (Params::replace_w_head)
+    // {
+    //     std::vector<double> omegas_dielect;
+    //     std::vector<double> dielect_func;
+    //     read_dielec_func("dielecfunc_out", omegas_dielect, dielect_func);
+    //
+    //     epsmac_LF_imagfreq_re = interpolate_dielec_func(
+    //             Params::option_dielect_func, omegas_dielect, dielect_func,
+    //             chi0.tfg.get_freq_nodes());
+    //
+    //
+    //     if (Params::debug) {
+    //         if (mpi_comm_global_h.is_root()) {
+    //             lib_printf("Dielectric function parsed:\n");
+    //             for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
+    //                 lib_printf("%d %f %f\n", i+1, chi0.tfg.get_freq_nodes()[i], epsmac_LF_imagfreq_re[i]);
+    //         }
+    //         mpi_comm_global_h.barrier();
+    //     }
+    // }
 
     // 设置收敛条件
     double eigenvalue_tolerance = 1e-6; // 设置一个适当的小值，作为本征值收敛的判断标准
@@ -162,21 +160,32 @@ void task_qsgw()
     bool converged = false;
 
     // 定义存储前一轮的本征值以检查收敛性
-    std::vector<matrix> previous_eigenvalues;
+    std::vector<matrix> previous_eigenvalues(n_spins);
 
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations) {
         iteration++;
 
         // 更新前一轮的本征值
-        previous_eigenvalues = meanfield.get_eigenvals();
+        for (int i_spin = 0; i_spin < n_spins; i_spin++)
+        {
+            previous_eigenvalues[i_spin] = meanfield.get_eigenvals()[i_spin];
+        }
 
-        // 构建V^{exx}矩阵,得到Hexx_nband_nband
+        // 构建V^{exx}矩阵,得到Hexx_nband_nband: exx.exx_is_ik_KS
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list);
         exx.build(Cs_data, Rlist, period, VR);
         exx.build_KS_kgrid();
         Profiler::stop("qsgw_exx");
+
+        Chi0 chi0(meanfield, klist, Params::nfreq);
+        chi0.gf_R_threshold = Params::gf_R_threshold;
+
+        Profiler::start("chi0_build", "Build response function chi0");
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist,
+                   TFGrids::get_grid_type(Params::tfgrids_type), true);
+        Profiler::stop("chi0_build");
 
         // Build screened interaction
         Profiler::start("qsgw_wc", "Build screened interaction");
@@ -221,7 +230,18 @@ void task_qsgw()
         s_g0w0.build_sigc_matrix_KS_kgrid();
         Profiler::stop("qsgw_sigc_rotate_KS");
 
-        // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
+        // 构建哈密顿量矩阵并对角化，旋转基底，并存储本征值，本征矢量
+        // 第一步：构建关联势矩阵
+        std::map<int, std::map<int, Matz>> Vc_all;
+
+        // 构建虚频点列表
+        std::vector<cplxdb> imagfreqs;
+        for (const auto &freq : chi0.tfg.get_freq_nodes()) {
+            imagfreqs.push_back(cplxdb{0.0, freq});
+        }
+
+        std::map<int, std::map<int, std::map<int, double>>> e_qp_all;
+        std::map<int, std::map<int, std::map<int, cplxdb>>> sigc_all;
 
         if (all_files_processed_successfully)
         {
@@ -231,185 +251,154 @@ void task_qsgw()
                 std::cout << "Solving quasi-particle equation\n";
             }
 
-            // 构建虚频点列表
-            std::vector<cplxdb> imagfreqs;
-            for (const auto &freq : chi0.tfg.get_freq_nodes()) {
-                imagfreqs.push_back(cplxdb{0.0, freq});
-            }
-
             if (mpi_comm_global_h.is_root()) {
-                // 初始化存储自能的容器
-                map<int, map<int, map<int, map<int, cplxdb>>>> sigc_all;
-                map<int, map<int, map<int, map<double, cplxdb>>>> sigc_real_all;
-
-                // 定义实频点数组
-                // MYZ: Why do you need this?
-                std::vector<double> real_freqs = {/* 实频点数组，例如：-10.0, -5.0, 0.0, 5.0, 10.0 */};
-
                 // 遍历自旋、k点和能带状态
-                for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++) {
-                    for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++) {
+                for (int i_spin = 0; i_spin < n_spins; i_spin++) {
+                    for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
+                        Matz sigcmat(n_bands, n_bands, MAJOR::COL);
+                        std::vector<double> e_qp_spin_k;
+
                         const auto &sigc_sk = s_g0w0.sigc_is_ik_f_KS[i_spin][i_kpoint];
 
-                        for (int i_state_row = 0; i_state_row < meanfield.get_n_bands(); i_state_row++) {
-                            for (int i_state_col = 0; i_state_col < meanfield.get_n_bands(); i_state_col++) {
+                        for (int i_state_row = 0; i_state_row < n_bands; i_state_row++) {
+                            // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
+                            const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                            const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row, i_state_row);
+                            const auto &vxc_state = vxc[i_spin][i_kpoint](i_state_row, i_state_row);
 
-                                // FIXME: eks_state_mn is wrong: it is always the diagonal element. Should extend to any element
-                                const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
-                                const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row, i_state_col);
-                                const auto &vxc_mn = vxc[i_spin][i_kpoint](i_state_row, i_state_col);
-
-                                // 获取自能的虚频值
-                                std::vector<cplxdb> sigc_state;
-                                for (const auto &freq : chi0.tfg.get_freq_nodes()) {
-                                    sigc_state.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
-                                }
-
-                                // 构建 Pade 近似对象
-                                LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_state);
-
-                                // 解析延拓到每个实频点
-                                for (const auto& real_freq : real_freqs) {
-                                    cplxdb sigc_real = pade.get(static_cast<cplxdb>(real_freq - efermi));
-                                    sigc_real_all[i_spin][i_kpoint][i_state_row][i_state_col][real_freq] = sigc_real;
-                                }
+                            // 获取自能
+                            std::vector<cplxdb> sigc_state;
+                            for (const auto &freq : chi0.tfg.get_freq_nodes()) {
+                                sigc_state.push_back(sigc_sk.at(freq)(i_state_row, i_state_row));
                             }
+
+                            // 构建 Pade 近似对象
+                            LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_state);
                             // QPE求解
                             double e_qp;
                             cplxdb sigc_qp;
                             int flag_qpe_solver = LIBRPA::qpe_solver_pade_self_consistent(
-                                pade, eks_state_row, efermi, vxc_state_row, exx_state_row, e_qp, sigc_qp
+                                pade, eks_state, efermi, vxc_state.real(), exx_state.real(), e_qp, sigc_qp
                             );
 
-                            if (flag_qpe_solver == 0) {
-                                e_qp_all[i_spin][i_kpoint][i_state_row] = e_qp;
-                                sigc_all[i_spin][i_kpoint][i_state_row] = sigc_qp;
-                            } else {
+                            if (flag_qpe_solver != 0) {
                                 std::cout << "Warning! QPE solver failed for spin " << i_spin + 1
                                         << ", kpoint " << i_kpoint + 1
-                                        << ", state (" << i_state_row + 1 << ", " << i_state_col + 1 << ")\n";
-                                e_qp_all[i_spin][i_kpoint][i_state_row] = std::numeric_limits<double>::quiet_NaN();
-                                sigc_all[i_spin][i_kpoint][i_state_row] = std::numeric_limits<cplxdb>::quiet_NaN();
+                                        << ", state " << i_state_row + 1 << "\n";
+                                e_qp = std::numeric_limits<double>::quiet_NaN();
+                                sigc_qp = std::numeric_limits<cplxdb>::quiet_NaN();
+                            }
+                            e_qp_spin_k.push_back(e_qp);
+                            sigcmat(i_state_row, i_state_row) = sigc_qp;
+                            e_qp_all[i_spin][i_kpoint][i_state_row] = e_qp;
+                            sigc_all[i_spin][i_kpoint][i_state_row] = sigc_qp;
+
+                            for (int i_state_col = 0; i_state_col < meanfield.get_n_bands(); i_state_col++) {
+                                std::vector<cplxdb> sigc_mn;
+                                for (const auto &freq : chi0.tfg.get_freq_nodes()) {
+                                    sigc_mn.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
+                                    LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_state);
+                                    sigcmat(i_state_row, i_state_col) = pade.get(e_qp - efermi);
+                                }
                             }
                         }
+
+                        Vc_all[i_spin][i_spin] = build_correlation_potential_spin_k(sigcmat, e_qp_spin_k, n_bands);
                     }
                 }
             }
-
             Profiler::stop("qsgw_solve_qpe");
         }
 
-        //构建哈密顿量矩阵并对角化，旋转基底，并存储本征值，本征矢量
-        // 第一步：构建关联势矩阵
-        auto Vc_all = build_correlation_potential(sigc_real_all, e_qp_all, n_spins, n_kpoints, n_bands);
-
         // 第二步：使用构建好的关联势矩阵构建 GW 哈密顿量
-        std::vector<Matrix> H_KS_vec, vxc0_vec, Hexx_vec;
+        // std::vector<std::vector<Matz>> H_KS_vec, vxc0_vec, Hexx_vec;
 
         // 将 H_KS 和 vxc0 转换为二维矩阵向量
-        for (int ispin = 0; ispin < n_spins; ++ispin) {
-            for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
-                H_KS_vec.push_back(H_KS[ispin][ikpt].block(0, 0, n_bands, n_bands));
-                vxc0_vec.push_back(vxc0[ispin][ikpt].block(0, 0, n_bands, n_bands));
-                Hexx_vec.push_back(exx.Hexx_KS[ispin][ikpt].block(0, 0, n_bands, n_bands));
-            }
-        }
+        // for (int ispin = 0; ispin < n_spins; ++ispin) {
+        //     for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
+        //         H_KS_vec.push_back(H_KS[ispin][ikpt].block(0, 0, n_bands, n_bands));
+        //         vxc0_vec.push_back(vxc0[ispin][ikpt].block(0, 0, n_bands, n_bands));
+        //         Hexx_vec.push_back(exx.Hexx_KS[ispin][ikpt].block(0, 0, n_bands, n_bands));
+        //     }
+        // }
 
-        auto H0_GW_all = construct_H0_GW(H_KS_vec, vxc0_vec, Hexx_vec, Vc_all, n_spins, n_kpoints, n_bands);
+        auto H0_GW_all = construct_H0_GW(H_KS, vxc0, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
 
         // 第三步：对 Hamiltonian 进行对角化并存储本征值
         diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
 
-        // 第四步：存储新矩阵到 MeanField 对象的 wfc 矩阵中
-        std::vector<std::vector<std::vector<std::vector<double>>>> newMatrix(n_spins, std::vector<std::vector<std::vector<double>>>(n_kpoints, std::vector<std::vector<double>>(n_bands, std::vector<double>(n_aos, 0.0))));
-        // MYZ: Now you ARE saving zeros to meanfield.
-        store_newMatrix_to_wfc(meanfield, newMatrix, n_spins, n_kpoints, n_bands, n_aos);
+        // // 第四步：存储新矩阵到 MeanField 对象的 wfc 矩阵中
+        // // std::vector<std::vector<std::vector<std::vector<double>>>> newMatrix(n_spins, std::vector<std::vector<std::vector<double>>>(n_kpoints, std::vector<std::vector<double>>(n_bands, std::vector<double>(n_aos, 0.0))));
+        // // MYZ: Now you ARE saving zeros to meanfield.
+        // // store_newMatrix_to_wfc(meanfield, newMatrix, n_spins, n_kpoints, n_bands, n_aos);
 
         // 计算全局费米能和占据数
     
         // 计算费米能级并更新占据数
-        double efermi = calculate_fermi_energy_and_occupations(meanfield, temperature, total_electrons);
+        const double temperature = 0.00001;
+        double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
 
         // 将费米能级更新到 MeanField 对象中
-        meanfield.get_efermi() = efermi;
 
         // 更新vxc数据
         for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
             for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
-                // 获取 Hexx_vec 和 Vc_all 对应的矩阵
-                const auto& Hexx_matrix = Hexx_vec[ispin][ikpt];
+                const auto& Hexx_matrix = exx.exx_is_ik_KS[ispin][ikpt];
                 const auto& Vc_matrix = Vc_all[ispin][ikpt];
 
-                // 获取矩阵的维度（假设 Hexx_matrix 和 Vc_matrix 具有相同的维度）
-                int n_rows = Hexx_matrix.size();
-                int n_cols = Hexx_matrix[0].size();
-
-                // 遍历矩阵中的每个元素，并更新 vxc[ispin][ikpt] 矩阵
-                for (int i = 0; i < n_rows; ++i) {
-                    for (int j = 0; j < n_cols; ++j) {
-                        vxc[ispin][ikpt](i, j) = Hexx_matrix[i][j] + Vc_matrix[i][j];
-                    }
-                }
+                vxc[ispin][ikpt] = Hexx_matrix + Vc_matrix;
             }
         }
 
         // 比较本轮和前一轮的本征值，判断是否收敛
         converged = true;
         for (int ispin = 0; ispin < n_spins; ++ispin) {
-            for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
-                const auto &current_eigenvals = meanfield.get_eigenvals()[ispin].row(ikpt);
-                if (!previous_eigenvalues.empty()) {
-                    const auto &previous_eigenvals = previous_eigenvalues[ispin * n_kpoints + ikpt];
-                    for (int ib = 0; ib < n_bands; ++ib) {
-                        if (std::abs(current_eigenvals(ib) - previous_eigenvals(ib)) > eigenvalue_tolerance) {
-                            converged = false;
-                            break;
-                        }
-                    }
-                }
-                if (!converged) break;
+            const auto &current_eigenvals = meanfield.get_eigenvals()[ispin];
+            const auto max_diff = (current_eigenvals - previous_eigenvalues[ispin]).absmax();
+            if (max_diff > eigenvalue_tolerance) {
+                converged = false;
+                break;
             }
-            if (!converged) break;
         }
 
-        // 如果已经收敛或达到最大迭代次数，退出循环
+        // 如果已经收敛或达到最大迭代次数，输出最终的QSGW迭代结果，退出循环
         if (converged) {
             std::cout << "Converged after " << iteration << " iterations.\n";
+            const std::string final_banner(90, '-');
+            lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
+            for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+            {
+                for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+                {
+                    const auto &k = kfrac_list[i_kpoint];
+                    printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
+                           i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
+                    printf("%77s\n", final_banner.c_str());
+                    printf("%5s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx", "ReSigc", "ImSigc", "e_qp");
+                    printf("%77s\n", final_banner.c_str());
+                    for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                    {
+                        const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * RY2EV;
+                        const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                        const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+                        const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
+                        const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
+                        const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
+                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
+                               i_state + 1, eks_state, vxc_state.real(), exx_state, resigc, imsigc, eqp);
+                    }
+                    printf("\n");
+                }
+            }
             break;
         }
 
         if (iteration == max_iterations) {
             std::cout << "Reached maximum number of iterations.\n";
         }
+
     }
 
-    // 输出最终的QSGW迭代结果
-    const std::string final_banner(90, '-');
-    printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
-    for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-    {
-        for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-        {
-            const auto &k = kfrac_list[i_kpoint];
-            printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-                   i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-            printf("%77s\n", final_banner.c_str());
-            printf("%5s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx", "ReSigc", "ImSigc", "e_qp");
-            printf("%77s\n", final_banner.c_str());
-            for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-            {
-                const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * RY2EV;
-                const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
-                const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
-                const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
-                       i_state + 1, eks_state, vxc_state, exx_state, resigc, imsigc, eqp);
-            }
-            printf("\n");
-        }
-    }
 
     Profiler::stop("qsgw");
 }
