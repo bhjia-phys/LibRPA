@@ -66,7 +66,7 @@ MeanField::MeanField(const MeanField &mf)
     efermi = mf.efermi;
 }
 
-double MeanField::get_E_min_max(double &emin, double &emax)
+double MeanField::get_E_min_max(double &emin, double &emax) const
 {
     double lb = eskb[0](0, 0);
     double ub = eskb[0](0, n_bands - 1);
@@ -82,7 +82,7 @@ double MeanField::get_E_min_max(double &emin, double &emax)
     return emin;
 }
 
-double MeanField::get_band_gap()
+double MeanField::get_band_gap() const
 {
     double gap = 1e6;
     double homo = -1e6, lumo = 1e6;
