@@ -9,14 +9,13 @@
 
 // 构建关联势函数
 Matz build_correlation_potential_spin_k(
-    const Matz& sigc_spin_k,
-    const std::vector<double>& e_qp_spin_k,
+    const std::vector<std::vector<std::vector<cplxdb>>>& sigc_spin_k,
     int n_states);
 
 // 构建哈密顿量函数
 std::map<int, std::map<int, Matz>> construct_H0_GW(
     const std::map<int, std::map<int, Matz>> & H_KS_all,
-    const std::map<int, std::map<int, Matz>> & vxc0_all,
+    const std::map<int, std::map<int, Matz>> & vxc_all,
     const std::map<int, std::map<int, Matz>> & Hexx_all,
     const std::map<int, std::map<int, Matz>> & Vc_all,
     int n_spins, int n_kpoints, int n_states);

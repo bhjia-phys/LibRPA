@@ -82,17 +82,17 @@ static Matz loadMatrix(const std::string& filePath) {
 
     return matrix;
 }
-
-
-bool convert_csc(const std::string& filePath, std::map<std::string, Matz>& matrices)
+bool convert_csc(const std::string& filePath, std::map<std::string, Matz>& matrices, std::string& key)
 {
-    std::regex filePattern(R"((\w+)_spin_(\d+)_kpt_(\d+)(?:_freq_(\d+))?.csc)");
+    // 定义正则表达式，用于匹配文件名格式
+    std::regex filePattern(R"((\w+)_spin_(\d+)_kpt_(\d{6})(?:_freq_(\d+))?.csc)");
     std::smatch match;
 
+    // 如果文件名符合正则表达式模式
     if (std::regex_search(filePath, match, filePattern)) {
         std::string fileType = match[1];
-        int ispin = std::stoi(match[2]) - 1;  // 将自旋从1基索引转换为0基索引
-        int ikpt = std::stoi(match[3]) - 1;   // 将k点从1基索引转换为0基索引
+        int ispin = std::stoi(match[2]) - 1;  // 自旋索引从1基转换为0基
+        int ikpt = std::stoi(match[3]) - 1;   // k点从1基转换为0基
         int freq = match[4].matched ? std::stoi(match[4]) : -1;
 
         std::cout << "File Type: " << fileType << std::endl;
@@ -104,21 +104,25 @@ bool convert_csc(const std::string& filePath, std::map<std::string, Matz>& matri
 
         std::cout << "尝试打开文件: " << filePath << std::endl;
 
+        // 加载矩阵
         Matz matrix = loadMatrix(filePath);
 
-        // 生成唯一键来存储矩阵数据，例如： "vxc_spin_0_kpt_0_freq_-1"
-        std::string key = fileType + "_spin_" + std::to_string(ispin) + "_kpt_" + std::to_string(ikpt);
+        // 使用ostringstream格式化key，包括6位的k点
+        std::ostringstream oss;
+        oss << fileType << "_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1);
         if (freq != -1) {
-            key += "_freq_" + std::to_string(freq);
+            oss << "_freq_" << freq;
         }
 
-        // 将矩阵存储在 map 中，使用文件类型和索引作为键
+        key = oss.str();  // 生成的key
+        // 将矩阵存储在 map 中
         matrices[key] = matrix;
 
         std::cout << "Matrix loaded and stored successfully under key: " << key << std::endl;
         return true;
     }
 
+    // 如果文件名不符合正则表达式模式，返回错误
     std::cerr << "无法解析文件名: " << filePath << std::endl;
     return false;
 }

@@ -1,7 +1,7 @@
 #include "qpe_solver.h"
 
 #include <cmath>
-// #include <iostream>
+#include <iostream>
 // #include <iomanip>
 
 namespace LIBRPA
@@ -33,6 +33,11 @@ int qpe_solver_pade_self_consistent(
         e_qp = e_qp + escale * diff;
         sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
         diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
+        // 输出每次迭代的 diff 和相关信息
+        // std::cout << "Iteration " << n_iter << ": "
+        //           << "e_qp = " << e_qp << ", "
+        //           << "sigc = " << sigc << ", "
+        //           << "diff = " << diff << std::endl;
         if (std::abs(diff) < thres)
         {
             break;
