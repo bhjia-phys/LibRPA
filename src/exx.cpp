@@ -390,7 +390,10 @@ void Exx::build_KS_kgrid()
 {
     this->build_KS(this->mf_.get_eigenvectors(), this->kfrac_list_);
 }
-
+void Exx::build_KS_kgrid0()
+{
+    this->build_KS(this->mf_.get_eigenvectors0(), this->kfrac_list_);
+}
 void Exx::build_KS_band(const std::vector<std::vector<ComplexMatrix>> &wfc_band,
                         const std::vector<Vector3_Order<double>> &kfrac_band)
 {

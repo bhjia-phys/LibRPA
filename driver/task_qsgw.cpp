@@ -78,10 +78,20 @@ void task_qsgw()
 
             // 使用 ostringstream 构建文件名
             std::ostringstream oss;
-            // oss << "xc_matr_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
-            oss << "hf_exchange_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
+            oss << "xc_matr_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
+            // oss << "hf_exchange_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
             std::string filePath = oss.str();
 
+
+            Matz wfc1(n_bands, n_aos, MAJOR::COL);
+            for (int ib = 0; ib < n_bands; ++ib)
+            {
+                for (int iao = 0; iao < n_aos; iao++)
+                {
+                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
+                    meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
+                }
+            }
             // 检查文件是否存在并读取矩阵
             std::ifstream file(filePath.c_str());
             if (file.good()) {
@@ -95,21 +105,21 @@ void task_qsgw()
                 std::cerr << "File not found: " << filePath << std::endl;
                 continue;
             }
-            //测试hf用,转换nao-ks
-            vxc_nao[ispin][ikpt] = arrays[key];
-            Matz wfc(n_bands, n_aos, MAJOR::COL);
-            for (int ib = 0; ib < n_bands; ++ib)
-            {
-                for (int iao = 0; iao < n_aos; iao++)
-                {
-                    wfc(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-                }
-            }
+            // //测试hf用,转换nao-ks
+            // vxc_nao[ispin][ikpt] = arrays[key];
+            // Matz wfc(n_bands, n_aos, MAJOR::COL);
+            // for (int ib = 0; ib < n_bands; ++ib)
+            // {
+            //     for (int iao = 0; iao < n_aos; iao++)
+            //     {
+            //         wfc(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
+            //     }
+            // }
 
-            vxc[ispin][ikpt]= wfc * vxc_nao[ispin][ikpt] * transpose(wfc);
+            // vxc[ispin][ikpt]= wfc * vxc_nao[ispin][ikpt] * transpose(wfc);
 
             // 获取并存储 xc 矩阵
-            // vxc[ispin][ikpt] = arrays[key];
+            vxc[ispin][ikpt] = arrays[key];
             vxc0[ispin][ikpt] = vxc[ispin][ikpt];
             // 构建 H_KS 矩阵，使用哈密顿量中的本征值
             H_KS[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
@@ -180,14 +190,12 @@ void task_qsgw()
 
 
     // 设置收敛条件
-    double eigenvalue_tolerance = -1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
+    double eigenvalue_tolerance = 1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
     int max_iterations = 200;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.001;
     bool converged = false;
     int frequency = n_bands + 1; 
-    std::vector<double> element_13_values(max_iterations);
-    std::vector<double> element_02_values(max_iterations);
     std::vector<std::pair<int, int>> significant_positions;
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
@@ -208,7 +216,7 @@ void task_qsgw()
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list);
         exx.build(Cs_data, Rlist, period, VR);
-        exx.build_KS_kgrid();
+        exx.build_KS_kgrid0();
         Profiler::stop("qsgw_exx");
         Hexx_matrix_temp[iteration] = exx.exx_is_ik_KS ;
         Hexx_matrix_temp[0] = exx.exx_is_ik_KS ;
@@ -310,7 +318,7 @@ void task_qsgw()
         Profiler::stop("g0w0_sigc_IJ");
 
         Profiler::start("g0w0_sigc_rotate_KS", "Rotate self-energy, IJ -> ij -> KS");
-        s_g0w0.build_sigc_matrix_KS_kgrid();
+        s_g0w0.build_sigc_matrix_KS_kgrid0();
         Profiler::stop("g0w0_sigc_rotate_KS");
 
         // 构建哈密顿量矩阵并对角化，旋转基底，并存储本征值，本征矢量
@@ -448,15 +456,6 @@ void task_qsgw()
                                 //         << "] = " << result << std::endl;
                             }
                             
-                            // double element_13 = sigcmat[1][3][frequency].real();
-                            // element_13_values[iteration]= element_13;
-
-                            // double element_02 = sigcmat[0][2][frequency].real();
-                            // element_02_values[iteration]= element_02;
-                            // // 输出当前迭代的元素值
-                            // std::cout << "Iteration: " << iteration 
-                            //         << ", Element (2, 3): " << element_13 
-                            //         << ", Element (0, 2): " << element_02 << std::endl;
 
                         }
 
@@ -749,31 +748,31 @@ void task_qsgw()
         const auto &Efermi = meanfield.get_efermi() ;
         printf("%5s\n","efermi");
         printf("%5f\n",Efermi);
-        for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-        {
-            for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-            {
-                const auto &k = kfrac_list[i_kpoint];
-                printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-                        i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-                printf("%77s\n", final_banner.c_str());
-                printf("%5s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx", "ReSigc", "ImSigc", "e_qp");
-                printf("%77s\n", final_banner.c_str());
-                for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-                {
-                    const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                    const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                    // exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                    const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                    const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
-                    const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
-                    const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                    printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
-                           i_state + 1, eks_state, vxc_state.real(), exx_state.real(), resigc, imsigc, eqp);
-                }
-                printf("\n");
-            }
-        }
+        // for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+        // {
+        //     for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+        //     {
+        //         const auto &k = kfrac_list[i_kpoint];
+        //         printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
+        //                 i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
+        //         printf("%77s\n", final_banner.c_str());
+        //         printf("%5s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx", "ReSigc", "ImSigc", "e_qp");
+        //         printf("%77s\n", final_banner.c_str());
+        //         for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+        //         {
+        //             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+        //             const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+        //             // exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+        //             const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+        //             const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
+        //             const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
+        //             const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
+        //             printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
+        //                    i_state + 1, eks_state, vxc_state.real(), exx_state.real(), resigc, imsigc, eqp);
+        //         }
+        //         printf("\n");
+        //     }
+        // }
 
         
         // 更新vxc数据
@@ -997,17 +996,7 @@ void task_qsgw()
 
     plot_homo_lumo_vs_iterations();
 
-    // 保存非对角元的变化到文件
-    std::ofstream out_file("off_diagonal_elements_changes.dat");
-    out_file << "# Iteration  Element (1, 3)  Element (0, 2)\n";
-
-    for (int iteration = 0; iteration < max_iterations; ++iteration) {
-        out_file << iteration << " "
-                << element_13_values[iteration] << " "
-                << element_02_values[iteration] << "\n";
-    }
-
-    out_file.close();
+    
 
 
     Profiler::stop("qsgw");

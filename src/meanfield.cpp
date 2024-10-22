@@ -14,6 +14,7 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
         eskb.clear();
         wg.clear();
         wfc.clear();
+        wfc0.clear();
     }
 
     n_spins = ns;
@@ -24,14 +25,18 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
     eskb.resize(n_spins);
     wg.resize(n_spins);
     wfc.resize(n_spins);
+    wfc0.resize(n_spins);
 
     for (int is = 0; is < n_spins; is++)
     {
         eskb[is].create(n_kpoints, n_bands);
         wg[is].create(n_kpoints, n_bands);
         wfc[is].resize(n_kpoints);
-        for (int ik = 0; ik < n_kpoints; ik++)
+        wfc0[is].resize(n_kpoints);
+        for (int ik = 0; ik < n_kpoints; ik++){
             wfc[is][ik].create(n_bands, n_aos);
+            wfc0[is][ik].create(n_bands, n_aos);
+        }
     }
 }
 
@@ -57,6 +62,7 @@ MeanField::MeanField(const MeanField &mf)
     eskb = mf.eskb;
     wg = mf.wg;
     wfc = mf.wfc;
+    wfc0 = mf.wfc0;
     efermi = mf.efermi;
 }
 

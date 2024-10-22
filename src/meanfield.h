@@ -33,6 +33,7 @@ class MeanField
         std::vector<matrix> wg;
         //! eigenvector, (n_spins, n_kpoint, n_bands, n_aos)
         std::vector<std::vector<ComplexMatrix>> wfc;
+        std::vector<std::vector<ComplexMatrix>> wfc0;
         //! Fermi energy
         double efermi;
         void resize(int ns, int nk, int nb, int nao);
@@ -60,6 +61,8 @@ class MeanField
         ComplexMatrix get_dmat_cplx_R(int ispin, const std::vector<Vector3_Order<double>>& kfrac_list, const Vector3_Order<int>& R) const;
         std::vector<std::vector<ComplexMatrix>> & get_eigenvectors() { return wfc; }
         const std::vector<std::vector<ComplexMatrix>> & get_eigenvectors() const { return wfc; }
+        std::vector<std::vector<ComplexMatrix>> & get_eigenvectors0() { return wfc0; }
+        const std::vector<std::vector<ComplexMatrix>> & get_eigenvectors0() const { return wfc0; }
         double get_E_min_max(double &emin, double &emax);
         double get_band_gap();
         std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs(int ispin, const std::vector<Vector3_Order<double>>& kfrac_list, std::vector<double> imagtimes, const std::vector<Vector3_Order<int>>& Rs) const;

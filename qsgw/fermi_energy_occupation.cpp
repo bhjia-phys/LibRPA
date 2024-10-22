@@ -67,7 +67,7 @@ double calculate_fermi_energy(const MeanField &mf, double temperature, double to
     mu = (vbm + cbm) * 0.5;
     gap = cbm - vbm ;
     std::cout << "Final VBM: " << vbm << ", CBM: " << cbm << ", Final Fermi level: " << mu << std::endl;
-    std::cout << "gap: " << gap << std::endl;
+    std::cout << "gap: " << gap * HA2EV << " eV, "<< std::endl;
     return mu;  
 }
 
