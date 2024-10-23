@@ -61,8 +61,9 @@ void task_qsgw()
     const auto n_aos = meanfield.get_n_aos();
     // 初始化
     Profiler::start("read_vxc_HKS");
-    std::map<int, std::map<int, Matz>> vxc_nao;  
+    std::map<int, std::map<int, Matz>> hf_nao;  
     std::map<int, std::map<int, Matz>> vxc;  
+    std::map<int, std::map<int, Matz>> hf;
     std::map<int, std::map<int, Matz>> vxc0;
     std::map<int,std::map<int, std::map<int, Matz>>> Hexx_matrix_temp;
     std::map<int, std::map<int, Matz>> H_KS; // H_KS矩阵
@@ -70,57 +71,83 @@ void task_qsgw()
     std::map<int, std::map<int, Matz>> H_KS1;//用于混合迭代
     bool all_files_processed_successfully = true;
 
-    // 自旋和 k 点的循环，读取初始数据
+        // 自旋和 k 点的循环，读取初始数据
     for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
         for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
             std::map<std::string, Matz> arrays;
-            std::string key;
+            std::string key_hf, key_vxc;
 
             // 使用 ostringstream 构建文件名
-            std::ostringstream oss;
-            oss << "xc_matr_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
-            // oss << "hf_exchange_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
-            std::string filePath = oss.str();
+            std::ostringstream oss_hf, oss_vxc;
+            oss_hf << "hf_exchange_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
+            oss_vxc << "xc_matr_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
 
+            std::string hfFilePath = oss_hf.str();
+            std::string vxcFilePath = oss_vxc.str();
 
             Matz wfc1(n_bands, n_aos, MAJOR::COL);
-            for (int ib = 0; ib < n_bands; ++ib)
-            {
-                for (int iao = 0; iao < n_aos; iao++)
-                {
+            for (int ib = 0; ib < n_bands; ++ib) {
+                for (int iao = 0; iao < n_aos; iao++) {
                     wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
                     meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
                 }
             }
-            // 检查文件是否存在并读取矩阵
-            std::ifstream file(filePath.c_str());
-            if (file.good()) {
-                if (!convert_csc(filePath, arrays, key)) {
+            hf_nao[ispin][ikpt] = Matz(n_aos, n_aos, MAJOR::COL);  
+            vxc[ispin][ikpt] = Matz(n_aos, n_aos, MAJOR::COL);     
+            // 初始化 hf 和 vxc 矩阵为零矩阵
+            for (int i = 0; i < n_aos; ++i) {
+                for (int j = 0; j < n_aos; ++j) {
+                    hf_nao[ispin][ikpt](i, j) = 0.0;
+                    vxc[ispin][ikpt](i, j) = 0.0;
+                }
+            }
+          
+
+            bool hf_file_found = false;
+            bool vxc_file_found = false;
+
+            // 读取 hf 文件
+            std::ifstream hf_file(hfFilePath.c_str());
+            if (hf_file.good()) {
+                if (!convert_csc(hfFilePath, arrays, key_hf)) {
                     all_files_processed_successfully = false;
-                    std::cerr << "Failed to process file: " << filePath << std::endl;
-                    continue;  // 如果某个文件处理失败，跳过该 k 点的处理
+                    std::cerr << "Failed to process file: " << hfFilePath << std::endl;
+                } else {
+                    hf_nao[ispin][ikpt] = arrays[key_hf];
+                    hf_file_found = true;
                 }
             } else {
+                std::cerr << "HF file not found: " << hfFilePath << std::endl;
+            }
+
+            // 读取 vxc 文件
+            std::ifstream vxc_file(vxcFilePath.c_str());
+            if (vxc_file.good()) {
+                if (!convert_csc(vxcFilePath, arrays, key_vxc)) {
+                    all_files_processed_successfully = false;
+                    std::cerr << "Failed to process file: " << vxcFilePath << std::endl;
+                } else {
+                    vxc[ispin][ikpt] = arrays[key_vxc]; 
+                    vxc_file_found = true;
+                }
+            } else {
+                std::cerr << "VXC file not found: " << vxcFilePath << std::endl;
+            }
+
+            // 如果两个文件都不存在，报错并跳过该 k 点
+            if (!hf_file_found && !vxc_file_found) {
                 all_files_processed_successfully = false;
-                std::cerr << "File not found: " << filePath << std::endl;
+                std::cerr << "Both HF and VXC files not found for spin " << ispin + 1 << ", k-point " << ikpt + 1 << std::endl;
                 continue;
             }
-            // //测试hf用,转换nao-ks
-            // vxc_nao[ispin][ikpt] = arrays[key];
-            // Matz wfc(n_bands, n_aos, MAJOR::COL);
-            // for (int ib = 0; ib < n_bands; ++ib)
-            // {
-            //     for (int iao = 0; iao < n_aos; iao++)
-            //     {
-            //         wfc(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-            //     }
-            // }
 
-            // vxc[ispin][ikpt]= wfc * vxc_nao[ispin][ikpt] * transpose(wfc);
+            // 生成 H_KS 和 H_KS0 矩阵
+            hf[ispin][ikpt] = wfc1 * hf_nao[ispin][ikpt] * transpose(wfc1);
 
-            // 获取并存储 xc 矩阵
-            vxc[ispin][ikpt] = arrays[key];
+            // 将 hf 和 vxc 在 KS 基下相加，生成最终的 vxc 矩阵
+            vxc[ispin][ikpt] = vxc[ispin][ikpt] + hf[ispin][ikpt];
             vxc0[ispin][ikpt] = vxc[ispin][ikpt];
+
             // 构建 H_KS 矩阵，使用哈密顿量中的本征值
             H_KS[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
             H_KS0[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
@@ -131,14 +158,15 @@ void task_qsgw()
         }
     }
 
-    // 判断是否所有文件都成功处理
-    if (mpi_comm_global_h.myid == 0) {
-        if (all_files_processed_successfully) {
-            std::cout << "* Success: Read DFT xc potential, will solve quasi-particle equation\n";
-        } else {
-            std::cout << "* Error: Some files failed to process, switch off solving quasi-particle equation\n";
-        }
-    }
+
+    // // 判断是否所有文件都成功处理
+    // if (mpi_comm_global_h.myid == 0) {
+    //     if (all_files_processed_successfully) {
+    //         std::cout << "* Success: Read DFT xc potential, will solve quasi-particle equation\n";
+    //     } else {
+    //         std::cout << "* Error: Some files failed to process, switch off solving quasi-particle equation\n";
+    //     }
+    // }
 
     Profiler::stop("read_vxc_HKS");
 
@@ -190,8 +218,8 @@ void task_qsgw()
 
 
     // 设置收敛条件
-    double eigenvalue_tolerance = 1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 200;           // 最大迭代次数
+    double eigenvalue_tolerance = -1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
+    int max_iterations = 50;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.001;
     bool converged = false;

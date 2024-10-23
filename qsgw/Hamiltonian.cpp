@@ -75,17 +75,7 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
                                 Hexx_all.at(ispin).at(ikpt) + Vc_all.at(ispin).at(ikpt);
             // Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) +
             //                     Hexx_all.at(ispin).at(ikpt) ;
-            // // 设置阈值，小于此阈值的非对角元素置为 0
-            // const double threshold = 1e-6;
-            
-            // // 假设 Matz 是 n_states x n_states 的方阵
-            // for (int i = 0; i < n_states; ++i) {
-            //     for (int j = 0; j < n_states; ++j) {
-            //         if (i != j && std::abs(H0_GW_spin_k(i, j).real()) < threshold) {
-            //             H0_GW_spin_k(i, j) = 0.0; // 将小于阈值的非对角元实部置为 0
-            //         }
-            //     }
-            // }
+           
             H0_GW_all[ispin][ikpt] = H0_GW_spin_k;
         }
     }
@@ -108,25 +98,44 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
             // 对角化哈密顿量，得到 QP 波函数在 KS 表象下的表示
             std::vector<double> w;
             Matz eigvec_KS;
+
+            // 打印哈密顿量矩阵
+            printf("%77s\n", final_banner.c_str());
+            printf("Hamiltonian matrix (h):\n");
+            for (int i = 0; i < dimension; ++i) {
+                for (int j = 0; j < nao; ++j) {
+                    printf("%20.16f ", h(i, j).real());
+                }
+                printf("\n"); // 换行
+            }
+            printf("%77s\n", final_banner.c_str());
+
             eigsh(h, w, eigvec_KS);
+
+            // 打印本征值 w
+            printf("Eigenvalues (w):\n");
+            for (int i = 0; i < dimension; ++i) {
+                printf("%20.16f\n", w[i]);
+            }
+            printf("%77s\n", final_banner.c_str());
+
+            // 打印本征向量矩阵 eigvec_KS
+            printf("Eigenvectors (eigvec_KS):\n");
+            for (int i = 0; i < dimension; ++i) {
+                for (int j = 0; j < nao; ++j) {
+                    printf("%20.16f ", eigvec_KS(i, j).real());
+                }
+                printf("\n"); // 换行
+            }
+            printf("%77s\n", final_banner.c_str());
+
 
             // 将本征值存储到 MeanField 的 eskb 矩阵
             for (int ib = 0; ib < dimension; ++ib)
             {
                 meanfield.get_eigenvals()[ispin](ikpt, ib) = w[ib];
             }
-            // printf("%77s\n", final_banner.c_str());
-            // printf("Eigenvectors1:\n");
-            // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-            //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-            //         const auto &eigenvectors = meanfield.get_eigenvectors()[ispin][ikpt](i, j) ;
-            //         printf("%16.6f ", eigenvectors.real()); 
-            //     }
-            //     printf("\n"); // 换行
-            // }
-            // printf("%77s\n", final_banner.c_str());
-            // printf("\n");
-            // Rotate H0_GW eigenvectors and store in meanfield
+            
             Matz wfc(dimension, nao, MAJOR::COL);
             for (int ib = 0; ib < dimension; ++ib)
             {
@@ -137,30 +146,12 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
             }
             auto eigvec_NAO = transpose(eigvec_KS) * wfc;
             
-            // // 确保新特征向量方向与原特征向量一致
-            // for (int ib = 0; ib < dimension; ++ib)
-            // {
-            //     double dot_product = 0.0;
-            //     for (int iao = 0; iao < nao; ++iao)
-            //     {
-            //         dot_product += wfc(ib, iao).real() * eigvec_NAO(ib, iao).real();
-            //     }
-
-            //     // 如果点积为负数，翻转新特征向量的方向
-            //     if (dot_product < 0.0)
-            //     {
-            //         for (int iao = 0; iao < nao; ++iao)
-            //         {
-            //             eigvec_NAO(ib, iao) = -eigvec_NAO(ib, iao);
-            //         }
-            //     }
-            // }
             printf("%77s\n", final_banner.c_str());
             printf("Eigenvectors2:\n");
             for (int i = 0; i < meanfield.get_n_bands(); i++) {
                 for (int j = 0; j < meanfield.get_n_bands(); j++) {
                     const auto &eigenvectors = meanfield.get_eigenvectors()[ispin][ikpt](i, j) ;
-                    printf("%20.16f ", eigenvectors.real()); 
+                    printf("%20.16f ", eigenvectors.real());
                 }
                 printf("\n"); // 换行
             }
