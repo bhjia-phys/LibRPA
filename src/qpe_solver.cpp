@@ -19,13 +19,13 @@ int qpe_solver_pade_self_consistent(
 {
     int info = 0;
     const double escale = 0.1;
-    const int n_iter_max = 200;
+    const int n_iter_max = 1000;
     int n_iter = 0;
 
     // initial guess of e_qp as input mean-field energy
     e_qp = e_mf;
 
-    double diff = 1e-3;
+    double diff = 1e-4;
 
     // std::cout << "QPE: " << e_mf << " " << e_fermi << " " << vxc << " " << sigma_x << "\n";
     while (n_iter++ < n_iter_max)
@@ -33,7 +33,7 @@ int qpe_solver_pade_self_consistent(
         e_qp = e_qp + escale * diff;
         sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
         diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
-        // 输出每次迭代的 diff 和相关信息
+        // check;
         // std::cout << "Iteration " << n_iter << ": "
         //           << "e_qp = " << e_qp << ", "
         //           << "sigc = " << sigc << ", "

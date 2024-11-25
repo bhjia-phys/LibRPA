@@ -9,6 +9,8 @@ enum class task_t {
     G0W0,
     G0W0_band,
     QSGW,
+    QSGW_band,
+    scRPA,
     Wc_Rf,
     print_minimax,
 };

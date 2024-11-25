@@ -1,4 +1,4 @@
-#include "task_qsgw.h"
+#include "task_scRPA.h"
 
 // 标准库头文件
 #include <iostream>         // 用于输入输出操作
@@ -33,21 +33,17 @@
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
+#include "task_qsgw.h"
 
 
 
-std::vector<double> efermi_values;  
-std::vector<double> homo_values;
-std::vector<double> lumo_values;
-std::vector<int> iteration_numbers;
-
-void task_qsgw()
+void task_scRPA()
 {
     using LIBRPA::envs::mpi_comm_global_h;
     using LIBRPA::utils::lib_printf;
  
 
-    Profiler::start("qsgw", "QSGW quasi-particle calculation");
+    Profiler::start("scRPA", "scRPA quasi-particle calculation");
 
     Vector3_Order<int> period {kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
@@ -251,8 +247,6 @@ void task_qsgw()
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
     mpi_comm_global_h.barrier();
-    std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
-    file.close();
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations) {
         iteration++;
@@ -292,7 +286,7 @@ void task_qsgw()
         }
 
         // 构建V^{exx}矩阵,得到Hexx_nband_nband: exx.exx_is_ik_KS
-        Profiler::start("qsgw_exx", "Build exchange self-energy");
+        Profiler::start("scRPA_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
@@ -304,7 +298,7 @@ void task_qsgw()
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
         }
-        Profiler::stop("qsgw_exx");
+        Profiler::stop("scRPA_exx");
         Hexx_matrix_temp[iteration] = exx.exx_is_ik_KS ;
         Hexx_matrix_temp[0] = exx.exx_is_ik_KS ;
 
@@ -360,7 +354,7 @@ void task_qsgw()
         
         
         // Build screened interaction
-        Profiler::start("qsgw_wc", "Build screened interaction");
+        Profiler::start("scRPA_wc", "Build screened interaction");
         vector<std::complex<double>> epsmac_LF_imagfreq(epsmac_LF_imagfreq_re.cbegin(), epsmac_LF_imagfreq_re.cend());
         map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old> Wc_freq_q;
         if (Params::use_scalapack_gw_wc) {
@@ -368,7 +362,7 @@ void task_qsgw()
         } else {
             Wc_freq_q = compute_Wc_freq_q(chi0, Vq, Vq_cut, epsmac_LF_imagfreq);
         }
-        Profiler::stop("qsgw_wc");
+        Profiler::stop("scRPA_wc");
 
 
         LIBRPA::G0W0 s_g0w0(meanfield, kfrac_list, chi0.tfg);
@@ -396,7 +390,7 @@ void task_qsgw()
         
         if (all_files_processed_successfully)
         {
-            Profiler::start("qsgw_solve_qpe", "Solve quasi-particle equation");
+            Profiler::start("scRPA_solve_qpe", "Solve quasi-particle equation");
 
             if (mpi_comm_global_h.is_root()) {
                 std::cout << "Solving quasi-particle equation\n";
@@ -411,88 +405,129 @@ void task_qsgw()
                         );
                   
                         const auto &sigc_sk = s_g0w0.sigc_is_ik_f_KS[i_spin][i_kpoint];
-
-                        for (int i_state_row = 0; i_state_row < n_bands; i_state_row++) {
-                            // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
-                            const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
-                            const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row,i_state_row);
-                            const auto &vxc_state = vxc[i_spin][i_kpoint](i_state_row, i_state_row);
+                        
+                        //QSGW
+                        // for (int i_state_row = 0; i_state_row < n_bands; i_state_row++) {
+                        //     // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
+                        //     const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                        //     const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row,i_state_row);
+                        //     const auto &vxc_state = vxc[i_spin][i_kpoint](i_state_row, i_state_row);
                        
-                            // 获取自能
-                            std::vector<cplxdb> sigc_state;
+                        //     // 获取自能
+                        //     std::vector<cplxdb> sigc_state;
 
-                            for (const auto &freq : chi0.tfg.get_freq_nodes()) {
-                                sigc_state.push_back(sigc_sk.at(freq)(i_state_row, i_state_row));
-                            }
-                            // 定义阈值
-                            // double threshold = 1e-5;
+                        //     for (const auto &freq : chi0.tfg.get_freq_nodes()) {
+                        //         sigc_state.push_back(sigc_sk.at(freq)(i_state_row, i_state_row));
+                        //     }
+                        //     // 定义阈值
+                        //     // double threshold = 1e-5;
                             
-                            // 构建 Pade 近似对象
-                            LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_state);
-                            // QPE求解
-                            double e_qp;
-                            cplxdb sigc_qp;
-                            int flag_qpe_solver = LIBRPA::qpe_solver_pade_self_consistent(
-                                pade, eks_state, efermi, vxc_state.real(), exx_state.real(), e_qp, sigc_qp
-                            );
+                        //     // 构建 Pade 近似对象
+                        //     LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_state);
+                        //     // QPE求解
+                        //     double e_qp;
+                        //     cplxdb sigc_qp;
+                        //     int flag_qpe_solver = LIBRPA::qpe_solver_pade_self_consistent(
+                        //         pade, eks_state, efermi, vxc_state.real(), exx_state.real(), e_qp, sigc_qp
+                        //     );
 
-                            if (flag_qpe_solver != 0) {
-                                std::cout << "Warning! QPE solver failed for spin " << i_spin + 1
-                                        << ", kpoint " << i_kpoint + 1
-                                        << ", state " << i_state_row + 1 << "\n";
-                                e_qp = std::numeric_limits<double>::quiet_NaN();
-                                sigc_qp = std::numeric_limits<cplxdb>::quiet_NaN();
-                            }
-                            else
-                            {
-                                sigcmat[i_state_row][i_state_row][i_state_row] = sigc_qp;
-                                e_qp_all[i_spin][i_kpoint][i_state_row] = e_qp;
-                                sigc_all[i_spin][i_kpoint][i_state_row] = sigc_qp;
-                                // // 输出 e_qp 的值
-                                // std::cout << "e_qp for spin " << i_spin + 1 
-                                //         << ", kpoint " << i_kpoint + 1 
-                                //         << ", state " << i_state_row + 1 
-                                //         << " = " << e_qp << std::endl;
-                            }
-                            for (int i_state_col = 0; i_state_col < meanfield.get_n_bands(); i_state_col++) {
-                                if (i_state_col == i_state_row) {
-                                    continue;  // 跳过 i_state_col 等于 i_state_row 的情况
-                                }
-                                std::vector<cplxdb> sigc_mn;
-                                for (const auto &freq : chi0.tfg.get_freq_nodes()) {
-                                    sigc_mn.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
-                                    // if (std::abs(sigc_mn.real()) < threshold) {
-                                    //     sigc_mn.real(0.0);
-                                    // }
-                                    // if (std::abs(sigc_mn.imag()) < threshold) {
-                                    //     sigc_mn.imag(0.0);
-                                    // }
-                                }    
-                                LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
+                        //     if (flag_qpe_solver != 0) {
+                        //         std::cout << "Warning! QPE solver failed for spin " << i_spin + 1
+                        //                 << ", kpoint " << i_kpoint + 1
+                        //                 << ", state " << i_state_row + 1 << "\n";
+                        //         e_qp = std::numeric_limits<double>::quiet_NaN();
+                        //         sigc_qp = std::numeric_limits<cplxdb>::quiet_NaN();
+                        //     }
+                        //     else
+                        //     {
+                        //         sigcmat[i_state_row][i_state_row][i_state_row] = sigc_qp;
+                        //         e_qp_all[i_spin][i_kpoint][i_state_row] = e_qp;
+                        //         sigc_all[i_spin][i_kpoint][i_state_row] = sigc_qp;
+                        //         // // 输出 e_qp 的值
+                        //         // std::cout << "e_qp for spin " << i_spin + 1 
+                        //         //         << ", kpoint " << i_kpoint + 1 
+                        //         //         << ", state " << i_state_row + 1 
+                        //         //         << " = " << e_qp << std::endl;
+                        //     }
+                        //     for (int i_state_col = 0; i_state_col < meanfield.get_n_bands(); i_state_col++) {
+                        //         if (i_state_col == i_state_row) {
+                        //             continue;  // 跳过 i_state_col 等于 i_state_row 的情况
+                        //         }
+                        //         std::vector<cplxdb> sigc_mn;
+                        //         for (const auto &freq : chi0.tfg.get_freq_nodes()) {
+                        //             sigc_mn.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
+                        //             // if (std::abs(sigc_mn.real()) < threshold) {
+                        //             //     sigc_mn.real(0.0);
+                        //             // }
+                        //             // if (std::abs(sigc_mn.imag()) < threshold) {
+                        //             //     sigc_mn.imag(0.0);
+                        //             // }
+                        //         }    
+                        //         LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
                                 
-                                // 计算得到的值
-                                auto result = pade.get(e_qp - efermi);
-                                auto result1 = pade.get(0.0);
-                                // 存储值到 sigcmat
-                                sigcmat[i_state_row][i_state_col][i_state_row] = result;
-                                sigcmat[i_state_row][i_state_col][n_bands] = result1;
+                        //         // 计算得到的值
+                        //         auto result = pade.get(e_qp - efermi);
+                        //         auto result1 = pade.get(0.0);
+                        //         // 存储值到 sigcmat
+                        //         sigcmat[i_state_row][i_state_col][i_state_row] = result;
+                        //         sigcmat[i_state_row][i_state_col][n_bands] = result1;
                                 
-                                // // 输出当前计算结果
-                                // std::cout << "sigcmat[" << i_state_row << "][" << i_state_col << "][" << i_state_row 
-                                //         << "] = " << result << std::endl;
-                            }
+                        //         // // 输出当前计算结果
+                        //         // std::cout << "sigcmat[" << i_state_row << "][" << i_state_col << "][" << i_state_row 
+                        //         //         << "] = " << result << std::endl;
+                        //     }
                             
 
-                        }
+                        // }
+                        const auto& freq = chi0.tfg.get_freq_nodes();
+                        // printf("%zu\n ",freq.size());
+                        const auto& f_weight= chi0.tfg.get_freq_weights();
+                        auto G0_matrix= build_G0(meanfield,freq,i_spin,i_kpoint,n_bands);
                         
+                        Vc_all[i_spin][i_kpoint] = calculate_scRPA_exchange_correlation(meanfield,freq,f_weight,sigc_sk,G0_matrix,i_spin,i_kpoint,n_bands,efermi,temperature);
                         
-                        Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat,n_bands);
+                        //scRPA check
+                        // printf("%77s\n", final_banner.c_str());
+                        // printf("G0_matrix:\n");
+                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                        //     for (int j = 0; j < freq.size(); j++) {
+                        //         const auto &G0_matrix0 = G0_matrix[i][j] ;
+                        //         // 打印实部和虚部
+                        //         printf("%20.16f + %20.16fi ", std::real(G0_matrix0), std::imag(G0_matrix0));
+                        //     }
+                        //     printf("\n"); // 换行
+                        // }
                         
-                        
+                        // for (const auto& freq : chi0.tfg.get_freq_nodes()) {
+                        //     std::cout << "Frequency: " << freq << std::endl;
+                            
+                        //     // 获取该频率点对应的自能矩阵
+                        //     const auto& sigma_matrix = sigc_sk.at(freq);
+
+                        //     // 打印自能矩阵
+                        //     for (int i = 0; i < meanfield.get_n_bands(); ++i) {
+                        //         for (int j = 0; j < meanfield.get_n_bands(); ++j) {
+                        //             const auto &sigc_sk0 = sigma_matrix(i,j) ;
+                        //             // 打印实部和虚部
+                        //             printf("%20.16f + %20.16fi ", std::real(sigc_sk0), std::imag(sigc_sk0));
+                        //         }
+                        //         std::cout << std::endl;
+                        //     }
+                        //     std::cout << std::endl; 
+                        // }
+                        // printf("%77s\n", final_banner.c_str());
+                        // printf("Vc_all:\n");
+                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                        //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        //         const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
+                        //         printf("%20.16f ", Vc_all_0); 
+                        //     }
+                        //     printf("\n"); // 换行
+                        // }
                     }
                 }
             }
-            Profiler::stop("qsgw_solve_qpe");
+            Profiler::stop("scRPA_solve_qpe");
         }
 
         //检查输入
@@ -776,7 +811,7 @@ void task_qsgw()
         }
         std::cout << "Converged after " << iteration << " iterations.\n";
         // const std::string final_banner(90, '-');
-        lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
+        lib_printf("Final Quasi-Particle Energy after scRPA Iterations [unit: eV]\n\n");
         const auto &Efermi = meanfield.get_efermi() ;
         printf("%5s\n","efermi");
         printf("%5f\n",Efermi);
@@ -1013,6 +1048,7 @@ void task_qsgw()
         //         printf("\n");
         //     }
         // }
+
         // 保存 HOMO、LUMO 和费米能级数据
         {
             std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::app); // 使用 std::ios::app 以追加模式打开文件
@@ -1021,10 +1057,7 @@ void task_qsgw()
                 << lumo_values[iteration] << " "
                 << efermi_values[iteration] << std::endl;
         }
-
-        
-
-        // 如果已经收敛或达到最大迭代次数，输出最终的QSGW迭代结果，退出循环
+        // 如果已经收敛或达到最大迭代次数，输出最终的scRPA迭代结果，退出循环
         if (converged) {
             break;
         }
@@ -1035,18 +1068,10 @@ void task_qsgw()
         mpi_comm_global_h.barrier();
     }
 
-    Profiler::stop("qsgw");
-}
+    plot_homo_lumo_vs_iterations();
 
-void plot_homo_lumo_vs_iterations() {
-    // 将 HOMO、LUMO 和费米能级数据保存到文件
-    std::ofstream file("homo_lumo_vs_iterations.dat");
-    for (size_t i = 0; i < iteration_numbers.size(); ++i) {
-        file << iteration_numbers[i] << " "
-             << homo_values[i] << " "
-             << lumo_values[i] << " "
-             << efermi_values[i] << std::endl;
-    }
-    file.close();
+    
 
+
+    Profiler::stop("scRPA");
 }

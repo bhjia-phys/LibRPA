@@ -18,6 +18,8 @@
 #include "task_exx.h"
 #include "task_gw.h"
 #include "task_qsgw.h"
+#include "task_qsgw_band.h"
+#include "task_scRPA.h"
 #include "task_gw_band.h"
 #include "task_screened_coulomb.h"
 
@@ -100,6 +102,10 @@ int main(int argc, char **argv)
         task = task_t::G0W0;
     else if (task_lower == "qsgw")
         task = task_t::QSGW;
+    else if (task_lower == "qsgw_band")
+        task = task_t::QSGW_band;    
+    else if (task_lower == "scrpa")
+        task = task_t::scRPA;
     else if (task_lower == "g0w0_band")
         task = task_t::G0W0_band;
     else if (task_lower == "exx")
@@ -311,6 +317,14 @@ int main(int argc, char **argv)
     else if (task == task_t::QSGW)
     {
         task_qsgw();
+    }
+    else if (task == task_t::QSGW_band)
+    {
+        task_qsgw_band();
+    }
+    else if (task == task_t::scRPA)
+    {
+        task_scRPA();
     }
     else if (task == task_t::G0W0_band)
     {

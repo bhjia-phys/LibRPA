@@ -18,6 +18,7 @@
 #include "read_data.h"
 #include "write_aims.h"
 #include "driver_utils.h"
+#include "fermi_energy_occupation.h"
 
 void task_g0w0()
 {
@@ -115,6 +116,28 @@ void task_g0w0()
         }
     }
 
+    //check input eigenvector
+    const std::string final_banner(90, '-');
+    // for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+    // {
+    //     for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+    //     {
+    //         const auto &k = kfrac_list[i_kpoint];
+    //         // Output the k-point vector components
+    //         printf("k-point %d: (%20.15f, %20.15f, %20.15f)\n", i_kpoint, k.x, k.y, k.z);
+    //         printf("%77s\n", final_banner.c_str());
+    //         printf("eigenvectors:\n");
+    //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
+    //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
+    //                 const auto &eigenvectors = meanfield.get_eigenvectors()[i_spin][i_kpoint](i, j) ;
+    //                 printf("%20.15f ", eigenvectors.real()); 
+    //             }
+    //             printf("\n"); // 换行
+    //         }
+    //         printf("%77s\n", final_banner.c_str());
+    //         printf("\n");
+    //     }
+    // }
     Profiler::start("g0w0_exx", "Build exchange self-energy");
     auto exx = LIBRPA::Exx(meanfield, kfrac_list);
     {
@@ -305,6 +328,14 @@ void task_g0w0()
                     printf("\n");
                 }
             }
+            //check g0w0;
+            const double temperature = 0.0001;
+            double total_electrons = meanfield.get_total_weight();
+            printf("%5s\n","Total_electrons");
+            printf("%5f\n",total_electrons);
+            double eqp_gap = calculate_eqp_fermi_energy(meanfield, e_qp_all, temperature, total_electrons);
+            printf("%5s\n","eqp_gap:");
+            printf("%5f\n",eqp_gap);
         }
         Profiler::stop("g0w0_solve_qpe");
     }

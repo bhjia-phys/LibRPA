@@ -16,6 +16,8 @@ list(APPEND exe_sources
   task_gw.cpp
   task_gw_band.cpp
   task_qsgw.cpp
+  task_qsgw_band.cpp
+  task_scRPA.cpp
   task_screened_coulomb.cpp
   )
 

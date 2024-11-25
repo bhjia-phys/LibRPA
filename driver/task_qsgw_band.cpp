@@ -33,15 +33,12 @@
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
+#include "task_qsgw.h"
 
 
 
-std::vector<double> efermi_values;  
-std::vector<double> homo_values;
-std::vector<double> lumo_values;
-std::vector<int> iteration_numbers;
 
-void task_qsgw()
+void task_qsgw_band()
 {
     using LIBRPA::envs::mpi_comm_global_h;
     using LIBRPA::utils::lib_printf;
@@ -241,7 +238,7 @@ void task_qsgw()
     //     }
     // }
     // 设置收敛条件
-    double eigenvalue_tolerance = 1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
+    double eigenvalue_tolerance = -1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
     int max_iterations = 50;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
@@ -251,8 +248,6 @@ void task_qsgw()
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
     mpi_comm_global_h.barrier();
-    std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
-    file.close();
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations) {
         iteration++;
@@ -484,11 +479,51 @@ void task_qsgw()
                             
 
                         }
-                        
-                        
+                        const auto& freq = chi0.tfg.get_freq_nodes();
+                        // printf("%zu\n ",freq.size());
+                        const auto& f_weight= chi0.tfg.get_freq_weights();
+                        auto G0_matrix= build_G0(meanfield,freq,i_spin,i_kpoint,n_bands);
                         Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat,n_bands);
+                        // Vc_all[i_spin][i_kpoint] = calculate_scRPA_exchange_correlation(meanfield,freq,f_weight,sigc_sk,G0_matrix,i_spin,i_kpoint,n_bands,efermi,temperature);
                         
+                        //scRPA check
+                        // printf("%77s\n", final_banner.c_str());
+                        // printf("G0_matrix:\n");
+                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                        //     for (int j = 0; j < freq.size(); j++) {
+                        //         const auto &G0_matrix0 = G0_matrix[i][j] ;
+                        //         // 打印实部和虚部
+                        //         printf("%20.16f + %20.16fi ", std::real(G0_matrix0), std::imag(G0_matrix0));
+                        //     }
+                        //     printf("\n"); // 换行
+                        // }
                         
+                        // for (const auto& freq : chi0.tfg.get_freq_nodes()) {
+                        //     std::cout << "Frequency: " << freq << std::endl;
+                            
+                        //     // 获取该频率点对应的自能矩阵
+                        //     const auto& sigma_matrix = sigc_sk.at(freq);
+
+                        //     // 打印自能矩阵
+                        //     for (int i = 0; i < meanfield.get_n_bands(); ++i) {
+                        //         for (int j = 0; j < meanfield.get_n_bands(); ++j) {
+                        //             const auto &sigc_sk0 = sigma_matrix(i,j) ;
+                        //             // 打印实部和虚部
+                        //             printf("%20.16f + %20.16fi ", std::real(sigc_sk0), std::imag(sigc_sk0));
+                        //         }
+                        //         std::cout << std::endl;
+                        //     }
+                        //     std::cout << std::endl; 
+                        // }
+                        // printf("%77s\n", final_banner.c_str());
+                        // printf("Vc_all:\n");
+                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                        //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        //         const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
+                        //         printf("%20.16f ", Vc_all_0); 
+                        //     }
+                        //     printf("\n"); // 换行
+                        // }
                     }
                 }
             }
@@ -1013,16 +1048,6 @@ void task_qsgw()
         //         printf("\n");
         //     }
         // }
-        // 保存 HOMO、LUMO 和费米能级数据
-        {
-            std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::app); // 使用 std::ios::app 以追加模式打开文件
-            file << iteration << " "
-                << homo_values[iteration] << " "
-                << lumo_values[iteration] << " "
-                << efermi_values[iteration] << std::endl;
-        }
-
-        
 
         // 如果已经收敛或达到最大迭代次数，输出最终的QSGW迭代结果，退出循环
         if (converged) {
@@ -1035,18 +1060,10 @@ void task_qsgw()
         mpi_comm_global_h.barrier();
     }
 
+    plot_homo_lumo_vs_iterations();
+
+    
+
+
     Profiler::stop("qsgw");
-}
-
-void plot_homo_lumo_vs_iterations() {
-    // 将 HOMO、LUMO 和费米能级数据保存到文件
-    std::ofstream file("homo_lumo_vs_iterations.dat");
-    for (size_t i = 0; i < iteration_numbers.size(); ++i) {
-        file << iteration_numbers[i] << " "
-             << homo_values[i] << " "
-             << lumo_values[i] << " "
-             << efermi_values[i] << std::endl;
-    }
-    file.close();
-
 }

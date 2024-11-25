@@ -348,6 +348,7 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
             collect_block_from_IJ_storage_tensor_transform(Hexx_nao_nao, desc_nao_nao, 
                     atomic_basis_wfc, atomic_basis_wfc, fourier, exx_I_JR);
             Profiler::stop("build_real_space_exx_6");
+
             // utils::lib_printf("%s\n", str(Hexx_nao_nao).c_str());
             const auto &wfc_isp_k = wfc_target[isp][ik];
             blacs_ctxt_global_h.barrier();
@@ -374,17 +375,37 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
                                           Hexx_nband_nband.ptr(), 1, 1, desc_nband_nband.desc,
                                           Hexx_nband_nband_fb.ptr(), 1, 1, desc_nband_nband_fb.desc,
                                           desc_nband_nband_fb.ictxt());
-            this->exx_is_ik_KS[isp][ik] = Hexx_nband_nband_fb;
+
+                                     
+            this->exx_is_ik_KS[isp][ik] = Hexx_nband_nband_fb.copy();
+            
             // cout << "Hexx_nband_nband_fb isp " << isp  << " ik " << ik << endl << Hexx_nband_nband_fb;
             if (blacs_ctxt_global_h.myid == 0)
             {
-                for (int ib = 0; ib != n_bands; ib++)
-                    this->Eexx[isp][ik][ib] = Hexx_nband_nband_fb(ib, ib).real();
+                for (int ib_row = 0; ib_row != n_bands; ib_row++){
+                    this->Eexx[isp][ik][ib_row] = Hexx_nband_nband_fb(ib_row, ib_row).real();
+                }
             }
             Profiler::stop("build_real_space_exx_8");
         }
     }
+    // 在所有计算完成后输出 exx_is_ik_KS 矩阵
+    // printf("Checking exx_is_ik_KS matrices for all k-points:\n");
+    // for (int isp = 0; isp < n_spins; isp++) {
+    //     for (int ik = 0; ik < n_kpts; ik++) {
+    //         printf("exx_is_ik_KS[%d][%d] matrix:\n", isp, ik);
+    //         for (int i = 0; i < n_bands; i++) {
+    //             for (int j = 0; j < n_bands; j++) {
+    //                 printf("%20.15f ", this->exx_is_ik_KS[isp][ik](i, j).real());
+    //             }
+    //             printf("\n");
+    //         }
+    //         printf("\n");
+    //     }
+    // }
 }
+
+
 
 void Exx::build_KS_kgrid()
 {
