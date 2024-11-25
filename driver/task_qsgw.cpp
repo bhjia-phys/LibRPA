@@ -12,6 +12,8 @@
 // 自定义头文件
 #include "envs_mpi.h"     
 #include "envs_io.h"        
+#include "envs_mpi.h"     
+#include "envs_io.h"        
 #include "utils_io.h"
 #include "meanfield.h"              // MeanField类相关
 #include "params.h"                 // 参数设置相关
@@ -27,12 +29,18 @@
 #include "profiler.h"               // 性能分析工具
 #include "ri.h"     
 #include "read_data.h"                
+#include "ri.h"     
+#include "read_data.h"                
 #include "matrix.h"
+#include "read_data.h"    
+#include "driver_utils.h"        
 #include "read_data.h"    
 #include "driver_utils.h"        
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
+
+
 
 
 
@@ -59,10 +67,13 @@ void task_qsgw()
     }
 
     
+
+    
     const auto n_spins = meanfield.get_n_spins();
     const auto n_bands = meanfield.get_n_bands();
     const auto n_kpoints = meanfield.get_n_kpoints();
     const auto n_aos = meanfield.get_n_aos();
+
 
     // 初始化
     Profiler::start("read_vxc_HKS");
@@ -423,6 +434,7 @@ void task_qsgw()
 
     Profiler::stop("read_vxc_HKS");
     mpi_comm_global_h.barrier();
+    mpi_comm_global_h.barrier();
     
     // 在迭代开始前计算初始 HOMO, LUMO 和费米能级
     double efermi = meanfield.get_efermi();
@@ -503,11 +515,15 @@ void task_qsgw()
     int max_iterations =30;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
+    const double temperature = 0.0001;
     bool converged = false;
     int frequency = n_bands + 1; 
     std::vector<std::pair<int, int>> significant_positions;
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
+    mpi_comm_global_h.barrier();
+    std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
+    file.close();
     mpi_comm_global_h.barrier();
     std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
     file.close();
@@ -522,6 +538,33 @@ void task_qsgw()
         }
         
         
+        Chi0 chi0(meanfield, klist, Params::nfreq);
+        chi0.gf_R_threshold = Params::gf_R_threshold;
+
+        Profiler::start("chi0_build", "Build response function chi0");
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist,
+                   TFGrids::get_grid_type(Params::tfgrids_type), true);
+        Profiler::stop("chi0_build");
+        mpi_comm_global_h.barrier();
+
+        // 读取库伦相互作用
+        Profiler::start("read_vq_cut", "Load truncated Coulomb");
+        read_Vq_full("./", "coulomb_cut_", true);
+        Profiler::stop("read_vq_cut");
+
+        // 读取和处理介电函数
+        std::vector<double> epsmac_LF_imagfreq_re;
+        if (Params::replace_w_head)
+        {
+            std::vector<double> omegas_dielect;
+            std::vector<double> dielect_func;
+            read_dielec_func("dielecfunc_out", omegas_dielect, dielect_func);
+    
+            epsmac_LF_imagfreq_re = interpolate_dielec_func(
+                    Params::option_dielect_func, omegas_dielect, dielect_func,
+                    chi0.tfg.get_freq_nodes());
+        }
+
         Chi0 chi0(meanfield, klist, Params::nfreq);
         chi0.gf_R_threshold = Params::gf_R_threshold;
 
@@ -617,6 +660,7 @@ void task_qsgw()
         Hexx_matrix_temp[0] = exx.exx_is_ik_KS ;
 
         mpi_comm_global_h.barrier();
+        mpi_comm_global_h.barrier();
 
         
         // //check
@@ -676,6 +720,7 @@ void task_qsgw()
         // }
         
         
+        
         // Build screened interaction
         Profiler::start("qsgw_wc", "Build screened interaction");
         vector<std::complex<double>> epsmac_LF_imagfreq(epsmac_LF_imagfreq_re.cbegin(), epsmac_LF_imagfreq_re.cend());
@@ -695,11 +740,13 @@ void task_qsgw()
 
         Profiler::start("g0w0_sigc_rotate_KS", "Rotate self-energy, IJ -> ij -> KS");
         s_g0w0.build_sigc_matrix_KS_kgrid0();//rotate
+        s_g0w0.build_sigc_matrix_KS_kgrid0();//rotate
         Profiler::stop("g0w0_sigc_rotate_KS");
 
         // 构建哈密顿量矩阵并对角化，旋转基底，并存储本征值，本征矢量
         // 第一步：构建关联势矩阵
         std::map<int, std::map<int, Matz>> Vc_all;
+
 
 
         // 构建虚频点列表
@@ -734,6 +781,7 @@ void task_qsgw()
                             // 检测；Solve quasi-particle equation，并对于全自能矩阵进行解析延拓方便下一步构建哈密顿量
                             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
                             const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row,i_state_row);
+                            const auto &exx_state = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state_row,i_state_row);
                             const auto &vxc_state = vxc[i_spin][i_kpoint](i_state_row, i_state_row);
                        
                             // 获取自能
@@ -743,6 +791,8 @@ void task_qsgw()
                                 sigc_state.push_back(sigc_sk.at(freq)(i_state_row, i_state_row));
                             }
                             // 定义阈值
+                            // double threshold = 1e-5;
+                            
                             // double threshold = 1e-5;
                             
                             // 构建 Pade 近似对象
@@ -1155,6 +1205,9 @@ void task_qsgw()
         double eqp_gap = calculate_eqp_fermi_energy(meanfield, e_qp_all, temperature, total_electrons);
         printf("%5s\n","eqp_gap:");
         printf("%5f\n",eqp_gap);
+        double eqp_gap = calculate_eqp_fermi_energy(meanfield, e_qp_all, temperature, total_electrons);
+        printf("%5s\n","eqp_gap:");
+        printf("%5f\n",eqp_gap);
          //将占据数和费米能级更新到 MeanField 对象中
         update_fermi_energy_and_occupations(meanfield, temperature, efermi);
         efermi_values.push_back(efermi * HA2EV);  
@@ -1366,10 +1419,12 @@ void task_qsgw()
             std::cout << "Reached maximum number of iterations.\n";
         }
         mpi_comm_global_h.barrier();
+        mpi_comm_global_h.barrier();
     }
 
     Profiler::stop("qsgw");
 }
+
 
 void plot_homo_lumo_vs_iterations() {
     // 将 HOMO、LUMO 和费米能级数据保存到文件

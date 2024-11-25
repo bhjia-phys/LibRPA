@@ -1,5 +1,6 @@
 #include "Hamiltonian.h"
 #include "fermi_energy_occupation.h"
+#include "fermi_energy_occupation.h"
 #include <iostream>
 #include "pbc.h"
 #include "constants.h"
