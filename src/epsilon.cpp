@@ -2223,8 +2223,8 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
     desc_nabf_nabf.init_square_blk(n_abf, n_abf, 0, 0);
     // obtain the indices of atom-pair block necessary to build 2D block of a Hermitian/symmetric
     // matrix
-    const auto set_IJ_nabf_nabf =
-        LIBRPA::get_necessary_IJ_from_block_2D_sy('U', LIBRPA::atomic_basis_abf, desc_nabf_nabf);
+    const auto set_IJ_nabf_nabf = LIBRPA::utils::get_necessary_IJ_from_block_2D_sy(
+        'U', LIBRPA::atomic_basis_abf, desc_nabf_nabf);
     const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
     auto chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
     auto coul_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
@@ -2245,6 +2245,22 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
         Iset_Jset_Wc.first.insert(ap.first);
         Iset_Jset_Wc.second.insert(ap.second);
     }
+    // Prepare local basis indices for 2D->IJ map
+    int I, iI;
+    map<int, vector<int>> map_lor_v;
+    map<int, vector<int>> map_loc_v;
+    for (int i_lo = 0; i_lo != desc_nabf_nabf.m_loc(); i_lo++)
+    {
+        int i_glo = desc_nabf_nabf.indx_l2g_r(i_lo);
+        LIBRPA::atomic_basis_abf.get_local_index(i_glo, I, iI);
+        map_lor_v[I].push_back(iI);
+    }
+    for (int i_lo = 0; i_lo != desc_nabf_nabf.n_loc(); i_lo++)
+    {
+        int i_glo = desc_nabf_nabf.indx_l2g_c(i_lo);
+        LIBRPA::atomic_basis_abf.get_local_index(i_glo, I, iI);
+        map_loc_v[I].push_back(iI);
+    }
 
     vector<Vector3_Order<double>> qpts;
     for (const auto &q_weight : irk_weight) qpts.push_back(q_weight.first);
@@ -2258,7 +2274,7 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
         coulwc_block.zero_out();
         // lib_printf("coul_block\n%s", str(coul_block).c_str());
 
-        int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q));
+        // int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q));
         std::array<double, 3> qa = {q.x, q.y, q.z};
 
         // collect the block elements of truncated coulomb matrices first
@@ -2586,8 +2602,10 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
             Profiler::start("epsilon_convert_wc_2d_to_ij", "Convert Wc, 2D -> IJ");
             Profiler::start("epsilon_convert_wc_map_block", "Initialize Wc atom-pair map");
             map<int, map<int, matrix_m<complex<double>>>> Wc_MNmap;
-            map_block_to_IJ_storage(Wc_MNmap, LIBRPA::atomic_basis_abf, LIBRPA::atomic_basis_abf,
-                                    chi0_block, desc_nabf_nabf, MAJOR::ROW);
+            // map_block_to_IJ_storage(Wc_MNmap, LIBRPA::atomic_basis_abf, LIBRPA::atomic_basis_abf,
+            //                         chi0_block, desc_nabf_nabf, MAJOR::ROW);
+            map_block_to_IJ_storage_new(Wc_MNmap, LIBRPA::atomic_basis_abf, map_lor_v, map_loc_v,
+                                        chi0_block, desc_nabf_nabf, MAJOR::ROW);
             Profiler::stop("epsilon_convert_wc_map_block");
 
             Profiler::start("epsilon_convert_wc_communicate", "Communicate");
@@ -2595,6 +2613,7 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
                 std::map<int, std::map<std::pair<int, std::array<double, 3>>,
                                        RI::Tensor<complex<double>>>>
                     Wc_libri;
+                Profiler::start("epsilon_convert_wc_communicate_1");
                 for (const auto &M_NWc : Wc_MNmap)
                 {
                     const auto &M = M_NWc.first;
@@ -2610,9 +2629,14 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
                         Wc_libri[M][{N, qa}] = RI::Tensor<complex<double>>({n_mu, n_nu}, Wc.sptr());
                     }
                 }
+                Profiler::stop("epsilon_convert_wc_communicate_1");
+                Profiler::start("epsilon_convert_wc_communicate_2");
+                // main timing
                 // cout << Wc_libri;
                 const auto IJq_Wc = RI::Communicate_Tensors_Map_Judge::comm_map2_first(
                     mpi_comm_global_h.comm, Wc_libri, Iset_Jset_Wc.first, Iset_Jset_Wc.second);
+                Profiler::stop("epsilon_convert_wc_communicate_2");
+                Profiler::start("epsilon_convert_wc_communicate_3");
                 // parse collected to
                 for (const auto &MN : atpair_local)
                 {
@@ -2624,6 +2648,7 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
                     Wc_freq_q[freq][M][N][q] = matrix_m<complex<double>>(
                         n_mu, n_nu, IJq_Wc.at(M).at({N, qa}).data, MAJOR::ROW);
                 }
+                Profiler::stop("epsilon_convert_wc_communicate_3");
                 // for ( int i_mu = 0; i_mu != n_mu; i_mu++ )
                 //     for ( int i_nu = 0; i_nu != n_nu; i_nu++ )
                 //     {
@@ -2636,8 +2661,6 @@ compute_Wc_freq_q_blacs_wing(const Chi0 &chi0, const atpair_k_cplx_mat_t &coulma
 #else
     throw std::logic_error("need compilation with LibRI");
 #endif
-
-    
 
     return Wc_freq_q;
 }
