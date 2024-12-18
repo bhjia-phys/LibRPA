@@ -241,8 +241,8 @@ void task_qsgw()
     //     }
     // }
     // 设置收敛条件
-    double eigenvalue_tolerance = 1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 50;           // 最大迭代次数
+    double eigenvalue_tolerance = 1e-3; // 设置一个适当的小值，作为本征值收敛的判断标准
+    int max_iterations = 30;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -575,7 +575,7 @@ void task_qsgw()
         //         printf("\n");
         //     }
         // }
-        auto H0_GW_all = construct_H0_GW(H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
+        auto H0_GW_all = construct_H0_GW(meanfield, H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
         
         mpi_comm_global_h.barrier();
         //混合
@@ -588,166 +588,102 @@ void task_qsgw()
         // }
         //检查输入
         
-        // for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-        // {
-        //     for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-        //     {
-        //         const auto &k = kfrac_list[i_kpoint];
-        //         printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-        //                 i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("%5s %16s %16s\n", "State", "e_mf", "v_xc");
-        //         printf("%77s\n", final_banner.c_str());
-        //         for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-        //         {
-        //             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                    
-        //             const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                        
-        //             printf("%5d %20.15f %20.15f\n",
-        //                 i_state + 1, eks_state, vxc_state.real());
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("H Matrix_real:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &H_value = H0_GW_all[i_spin][i_kpoint](i, j) ;
-        //                 printf("%20.15f ", H_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("H Matrix_image:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &H_value = H0_GW_all[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", H_value.imag()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         // 输出 exx_is_ik_KS 矩阵
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("exx Matrix2:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", exx_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("eigenvectors:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &eigenvectors = meanfield.get_eigenvectors()[i_spin][i_kpoint](i, j) ;
-        //                 printf("%20.15f ", eigenvectors.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("vxc Matrix2:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", vxc_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("exx Matrix-vxc Matrix2:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 printf("%16.6f ", exx_value.real()-vxc_value.real()); 
-        //             }
-        //             printf("\n"); 
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //     }
-        // }
+        for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+        {
+            for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+            {
+                const auto &k = kfrac_list[i_kpoint];
+                printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
+                        i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
+                printf("%77s\n", final_banner.c_str());
+                printf("H Matrix_real:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &H_value = H0_GW_all[i_spin][i_kpoint](i, j) ;
+                        printf("%20.15f ", H_value.real()); 
+                    }
+                    printf("\n"); // 换行
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+                printf("%77s\n", final_banner.c_str());
+                printf("H Matrix_image:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &H_value = H0_GW_all[i_spin][i_kpoint](i, j) ;
+                        printf("%16.6f ", H_value.imag()); 
+                    }
+                    printf("\n"); // 换行
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+                
+            }
+        }
 
         // 第三步：对 Hamiltonian 进行对角化并存储本征值
         diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
         
-        // for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-        // {
-        //     for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-        //     {
-        //         const auto &k = kfrac_list[i_kpoint];
-        //         printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-        //                 i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("%5s %16s %16s\n", "State", "e_mf", "v_xc");
-        //         printf("%77s\n", final_banner.c_str());
-        //         for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-        //         {
-        //             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                    
-        //             const auto &vxc_state = vxc0[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                        
-        //             printf("%5d %20.15f %20.15f\n",
-        //                 i_state + 1, eks_state, vxc_state.real());
-        //         }
-        //         // 输出 exx_is_ik_KS 矩阵
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("exx Matrix3:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", exx_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("eigenvectors2:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &eigenvectors = meanfield.get_eigenvectors()[i_spin][i_kpoint](i, j) ;
-        //                 printf("%20.15f ", eigenvectors.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("vxc Matrix3:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", vxc_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("Vc+exx Matrix-vxc Matrix:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 const auto &Vc_value = Vc_all[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 printf("%20.15f ", Vc_value.real() + exx_value.real() - vxc_value.real()); 
-        //             }
-        //             printf("\n"); 
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //     }
-        // }
+        for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+        {
+            for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+            {
+                const auto &k = kfrac_list[i_kpoint];
+                printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
+                        i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
+                printf("%77s\n", final_banner.c_str());
+  
+                // 输出 exx_is_ik_KS 矩阵
+                printf("%77s\n", final_banner.c_str());
+                printf("exx Matrix:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j) ;
+                        printf("%16.6f ", exx_value.real()); 
+                    }
+                    printf("\n"); // 换行
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+
+                printf("%77s\n", final_banner.c_str());
+                printf("exx Matrix-vxc0 Matrix:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j)* HA2EV ;
+                        const auto &vxc_value = vxc[i_spin][i_kpoint](i, j) ;
+                        printf("%20.15f ", exx_value.real() - vxc_value.real()); 
+                    }
+                    printf("\n"); // 换行
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+                printf("%77s\n", final_banner.c_str());
+                printf("Vc Matrix:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &Vc_value = Vc_all[i_spin][i_kpoint](i, j)* HA2EV ;
+                        printf("%20.15f ", Vc_value.real()); 
+                    }
+                    printf("\n"); 
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+                printf("%77s\n", final_banner.c_str());
+                printf("Vc+exx Matrix-vxc0 Matrix:\n");
+                for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                    for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                        const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j)* HA2EV ;
+                        const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j)* HA2EV ;
+                        const auto &Vc_value = Vc_all[i_spin][i_kpoint](i, j)* HA2EV ;
+                        printf("%20.15f ", Vc_value.real() + exx_value.real() - vxc_value.real()); 
+                    }
+                    printf("\n"); 
+                }
+                printf("%77s\n", final_banner.c_str());
+                printf("\n");
+            }
+        }
 
         // 计算全局费米能和占据数
         const auto &Efermi0 = meanfield.get_efermi() ;
@@ -832,93 +768,32 @@ void task_qsgw()
                 }
             }
         }
-        // for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-        // {
-        //     for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-        //     {
-        //         const auto &k = kfrac_list[i_kpoint];
-        //         printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-        //                 i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("%5s %16s %16s\n", "State", "e_mf", "v_xc");
-        //         printf("%77s\n", final_banner.c_str());
-        //         for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-        //         {
-        //             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                    
-        //             const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                        
-        //             printf("%5d %16.5f %16.5f\n",
-        //                 i_state + 1, eks_state, vxc_state.real());
-        //         }
-        //         // 输出 exx_is_ik_KS 矩阵
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("exx Matrix4:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", exx_value.real()); 
+
+        
+        // std::ofstream exx_output_file("exx_output_all_iterations.dat", std::ios::app);
+        // if (!exx_output_file.is_open()) {
+        //     std::cerr << "Error: Unable to open file for writing." << std::endl;
+        //     return;
+        // }
+        // // 写入当前迭代次数标识
+        // exx_output_file << "Iteration " << iteration << "\n";
+        // for (int ispin = 0; ispin < n_spins; ++ispin) { 
+        //     for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
+        //         exx_output_file << "Spin " << ispin << ", K-point " << ikpt << ":\n";
+
+        //         // 获取 exx 矩阵并写入文件
+        //         for (int i = 0; i < meanfield.get_n_bands(); ++i) {
+        //             for (int j = 0; j < meanfield.get_n_bands(); ++j) {
+        //                 const auto& exx_value = exx.exx_is_ik_KS[ispin][ikpt](i, j);
+        //                 exx_output_file << exx_value.real() << " "; // 假设只写入实部
         //             }
-        //             printf("\n"); // 换行
+        //             exx_output_file << "\n";
         //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("vxc Matrix4:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j) ;
-        //                 printf("%16.6f ", vxc_value.real()); 
-        //             }
-        //             printf("\n"); // 换行
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("exx Matrix-vxc Matrix4:\n");
-        //         for (int i = 0; i < meanfield.get_n_bands(); i++) {
-        //             for (int j = 0; j < meanfield.get_n_bands(); j++) {
-        //                 const auto &exx_value = exx.exx_is_ik_KS[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 const auto &vxc_value = vxc0[i_spin][i_kpoint](i, j)* HA2EV ;
-        //                 printf("%16.6f ", exx_value.real()-vxc_value.real()); 
-        //             }
-        //             printf("\n"); 
-        //         }
-        //         printf("%77s\n", final_banner.c_str());
-        //         printf("\n");
+        //         exx_output_file << "\n"; // 分隔不同自旋或 k 点
+
+              
         //     }
         // }
-        
-        std::ofstream exx_output_file("exx_output_all_iterations.dat", std::ios::app);
-        if (!exx_output_file.is_open()) {
-            std::cerr << "Error: Unable to open file for writing." << std::endl;
-            return;
-        }
-        // 写入当前迭代次数标识
-        exx_output_file << "Iteration " << iteration << "\n";
-        for (int ispin = 0; ispin < n_spins; ++ispin) { 
-            for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
-                exx_output_file << "Spin " << ispin << ", K-point " << ikpt << ":\n";
-
-                // 获取 exx 矩阵并写入文件
-                for (int i = 0; i < meanfield.get_n_bands(); ++i) {
-                    for (int j = 0; j < meanfield.get_n_bands(); ++j) {
-                        const auto& exx_value = exx.exx_is_ik_KS[ispin][ikpt](i, j);
-                        exx_output_file << exx_value.real() << " "; // 假设只写入实部
-                    }
-                    exx_output_file << "\n";
-                }
-                exx_output_file << "\n"; // 分隔不同自旋或 k 点
-
-                // // 输出 H_KS
-                // print_matrix_mm_file(H_KS[ispin][ikpt], "H_KS_output_ispin" + std::to_string(ispin) + "_ikpt" + std::to_string(ikpt) + ".dat");
-                // //exx
-                // print_matrix_mm_file(exx.exx_is_ik_KS[ispin][ikpt], "exx_output_ispin" + std::to_string(ispin) + "_ikpt" + std::to_string(ikpt) + ".dat");
-                
-                // // 输出 vxc
-                // print_matrix_mm_file(vxc[ispin][ikpt], "vxc_output_ispin" + std::to_string(ispin) + "_ikpt" + std::to_string(ikpt) + ".dat");
-            }
-        }
 
         // 计算 HOMO 和 LUMO
         homo = -1e6;  // 

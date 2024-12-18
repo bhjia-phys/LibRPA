@@ -483,7 +483,7 @@ void task_qsgw_band()
                         // printf("%zu\n ",freq.size());
                         const auto& f_weight= chi0.tfg.get_freq_weights();
                         auto G0_matrix= build_G0(meanfield,freq,i_spin,i_kpoint,n_bands);
-                        Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat,n_bands);
+                        Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat,n_bands); 
                         // Vc_all[i_spin][i_kpoint] = calculate_scRPA_exchange_correlation(meanfield,freq,f_weight,sigc_sk,G0_matrix,i_spin,i_kpoint,n_bands,efermi,temperature);
                         
                         //scRPA check
@@ -610,7 +610,7 @@ void task_qsgw_band()
         //         printf("\n");
         //     }
         // }
-        auto H0_GW_all = construct_H0_GW(H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
+        auto H0_GW_all = construct_H0_GW(meanfield, H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
         
         mpi_comm_global_h.barrier();
         //混合

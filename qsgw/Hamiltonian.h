@@ -33,6 +33,7 @@ Matz calculate_scRPA_exchange_correlation(
 
 // 构建哈密顿量函数
 std::map<int, std::map<int, Matz>> construct_H0_GW(
+    MeanField& meanfield,
     const std::map<int, std::map<int, Matz>> & H_KS_all,
     const std::map<int, std::map<int, Matz>> & vxc_all,
     const std::map<int, std::map<int, Matz>> & Hexx_all,

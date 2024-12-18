@@ -487,43 +487,43 @@ void task_scRPA()
                         Vc_all[i_spin][i_kpoint] = calculate_scRPA_exchange_correlation(meanfield,freq,f_weight,sigc_sk,G0_matrix,i_spin,i_kpoint,n_bands,efermi,temperature);
                         
                         //scRPA check
-                        // printf("%77s\n", final_banner.c_str());
-                        // printf("G0_matrix:\n");
-                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-                        //     for (int j = 0; j < freq.size(); j++) {
-                        //         const auto &G0_matrix0 = G0_matrix[i][j] ;
-                        //         // 打印实部和虚部
-                        //         printf("%20.16f + %20.16fi ", std::real(G0_matrix0), std::imag(G0_matrix0));
-                        //     }
-                        //     printf("\n"); // 换行
-                        // }
+                        printf("%77s\n", final_banner.c_str());
+                        printf("G0_matrix:\n");
+                        for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                            for (int j = 0; j < freq.size(); j++) {
+                                const auto &G0_matrix0 = G0_matrix[i][j] ;
+                                // 打印实部和虚部
+                                printf("%20.16f + %20.16fi ", std::real(G0_matrix0), std::imag(G0_matrix0));
+                            }
+                            printf("\n"); // 换行
+                        }
                         
-                        // for (const auto& freq : chi0.tfg.get_freq_nodes()) {
-                        //     std::cout << "Frequency: " << freq << std::endl;
+                        for (const auto& freq : chi0.tfg.get_freq_nodes()) {
+                            std::cout << "Frequency: " << freq << std::endl;
                             
-                        //     // 获取该频率点对应的自能矩阵
-                        //     const auto& sigma_matrix = sigc_sk.at(freq);
+                            // 获取该频率点对应的自能矩阵
+                            const auto& sigma_matrix = sigc_sk.at(freq);
 
-                        //     // 打印自能矩阵
-                        //     for (int i = 0; i < meanfield.get_n_bands(); ++i) {
-                        //         for (int j = 0; j < meanfield.get_n_bands(); ++j) {
-                        //             const auto &sigc_sk0 = sigma_matrix(i,j) ;
-                        //             // 打印实部和虚部
-                        //             printf("%20.16f + %20.16fi ", std::real(sigc_sk0), std::imag(sigc_sk0));
-                        //         }
-                        //         std::cout << std::endl;
-                        //     }
-                        //     std::cout << std::endl; 
-                        // }
-                        // printf("%77s\n", final_banner.c_str());
-                        // printf("Vc_all:\n");
-                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-                        //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-                        //         const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
-                        //         printf("%20.16f ", Vc_all_0); 
-                        //     }
-                        //     printf("\n"); // 换行
-                        // }
+                            // 打印自能矩阵
+                            for (int i = 0; i < meanfield.get_n_bands(); ++i) {
+                                for (int j = 0; j < meanfield.get_n_bands(); ++j) {
+                                    const auto &sigc_sk0 = sigma_matrix(i,j) ;
+                                    // 打印实部和虚部
+                                    printf("%20.16f + %20.16fi ", std::real(sigc_sk0), std::imag(sigc_sk0));
+                                }
+                                std::cout << std::endl;
+                            }
+                            std::cout << std::endl; 
+                        }
+                        printf("%77s\n", final_banner.c_str());
+                        printf("Vc_all:\n");
+                        for (int i = 0; i < meanfield.get_n_bands(); i++) {
+                            for (int j = 0; j < meanfield.get_n_bands(); j++) {
+                                const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
+                                printf("%20.16f ", Vc_all_0); 
+                            }
+                            printf("\n"); // 换行
+                        }
                     }
                 }
             }
@@ -610,7 +610,7 @@ void task_scRPA()
         //         printf("\n");
         //     }
         // }
-        auto H0_GW_all = construct_H0_GW(H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
+        auto H0_GW_all = construct_H0_GW(meanfield, H_KS, vxc, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
         
         mpi_comm_global_h.barrier();
         //混合
@@ -793,9 +793,6 @@ void task_scRPA()
         double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
         printf("%5s\n","efermi0");
         printf("%5f\n",efermi);
-        double eqp_gap = calculate_eqp_fermi_energy(meanfield, e_qp_all, temperature, total_electrons);
-        printf("%5s\n","eqp_gap:");
-        printf("%5f\n",eqp_gap);
          //将占据数和费米能级更新到 MeanField 对象中
         update_fermi_energy_and_occupations(meanfield, temperature, efermi);
         efermi_values.push_back(efermi * HA2EV);  
@@ -823,19 +820,18 @@ void task_scRPA()
                 printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
                         i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
                 printf("%77s\n", final_banner.c_str());
-                printf("%5s %16s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx1", "v_exx2","ReSigc", "ImSigc", "e_qp");
+                printf("%5s %16s %16s %16s %16s %16s %16s\n", "State", "e_mf", "v_xc", "v_exx","ReSigc", "ImSigc", "e_qp");
                 printf("%77s\n", final_banner.c_str());
                 for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                 {
                     const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                    const auto &exx_state1 = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                    const auto &exx_state2 = exx.exx_is_ik_KS[i_spin][i_kpoint](i_state, i_state)* HA2EV;
+                    const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
                     const auto &vxc_state = vxc[i_spin][i_kpoint](i_state, i_state) * HA2EV;
                     const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
                     const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
                     const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                    printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
-                           i_state + 1, eks_state, vxc_state.real(), exx_state1, exx_state2.real(), resigc, imsigc, eqp);
+                    printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
+                           i_state + 1, eks_state, vxc_state.real(), exx_state, resigc, imsigc, eqp);
                 }
                 printf("\n");
             }
