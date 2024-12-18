@@ -79,6 +79,7 @@ static Matz loadMatrix(const std::string& filePath) {
             matrix(row, col) = nnz_val[idx];
         }
     }
+    
 
     return matrix;
 }

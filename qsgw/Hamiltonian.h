@@ -5,7 +5,7 @@
 #include <map>
 
 #include "matrix_m.h"
-#include "meanfield.h"  // 假设你有这个头文件定义了 MeanField 类
+#include "meanfield.h" 
 
 //G0, for scRPA
 std::vector<std::vector<cplxdb>> build_G0(
@@ -43,3 +43,13 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
 // 对 Hamiltonian 进行对角化并存储本征值和本征矢量
 void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
                            int n_spins, int n_kpoints, int dimension);
+
+std::map<int, Matz> FT_R_TO_K(
+    MeanField& meanfield, 
+    const std::map<int, Matz>& Vr_ispin, 
+    const std::vector<Vector3_Order<int>>& Rlist);
+
+std::map<int, Matz> FT_K_TO_R(
+    MeanField& meanfield, 
+    const std::map<int, Matz>& Vk_ispin, 
+    const std::vector<Vector3_Order<int>>& Rlist);

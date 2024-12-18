@@ -9,10 +9,10 @@ double fermi_dirac(double energy, double mu, double temperature)
 {
     // const double K_B = 3.16681e-6;  // Hartree/K
     // return 1.0 / (1.0 + exp((energy - mu) / (K_B * temperature)));
-    if (energy > mu) {
-        return 0.0;
-    } else {
+    if (energy <= mu) {
         return 1.0;
+    } else {
+        return 0.0;
     }
 }
 
@@ -89,6 +89,7 @@ static double calculate_local_occupation(const MeanField &mf, double mu, double 
 
 //calculate_semiconductor_gap
 double calculate_fermi_energy(const MeanField &mf, double temperature, double total_electrons) {
+    double tolerance = 1e-5;   
     double mu = 0.0;
     double gap = 0.0;
     double vbm = -10000.0;  // 比mu小的最大值
@@ -102,11 +103,12 @@ double calculate_fermi_energy(const MeanField &mf, double temperature, double to
             for (int ib = 0; ib < mf.get_n_bands(); ++ib) {
                 double local_mu = mf.get_eigenvals()[ispin](ikpt, ib);
                 local_occupation = calculate_local_occupation(mf, local_mu, temperature, ispin, ikpt);
+                std::cout << "local_occupation: " << local_occupation << std::endl;
                 // update vbm,cbm;
-                if (local_occupation == total_electrons ) {
+                if (local_occupation <= total_electrons + tolerance ) {
                     local_vbm = local_mu;                    
                 }
-                if (local_occupation > total_electrons ) {
+                if (local_occupation > total_electrons + tolerance ) {
                     if (local_mu < local_cbm) {
                         local_cbm = local_mu;
                     }   
@@ -206,6 +208,7 @@ double calculate_eqp_fermi_energy(const MeanField &mf,
                                   std::map<int, std::map<int, std::map<int, double>>> e_qp_all, 
                                   double temperature, 
                                   double total_electrons) {
+    double tolerance = 1e-5;                                 
     double mu = 0.0;
     double gap = 0.0;
     double vbm = -10000.0;  // 比mu小的最大值
@@ -219,11 +222,12 @@ double calculate_eqp_fermi_energy(const MeanField &mf,
             for (int ib = 0; ib < mf.get_n_bands(); ++ib) {
                 double local_mu = e_qp_all[ispin][ikpt][ib];
                 local_occupation = calculate_eqp_local_occupation(mf,e_qp_all ,local_mu, temperature, ispin, ikpt);
+                std::cout << "local_occupation: " << local_occupation << std::endl;
                 // update vbm,cbm;
-                if (local_occupation == total_electrons ) {
+                if (local_occupation <= total_electrons + tolerance ) {
                     local_vbm = local_mu;                    
                 }
-                if (local_occupation > total_electrons ) {
+                if (local_occupation > total_electrons + tolerance) {
                     if (local_mu < local_cbm) {
                         local_cbm = local_mu;
                     }   

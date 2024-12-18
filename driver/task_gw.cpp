@@ -322,7 +322,7 @@ void task_g0w0()
                         const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
                         const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
                         const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
+                        printf("%5d %20.15f %16.5f %16.5f %16.5f %16.5f %20.15f\n",
                                i_state+1, eks_state, vxc_state, exx_state, resigc, imsigc, eqp);
                     }
                     printf("\n");

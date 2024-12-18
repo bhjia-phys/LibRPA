@@ -19,29 +19,48 @@ int qpe_solver_pade_self_consistent(
 {
     int info = 0;
     const double escale = 0.1;
-    const int n_iter_max = 1000;
+    const int n_iter_max = 10000;
     int n_iter = 0;
 
     // initial guess of e_qp as input mean-field energy
     e_qp = e_mf;
 
-    double diff = 1e-4;
+    double diff = 1.0;
 
     // std::cout << "QPE: " << e_mf << " " << e_fermi << " " << vxc << " " << sigma_x << "\n";
     while (n_iter++ < n_iter_max)
     {
-        e_qp = e_qp + escale * diff;
-        sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
-        diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
-        // check;
-        // std::cout << "Iteration " << n_iter << ": "
-        //           << "e_qp = " << e_qp << ", "
-        //           << "sigc = " << sigc << ", "
-        //           << "diff = " << diff << std::endl;
-        if (std::abs(diff) < thres)
+        if (std::abs(diff) > 10.0 * thres)
         {
-            break;
+            e_qp = e_qp + escale * diff;
+            sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
+            diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
+            if (n_iter == n_iter_max-1)
+            {
+                // check;
+                std::cout << "Iteration " << n_iter << ": "
+                        << "e_qp = " << e_qp << ", "
+                        << "sigc = " << sigc << ", "
+                        << "diff = " << diff << std::endl;
+                break;
+            }
         }
+        else
+        {
+            e_qp = e_qp + escale * diff * 0.1;
+            sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
+            diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
+            if (std::abs(diff) < thres || n_iter == n_iter_max-1)
+            {
+                // check;
+                std::cout << "Iteration " << n_iter << ": "
+                        << "e_qp = " << e_qp << ", "
+                        << "sigc = " << sigc << ", "
+                        << "diff = " << diff << std::endl;
+                break;
+            }
+        }
+        
     }
     // std::cout << "Finished QPE solve: " << n_iter << " " << std::scientific << diff << " " << std::abs(diff) << "\n";
 

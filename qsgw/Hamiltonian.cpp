@@ -1,6 +1,8 @@
 #include "Hamiltonian.h"
 #include "fermi_energy_occupation.h"
 #include <iostream>
+#include "pbc.h"
+#include "constants.h"
 
 
 // 定义复数类型
@@ -32,46 +34,75 @@ std::vector<std::vector<cplxdb>> build_G0(
     }
     return G0;
 }
-// // mode A
+// mode A
 // Matz build_correlation_potential_spin_k(
 //     const std::vector<std::vector<std::vector<cplxdb>>>& sigc_spin_k,
 //     int n_states) {
-
+//     std::cout << "QSGW: mode A" << std::endl;
 //     Matz Vc_spin_k(n_states, n_states, MAJOR::COL);
+//     std::map<int, Matz> Re_sigma;
+//     std::map<int, Matz> sigma;
+//     std::cout << "check112 " << std::endl;
+//     for (int k = 0 ; k < n_states; ++k)
+//     {
+//         Re_sigma[k] = Matz(n_states, n_states, MAJOR::COL);
+//         sigma[k] = Matz(n_states, n_states, MAJOR::COL);
+//         for (int i = 0; i < n_states; ++i)
+//         {
+//             for (int j = 0; j < n_states; ++j)
+//             {              
+//                 sigma[k](i,j) = sigc_spin_k[i][j][k] ;    
+//             }
+//         }
+//         Re_sigma[k] = 0.5 * (sigma[k] + transpose(sigma[k],true));
+//     }
+//     std::cout << "check113 " << std::endl;
 //     for (int i = 0; i < n_states; ++i)
 //     {
 //         for (int j = 0; j < n_states; ++j)
-//         {
-//             // 从自能矩阵中获取对应的元素
-//             std::complex<double> sigc_i = sigc_spin_k[i][j][i];
-//             std::complex<double> sigc_j = sigc_spin_k[i][j][j];
-
+//         { 
 //             // 构建关联势矩阵
-//             std::complex<double> Vc_ij = 0.5 * (sigc_i + sigc_j);
-//             Vc_spin_k(i, j) = std::real(Vc_ij);  // 只取实部
+//             std::complex<double> Vc_ij = 0.5 * (Re_sigma[i](i,j) + Re_sigma[j](i,j));
+//             Vc_spin_k(i, j) = Vc_ij;  
 //         }
-//     }
+//     }    
 
 //     return Vc_spin_k;
 // }
 
-//mode B
+// //mode B
 Matz build_correlation_potential_spin_k(
     const std::vector<std::vector<std::vector<cplxdb>>>& sigc_spin_k,
     int n_states) {
+    std::cout << "QSGW: mode B" << std::endl;
     Matz Vc_spin_k(n_states, n_states, MAJOR::COL);
+    std::map<int, Matz> Re_sigma;
+    std::map<int, Matz> sigma;
+    for (int k = 0 ; k < n_states+1; ++k)
+    {
+        Re_sigma[k] = Matz(n_states, n_states, MAJOR::COL);
+        sigma[k] = Matz(n_states, n_states, MAJOR::COL);
+        for (int i = 0; i < n_states; ++i)
+        {
+            for (int j = 0; j < n_states; ++j)
+            {              
+                sigma[k](i,j) = sigc_spin_k[i][j][k] ;    
+            }
+        }
+        Re_sigma[k] = 0.5 * (sigma[k] + transpose(sigma[k],true));
+    }
+
     for (int i = 0; i < n_states; ++i)
     {
-        std::complex<double> sigc1_i = sigc_spin_k[i][i][i];
-        std::complex<double> Vc_ii = sigc1_i;
-        Vc_spin_k(i, i) = std::real(Vc_ii);
+        
+        std::complex<double> Vc_ii = Re_sigma[i](i,i);
+        Vc_spin_k(i, i) = Vc_ii;
         for (int j = 0; j < n_states; ++j)
         {
             if(i!=j){
-                std::complex<double> sigc2 = sigc_spin_k[i][j][n_states];
-                // 构建关联势矩阵
-                std::complex<double> Vc_ij = sigc2;
-                Vc_spin_k(i, j) = std::real(Vc_ij);  // 只取实部
+                
+                std::complex<double> Vc_ij = Re_sigma[n_states](i,j);
+                Vc_spin_k(i, j) = Vc_ij;  
             }  
         }
     }
@@ -166,14 +197,24 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
 
     // 初始化 GW 哈密顿量矩阵
     std::map<int, std::map<int, Matz>> H0_GW_all;
+    
     double efermi = meanfield.get_efermi();
-
     for (int ispin = 0; ispin < n_spins; ++ispin)
     {
         for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
         {
-            Matz Vxc_diff_spin_k = Hexx_all.at(ispin).at(ikpt) + Vc_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt);
+            Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
+            Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
+            // // realize in k-space
+            // for (int i = 0; i < n_states; ++i){   
+            //     for (int j = 0; j < n_states; ++j){
+            //         Vxc_construct_ispin_ik(i,j) = std::real(Vxc_construct_ispin_ik(i,j));
+            //         // Vxc_construct_ispin_ik(i,j) = std::real(Vc_all.at(ispin).at(ikpt)(i,j)) + Hexx_ispin_ik(i,j);
+            //     }
+            // }
+            
             // cut if possible
+            // Matz Vxc_diff_spin_k = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt);
             // for (int i = 0; i < n_states; ++i){
             //     double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
             //     for (int j = 0; j < n_states; ++j){
@@ -184,13 +225,11 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
             //     }
             // }
             // 构建 GW 哈密顿量矩阵
-            Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) + Vxc_diff_spin_k;
-            // Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) +
-            //                     Hexx_all.at(ispin).at(ikpt) ;
-           
-            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;
-            
-            
+            Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
+
+            //Hatree-Fock check
+            // Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Hexx_ispin_ik ;
+            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
         }
     }
 
@@ -251,6 +290,7 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
             }
             
             Matz wfc(dimension, nao, MAJOR::COL);
+            
             for (int ib = 0; ib < dimension; ++ib)
             {
                 for (int iao = 0; iao < nao; iao++)
@@ -295,5 +335,80 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
     }
     std::cout << "所有本征值已存储到 MeanField 对象。" << std::endl;
 }
+
+
+// 
+std::map<int, Matz> FT_K_TO_R(MeanField& meanfield, const std::map<int, Matz>& Vk_ispin, const std::vector<Vector3_Order<int>>& Rlist)
+{    
+    std::map<int, Matz> Vr_ispin;
+    const auto n_aos = meanfield.get_n_aos();
+    // 遍历实空间格点向量列表
+    for (auto R : Rlist) 
+    {  
+        auto iteR = std::find(Rlist.cbegin(), Rlist.cend(), R);
+        auto iR = std::distance(Rlist.cbegin(), iteR);   
+        // std::cout << "iR 的值是: " << iR << std::endl;
+        Vr_ispin[iR] = Matz(n_aos, n_aos, MAJOR::COL);  
+        Vr_ispin[iR].zero_out();
+        for (int i = 0; i < n_aos; i++){
+            for (int j = 0; j < n_aos; j++){
+                complex<double> element = 0.0;
+                for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+                {
+                    auto Vk_element = Vk_ispin.at(i_kpoint)(i,j);
+                    auto k = kfrac_list[i_kpoint];
+                    double ang = - k * R * TWO_PI ;
+                    // double ang_check = - k * R ;    
+                    // std::cout << "ang 的值是: " << ang_check << std::endl;
+                    complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                    element += Vk_element * kphase;
+                    // element += 1.0 * kphase;
+                    
+                }
+                Vr_ispin[iR](i,j)=element;
+                // for (int i = 0; i < n_aos; ++i){
+                //     for (int j = 0; j < n_aos; ++j){
+                //         Vr_ispin[iR](i,j)=std::real(Vr_ispin[iR](i,j));
+                //     }
+                // }
+            }
+        }
+    }
+    return Vr_ispin;
+}
+
+
+
+
+std::map<int, Matz> FT_R_TO_K(MeanField& meanfield, const std::map<int, Matz>& Vr_ispin, const std::vector<Vector3_Order<int>>& Rlist)
+{    
+    std::map<int, Matz> Vk_ispin;
+    const auto n_aos = meanfield.get_n_aos();
+    // 遍历实空间格点向量列表
+    for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+    {  
+        Vk_ispin[i_kpoint] = Matz(n_aos, n_aos, MAJOR::COL);  
+        Vk_ispin[i_kpoint].zero_out();
+        auto k = kfrac_list[i_kpoint];
+        for (int i = 0; i < n_aos; i++){
+            for (int j = 0; j < n_aos; j++){
+                complex<double> element = 0.0;
+                for (auto R : Rlist) 
+                {                      
+                    auto iteR = std::find(Rlist.cbegin(), Rlist.cend(), R);
+                    auto iR = std::distance(Rlist.cbegin(), iteR);   
+                    auto Vr_element = Vr_ispin.at(iR)(i,j);
+                    double ang =  k * R * TWO_PI ;
+                    complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                    element += Vr_element * kphase / meanfield.get_n_kpoints() ;
+                    // element += 1.0 * kphase;
+                }
+                Vk_ispin[i_kpoint](i,j)=element;
+            }
+        }
+    }
+    return Vk_ispin;
+}
+
 
 
