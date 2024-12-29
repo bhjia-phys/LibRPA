@@ -520,6 +520,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             // collect chi0 on selected atpairs of all R
             Profiler::start("chi0_libri_routing_collect_Rs", "Collect all R blocks");
             auto chi0s_IJR = RI::Communicate_Tensors_Map_Judge::comm_map2_first(mpi_comm_global_h.comm, rpa.chi0s, s0_s1.first, s0_s1.second);
+            rpa.chi0s.clear(); // release chi0s at this tau
             Profiler::stop("chi0_libri_routing_collect_Rs");
             std::clock_t cpu_clock_done_chi0s = clock();
 
