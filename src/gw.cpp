@@ -198,6 +198,7 @@ void G0W0::build_spacetime(
                     sigc_posi_tau = std::move(g0w0_libri.Sigc_tau);
                 else
                     sigc_nega_tau = std::move(g0w0_libri.Sigc_tau);
+                g0w0_libri.Sigc_tau.clear();
                 wtime_g0w0_cal_sigc = omp_get_wtime() - wtime_g0w0_cal_sigc;
                 LIBRPA::utils::lib_printf("Task %4d. libRI G0W0, spin %1d, time grid %12.6f. Wc size %zu, GF size %zu. Wall time %f\n",
                        mpi_comm_global_h.myid, ispin, t, n_obj_wc_libri, n_obj_gf_libri, wtime_g0w0_cal_sigc);
