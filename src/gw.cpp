@@ -32,6 +32,7 @@ G0W0::G0W0(const MeanField &mf,
     : mf(mf), kfrac_list(kfrac_list), tfg(tfg_in), period_(period)
 {
     is_rspace_built_ = false;
+    is_kspace_built_ = false;
 }
 
 void G0W0::reset_rspace()
@@ -417,8 +418,8 @@ void G0W0::build_sigc_matrix_KS(const std::vector<std::vector<ComplexMatrix>> &w
         }
     }
 #endif
-
-   Profiler::stop("g0w0_build_sigc_KS");
+    this->is_kspace_built_ = true;
+    Profiler::stop("g0w0_build_sigc_KS");
 }
 
 void G0W0::build_sigc_matrix_KS_kgrid()
