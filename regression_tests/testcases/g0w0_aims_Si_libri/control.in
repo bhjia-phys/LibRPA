@@ -18,7 +18,7 @@ k_grid 3 3 3
 # # Compute QPE for all states
 # state_upper_limit 100000
 
-output librpa binary
+output librpa binary develop fold_C
 
 # insert species below
 ################################################################################
