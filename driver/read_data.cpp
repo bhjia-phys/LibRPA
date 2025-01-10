@@ -1671,8 +1671,8 @@ void read_stru(const int &n_kpoints, const std::string &file_path)
     }
 }
 
-std::vector<Vector3_Order<double>> read_band_kpath_info(int &n_basis, int &n_states, int &n_spin,
-                                                        const std::string &file_path)
+std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path, int &n_basis,
+                                                        int &n_states, int &n_spin)
 {
     std::vector<Vector3_Order<double>> kfrac_band;
 
