@@ -173,12 +173,6 @@ int main(int argc, char **argv)
     }
     Profiler::stop("driver_band_out");
 
-    Profiler::start("driver_read_common_input_data", "Driver Read Task-Common Input Data");
-    read_stru(meanfield.get_n_kpoints(), "stru_out");
-    Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
-    auto Rlist = construct_R_grid(period);
-    const int Rt_num = Rlist.size() * Params::nfreq;
-
     // early exit for print_minimax task
     if (task == task_t::print_minimax)
     {
