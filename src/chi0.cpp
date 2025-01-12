@@ -258,6 +258,12 @@ static void build_gf_Rt_libri(
     const auto naos = mf.get_n_aos();
 
     assert(klist.size() == nkpts);
+    assert(Params::nbands_G < nbands);
+    if (Params::nbands_G >= 0)
+        std::cout << "Note: Green's Function sums over " << Params::nbands_G << " states."
+                  << std::endl;
+    else
+        std::cout << "Green's Function sums over all states." << std::endl;
 
     std::map<Vector3_Order<int>, std::vector<atpair_t>> map_R_IJs;
     for (const auto &IJR : IJRs)
@@ -304,6 +310,13 @@ static void build_gf_Rt_libri(
             auto scaled_wfc_conj = conj(mf.get_eigenvectors()[ispin][ik]);
             for (int ib = 0; ib != nbands; ib++)
                 LapackConnector::scal(naos, scale(ik, ib), scaled_wfc_conj.c + naos * ib, 1);
+            if (Params::nbands_G >= 0)
+            {
+                for (int ib = Params::nbands_G; ib != nbands; ib++)
+                {
+                    for (int inaos = 0; inaos != naos; inaos++) scaled_wfc_conj(ib, inaos) = 0.0;
+                }
+            }
             auto mat =
                 (kphase * transpose(mf.get_eigenvectors()[ispin][ik], false) * scaled_wfc_conj)
                     .real();
