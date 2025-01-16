@@ -519,14 +519,24 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
 
             // collect chi0 on selected atpairs of all R
             Profiler::start("chi0_libri_routing_collect_Rs", "Collect all R blocks");
-            auto chi0s_IJR = RI::Communicate_Tensors_Map_Judge::comm_map2_first(mpi_comm_global_h.comm, rpa.chi0s, s0_s1.first, s0_s1.second);
-            rpa.chi0s.clear(); // release chi0s at this tau
+            std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<double>>> chi0s_IJR;
+            if (mpi_comm_global_h.nprocs > 1)
+            {
+                // Single MPI task, no need to perform communication
+                chi0s_IJR = RI::Communicate_Tensors_Map_Judge::comm_map2_first(mpi_comm_global_h.comm, rpa.chi0s, s0_s1.first, s0_s1.second);
+                rpa.chi0s.clear(); // release chi0s at this tau
+            }
+            else
+            {
+                chi0s_IJR = std::move(rpa.chi0s);
+            }
             Profiler::stop("chi0_libri_routing_collect_Rs");
             std::clock_t cpu_clock_done_chi0s = clock();
 
             // parse back to chi0
             Profiler::start("chi0_libri_routing_ft_ct", "Fourier and Cosine transform");
             chi_libri_ft_ct(isp, mf.get_n_spins(), it, tfg, chi0s_IJR, qlist, atpairs_ABF, chi0_q);
+            chi0s_IJR.clear();
             Profiler::stop("chi0_libri_routing_ft_ct");
 
             std::clock_t cpu_clock_done_trans = clock();
