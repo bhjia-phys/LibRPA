@@ -693,7 +693,7 @@ size_t read_Cs_evenly_distribute(const string &dir_path, double threshold, int m
             files.push_back(dir_path + fn);
             if (!binary_checked)
             {
-                binary = check_Cs_file_binary(fn);
+                binary = check_Cs_file_binary(dir_path + fn);
                 binary_checked = true;
             }
         }
