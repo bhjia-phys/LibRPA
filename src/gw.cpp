@@ -111,7 +111,7 @@ void G0W0::build_spacetime(
     }
 
 
-    std::ofstream ofs_sigmac_rt;
+    std::ofstream ofs_sigmac_r;
     for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
     {
         for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
@@ -120,12 +120,12 @@ void G0W0::build_spacetime(
             if (Params::output_gw_sigc_mat_rt)
             {
                 std::stringstream ss;
-                ss << Params::output_dir << "SigmaRt"
+                ss << Params::output_dir << "SigcRT"
                     << "_ispin_" << std::setfill('0') << std::setw(5) << ispin
                     << "_itau_" << std::setfill('0') << std::setw(5) << itau
                     << "_myid_" << std::setfill('0') << std::setw(5) << envs::myid_global << ".dat";
-                ofs_sigmac_rt.open(ss.str(), std::ios::out | std::ios::binary);
-                ofs_sigmac_rt.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+                ofs_sigmac_r.open(ss.str(), std::ios::out | std::ios::binary);
+                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
             }
 
             Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
@@ -255,11 +255,11 @@ void G0W0::build_spacetime(
                         dims[2] = J;
                         dims[3] = n_I;
                         dims[4] = n_J;
-                        ofs_sigmac_rt.write((char *) dims, 5 * sizeof(size_t));
+                        ofs_sigmac_r.write((char *) dims, 5 * sizeof(size_t));
                         // cos: contribute to the real part
-                        ofs_sigmac_rt.write((char *) sigc_cos.ptr(), n_I * n_J * sizeof(double));
+                        ofs_sigmac_r.write((char *) sigc_cos.ptr(), n_I * n_J * sizeof(double));
                         // sin: contribute to the imaginary part
-                        ofs_sigmac_rt.write((char *) sigc_sin.ptr(), n_I * n_J * sizeof(double));
+                        ofs_sigmac_r.write((char *) sigc_sin.ptr(), n_I * n_J * sizeof(double));
                     }
 
                     for (int iomega = 0; iomega != tfg.get_n_grids(); iomega++)
@@ -293,14 +293,65 @@ void G0W0::build_spacetime(
 
             if (Params::output_gw_sigc_mat_rt)
             {
-                ofs_sigmac_rt.seekp(0);
-                ofs_sigmac_rt.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
-                ofs_sigmac_rt.close();
+                ofs_sigmac_r.seekp(0);
+                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+                ofs_sigmac_r.close();
             }
         }
     }
     is_rspace_built_ = true;
 #endif
+
+    // Export real-space imaginary-frequency NAO sigma_c matrices
+    if (is_rspace_built_ && Params::output_gw_sigc_mat_rf)
+    {
+        for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
+        {
+            for (auto iomega = 0; iomega != tfg.get_n_grids(); iomega++)
+            {
+                size_t n_IJR_myid = 0;
+                std::stringstream ss;
+                ss << Params::output_dir << "SigcRF"
+                    << "_ispin_" << std::setfill('0') << std::setw(5) << ispin
+                    << "_iomega_" << std::setfill('0') << std::setw(5) << iomega
+                    << "_myid_" << std::setfill('0') << std::setw(5) << envs::myid_global << ".dat";
+                ofs_sigmac_r.open(ss.str(), std::ios::out | std::ios::binary);
+                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+
+                const auto omega = tfg.get_freq_nodes()[iomega];
+                const auto &sigc_RIJ = sigc_is_f_R_IJ[ispin][omega];
+                for (const auto& R_IJsigc: sigc_RIJ)
+                {
+                    const auto &R = R_IJsigc.first;
+                    const auto iR = std::distance(Rlist.cbegin(), std::find(Rlist.cbegin(), Rlist.cend(), R));
+                    for (const auto& I_Jsigc: R_IJsigc.second)
+                    {
+                        const auto &I = I_Jsigc.first;
+                        const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
+                        for (const auto& J_sigc: I_Jsigc.second)
+                        {
+                            const auto &J = J_sigc.first;
+                            const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
+                            const auto &sigc = J_sigc.second;
+                            n_IJR_myid++;
+                            size_t dims[5];
+                            dims[0] = iR;
+                            dims[1] = I;
+                            dims[2] = J;
+                            dims[3] = n_I;
+                            dims[4] = n_J;
+                            assert (sigc.size() == n_I * n_J);
+                            ofs_sigmac_r.write((char *) dims, 5 * sizeof(size_t));
+                            ofs_sigmac_r.write((char *) sigc.ptr(), sigc.size() * 2 * sizeof(double));
+                        }
+                    }
+                }
+                ofs_sigmac_r.seekp(0);
+                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+                ofs_sigmac_r.close();
+            }
+        }
+    }
 }
 
 void G0W0::build_sigc_matrix_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
