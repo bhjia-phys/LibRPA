@@ -65,6 +65,18 @@ get_s0_s1_for_comm_map2_first(const std::set<std::pair<TA, TA>>& atpairs)
     return {set_s0, set_s1};
 }
 
+// Only works for real type
+template <typename T>
+T absmax(const RI::Tensor<T>& t)
+{
+    T maxval = T(-1.0);
+    for (int i = 0; i < t.get_shape_all(); i++)
+    {
+        maxval = max(std::abs(t.ptr()[i]), maxval);
+    }
+    return maxval;
+}
+
 #ifdef LIBRPA_USE_LIBRI
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const RI::Tensor<T>& t)

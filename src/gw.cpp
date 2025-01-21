@@ -15,6 +15,9 @@
 
 #include <map>
 #include <functional>
+#include <sstream>
+#include <fstream>
+
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
 #include <RI/physics/GW.h>
@@ -107,10 +110,24 @@ void G0W0::build_spacetime(
         Rs_local.insert(IJR.second);
     }
 
+
+    std::ofstream ofs_sigmac_rt;
     for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
     {
         for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
         {
+            size_t n_IJR_myid = 0;
+            if (Params::output_gw_sigc_mat_rt)
+            {
+                std::stringstream ss;
+                ss << Params::output_dir << "SigmaRt"
+                    << "_ispin_" << std::setfill('0') << std::setw(5) << ispin
+                    << "_itau_" << std::setfill('0') << std::setw(5) << itau
+                    << "_myid_" << std::setfill('0') << std::setw(5) << envs::myid_global << ".dat";
+                ofs_sigmac_rt.open(ss.str(), std::ios::out | std::ios::binary);
+                ofs_sigmac_rt.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+            }
+
             Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
             // LIBRPA::utils::lib_printf("task %d itau %d start\n", mpi_comm_global_h.myid, itau);
             const auto tau = tfg.get_time_nodes()[itau];
@@ -222,16 +239,34 @@ void G0W0::build_spacetime(
                         continue;
                     }
                     const auto &sigc_nega_block = sigc_nega_tau.at(I).at(JR_sigc_posi.first);
-                    auto iR = std::distance(Rlist.cbegin(), std::find(Rlist.cbegin(), Rlist.cend(), Vector3_Order<int>{Ra[0], Ra[1], Ra[2]}));
+                    const auto R = Vector3_Order<int>(Ra[0], Ra[1], Ra[2]);
+                    const auto iR = std::distance(Rlist.cbegin(), std::find(Rlist.cbegin(), Rlist.cend(), R));
 
                     auto sigc_cos = 0.5 * (sigc_posi_block + sigc_nega_block);
                     auto sigc_sin = 0.5 * (sigc_posi_block - sigc_nega_block);
+
+                    if (Params::output_gw_sigc_mat_rt)
+                    {
+                        n_IJR_myid++;
+                        // write indices and dimensions
+                        size_t dims[5];
+                        dims[0] = iR;
+                        dims[1] = I;
+                        dims[2] = J;
+                        dims[3] = n_I;
+                        dims[4] = n_J;
+                        ofs_sigmac_rt.write((char *) dims, 5 * sizeof(size_t));
+                        // cos: contribute to the real part
+                        ofs_sigmac_rt.write((char *) sigc_cos.ptr(), n_I * n_J * sizeof(double));
+                        // sin: contribute to the imaginary part
+                        ofs_sigmac_rt.write((char *) sigc_sin.ptr(), n_I * n_J * sizeof(double));
+                    }
+
                     for (int iomega = 0; iomega != tfg.get_n_grids(); iomega++)
                     {
                         const auto omega = tfg.get_freq_nodes()[iomega];
                         const auto t2f_sin = tfg.get_sintrans_t2f()(iomega, itau);
                         const auto t2f_cos = tfg.get_costrans_t2f()(iomega, itau);
-                        const auto R = Vector3_Order<int>(Ra[0], Ra[1], Ra[2]);
                         // row-major used here for libRI communication when building sigc_KS
                         matrix_m<complex<double>> sigc_temp(n_I, n_J, MAJOR::ROW);
                         for (int i = 0; i != n_I; i++)
@@ -255,6 +290,13 @@ void G0W0::build_spacetime(
                 }
             }
             Profiler::stop("g0w0_build_spacetime_6");
+
+            if (Params::output_gw_sigc_mat_rt)
+            {
+                ofs_sigmac_rt.seekp(0);
+                ofs_sigmac_rt.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
+                ofs_sigmac_rt.close();
+            }
         }
     }
     is_rspace_built_ = true;

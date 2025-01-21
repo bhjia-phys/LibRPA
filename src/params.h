@@ -77,9 +77,6 @@ struct Params
     //! switch of run-time debug mode
     static bool debug;
 
-    //! switch of output correlation self-energy matrix
-    static bool output_gw_sigc_mat;
-
     //! switch of replacing head of screened interaction by macroscopic dielectric function
     static bool replace_w_head;
 
@@ -91,6 +88,18 @@ struct Params
      * - 2: cubic-spline interpolation
      */
     static int option_dielect_func;
+
+    /* ==========================================================
+     * output options
+     */
+    //! output correlation self-energy matrix (reciprocal space, imaginary frequency domain)
+    static bool output_gw_sigc_mat;
+
+    //! output correlation self-energy matrix in NAO (real space, imaginary time domain)
+    static bool output_gw_sigc_mat_rt;
+
+    //! output correlation self-energy matrix in NAO (real space, imaginary frequency domain)
+    static bool output_gw_sigc_mat_rf;
 
     static void check_consistency();
     static void print();

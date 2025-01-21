@@ -9,14 +9,15 @@
 // default setting
 
 std::string Params::task = "rpa";
-std::string Params::output_file="stdout";
-std::string Params::output_dir = "librpa.d";
+std::string Params::output_file = "stdout";
+std::string Params::output_dir = "librpa.d/";
 std::string Params::tfgrids_type = "minimax";
 std::string Params::DFT_software =  "auto";
 std::string Params::parallel_routing = "auto";
 
 int Params::nfreq = 0;
 int Params::n_params_anacon = -1;
+int Params::option_dielect_func = 2;
 
 double Params::gf_R_threshold = 1e-4;
 double Params::cs_threshold = 1e-4;
@@ -34,10 +35,17 @@ double Params::libri_g0w0_threshold_Wc = 0.0;
 bool Params::use_scalapack_ecrpa = true;
 bool Params::use_scalapack_gw_wc = false;
 bool Params::debug = false;
-bool Params::output_gw_sigc_mat = true;
 bool Params::replace_w_head = true;
 
-int Params::option_dielect_func = 2;
+/* ==========================================================
+ * output options begin
+ * ========================================================== */
+bool Params::output_gw_sigc_mat = false;
+bool Params::output_gw_sigc_mat_rt = false;
+bool Params::output_gw_sigc_mat_rf = false;
+/* ==========================================================
+ * output options end
+ * ========================================================== */
 
 void Params::check_consistency()
 {

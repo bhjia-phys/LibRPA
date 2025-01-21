@@ -18,6 +18,9 @@ template <typename Tdata>
 class Tensor
 {
 public:
+    // dummy, should never be used
+    std::shared_ptr<std::valarray<Tdata>> data;
+
     Tensor()
     {};
 
@@ -29,9 +32,9 @@ public:
 
     inline Tdata operator() (const std::size_t i0, const std::size_t i1) const { return static_cast<Tdata>(0); };
 
-    // dummy, should never be used
-    std::shared_ptr<std::valarray<Tdata>> data;
+    inline std::size_t get_shape_all() const { return 0; };
 
+    Tdata* ptr() const { return &(*this->data)[0]; }
     void clear() {};
 };
 

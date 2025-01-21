@@ -126,6 +126,21 @@ InputParser InputFile::load(const std::string &fn, bool error_if_fail_open)
     return InputParser(params);
 }
 
+static std::string check_dirpath(const std::string &dirpath)
+{
+    if (dirpath.find(":") != std::string::npos)
+    {
+        throw std::runtime_error("input_dir contains invalid character (:) for POSIX path");
+    }
+
+    if (dirpath.back() != '/')
+    {
+        return dirpath + '/';
+    }
+
+    return std::string(dirpath);
+}
+
 void parse_inputfile_to_params(const std::string& fn)
 {
     InputFile inputf;
@@ -134,18 +149,13 @@ void parse_inputfile_to_params(const std::string& fn)
 
     // driver parameters
     parser.parse_string("input_dir", driver_params.input_dir, "./", flag);
-    if (driver_params.input_dir.back() != '/')
-    {
-        driver_params.input_dir = driver_params.input_dir + '/';
-    }
-    if (driver_params.input_dir.find(":") != std::string::npos)
-    {
-        throw std::runtime_error("input_dir contains invalid character (:) for POSIX path");
-    }
+    driver_params.input_dir = check_dirpath(driver_params.input_dir);
 
     // general parameters
     parser.parse_string("task", Params::task, "rpa", flag);
-    parser.parse_string("output_dir", Params::output_dir, "librpa.d", flag);
+    parser.parse_string("output_dir", Params::output_dir, "librpa.d/", flag);
+    Params::output_dir = check_dirpath(Params::output_dir);
+
     parser.parse_string("output_file", Params::output_file, "stdout", flag);
     parser.parse_bool("debug", Params::debug, false, flag);
 
@@ -172,9 +182,12 @@ void parse_inputfile_to_params(const std::string& fn)
     parser.parse_double("libri_g0w0_threshold_G", Params::libri_g0w0_threshold_G, 0.0, flag);
     parser.parse_double("libri_g0w0_threshold_Wc", Params::libri_g0w0_threshold_Wc, 0.0, flag);
 
-    parser.parse_bool("output_gw_sigc_mat", Params::output_gw_sigc_mat, true, flag);
     parser.parse_bool("replace_w_head", Params::replace_w_head, true, flag);
     parser.parse_int("option_dielect_func", Params::option_dielect_func, 2, flag);
+
+    parser.parse_bool("output_gw_sigc_mat", Params::output_gw_sigc_mat, false, flag);
+    parser.parse_bool("output_gw_sigc_mat_rt", Params::output_gw_sigc_mat_rt, false, flag);
+    parser.parse_bool("output_gw_sigc_mat_rf", Params::output_gw_sigc_mat_rf, false, flag);
 }
 
 const std::string input_filename = "librpa.in";
