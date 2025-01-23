@@ -90,7 +90,7 @@ void G0W0::build_spacetime(
     throw std::logic_error("compilation");
 #else
     Profiler::start("g0w0_build_spacetime_1", "Tranform Wc (q,w) -> (R,t)");
-    const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, Rlist);
+    const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
     Profiler::stop("g0w0_build_spacetime_1");
     RI::G0W0<int, int, 3, double> g0w0_libri;
     map<int,std::array<double,3>> atoms_pos;
@@ -432,10 +432,9 @@ void G0W0::build_sigc_matrix_KS(const std::vector<std::vector<ComplexMatrix>> &w
             for (int ik = 0; ik < kfrac_target.size(); ik++)
             {
                 const auto kfrac = kfrac_target[ik];
-                const auto n_kpoints = this->mf.get_n_kpoints();
 
                 const std::function<complex<double>(const int &, const std::pair<int, std::array<int, 3>> &)>
-                    fourier = [kfrac, n_kpoints, this](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
+                    fourier = [kfrac, this](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
                     {
                         auto distsq = std::numeric_limits<double>::max();
                         const auto &J = J_Ra.first;
@@ -482,7 +481,7 @@ void G0W0::build_sigc_matrix_KS(const std::vector<std::vector<ComplexMatrix>> &w
                         // R_IJ_min.y = J_Ra.second[1];
                         // R_IJ_min.z = J_Ra.second[2];
                         const auto ang = (kfrac * R_IJ_min) * TWO_PI;
-                        return complex<double>{std::cos(ang), std::sin(ang)} / double(n_kpoints);
+                        return complex<double>{std::cos(ang), std::sin(ang)};
                     };
 
                 sigc_nao_nao.zero_out();

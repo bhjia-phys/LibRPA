@@ -100,7 +100,7 @@ void task_g0w0_band()
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
         Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-        const auto VR = FT_Vq(Vq_cut, Rlist, true);
+        const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
         Profiler::stop("ft_vq_cut");
 
         Profiler::start("g0w0_exx_real_work");

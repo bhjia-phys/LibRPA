@@ -106,7 +106,7 @@ void task_screened_coulomb_real_freq()
     Profiler::stop("construct_Wc_lower_half");
 
     Profiler::start("FT_Wc_freq_q", "Fourier Transform Wc(q,w) -> Wc(R,w)");
-    const auto Wc_freq_MN_R = FT_Wc_freq_q(Wc_freq_q, chi0.tfg, Rlist);
+    const auto Wc_freq_MN_R = FT_Wc_freq_q(Wc_freq_q, chi0.tfg, meanfield.get_n_kpoints(), Rlist);
     Profiler::stop("FT_Wc_freq_q");
 
     Profiler::start("write_Wc_freq_R", "Export Wc(R,w) to file");

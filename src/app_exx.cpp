@@ -58,7 +58,7 @@ std::vector<double> compute_exx_orbital_energy_(int i_state_low, int i_state_hig
     Vector3_Order<int> period {kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    const auto VR = FT_Vq(Vq_cut, Rlist, true);
+    const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
     // TODO: kfrac_list should depend on i_kpoints_compute
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     exx.build(Cs_data, Rlist, VR);

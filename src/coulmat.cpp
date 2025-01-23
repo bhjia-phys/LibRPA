@@ -4,7 +4,7 @@
 #include "pbc.h"
 
 atpair_R_mat_t
-FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, vector<Vector3_Order<int>> Rlist, bool return_ordered_atom_pair)
+FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<Vector3_Order<int>> &Rlist, bool return_ordered_atom_pair)
 {
     atpair_R_mat_t coulmat_R;
 
@@ -29,7 +29,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, vector<Vector3_Order<int>> Rlist, bo
                     for (auto q_bz: map_irk_ks[q])
                     {
                         double ang = - q_bz * (R * latvec) * TWO_PI;
-                        complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                        complex<double> kphase = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
                         // FIXME: currently support inverse symmetry only
                         if (q_bz == q)
                         {
@@ -69,7 +69,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, vector<Vector3_Order<int>> Rlist, bo
                         for (auto q_bz: map_irk_ks[q])
                         {
                             double ang = - q_bz * (R * latvec) * TWO_PI;
-                            complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                            complex<double> kphase = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
                             if (q_bz == q)
                             {
                                 VR_cplx += transpose(*q_V.second, true) * kphase;

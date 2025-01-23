@@ -15,5 +15,6 @@
  * @return  atpair_R_mat_t
  */
 atpair_R_mat_t FT_Vq(const atpair_k_cplx_mat_t &coulmat,
-                     vector<Vector3_Order<int>> Rlist,
+                     const int &n_k_points,
+                     const vector<Vector3_Order<int>> &Rlist,
                      bool return_ordered_atom_pair);

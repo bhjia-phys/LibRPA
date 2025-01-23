@@ -289,7 +289,6 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
 
     const auto& n_aos = this->mf_.get_n_aos();
     const auto& n_spins = this->mf_.get_n_spins();
-    const auto& n_kpts = this->mf_.get_n_kpoints();
     const auto& n_bands = this->mf_.get_n_bands();
 
     // prepare scalapack array descriptors
@@ -351,7 +350,7 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
             Profiler::start("build_real_space_exx_6", "Hexx IJ -> 2D block");
             const auto& kfrac = kfrac_target[ik];
             const std::function<complex<double>(const int &, const std::pair<int, std::array<int, 3>> &)>
-                fourier = [kfrac, n_kpts, this](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
+                fourier = [kfrac, this](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
                 {
                     auto distsq = std::numeric_limits<double>::max();
                     const auto &J = J_Ra.first;
@@ -398,7 +397,7 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
                     // R_IJ_min.y = J_Ra.second[1];
                     // R_IJ_min.z = J_Ra.second[2];
                     const auto ang = (kfrac * R_IJ_min) * TWO_PI;
-                    return complex<double>{std::cos(ang), std::sin(ang)} / double(n_kpts);
+                    return complex<double>{std::cos(ang), std::sin(ang)};
                 };
             collect_block_from_IJ_storage_tensor_transform(Hexx_nao_nao, desc_nao_nao, 
                     atomic_basis_wfc, atomic_basis_wfc, fourier, exx_I_JR);

@@ -41,14 +41,14 @@ FT_Wc_freq_q(
     const map<double,
               atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
         &Wc_freq_q,
-    const TFGrids &tfg, vector<Vector3_Order<int>> Rlist);
+    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist);
 
 map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old>
 CT_FT_Wc_freq_q(
     const map<double,
               atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
         &Wc_freq_q,
-    const TFGrids &tfg, vector<Vector3_Order<int>> Rlist);
+    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist);
 
 ComplexMatrix compute_Pi_freq_q_row_ri(const Vector3_Order<double> &ik_vec, const atom_mapping<ComplexMatrix>::pair_t_old &chi0_freq_q, const atpair_k_cplx_mat_t &Vq_loc, const int &I, const Vector3_Order<double> &q);
 ComplexMatrix compute_Pi_freq_q_row(const Vector3_Order<double> &ik_vec, const atom_mapping<ComplexMatrix>::pair_t_old &chi0_freq_q, const atom_mapping<ComplexMatrix>::pair_t_old &Vq_row, const int &I);

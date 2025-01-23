@@ -2001,7 +2001,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
 
 map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old>
 FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old> &Wc_freq_q,
-             const TFGrids &tfg, vector<Vector3_Order<int>> Rlist)
+             const TFGrids &tfg, const int &n_k_points, const vector<Vector3_Order<int>> &Rlist)
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
@@ -2075,12 +2075,12 @@ FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, matr
             const auto &Wc = Wc_q.second;
             for (auto q_bz: map_irk_ks[q])
             {
-                double ang = - q_bz * (R * latvec) * TWO_PI;
-                complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                const double ang = - q_bz * (R * latvec) * TWO_PI;
+                const complex<double> weight = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
                 if (q == q_bz)
-                    WfR_temp += Wc * kphase;
+                    WfR_temp += Wc * weight;
                 else
-                    WfR_temp += conj(Wc) * kphase;
+                    WfR_temp += conj(Wc) * weight;
             }
         }
         // omp_set_lock(&lock_Wc);
@@ -2100,7 +2100,7 @@ FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, matr
 
 map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old>
 CT_FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old> &Wc_freq_q,
-                const TFGrids &tfg, vector<Vector3_Order<int>> Rlist)
+                const TFGrids &tfg, const int &n_k_points, const vector<Vector3_Order<int>> &Rlist)
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
@@ -2182,9 +2182,8 @@ CT_FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, m
                 const auto &Wc = Wc_q.second;
                 for (auto q_bz: map_irk_ks[q])
                 {
-                    double ang = - q_bz * (R * latvec) * TWO_PI;
-                    complex<double> kphase = complex<double>(cos(ang), sin(ang));
-                    complex<double> weight = kphase * f2t;
+                    const double ang = - q_bz * (R * latvec) * TWO_PI;
+                    const complex<double> weight = complex<double>(cos(ang), sin(ang)) * f2t / double(n_k_points);
                     // ofs_myid << q << " " << q_bz << " weight = " << weight << "\n";
                     // ofs_myid << q_Wc.second;
                     if (q == q_bz)
