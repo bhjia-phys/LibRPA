@@ -97,15 +97,19 @@ class diele_func
     // compute wing in ABF representation
     std::complex<double> compute_wing(int alpha, int iomega, int mu);
     // transform wing from ABF to Coulomb representation
-    void tranform_mu_to_lambda();
+    void wing_mu_to_lambda(matrix_m<std::complex<double>> &sqrtveig_blacs);
     // tranform Cs_ij(R) to Cs_ij(k)
     void FT_R2k();
     std::complex<double> compute_Cijk(int mu, int I, int i, int J, int j, int ik);
     void Cs_ij2mn();
     std::complex<double> compute_Cs_ij2mn(int mu, int m, int n, int ik);
-    // diagonalize Vq_cut(q=0)
-    void get_Xv();
+    // diagonalize real Vq_cut(q=0)
+    void get_Xv_real();
+    // diagonalize complex Vq_cut(q=0)
+    void get_Xv_cpl();
     void test_wing();
+    // set wing=0 for debug
+    void set_0_wing();
 
     void get_body_inv(matrix_m<std::complex<double>> &chi0_block);
     void construct_L(const int ifreq);
