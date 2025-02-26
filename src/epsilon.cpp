@@ -25,7 +25,6 @@
 #include "atoms.h"
 #include "profiler.h"
 #include "scalapack_connector.h"
-#include <omp.h>
 
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/comm/mix/Communicate_Tensors_Map_Judge.h>
@@ -1646,12 +1645,16 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
     auto coul_chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
     auto coulwc_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
 
+    const double mem_blocks = (chi0_block.size() + coul_block.size() + coul_eigen_block.size() +
+                               coul_chi0_block.size() + coulwc_block.size()) * 16.0e-6;
+    ofs_myid << get_timestamp() << " Memory consumption of task-local blocks for screened Coulomb [MB]: " << mem_blocks << endl;
+
     const auto atpair_local = dispatch_upper_trangular_tasks(
         natom, blacs_ctxt_global_h.myid, blacs_ctxt_global_h.nprows,
         blacs_ctxt_global_h.npcols, blacs_ctxt_global_h.myprow,
         blacs_ctxt_global_h.mypcol);
-    ofs_myid << "atpair_local " << atpair_local << endl;
-    ofs_myid << "s0_s1 " << s0_s1 << endl;
+    ofs_myid << get_timestamp() << " atpair_local " << atpair_local << endl;
+    ofs_myid << get_timestamp() << " s0_s1 " << s0_s1 << endl;
 
     // IJ pair of Wc to be returned
     pair<set<int>, set<int>> Iset_Jset_Wc;
@@ -1742,19 +1745,19 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             Profiler::stop("epsilon_prepare_coulwc_sqrt_4");
         }
         Profiler::stop("epsilon_prepare_coulwc_sqrt");
-        ofs_myid << "Done coulwc sqrt\n";
+        ofs_myid << get_timestamp() << " Done coulwc sqrt" << endl;
 
         Profiler::start("epsilon_prepare_couleps_sqrt", "Prepare sqrt of bare Coulomb");
         // collect the block elements of coulomb matrices
         {
             // LibRI tensor for communication, release once done
             std::map<int, std::map<std::pair<int, std::array<double, 3>>, RI::Tensor<complex<double>>>> couleps_libri;
-            ofs_myid << "Start build couleps_libri\n";
+            ofs_myid << get_timestamp() << " Start build couleps_libri" << endl;
             for (const auto &Mu_Nu: atpair_local)
             {
                 const auto Mu = Mu_Nu.first;
                 const auto Nu = Mu_Nu.second;
-                ofs_myid << "Mu " << Mu << " Nu " << Nu << endl;
+                // ofs_myid << "Mu " << Mu << " Nu " << Nu << endl;
                 if (coulmat_eps.count(Mu) == 0 ||
                     coulmat_eps.at(Mu).count(Nu) == 0 ||
                     coulmat_eps.at(Mu).at(Nu).count(q) == 0) continue;
@@ -1766,28 +1769,27 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 *pvq = Vq_va;
                 couleps_libri[Mu][{Nu, qa}] = RI::Tensor<complex<double>>({n_mu, n_nu}, pvq);
             }
-            ofs_myid << "Done build couleps_libri\n";
+            ofs_myid << get_timestamp() << " Done build couleps_libri" << endl;
             // ofs_myid << "Couleps_libri" << endl << couleps_libri;
             // if (couleps_libri.size() == 0)
             //     throw std::logic_error("data at q-point not found in coulmat_eps");
 
             // perform communication
-            ofs_myid << "Start collect couleps_libri, targets\n";
-            ofs_myid << set_IJ_nabf_nabf << "\n";
+            ofs_myid << get_timestamp() << " Start collect couleps_libri, targets" << endl;
+            ofs_myid << set_IJ_nabf_nabf << endl;
             ofs_myid << "Extended blocks\n";
-            ofs_myid << "atom 1: " << s0_s1.first << "\n";
-            ofs_myid << "atom 2: " << s0_s1.second << "\n";
+            ofs_myid << "atom 1: " << s0_s1.first << endl;
+            ofs_myid << "atom 2: " << s0_s1.second << endl;
             // ofs_myid << "Owned blocks\n";
             // print_keys(ofs_myid, couleps_libri);
-            std::flush(ofs_myid);
             // mpi_comm_global_h.barrier();
             const auto IJq_coul = RI::Communicate_Tensors_Map_Judge::comm_map2_first(mpi_comm_global_h.comm, couleps_libri, s0_s1.first, s0_s1.second);
-            ofs_myid << "Done collect couleps_libri, collected blocks\n";
+            ofs_myid << get_timestamp() << " Done collect couleps_libri, collected blocks" << endl;
 
-            ofs_myid << "Start construct couleps 2D block\n";
+            ofs_myid << get_timestamp() << " Start construct couleps 2D block" << endl;
             collect_block_from_ALL_IJ_Tensor(coul_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                              qa, true, CONE, IJq_coul, MAJOR::ROW);
-            ofs_myid << "Done construct couleps 2D block\n";
+            ofs_myid << get_timestamp() << " Done construct couleps 2D block" << endl;
         }
         // char fn[100];
         // sprintf(fn, "couleps_iq_%d.mtx", iq);
@@ -1796,16 +1798,16 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
         // lib_printf("coul_block\n%s", str(coul_block).c_str());
 
         size_t n_singular;
-        ofs_myid << "Start power hemat couleps\n";
+        ofs_myid << get_timestamp() << " Start power hemat couleps\n";
         auto sqrtveig_blacs = power_hemat_blacs(coul_block, desc_nabf_nabf, coul_eigen_block, desc_nabf_nabf, n_singular, eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
-        ofs_myid << "Done power hemat couleps\n";
+        ofs_myid << get_timestamp() << " Done power hemat couleps\n";
         // lib_printf("nabf %d nsingu %lu\n", n_abf, n_singular);
         // release sqrtv when the q-point is not Gamma, or macroscopic dielectric constant at imaginary frequency is not prepared
         if (epsmac_LF_imagfreq.empty() || !is_gamma_point(q))
             sqrtveig_blacs.clear();
         const size_t n_nonsingular = n_abf - n_singular;
         Profiler::stop("epsilon_prepare_couleps_sqrt");
-        ofs_myid << "Done couleps sqrt\n";
+        ofs_myid << get_timestamp() << " Done couleps sqrt\n";
         std::flush(ofs_myid);
 
         for (const auto &freq: chi0.tfg.get_freq_nodes())
@@ -1838,7 +1840,9 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                     chi0.free_chi0_q(freq, q);
                 }
                 // ofs_myid << "chi0_libri" << endl << chi0_libri;
+                Profiler::start("epsilon_prepare_chi0_2d_comm_map2");
                 const auto IJq_chi0 = RI::Communicate_Tensors_Map_Judge::comm_map2_first(mpi_comm_global_h.comm, chi0_libri, s0_s1.first, s0_s1.second);
+                Profiler::stop("epsilon_prepare_chi0_2d_comm_map2");
                 // ofs_myid << "IJq_chi0" << endl << IJq_chi0;
                 // for (const auto &IJ: set_IJ_nabf_nabf)
                 // {
@@ -1848,8 +1852,10 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 //         chi0_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf, IJ.first,
                 //         IJ.second, true, CONE, IJq_chi0.at(I).at({J, qa}).ptr(), MAJOR::ROW);
                 // }
+                Profiler::start("epsilon_prepare_chi0_2d_collect_block");
                 collect_block_from_ALL_IJ_Tensor(chi0_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                                  qa, true, CONE, IJq_chi0, MAJOR::ROW);
+                Profiler::stop("epsilon_prepare_chi0_2d_collect_block");
                 // sprintf(fn, "chi_ifreq_%d_iq_%d.mtx", ifreq, iq);
                 // print_matrix_mm_file_parallel(fn, chi0_block, desc_nabf_nabf);
             }
@@ -1859,7 +1865,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             // for Gamma point, overwrite the head term
             if (epsmac_LF_imagfreq.size() > 0 && is_gamma_point(q))
             {
-                ofs_myid << "Entering dielectric matrix head overwrite\n";
+                ofs_myid << get_timestamp() << " Entering dielectric matrix head overwrite" << endl;
                 // rotate to Coulomb-eigenvector basis
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_nonsingular, n_abf, 1.0,
                         chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
@@ -1873,7 +1879,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 const int jlo = desc_nabf_nabf.indx_g2l_c(n_nonsingular - 1);
                 if (ilo >= 0 && jlo >= 0)
                 {
-                    ofs_myid << "Perform the head element overwrite\n";
+                    ofs_myid << get_timestamp() << "Perform the head element overwrite\n";
                     chi0_block(ilo, jlo) = 1.0 - epsmac_LF_imagfreq[ifreq];
                 }
                 // rotate back to ABF
