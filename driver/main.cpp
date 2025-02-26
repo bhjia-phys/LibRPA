@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <omp.h>
 
 #include "envs_io.h"
 #include "envs_mpi.h"
@@ -79,7 +80,9 @@ int main(int argc, char **argv)
     using LIBRPA::utils::lib_printf_master;
 
     initialize(argc, argv);
+    lib_printf_master(mpi_comm_global_h, "Total number of tasks: %5d\n", LIBRPA::envs::size_global);
     lib_printf_master(mpi_comm_global_h, "Total number of nodes: %5d\n", LIBRPA::envs::size_inter);
+    lib_printf_master(mpi_comm_global_h, "Maximumal number of threads: %3d\n", omp_get_max_threads());
     mpi_comm_global_h.barrier();
     if (LIBRPA::envs::mpi_comm_intra_h.myid == 0)
     {
