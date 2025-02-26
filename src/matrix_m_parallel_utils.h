@@ -397,13 +397,13 @@ void map_block_to_IJ_storage_new(map<int, map<int, matrix_m<T>>> &IJmap,
     {
         for (const auto &J: Js)
         {
-            const auto n_j = static_cast<int>(atbasis.get_atom_nb(J));
-            const auto step = n_j / subdiv;
-            const auto resi = n_j % subdiv;
+            const int n_j_loc = map_loc_J_js.at(J).size();
+            const auto step = n_j_loc / subdiv;
+            const auto resi = n_j_loc % subdiv;
             for (int j_subdiv = 0; j_subdiv < subdiv; j_subdiv++)
             {
                 int st = j_subdiv * step + j_subdiv * int(j_subdiv < resi) + resi * int(j_subdiv >= resi);
-                int ed = std::min(n_j, st + step + int(j_subdiv < resi));
+                int ed = std::min(n_j_loc, st + step + int(j_subdiv < resi));
                 blocks.push_back({I, J, st, ed});
             }
         }
@@ -419,17 +419,17 @@ void map_block_to_IJ_storage_new(map<int, map<int, matrix_m<T>>> &IJmap,
         const auto &j_indices = map_loc_J_js.at(J);
 
         // auto mat = IJmap_local[I][J];
-        auto mat = IJmap[I][J];
+        auto &mat = IJmap[I][J];
 
         const auto &j_st = index[2];
         const auto &j_ed = index[3];
         for (int i_idx = 0; i_idx < i_indices.size(); i_idx++)
         {
-            int i = i_indices[i_idx];
+            const int i = i_indices[i_idx];
+            const auto i_loc = desc.indx_g2l_r(atbasis.get_global_index(I, i));
             for (int j_idx = j_st; j_idx < j_ed; j_idx++)
             {
-                int j = j_indices[j_idx];
-                const auto i_loc = desc.indx_g2l_r(atbasis.get_global_index(I, i));
+                const int j = j_indices[j_idx];
                 const auto l_loc = desc.indx_g2l_c(atbasis.get_global_index(J, j));
                 mat(i, j) = mat_lo(i_loc, l_loc);
             }
