@@ -259,11 +259,14 @@ static void build_gf_Rt_libri(
 
     assert(klist.size() == nkpts);
     assert(Params::nbands_G < nbands);
-    if (Params::nbands_G >= 0)
-        std::cout << "Note: Green's Function sums over " << Params::nbands_G << " states."
-                  << std::endl;
-    else
-        std::cout << "Green's Function sums over all states." << std::endl;
+    if (mpi_comm_global_h.is_root())
+    {
+        if (Params::nbands_G >= 0)
+            std::cout << "Note: Green's Function sums over " << Params::nbands_G << " states."
+                      << std::endl;
+        else
+            std::cout << "Green's Function sums over all states." << std::endl;
+    }
 
     std::map<Vector3_Order<int>, std::vector<atpair_t>> map_R_IJs;
     for (const auto &IJR : IJRs)
