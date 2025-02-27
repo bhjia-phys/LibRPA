@@ -14,6 +14,7 @@ list(APPEND exe_sources
   inputfile.cpp
   task_rpa.cpp
   task_exx.cpp
+  task_exx_band.cpp
   task_gw.cpp
   task_gw_band.cpp
   task_screened_coulomb.cpp

@@ -117,6 +117,8 @@ int main(int argc, char **argv)
         task = task_t::G0W0_band;
     else if (task_lower == "exx")
         task = task_t::EXX;
+    else if (task_lower == "exx_band")
+        task = task_t::EXX_band;
     else if (task_lower == "wc_rf")
         task = task_t::Wc_Rf;
     else if (task_lower == "print_minimax")
@@ -363,6 +365,10 @@ int main(int argc, char **argv)
         task_g0w0_band();
     }
     else if (task == task_t::EXX)
+    {
+        task_exx();
+    }
+    else if (task == task_t::EXX_band)
     {
         task_exx();
     }
