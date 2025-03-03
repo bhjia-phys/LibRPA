@@ -1651,8 +1651,14 @@ void read_elsi_csc(const string &file_path, bool save_row_major, std::vector<dou
 
     n_basis = header[3];
     int64_t nnz = header[5];
+    // cout << n_basis << " " << nnz << endl;
 
     int64_t* col_ptr_raw = reinterpret_cast<int64_t*>(buffer.data() + 128);
+    std::vector<int> col_ptr;
+    col_ptr.assign(col_ptr_raw, col_ptr_raw + n_basis);
+    // Trailing column index to mark the end. +1 for index starting from 1 in ELSI CSC
+    col_ptr.push_back(nnz + 1);
+
     int32_t* row_idx_raw = reinterpret_cast<int32_t*>(buffer.data() + 128 + n_basis * 8);
 
     char* nnz_val_raw = buffer.data() + 128 + n_basis * 8 + nnz * 4;
@@ -1670,9 +1676,10 @@ void read_elsi_csc(const string &file_path, bool save_row_major, std::vector<dou
     }
 
     for (auto col = 0; col < n_basis; ++col) {
-        for (auto idx = col_ptr_raw[col]; idx < col_ptr_raw[col + 1]; ++idx) {
+        for (auto idx = col_ptr[col]; idx < col_ptr[col + 1]; ++idx) {
             int row = row_idx_raw[idx - 1] - 1;
             int index = save_row_major ? row * n_basis + col : col * n_basis + row;
+            // cout << idx - 1 << " " << col << " " << row << " " << index << endl;
             if (is_real)
             {
                 mat[index] = nnz_val_double[idx - 1];
