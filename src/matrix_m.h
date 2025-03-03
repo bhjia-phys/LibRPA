@@ -1171,3 +1171,64 @@ void print_matrix_mm_file(const matrix_m<T> &mat, const std::string &fn, Treal t
     print_matrix_mm(mat, fs, threshold, row_first);
     fs.close();
 }
+
+//! print the matrix in ELSI CSC format
+template <typename T, typename Treal = typename to_real<T>::type>
+void print_matrix_elsi_csc(const matrix_m<T> &mat, const std::string &fn, Treal threshold = 1e-15)
+{
+    const int nr = mat.nr(), nc = mat.nc();
+    const int step =  is_complex<T>()? 2 : 1;
+    // ELSI CSC only support square matrices
+    assert (nr == nc);
+
+    int64_t nnz = 0;
+    for (int i = 0; i != mat.size(); i++)
+    {
+        if (fabs(mat.dataobj[i]) > threshold)
+            nnz++;
+    }
+    // cout << nnz << endl;
+    std::vector<int64_t> colptr(nc+1);
+    std::vector<int32_t> rowptr(nnz);
+    std::vector<Treal> nnz_val(nnz * step);
+
+    int64_t idx = 0;
+    colptr[0] = 1;  // Indices begin from 1
+    for (int i = 0; i < nc; i++)
+    {
+        int64_t nnz_this_col = 0;
+        for (int j = 0; j < nr; j++)
+        {
+            if (fabs(mat(j, i)) > threshold)
+            {
+                const T val = mat(j,i);
+                // cout << val << endl;
+                std::memcpy(nnz_val.data() + idx * step, &val, sizeof(T));
+                rowptr[idx] = j + 1;  // Indices begin from 1
+                nnz_this_col++;
+                idx++;
+            }
+        }
+        colptr[i+1] = colptr[i] + nnz_this_col;
+    }
+
+    // Ensure correct non-zero values counting are consistent in the two runs
+    // cout << colptr[nc] << " " << nnz + 1 << endl;
+    assert (colptr[nc] == nnz + 1);
+
+    int64_t header[16];
+    header[2] = is_complex<T>()? 1 : 0;
+    header[3] = nr;
+    header[5] = nnz;
+
+    std::ofstream wf;
+    wf.open(fn, std::ios::out | std::ios::binary);
+    // check open status
+    if (!wf)
+        throw logic_error("Fail to read " + fn);
+    wf.write((char *) header, 16 * sizeof(int64_t));
+    wf.write((char *) colptr.data(), nc * sizeof(int64_t));  // only write the first nc elements
+    wf.write((char *) rowptr.data(), nnz * sizeof(int32_t));
+    wf.write((char *) nnz_val.data(), nnz * sizeof(T));
+    wf.close();
+}
