@@ -53,4 +53,6 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
 
 std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_spin, int n_kpoints_band);
 
+//! Read ELSI CSC format matrix file
+void read_elsi_csc(const string &file_path, bool save_row_major, std::vector<double> &mat, int &n_basis, bool &is_real);
 #endif // !READ_DATA_H

@@ -1628,3 +1628,60 @@ std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_sp
     }
     return vxc_band;
 }
+
+void read_elsi_csc(const string &file_path, bool save_row_major, std::vector<double> &mat, int &n_basis, bool &is_real)
+{
+    ifstream infile;
+    infile.open(file_path, std::ios::binary);
+    if (!infile.good())
+    {
+        throw std::logic_error("Failed to open " + file_path);
+    }
+
+    // Read the whole buffer
+    infile.seekg(0, std::ios::end);
+    std::streampos size = infile.tellg();
+    infile.seekg(0, std::ios::beg);
+    std::vector<char> buffer(size);
+    infile.read(buffer.data(), size);
+    infile.close();
+
+    int64_t header[16];
+    std::memcpy(header, buffer.data(), 128);
+
+    n_basis = header[3];
+    int64_t nnz = header[5];
+
+    int64_t* col_ptr_raw = reinterpret_cast<int64_t*>(buffer.data() + 128);
+    int32_t* row_idx_raw = reinterpret_cast<int32_t*>(buffer.data() + 128 + n_basis * 8);
+
+    char* nnz_val_raw = buffer.data() + 128 + n_basis * 8 + nnz * 4;
+    double* nnz_val_double = reinterpret_cast<double*>(nnz_val_raw);
+
+    if (header[2] == 0)
+    {
+        // Real valued
+        is_real = true;
+        mat.resize(n_basis * n_basis);
+    } else {
+        // Complex valued
+        is_real = false;
+        mat.resize(2 * n_basis * n_basis);
+    }
+
+    for (auto col = 0; col < n_basis; ++col) {
+        for (auto idx = col_ptr_raw[col]; idx < col_ptr_raw[col + 1]; ++idx) {
+            int row = row_idx_raw[idx - 1] - 1;
+            int index = save_row_major ? row * n_basis + col : col * n_basis + row;
+            if (is_real)
+            {
+                mat[index] = nnz_val_double[idx - 1];
+            }
+            else
+            {
+                mat[2 * index] = nnz_val_double[2 * idx - 2];
+                mat[2 * index + 1] = nnz_val_double[2 * idx - 1];
+            }
+        }
+    }
+}
