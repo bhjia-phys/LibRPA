@@ -21,9 +21,11 @@
 
 #include "task_rpa.h"
 #include "task_exx.h"
+#include "task_exx_band.h"
 #include "task_gw.h"
 #include "task_gw_band.h"
 #include "task_screened_coulomb.h"
+#include "task_test.h"
 
 static void initialize(int argc, char **argv)
 {
@@ -123,6 +125,8 @@ int main(int argc, char **argv)
         task = task_t::Wc_Rf;
     else if (task_lower == "print_minimax")
         task = task_t::print_minimax;
+    else if (task_lower == "test")
+        task = task_t::test;
     else
         throw std::logic_error("Unknown task (" + Params::task + "). Please check your input");
 
@@ -371,6 +375,10 @@ int main(int argc, char **argv)
     else if (task == task_t::EXX_band)
     {
         task_exx_band();
+    }
+    else if (task == task_t::test)
+    {
+        task_test();
     }
 
     finalize(true);

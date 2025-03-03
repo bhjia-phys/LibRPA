@@ -11,6 +11,7 @@ enum class task_t {
     G0W0_band,
     Wc_Rf,
     print_minimax,
+    test,  // a task for convenience of test
 };
 
 }

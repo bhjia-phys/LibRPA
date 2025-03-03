@@ -18,6 +18,7 @@ list(APPEND exe_sources
   task_gw.cpp
   task_gw_band.cpp
   task_screened_coulomb.cpp
+  task_test.cpp
   )
 
 target_include_directories(rpa_exe
