@@ -370,7 +370,7 @@ int main(int argc, char **argv)
     }
     else if (task == task_t::EXX_band)
     {
-        task_exx();
+        task_exx_band();
     }
 
     finalize(true);
