@@ -123,6 +123,11 @@ void Profiler::stop(const char *tname) noexcept
     }
 }
 
+void Profiler::cease(const char *tname) noexcept
+{
+    stop(tname);
+}
+
 double Profiler::get_cpu_time_last(const char *tname) noexcept
 {
     std::string sname(tname);
