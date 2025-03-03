@@ -467,7 +467,7 @@ public:
     template <typename T1>
     void operator+=(const matrix_m<T1> &m)
     {
-        assert(size() == m.size() && major() == m.major());
+        assert(this->size() == m.size() && this->major() == m.major());
         for (int i = 0; i < size(); i++)
             dataobj[i] += m.dataobj[i];
     }
@@ -598,7 +598,7 @@ public:
 
     matrix_m<real_t> get_real() const
     {
-        matrix_m<real_t> m(nr(), nc(), major_);
+        matrix_m<real_t> m(nr(), nc(), this->major_);
         for (int i = 0; i < size(); i++)
             m.dataobj[i] = ::get_real(dataobj[i]);
         return m;
