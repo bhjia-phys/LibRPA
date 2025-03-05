@@ -485,7 +485,7 @@ matrix_m<std::complex<T>> power_hemat_blacs(matrix_m<std::complex<T>> &A_local,
     // initialize descriptor of array Z for optimized block size
     if (ad_A.ictxt() != ad_Z.ictxt())
     {
-        ofs_myid << "Warning(power_hemat_blacs): input contexts of A and Z are different!\n";
+        ofs_myid << "Warning(power_hemat_blacs): input contexts of A and Z are different!" << endl;
     }
     LIBRPA::Array_Desc ad_Z_opt(ad_Z.ictxt());
     ad_Z_opt.init(n, n, blocksize_row_opt, blocksize_col_opt, 0, 0);
@@ -507,7 +507,9 @@ matrix_m<std::complex<T>> power_hemat_blacs(matrix_m<std::complex<T>> &A_local,
                 Wquery, Z_local_opt.ptr(), 1, 1, ad_A_opt.desc, work, lwork, rwork, lrwork, info);
         lwork = int(work[0].real());
         lrwork = int(rwork[0]);
-        delete [] work, Wquery, rwork;
+        delete [] work;
+        delete [] Wquery;
+        delete [] rwork;
     }
     Profiler::stop("power_hemat_blacs_1");
 
@@ -517,7 +519,8 @@ matrix_m<std::complex<T>> power_hemat_blacs(matrix_m<std::complex<T>> &A_local,
     ScalapackConnector::pheev_f(jobz, uplo,
             n, A_local_opt.ptr(), 1, 1, ad_A_opt.desc,
             W, Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, work, lwork, rwork, lrwork, info);
-    delete [] work, rwork;
+    delete [] work;
+    delete [] rwork;
     Profiler::stop("power_hemat_blacs_2");
     // Optimized A no longer used
     Profiler::start("power_hemat_blacs_3");
