@@ -13,6 +13,7 @@
 #include "envs_io.h"
 #include "envs_mpi.h"
 #include "utils_io.h"
+#include "utils_mpi_io.h"
 #include "utils_mem.h"
 #include "stl_io_helper.h"
 #include "libri_utils.h"
@@ -1633,6 +1634,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
     }
     mpi_comm_global_h.barrier();
 
+    Profiler::start("compute_Wc_freq_q_blacs_init");
     Array_Desc desc_nabf_nabf(blacs_ctxt_global_h);
     // use a square blocksize instead max block, otherwise heev and inversion will complain about illegal parameter
     desc_nabf_nabf.init_square_blk(n_abf, n_abf, 0, 0);
@@ -1686,16 +1688,26 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
         qpts.push_back(q_weight.first);
 
     vec<double> eigenvalues(n_abf);
+    Profiler::cease("compute_Wc_freq_q_blacs_init");
+    LIBRPA::utils::lib_printf_root("Time for Wc initialization (seconds, Wall/CPU): %f %f\n",
+            Profiler::get_wall_time_last("compute_Wc_freq_q_blacs_init"),
+            Profiler::get_cpu_time_last("compute_Wc_freq_q_blacs_init"));
 
+    Profiler::start("compute_Wc_freq_q_work");
 #ifdef LIBRPA_USE_LIBRI
     for (const auto &q: qpts)
     {
-        // cout << q << "\n";
+        const int iq = std::distance(qpts.cbegin(), std::find(qpts.cbegin(), qpts.cend(), q));
+        const int iq_in_k = std::distance(klist.cbegin(), std::find(klist.cbegin(), klist.cend(), q));
+        // q-point in fractional coordinates
+        const auto &qf= kfrac_list[iq_in_k];
+        LIBRPA::utils::lib_printf_root("Computing Wc(q), %d / %d, q=(%f, %f, %f)\n",
+                                       iq + 1, qpts.size(), qf.x, qf.y, qf.z);
         coul_block.zero_out();
         coulwc_block.zero_out();
         // lib_printf("coul_block\n%s", str(coul_block).c_str());
 
-        // int iq = std::distance(klist.begin(), std::find(klist.begin(), klist.end(), q));
+        // q-array for LibRI object
         std::array<double, 3> qa = {q.x, q.y, q.z};
 
         // collect the block elements of truncated coulomb matrices first
@@ -1745,6 +1757,9 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             Profiler::stop("epsilon_prepare_coulwc_sqrt_4");
         }
         Profiler::stop("epsilon_prepare_coulwc_sqrt");
+        LIBRPA::utils::lib_printf_root("Time to prepare sqrt root of Coulomb for Wc(q) (seconds, Wall/CPU): %f %f\n",
+                Profiler::get_wall_time_last("epsilon_prepare_coulwc_sqrt"),
+                Profiler::get_cpu_time_last("epsilon_prepare_coulwc_sqrt"));
         ofs_myid << get_timestamp() << " Done coulwc sqrt" << endl;
 
         Profiler::start("epsilon_prepare_couleps_sqrt", "Prepare sqrt of bare Coulomb");
@@ -1777,7 +1792,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             // perform communication
             ofs_myid << get_timestamp() << " Start collect couleps_libri, targets" << endl;
             ofs_myid << set_IJ_nabf_nabf << endl;
-            ofs_myid << "Extended blocks\n";
+            ofs_myid << "Extended blocks" << endl;
             ofs_myid << "atom 1: " << s0_s1.first << endl;
             ofs_myid << "atom 2: " << s0_s1.second << endl;
             // ofs_myid << "Owned blocks\n";
@@ -1807,12 +1822,16 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             sqrtveig_blacs.clear();
         const size_t n_nonsingular = n_abf - n_singular;
         Profiler::stop("epsilon_prepare_couleps_sqrt");
+        LIBRPA::utils::lib_printf_root("Time to prepare sqrt root of Coulomb for Epsilon(q) (seconds, Wall/CPU): %f %f\n",
+                Profiler::get_wall_time_last("epsilon_prepare_couleps_sqrt"),
+                Profiler::get_cpu_time_last("epsilon_prepare_couleps_sqrt"));
         ofs_myid << get_timestamp() << " Done couleps sqrt\n";
         std::flush(ofs_myid);
 
         for (const auto &freq: chi0.tfg.get_freq_nodes())
         {
             const auto ifreq = chi0.tfg.get_freq_index(freq);
+            Profiler::start("epsilon_wc_work_q_omega");
             Profiler::start("epsilon_prepare_chi0_2d", "Prepare Chi0 2D block");
             chi0_block.zero_out();
             {
@@ -1879,7 +1898,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 const int jlo = desc_nabf_nabf.indx_g2l_c(n_nonsingular - 1);
                 if (ilo >= 0 && jlo >= 0)
                 {
-                    ofs_myid << get_timestamp() << "Perform the head element overwrite\n";
+                    ofs_myid << get_timestamp() << "Perform the head element overwrite" << endl;
                     chi0_block(ilo, jlo) = 1.0 - epsmac_LF_imagfreq[ifreq];
                 }
                 // rotate back to ABF
@@ -1997,11 +2016,21 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             }
             Profiler::stop("epsilon_convert_wc_communicate");
             Profiler::stop("epsilon_convert_wc_2d_to_ij");
+            Profiler::cease("epsilon_wc_work_q_omega");
+            LIBRPA::utils::lib_printf_root("Time for Wc(i_q=%d, i_omega=%d) (seconds, Wall/CPU): %f %f\n",
+                    iq + 1, ifreq + 1,
+                    Profiler::get_wall_time_last("epsilon_wc_work_q_omega"),
+                    Profiler::get_cpu_time_last("epsilon_wc_work_q_omega"));
         }
     }
 #else
     throw std::logic_error("need compilation with LibRI");
 #endif
+    Profiler::cease("compute_Wc_freq_q_work");
+    LIBRPA::utils::lib_printf_root("Time for Wc computation (seconds, Wall/CPU): %f %f\n",
+            Profiler::get_wall_time_last("compute_Wc_freq_q_work"),
+            Profiler::get_cpu_time_last("compute_Wc_freq_q_work"));
+
     return Wc_freq_q;
 }
 
