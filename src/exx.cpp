@@ -336,9 +336,62 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
             }
         }
 
-        // collect the IJ pair of Hs with all R, do the Fourier transform
-        const auto exx_I_JR = comm_map2_first(mpi_comm_global_h.comm,exx_I_JR_local, Iset_Jset.first, Iset_Jset.second);
+        // Collect the IJ pair of Hs with all R for Fourier transform
+        auto exx_I_JR = comm_map2_first(mpi_comm_global_h.comm,exx_I_JR_local, Iset_Jset.first, Iset_Jset.second);
         exx_I_JR_local.clear();
+
+        // Convert each <I,<J, R>> pair to the nearest neighbour to speed up later Fourier transform
+        // while keep the accuracy in further band interpolation.
+        // Reuse the cleared-up exx_I_JR_local object
+        if (coord_frac.size() > 0)
+        {
+            for (auto &I_exxJR: exx_I_JR)
+            {
+                const auto &I = I_exxJR.first;
+                for (auto &JR_exx: I_exxJR.second)
+                {
+                    const auto &J = JR_exx.first.first;
+                    const auto &R = JR_exx.first.second;
+
+                    auto distsq = std::numeric_limits<double>::max();
+                    Vector3<int> R_IJ;
+                    std::array<int, 3> R_bvk;
+                    for (int i = -1; i < 2; i++)
+                    {
+                        R_IJ.x = i * this->period_.x + R[0];
+                        for (int j = -1; j < 2; j++)
+                        {
+                            R_IJ.y = j * this->period_.y + R[1];
+                            for (int k = -1; k < 2; k++)
+                            {
+                                R_IJ.z = k * this->period_.z + R[2];
+                                const auto diff =
+                                    (Vector3<double>(coord_frac[I][0], coord_frac[I][1],
+                                                     coord_frac[I][2]) -
+                                     Vector3<double>(coord_frac[J][0], coord_frac[J][1],
+                                                     coord_frac[J][2]) -
+                                     Vector3<double>(R_IJ.x, R_IJ.y, R_IJ.z)) * latvec;
+                                const auto norm2 = diff.norm2();
+                                if (norm2 < distsq)
+                                {
+                                    distsq = norm2;
+                                    R_bvk[0] = R_IJ.x;
+                                    R_bvk[1] = R_IJ.y;
+                                    R_bvk[2] = R_IJ.z;
+                                }
+                            }
+                        }
+                    }
+                    exx_I_JR_local[I][{J, R_bvk}] = std::move(JR_exx.second);
+                }
+            }
+        }
+        else
+        {
+            exx_I_JR_local = std::move(exx_I_JR);
+        }
+
+        exx_I_JR.clear();
         Profiler::stop("build_real_space_exx_5");
 
         utils::lib_printf("Task %4d: tensor communicate elapsed time: %f\n", mpi_comm_global_h.myid, Profiler::get_wall_time_last("build_real_space_exx_5"));
@@ -350,57 +403,15 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
             Profiler::start("build_real_space_exx_6", "Hexx IJ -> 2D block");
             const auto& kfrac = kfrac_target[ik];
             const std::function<complex<double>(const int &, const std::pair<int, std::array<int, 3>> &)>
-                fourier = [kfrac, this](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
+                fourier = [kfrac](const int &I, const std::pair<int, std::array<int, 3>> &J_Ra)
                 {
-                    auto distsq = std::numeric_limits<double>::max();
-                    const auto &J = J_Ra.first;
-                    Vector3<double> R_IJ_min;
-                    if (coord_frac.size() > 0)
-                    {
-                        Vector3<double> R_IJ;
-                        for (int i = -1; i < 2; i++)
-                        {
-                            R_IJ.x = i * this->period_.x + J_Ra.second[0];
-                            for (int j = -1; j < 2; j++)
-                            {
-                                R_IJ.y = j * this->period_.y + J_Ra.second[1];
-                                for (int k = -1; k < 2; k++)
-                                {
-                                    R_IJ.z = k * this->period_.z + J_Ra.second[2];
-                                    const auto diff =
-                                        (Vector3<double>(coord_frac[I][0], coord_frac[I][1],
-                                                         coord_frac[I][2]) -
-                                         Vector3<double>(coord_frac[J][0], coord_frac[J][1],
-                                                         coord_frac[J][2]) -
-                                         R_IJ) *
-                                        latvec;
-                                    const auto norm2 = diff.norm2();
-                                    if (norm2 < distsq)
-                                    {
-                                        distsq = norm2;
-                                        R_IJ_min = R_IJ;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        R_IJ_min.x = J_Ra.second[0];
-                        R_IJ_min.y = J_Ra.second[1];
-                        R_IJ_min.z = J_Ra.second[2];
-                    }
-                    // cout << I << " " << J << " " << J_Ra.second << " ; " << R_IJ_min << "\n";
-                    // std::flush(cout);
-                    // original
-                    // R_IJ_min.x = J_Ra.second[0];
-                    // R_IJ_min.y = J_Ra.second[1];
-                    // R_IJ_min.z = J_Ra.second[2];
-                    const auto ang = (kfrac * R_IJ_min) * TWO_PI;
+                    const auto &Ra = J_Ra.second;
+                    Vector3<double> R_IJ(Ra[0], Ra[1], Ra[2]);
+                    const auto ang = (kfrac * R_IJ) * TWO_PI;
                     return complex<double>{std::cos(ang), std::sin(ang)};
                 };
             collect_block_from_IJ_storage_tensor_transform(Hexx_nao_nao, desc_nao_nao, 
-                    atomic_basis_wfc, atomic_basis_wfc, fourier, exx_I_JR);
+                    atomic_basis_wfc, atomic_basis_wfc, fourier, exx_I_JR_local);
             Profiler::stop("build_real_space_exx_6");
             // utils::lib_printf("%s\n", str(Hexx_nao_nao).c_str());
             const auto &wfc_isp_k = wfc_target[isp][ik];
