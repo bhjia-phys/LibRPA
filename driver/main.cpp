@@ -16,7 +16,7 @@
 #include "stl_io_helper.h"
 #include "driver_params.h"
 #include "task.h"
-#include "utils_io_parallel.h"
+#include "utils_mpi_io.h"
 #include "utils_mem.h"
 
 #include "task_rpa.h"
@@ -78,21 +78,20 @@ int main(int argc, char **argv)
     using LIBRPA::task_t;
     using LIBRPA::envs::ofs_myid;
     using LIBRPA::utils::lib_printf;
-    using LIBRPA::utils::lib_printf_para;
-    using LIBRPA::utils::lib_printf_master;
+    using LIBRPA::utils::lib_printf_coll;
+    using LIBRPA::utils::lib_printf_root;
+    using LIBRPA::utils::lib_printf_comm_coll;
 
     initialize(argc, argv);
-    lib_printf_master(mpi_comm_global_h, "Total number of tasks: %5d\n", LIBRPA::envs::size_global);
-    lib_printf_master(mpi_comm_global_h, "Total number of nodes: %5d\n", LIBRPA::envs::size_inter);
-    lib_printf_master(mpi_comm_global_h, "Maximumal number of threads: %3d\n", omp_get_max_threads());
+    lib_printf_root("Total number of tasks: %5d\n", LIBRPA::envs::size_global);
+    lib_printf_root("Total number of nodes: %5d\n", LIBRPA::envs::size_inter);
+    lib_printf_root("Maximumal number of threads: %3d\n", omp_get_max_threads());
     mpi_comm_global_h.barrier();
-    if (LIBRPA::envs::mpi_comm_intra_h.myid == 0)
-    {
-        lib_printf_para(LIBRPA::envs::mpi_comm_inter_h,
-                        "Global ID of master process of node %5d : %5d\n",
-                        LIBRPA::envs::mpi_comm_inter_h.myid, LIBRPA::envs::mpi_comm_global_h.myid);
-    }
-    lib_printf_para(mpi_comm_global_h, "%s\n", mpi_comm_global_h.str().c_str());
+    lib_printf_comm_coll(LIBRPA::envs::mpi_comm_intra_h, "Global ID of master process of node %5d : %5d\n",
+                         LIBRPA::envs::mpi_comm_inter_h.myid, LIBRPA::envs::mpi_comm_global_h.myid);
+    mpi_comm_global_h.barrier();
+    lib_printf_coll("%s\n", mpi_comm_global_h.str().c_str());
+    mpi_comm_global_h.barrier();
 
     /*
      * Load computational parameters from input file
@@ -304,8 +303,7 @@ int main(int argc, char **argv)
     }
     Profiler::stop("driver_read_Cs_Vq");
 
-    lib_printf_para(mpi_comm_global_h,
-                    "| Process %5d: Cs with %14zu non-zero keys from local atpair size %7zu. "
+    lib_printf_coll("| Process %5d: Cs with %14zu non-zero keys from local atpair size %7zu. "
                     "Data memory: %10.2f MB\n",
                     mpi_comm_global_h.myid, Cs_data.n_keys(), local_atpair.size(),
                     Cs_data.n_data_bytes() * 8.0e-6);
