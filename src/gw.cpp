@@ -74,6 +74,8 @@ void G0W0::build_spacetime(
     }
     mpi_comm_global_h.barrier();
 
+    std::ofstream ofs_sigmac_r;
+
 #ifndef LIBRPA_USE_LIBRI
     if (mpi_comm_global_h.myid == 0)
     {
@@ -83,7 +85,6 @@ void G0W0::build_spacetime(
     mpi_comm_global_h.barrier();
     throw std::logic_error("compilation");
 #else
-
     // Transform 
     Profiler::start("g0w0_build_spacetime_ct_ft_wc", "Tranform Wc (q,w) -> (R,t)");
     const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
@@ -116,8 +117,6 @@ void G0W0::build_spacetime(
         Rs_local.insert(IJR.second);
     }
 
-
-    std::ofstream ofs_sigmac_r;
     for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
     {
         Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
