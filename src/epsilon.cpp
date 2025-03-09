@@ -1913,14 +1913,18 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             }
             else
             {
+                Profiler::start("epsilon_compute_eps_pgemm_1");
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
                         coul_block.ptr(), 1, 1, desc_nabf_nabf.desc,
                         chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
                         coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                Profiler::cease("epsilon_compute_eps_pgemm_1");
+                Profiler::start("epsilon_compute_eps_pgemm_2");
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
                         coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
                         coul_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
                         chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                Profiler::cease("epsilon_compute_eps_pgemm_2");
             }
             // now chi0_block is actually v1/2 chi v1/2
             chi0_block *= -1.0;

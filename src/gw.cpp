@@ -11,6 +11,7 @@
 #include "envs_mpi.h"
 #include "envs_blacs.h"
 #include "utils_io.h"
+#include "utils_mpi_io.h"
 #include "utils_blacs.h"
 
 #include <map>
@@ -89,19 +90,27 @@ void G0W0::build_spacetime(
     mpi_comm_global_h.barrier();
     throw std::logic_error("compilation");
 #else
+
     Profiler::start("g0w0_build_spacetime_1", "Tranform Wc (q,w) -> (R,t)");
     const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
     Profiler::stop("g0w0_build_spacetime_1");
+    LIBRPA::utils::lib_printf_root("Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
+            Profiler::get_wall_time_last("g0w0_build_spacetime_1"),
+            Profiler::get_cpu_time_last("g0w0_build_spacetime_1"));
+
     RI::G0W0<int, int, 3, double> g0w0_libri;
     map<int,std::array<double,3>> atoms_pos;
     for (int i = 0; i != natom; i++)
         atoms_pos.insert(pair<int, std::array<double, 3>>{i, {0, 0, 0}});
     std::array<int,3> period_array{this->period_.x,this->period_.y,this->period_.z};
-    g0w0_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
 
-    Profiler::start("g0w0_build_spacetime_2", "Setup LibRI C data");
+    Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
+    g0w0_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
     g0w0_libri.set_Cs(Cs_data.data_libri, Params::libri_g0w0_threshold_C);
     Profiler::stop("g0w0_build_spacetime_2");
+    LIBRPA::utils::lib_printf_root("Time for LibRI G0W0 setup (seconds, Wall/CPU): %f %f\n",
+            Profiler::get_wall_time_last("g0w0_build_spacetime_2"),
+            Profiler::get_cpu_time_last("g0w0_build_spacetime_2"));
 
     auto IJR_local_gf = dispatch_vector_prod(tot_atpair_ordered, Rlist, mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true, false);
     std::set<Vector3_Order<int>> Rs_local;
@@ -112,73 +121,69 @@ void G0W0::build_spacetime(
 
 
     std::ofstream ofs_sigmac_r;
-    for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
+    for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
     {
-        for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
+        Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
+        // LIBRPA::utils::lib_printf("task %d itau %d start\n", mpi_comm_global_h.myid, itau);
+        const auto tau = tfg.get_time_nodes()[itau];
+        // build the Wc LibRI object. Note <JI> has to be converted from <IJ>
+        // by W_IJ(R) = W^*_JI(-R)
+        std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> Wc_libri;
+        // in R-tau routing, some process can have zero time point
+        // check to avoid out-of-range by at()
+        // LIBRPA::utils::lib_printf("task %d Wc_tau_R.count(tau) %zu\n", mpi_comm_global_h.myid, Wc_tau_R.count(tau));
+        if (Wc_tau_R.count(tau))
         {
-            size_t n_IJR_myid = 0;
-            if (Params::output_gw_sigc_mat_rt)
+            for (const auto &I_JRWc: Wc_tau_R.at(tau))
             {
-                std::stringstream ss;
-                ss << Params::output_dir << "SigcRT"
-                    << "_ispin_" << std::setfill('0') << std::setw(5) << ispin
-                    << "_itau_" << std::setfill('0') << std::setw(5) << itau
-                    << "_myid_" << std::setfill('0') << std::setw(5) << envs::myid_global << ".dat";
-                ofs_sigmac_r.open(ss.str(), std::ios::out | std::ios::binary);
-                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
-            }
-
-            Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
-            // LIBRPA::utils::lib_printf("task %d itau %d start\n", mpi_comm_global_h.myid, itau);
-            const auto tau = tfg.get_time_nodes()[itau];
-            // build the Wc LibRI object. Note <JI> has to be converted from <IJ>
-            // by W_IJ(R) = W^*_JI(-R)
-            std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> Wc_libri;
-            // in R-tau routing, some process can have zero time point
-            // check to avoid out-of-range by at()
-            // LIBRPA::utils::lib_printf("task %d Wc_tau_R.count(tau) %zu\n", mpi_comm_global_h.myid, Wc_tau_R.count(tau));
-            if (Wc_tau_R.count(tau))
-            {
-                for (const auto &I_JRWc: Wc_tau_R.at(tau))
+                const auto &I = I_JRWc.first;
+                const auto &nabf_I = atomic_basis_abf.get_atom_nb(I);
+                for (const auto &J_RWc: I_JRWc.second)
                 {
-                    const auto &I = I_JRWc.first;
-                    const auto &nabf_I = atomic_basis_abf.get_atom_nb(I);
-                    for (const auto &J_RWc: I_JRWc.second)
+                    const auto &J = J_RWc.first;
+                    const auto &nabf_J = atomic_basis_abf.get_atom_nb(J);
+                    for (const auto &R_Wc: J_RWc.second)
                     {
-                        const auto &J = J_RWc.first;
-                        const auto &nabf_J = atomic_basis_abf.get_atom_nb(J);
-                        for (const auto &R_Wc: J_RWc.second)
-                        {
-                            const auto &R = R_Wc.first;
-                            // handle the <IJ(R)> block
-                            Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] = RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
-                            // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl ;
-                            // cout << Wc_libri[I][{J, {R.x, R.y, R.z}}] << endl;
-                            // handle the <JI(R)> block
-                            if (I == J) continue;
-                            auto minusR = (-R) % this->period_;
-                            if (J_RWc.second.count(minusR) == 0) continue;
-                            const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();
-                            // cout << R_Wc.second << endl;
-                            // cout << Wc_IJmR << endl;
-                            Wc_libri[static_cast<int>(J)][{static_cast<int>(I), {R.x, R.y, R.z}}] = RI::Tensor<double>({nabf_J, nabf_I}, Wc_IJmR.sptr());
-                        }
+                        const auto &R = R_Wc.first;
+                        // handle the <IJ(R)> block
+                        Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] = RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
+                        // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl ;
+                        // cout << Wc_libri[I][{J, {R.x, R.y, R.z}}] << endl;
+                        // handle the <JI(R)> block
+                        if (I == J) continue;
+                        auto minusR = (-R) % this->period_;
+                        if (J_RWc.second.count(minusR) == 0) continue;
+                        const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();
+                        // cout << R_Wc.second << endl;
+                        // cout << Wc_IJmR << endl;
+                        Wc_libri[static_cast<int>(J)][{static_cast<int>(I), {R.x, R.y, R.z}}] = RI::Tensor<double>({nabf_J, nabf_I}, Wc_IJmR.sptr());
                     }
                 }
             }
-            size_t n_obj_wc_libri = 0;
-            for (const auto &w: Wc_libri)
-            {
-                n_obj_wc_libri += w.second.size();
-            }
-            Profiler::stop("g0w0_build_spacetime_3");
+        }
+        size_t n_obj_wc_libri = 0;
+        for (const auto &w: Wc_libri)
+        {
+            n_obj_wc_libri += w.second.size();
+        }
+        Profiler::stop("g0w0_build_spacetime_3");
+        LIBRPA::utils::lib_printf_root("Time for preparing LibRI Wc object, i_tau %d (seconds, Wall/CPU): %f %f\n",
+                itau + 1,
+                Profiler::get_wall_time_last("g0w0_build_spacetime_3"),
+                Profiler::get_cpu_time_last("g0w0_build_spacetime_3"));
 
+        for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
+        {
             auto sigc_posi_tau = g0w0_libri.Sigc_tau;
             auto sigc_nega_tau = g0w0_libri.Sigc_tau;
 
             Profiler::start("g0w0_build_spacetime_4", "Compute G(R,t) and G(R,-t)");
             const auto gf = mf.get_gf_real_imagtimes_Rs(ispin, kfrac_list, {tau, -tau}, {Rs_local.cbegin(), Rs_local.cend()});
             Profiler::stop("g0w0_build_spacetime_4");
+            LIBRPA::utils::lib_printf_root("Time for Green's function, i_spin %d i_tau %d (seconds, Wall/CPU): %f %f\n",
+                    ispin + 1, itau + 1,
+                    Profiler::get_wall_time_last("g0w0_build_spacetime_4"),
+                    Profiler::get_cpu_time_last("g0w0_build_spacetime_4"));
 
             for (auto t: {tau, -tau})
             {
@@ -220,6 +225,19 @@ void G0W0::build_spacetime(
                 wtime_g0w0_cal_sigc = omp_get_wtime() - wtime_g0w0_cal_sigc;
                 LIBRPA::utils::lib_printf("Task %4d. libRI G0W0, spin %1d, time grid %12.6f. Wc size %zu, GF size %zu. Wall time %f\n",
                        mpi_comm_global_h.myid, ispin, t, n_obj_wc_libri, n_obj_gf_libri, wtime_g0w0_cal_sigc);
+            }
+
+            size_t n_IJR_myid = 0; // for sigcmat output
+
+            if (Params::output_gw_sigc_mat_rt)
+            {
+                std::stringstream ss;
+                ss << Params::output_dir << "SigcRT"
+                    << "_ispin_" << std::setfill('0') << std::setw(5) << ispin
+                    << "_itau_" << std::setfill('0') << std::setw(5) << itau
+                    << "_myid_" << std::setfill('0') << std::setw(5) << envs::myid_global << ".dat";
+                ofs_sigmac_r.open(ss.str(), std::ios::out | std::ios::binary);
+                ofs_sigmac_r.write((char *) &n_IJR_myid, sizeof(size_t)); // placeholder
             }
 
             // symmetrize and perform transformation
