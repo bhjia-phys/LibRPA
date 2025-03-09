@@ -1,6 +1,7 @@
 #include "gw.h"
 
 #include "atomic_basis.h"
+#include "constants.h"
 #include "matrix_m_parallel_utils.h"
 #include "profiler.h"
 #include "params.h"

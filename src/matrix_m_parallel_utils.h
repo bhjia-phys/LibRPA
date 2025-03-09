@@ -1,14 +1,15 @@
 #pragma once
-#include "matrix_m.h"
-#include "constants.h"
-#include "profiler.h"
-#include "base_blacs.h"
-#include "atomic_basis.h"
 #include <omp.h>
-#include <map>
+
 #include <functional>
+#include <map>
+
+#include "atomic_basis.h"
+#include "base_blacs.h"
+#include "matrix_m.h"
+#include "profiler.h"
 #include "scalapack_connector.h"
-#include "utils_io.h"
+// #include "utils_io.h"
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
 #else
@@ -271,6 +272,13 @@ void collect_block_from_ALL_IJ_Tensor(
     assert(ad.m() == atbasis.nb_total && ad.n() == atbasis.nb_total);
     matrix_m<Tdst> tmp_loc(mat_lo.nr(),mat_lo.nc(), MAJOR::ROW);
     size_t cp_size= ad.n_loc()*sizeof(Tdst);
+
+    LIBRPA::envs::ofs_myid << "cp_size: " << cp_size << endl;
+    LIBRPA::envs::ofs_myid << "Available TMAP keys: ";
+    print_keys(LIBRPA::envs::ofs_myid, TMAP);
+    LIBRPA::envs::ofs_myid << endl;
+    LIBRPA::envs::ofs_myid << "mat_lo dims: " << mat_lo.nr() << " " << mat_lo.nc() << endl;
+    LIBRPA::envs::ofs_myid << "ad_loc dims: " << ad.m_loc() << " " << ad.n_loc() << endl;
 
     omp_lock_t mat_lock;
     omp_init_lock(&mat_lock);

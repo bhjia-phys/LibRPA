@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "lapack_connector.h"
+#include "constants.h"
 #include "envs_io.h"
 #include "envs_mpi.h"
 #include "utils_io.h"
