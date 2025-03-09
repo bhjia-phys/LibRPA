@@ -766,7 +766,7 @@ size_t read_Cs_evenly_distribute(const string &dir_path, double threshold, int m
         atom_mu_part_range[I]=atom_mu.at(I-1)+atom_mu_part_range[I-1];
     
     N_all_mu=atom_mu_part_range[natom-1]+atom_mu[natom-1];
-    cout << "Done\n";
+    // cout << "Done\n";
     return cs_discard;
 }
 

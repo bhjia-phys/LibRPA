@@ -286,38 +286,60 @@ int main(int argc, char **argv)
         //local_atpair = dispatch_vector(tot_atpair, mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true);
         for(auto &iap:trangular_loc_atpair)
             local_atpair.push_back(iap);
+
+        Profiler::start("driver_read_Cs");
         read_Cs(driver_params.input_dir, Params::cs_threshold,local_atpair);
+        Profiler::cease("driver_read_Cs");
+
         // for(auto &ap:local_atpair)
         //     printf("   |process %d , local_atom_pair:  %d,  %d\n", mpi_comm_global_h.myid,ap.first,ap.second);
+        Profiler::start("driver_read_Vq");
         read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair, false);
+        Profiler::cease("driver_read_Vq");
         // test_libcomm_for_system(Vq);
     }
     else if(parallel_routing == ParallelRouting::LIBRI)
     {
-        if (mpi_comm_global_h.is_root()) lib_printf("Evenly distributed Cs and V for LibRI\n");
+        lib_printf_root("Evenly distributed Cs and V for LibRI\n");
+        Profiler::start("driver_read_Cs");
         read_Cs_evenly_distribute(driver_params.input_dir, Params::cs_threshold, mpi_comm_global_h.myid, mpi_comm_global_h.nprocs);
+        mpi_comm_global_h.barrier();
+        Profiler::cease("driver_read_Cs");
+        lib_printf_coll("| Process %5d: Cs with %14zu non-zero keys from local atpair size %7zu. "
+                        "Data memory: %10.2f MB. Wall/CPU time [min]: %12.4f %12.4f\n",
+                        mpi_comm_global_h.myid, Cs_data.n_keys(), local_atpair.size(),
+                        Cs_data.n_data_bytes() * 8.0e-6,
+                        Profiler::get_wall_time_last("driver_read_Cs") / 60.0,
+                        Profiler::get_cpu_time_last("driver_read_Cs") / 60.0);
         // Vq distributed using the same strategy
         // There should be no duplicate for V
+
+        Profiler::start("driver_read_Vq");
         auto trangular_loc_atpair= dispatch_upper_trangular_tasks(natom,blacs_ctxt_global_h.myid,blacs_ctxt_global_h.nprows,blacs_ctxt_global_h.npcols,blacs_ctxt_global_h.myprow,blacs_ctxt_global_h.mypcol);
         for(auto &iap:trangular_loc_atpair)
             local_atpair.push_back(iap);
         read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair, false);
+        mpi_comm_global_h.barrier();
+        Profiler::cease("driver_read_Vq");
+        lib_printf_coll("| Process %5d: coulomb_mat read. Wall/CPU time [min]: %12.4f %12.4f\n",
+                        mpi_comm_global_h.myid,
+                        Profiler::get_wall_time_last("driver_read_Vq") / 60.0,
+                        Profiler::get_cpu_time_last("driver_read_Vq") / 60.0);
         // test_libcomm_for_system(Vq);
     }
     else
     {
-        if (mpi_comm_global_h.is_root()) lib_printf("Complete copy of Cs and V on each process\n");
+        lib_printf_root("Complete copy of Cs and V on each process\n");
         local_atpair = generate_atom_pair_from_nat(natom, false);
+        Profiler::start("driver_read_Cs");
         read_Cs(driver_params.input_dir, Params::cs_threshold, local_atpair);
+        Profiler::cease("driver_read_Cs");
+
+        Profiler::start("driver_read_Vq");
         read_Vq_full(driver_params.input_dir, "coulomb_mat", false);
+        Profiler::cease("driver_read_Vq");
     }
     Profiler::stop("driver_read_Cs_Vq");
-
-    lib_printf_coll("| Process %5d: Cs with %14zu non-zero keys from local atpair size %7zu. "
-                    "Data memory: %10.2f MB\n",
-                    mpi_comm_global_h.myid, Cs_data.n_keys(), local_atpair.size(),
-                    Cs_data.n_data_bytes() * 8.0e-6);
-    std::flush(ofs_myid);
 
     // debug, check available Coulomb blocks on each process
     // ofs_myid << "Read Coulomb blocks in process\n";
