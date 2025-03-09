@@ -11,6 +11,7 @@
 #include "envs_mpi.h"
 #include "envs_blacs.h"
 #include "utils_io.h"
+#include "utils_mem.h"
 #include "utils_mpi_io.h"
 #include "utils_blacs.h"
 
@@ -53,9 +54,7 @@ void G0W0::reset_kspace()
 
 void G0W0::build_spacetime(
     const Cs_LRI &LRI_Cs,
-    const map<double,
-              atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
-        &Wc_freq_q,
+    map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old> &Wc_freq_q,
     const vector<Vector3_Order<int>> &Rlist)
 {
     using LIBRPA::envs::mpi_comm_global_h;
@@ -66,16 +65,10 @@ void G0W0::build_spacetime(
         throw std::logic_error("not implemented");
     }
 
-    if (mpi_comm_global_h.myid == 0)
-    {
-        LIBRPA::utils::lib_printf("Calculating correlation self-energy by space-time method\n");
-    }
+    LIBRPA::utils::lib_printf_root("Calculating correlation self-energy by space-time method\n");
     if (!tfg.has_time_grids())
     {
-        if (mpi_comm_global_h.myid == 0)
-        {
-            LIBRPA::utils::lib_printf("Parsed time-frequency object do not have time grids, exiting\n");
-        }
+        LIBRPA::utils::lib_printf_root("Parsed time-frequency object do not have time grids, exiting\n");
         mpi_comm_global_h.barrier();
         throw std::logic_error("no time grids");
     }
@@ -91,12 +84,16 @@ void G0W0::build_spacetime(
     throw std::logic_error("compilation");
 #else
 
-    Profiler::start("g0w0_build_spacetime_1", "Tranform Wc (q,w) -> (R,t)");
+    // Transform 
+    Profiler::start("g0w0_build_spacetime_ct_ft_wc", "Tranform Wc (q,w) -> (R,t)");
     const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
-    Profiler::stop("g0w0_build_spacetime_1");
+    // HACK: Free up Wc_freq_q to save memory, especially for large Coulomb matrix case and many minimax grids
+    Wc_freq_q.clear();
+    utils::release_free_mem();
+    Profiler::stop("g0w0_build_spacetime_ct_ft_wc");
     LIBRPA::utils::lib_printf_root("Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
-            Profiler::get_wall_time_last("g0w0_build_spacetime_1"),
-            Profiler::get_cpu_time_last("g0w0_build_spacetime_1"));
+            Profiler::get_wall_time_last("g0w0_build_spacetime_ct_ft_wc"),
+            Profiler::get_cpu_time_last("g0w0_build_spacetime_ct_ft_wc"));
 
     RI::G0W0<int, int, 3, double> g0w0_libri;
     map<int,std::array<double,3>> atoms_pos;

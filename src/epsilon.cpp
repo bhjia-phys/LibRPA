@@ -2149,8 +2149,7 @@ CT_FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, m
         throw logic_error("TFGrids object does not have time grids");
     const int ngrids = tfg.get_n_grids();
 
-    if (mpi_comm_global_h.is_root())
-        lib_printf("Converting Wc(q,w) -> W(R,t)\n");
+    LIBRPA::utils::lib_printf_root("Converting Wc(q,w) -> W(R,t)\n");
     mpi_comm_global_h.barrier();
 
     set<pair<atom_t, atom_t>> atpairs_unique;
@@ -2189,6 +2188,9 @@ CT_FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, m
             }
         }
     }
+
+    LIBRPA::utils::lib_printf_coll("Task %4d: distributing %d {I, J, R, tau} on %d threads\n",
+                                   LIBRPA::envs::myid_global, itauR_atpair_all.size(), omp_get_max_threads());
 
     #pragma omp parallel for schedule(dynamic)
     for (auto itauR_atpair: itauR_atpair_all)
@@ -2237,8 +2239,7 @@ CT_FT_Wc_freq_q(const map<double, atom_mapping<std::map<Vector3_Order<double>, m
         // omp_unset_lock(&lock_Wc);
     }
 
-    if (mpi_comm_global_h.is_root())
-        lib_printf("Done converting Wc q,w -> R,t\n");
+    LIBRPA::utils::lib_printf_root("Done converting Wc q,w -> R,t\n");
     mpi_comm_global_h.barrier();
 
     // myz debug: check the imaginary part of the matrix
