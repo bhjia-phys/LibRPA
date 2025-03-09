@@ -265,7 +265,7 @@ void collect_block_from_ALL_IJ_Tensor(
     const LIBRPA::AtomicBasis &atbasis,
     const TC &cell,
     bool conjugate,
-    Tdst alpha, const std::map<TA,std::map<TAC, RI::Tensor<Tdst>>> TMAP, MAJOR major_pv)
+    Tdst alpha, const std::map<TA,std::map<TAC, RI::Tensor<Tdst>>> &TMAP, MAJOR major_pv)
 {
     // assert(mat_lo.nr() == ad.m_loc() && mat_lo.nc() == ad.n_loc());
     assert(ad.m() == atbasis.nb_total && ad.n() == atbasis.nb_total);
