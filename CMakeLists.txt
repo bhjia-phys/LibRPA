@@ -85,6 +85,9 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
       FORCE)
 endif()
 
+# Get git commit number
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REF GIT_SHA1)
 
 if(NOT _loaded_cmake_inc)
   if(DEFINED ENV{MKLROOT} AND NOT DEFINED MKLROOT)

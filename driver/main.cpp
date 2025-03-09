@@ -16,6 +16,7 @@
 #include "stl_io_helper.h"
 #include "driver_params.h"
 #include "task.h"
+#include "utils_cmake.h"
 #include "utils_mpi_io.h"
 #include "utils_mem.h"
 
@@ -91,6 +92,15 @@ int main(int argc, char **argv)
                          LIBRPA::envs::mpi_comm_inter_h.myid, LIBRPA::envs::mpi_comm_global_h.myid);
     mpi_comm_global_h.barrier();
     lib_printf_coll("%s\n", mpi_comm_global_h.str().c_str());
+    mpi_comm_global_h.barrier();
+
+    // Print cmake infomation
+    if (mpi_comm_global_h.is_root())
+    {
+        lib_printf("\n");
+        LIBRPA::utils::print_cmake_info();
+        lib_printf("\n");
+    }
     mpi_comm_global_h.barrier();
 
     /*

@@ -1,6 +1,6 @@
 #include "get_minimax.h"
 
-#include "envs_dir.h"
+#include "envs_cmake.h"
 #include "envs_mpi.h"
 #include "parallel_mpi.h"
 

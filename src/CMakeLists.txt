@@ -18,7 +18,7 @@ set_target_properties(rpa_lib PROPERTIES
   SOVERSION ${CMAKE_PROJECT_VERSION}
 )
 
-configure_file(envs_dir.cpp.in envs_dir.cpp)
+configure_file(envs_cmake.cpp.in envs_cmake.cpp)
 list(APPEND lib_sources
         # aperiodic_chi0.cpp
         analycont.cpp
@@ -32,7 +32,7 @@ list(APPEND lib_sources
         constants.cpp
         coulmat.cpp
         dielecmodel.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/envs_dir.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/envs_cmake.cpp
         envs_io.cpp
         envs_mpi.cpp
         envs_blacs.cpp
@@ -55,6 +55,7 @@ list(APPEND lib_sources
         qpe_solver.cpp
         ri.cpp
         timefreq.cpp
+        utils_cmake.cpp
         utils_mem.cpp
         utils_blacs.cpp
         utils_timefreq.cpp
