@@ -15,17 +15,29 @@ extern const char * git_hash;
 //! Git reference of the source code
 extern const char * git_ref;
 
-//! Cmake C++ compiler
+//! CMake C++ compiler
 extern const char * cxx_compiler;
 
-//! Cmake Fortran compiler
+//! CMake Fortran compiler
 extern const char * fortran_compiler;
 
-//! Cmake C++ compiler flags
+//! CMake C++ compiler flags
 extern const char * cxx_compiler_flags;
 
-//! Cmake Fortran compiler flags
+//! CMake Fortran compiler flags
 extern const char * fortran_compiler_flags;
+
+// CMake Options
+//! CMake build type
+extern const char * cmake_build_type;
+
+extern const char * use_libri;
+
+extern const char * libri_include_dir;
+
+extern const char * libcomm_include_dir;
+
+extern const char * use_greenx_api;
 
 } /* end of namespace envs */
 } /* end of namespace LIBRPA */

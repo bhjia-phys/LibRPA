@@ -20,5 +20,15 @@ const char * cxx_compiler_flags = "${CMAKE_CXX_FLAGS}";
 
 const char * fortran_compiler_flags = "${CMAKE_Fortran_FLAGS}";
 
+const char * cmake_build_type = "${CMAKE_BUILD_TYPE}";
+
+const char * use_libri = "${USE_LIBRI}";
+
+const char * libri_include_dir = "${LibRI_INCLUDE_DIR}";
+
+const char * libcomm_include_dir = "${LibComm_INCLUDE_DIR}";
+
+const char * use_greenx_api = "${USE_GREENX_API}";
+
 } /* end of namespace envs */
 } /* end of namespace LIBRPA */
