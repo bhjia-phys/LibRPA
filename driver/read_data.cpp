@@ -1012,7 +1012,7 @@ size_t read_Vq_full(const string &dir_path, const string &vq_fprefix, bool is_cu
     Profiler::stop("handle_Vq_full_file");
 
     // cout << "FINISH coulomb files reading!" << endl;
-    Profiler::start("set_aux_cut_coulomb_k_atom_pair_out");
+    Profiler::start("set_aux_coulomb_k_atom_pair_out");
     for (auto &vf_p : Vq_full)
     {
         auto qvec = vf_p.first;
@@ -1082,7 +1082,7 @@ size_t read_Vq_full(const string &dir_path, const string &vq_fprefix, bool is_cu
             }
         }
     }
-    Profiler::stop("set_aux_cut_coulomb_k_atom_pair_out");
+    Profiler::stop("set_aux_coulomb_k_atom_pair_out");
     closedir(dir);
     dir = NULL;
     // cout << "vq threshold: " << threshold << endl;
@@ -1356,7 +1356,7 @@ size_t read_Vq_row(const string &dir_path, const string &vq_fprefix, double thre
     // Call the API to parse the data.
     // To reduce memory consumption during this process, we erase the data in temporary object once it is parsed.
     auto it_I = coulomb.begin();
-    Profiler::start("set_aux_coulomb_k_atom_pair");
+    Profiler::start("set_aux_coulomb_k_atom_pair_out");
     while (it_I != coulomb.end())
     {
         auto I = it_I->first;
@@ -1383,7 +1383,7 @@ size_t read_Vq_row(const string &dir_path, const string &vq_fprefix, double thre
         }
         it_I = coulomb.erase(it_I);
     }
-    Profiler::stop("set_aux_coulomb_k_atom_pair");
+    Profiler::stop("set_aux_coulomb_k_atom_pair_out");
 
     // cout << "FINISH coulomb files reading!" << endl;
 
