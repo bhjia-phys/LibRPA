@@ -140,6 +140,9 @@ void ComplexMatrix::set_as_identity_matrix()
 
 double ComplexMatrix::get_max_real() const
 {
+    // Not allocated
+    if (size == 0)
+        return 0.0;
     double rv = c[0].real();
     for (int i = 1; i != size; i++)
         if (c[i].real() > rv)
@@ -148,6 +151,9 @@ double ComplexMatrix::get_max_real() const
 }
 double ComplexMatrix::get_max_real(int &ir, int &ic) const
 {
+    // Not allocated
+    if (size == 0)
+        return 0.0;
     double rv = c[0].real();
     int pos = 0;
     for (int i = 1; i != size; i++)
@@ -165,6 +171,9 @@ double ComplexMatrix::get_max_real(int &ir, int &ic) const
 
 double ComplexMatrix::get_max_imag() const
 {
+    // Not allocated
+    if (size == 0)
+        return 0.0;
     double iv = c[0].imag();
     for (int i = 1; i != this->size; i++)
         if (c[i].imag() > iv)
@@ -174,6 +183,9 @@ double ComplexMatrix::get_max_imag() const
 
 double ComplexMatrix::get_max_abs() const
 {
+    // Not allocated
+    if (size == 0)
+        return 0.0;
     double iv = abs(this->c[0]);
     for (int i = 1; i != this->size; i++)
     {
@@ -184,6 +196,9 @@ double ComplexMatrix::get_max_abs() const
 
 double ComplexMatrix::get_max_abs_imag() const
 {
+    // Not allocated
+    if (size == 0)
+        return 0.0;
     double iv = abs(this->c[0].imag());
     for (int i = 1; i != this->size; i++)
     {
