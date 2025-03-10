@@ -1665,8 +1665,10 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
         natom, blacs_ctxt_global_h.myid, blacs_ctxt_global_h.nprows,
         blacs_ctxt_global_h.npcols, blacs_ctxt_global_h.myprow,
         blacs_ctxt_global_h.mypcol);
+#ifdef LIBRPA_DEBUG
     ofs_myid << get_timestamp() << " atpair_local " << atpair_local << endl;
     ofs_myid << get_timestamp() << " s0_s1 " << s0_s1 << endl;
+#endif
 
     // IJ pair of Wc to be returned
     pair<set<int>, set<int>> Iset_Jset_Wc;
@@ -1805,10 +1807,12 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
 
             // perform communication
             ofs_myid << get_timestamp() << " Start collect couleps_libri, targets" << endl;
+#ifdef LIBRPA_DEBUG
             ofs_myid << set_IJ_nabf_nabf << endl;
             ofs_myid << "Extended blocks" << endl;
             ofs_myid << "atom 1: " << s0_s1.first << endl;
             ofs_myid << "atom 2: " << s0_s1.second << endl;
+#endif
             // ofs_myid << "Owned blocks\n";
             // print_keys(ofs_myid, couleps_libri);
             // mpi_comm_global_h.barrier();
