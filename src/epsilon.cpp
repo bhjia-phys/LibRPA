@@ -1637,16 +1637,25 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
 
     Profiler::start("compute_Wc_freq_q_blacs_init");
     Array_Desc desc_nabf_nabf(blacs_ctxt_global_h);
-    // use a square blocksize instead max block, otherwise heev and inversion will complain about illegal parameter
+    // Use a square blocksize instead max block, otherwise heev and inversion will complain about illegal parameter
+    // Maximal blocksize ensure that atom indices related to the rows/columns of a local matrix is minimized.
     desc_nabf_nabf.init_square_blk(n_abf, n_abf, 0, 0);
+    // This, however, is not optimal for matrix operations, and may lead to segment fault during
+    // MPI operations with parallel linear algebra subroutine. Thus we define an optimal blocksize
+    Array_Desc desc_nabf_nabf_opt(blacs_ctxt_global_h);
+    const int nb_opt = min(128, desc_nabf_nabf.nb());
+    desc_nabf_nabf_opt.init(n_abf, n_abf, nb_opt, nb_opt, 0, 0);
     // obtain the indices of atom-pair block necessary to build 2D block of a Hermitian/symmetric matrix
     const auto set_IJ_nabf_nabf = LIBRPA::utils::get_necessary_IJ_from_block_2D_sy('U', LIBRPA::atomic_basis_abf, desc_nabf_nabf);
     const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
-    auto chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
-    auto coul_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
-    auto coul_eigen_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
-    auto coul_chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
-    auto coulwc_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
+    // temp_block is used to collect data from IJ-pair data structure with comm_map2_first
+    auto temp_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
+    // Below are the working arrays for matrix operations
+    auto chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
+    auto coul_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
+    auto coul_eigen_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
+    auto coul_chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
+    auto coulwc_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
 
     const double mem_blocks = (chi0_block.size() + coul_block.size() + coul_eigen_block.size() +
                                coul_chi0_block.size() + coulwc_block.size()) * 16.0e-6;
@@ -1750,11 +1759,15 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             //         coulwc_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf, IJ.first,
             //         IJ.second, true, CONE, IJq_coul.at(I).at({J, qa}).ptr(), MAJOR::ROW);
             // }
-            collect_block_from_ALL_IJ_Tensor(coulwc_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
+            collect_block_from_ALL_IJ_Tensor(temp_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                              qa, true, CONE, IJq_coul, MAJOR::ROW);
+            ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
+                                          coulwc_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, blacs_ctxt_global_h.ictxt);
             Profiler::stop("epsilon_prepare_coulwc_sqrt_3");
             Profiler::start("epsilon_prepare_coulwc_sqrt_4", "Perform square root");
-            power_hemat_blacs(coulwc_block, desc_nabf_nabf, coul_eigen_block, desc_nabf_nabf, n_singular_coulwc, eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
+            power_hemat_blacs(coulwc_block, desc_nabf_nabf_opt, coul_eigen_block,
+                              desc_nabf_nabf_opt, n_singular_coulwc, eigenvalues.c, 0.5,
+                              Params::sqrt_coulomb_threshold);
             Profiler::stop("epsilon_prepare_coulwc_sqrt_4");
         }
         Profiler::stop("epsilon_prepare_coulwc_sqrt");
@@ -1803,8 +1816,10 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             ofs_myid << get_timestamp() << " Done collect couleps_libri, collected blocks" << endl;
 
             ofs_myid << get_timestamp() << " Start construct couleps 2D block" << endl;
-            collect_block_from_ALL_IJ_Tensor(coul_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
+            collect_block_from_ALL_IJ_Tensor(temp_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                              qa, true, CONE, IJq_coul, MAJOR::ROW);
+            ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
+                                          coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, blacs_ctxt_global_h.ictxt);
             ofs_myid << get_timestamp() << " Done construct couleps 2D block" << endl;
         }
         // char fn[100];
@@ -1815,7 +1830,9 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
 
         size_t n_singular;
         ofs_myid << get_timestamp() << " Start power hemat couleps\n";
-        auto sqrtveig_blacs = power_hemat_blacs(coul_block, desc_nabf_nabf, coul_eigen_block, desc_nabf_nabf, n_singular, eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
+        auto sqrtveig_blacs =
+            power_hemat_blacs(coul_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt,
+                              n_singular, eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
         ofs_myid << get_timestamp() << " Done power hemat couleps\n";
         // lib_printf("nabf %d nsingu %lu\n", n_abf, n_singular);
         // release sqrtv when the q-point is not Gamma, or macroscopic dielectric constant at imaginary frequency is not prepared
@@ -1873,8 +1890,10 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 //         IJ.second, true, CONE, IJq_chi0.at(I).at({J, qa}).ptr(), MAJOR::ROW);
                 // }
                 Profiler::start("epsilon_prepare_chi0_2d_collect_block");
-                collect_block_from_ALL_IJ_Tensor(chi0_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
+                collect_block_from_ALL_IJ_Tensor(temp_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                                  qa, true, CONE, IJq_chi0, MAJOR::ROW);
+                ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
+                                              chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, blacs_ctxt_global_h.ictxt);
                 Profiler::stop("epsilon_prepare_chi0_2d_collect_block");
                 // sprintf(fn, "chi_ifreq_%d_iq_%d.mtx", ifreq, iq);
                 // print_matrix_mm_file_parallel(fn, chi0_block, desc_nabf_nabf);
@@ -1888,15 +1907,15 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 ofs_myid << get_timestamp() << " Entering dielectric matrix head overwrite" << endl;
                 // rotate to Coulomb-eigenvector basis
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_nonsingular, n_abf, 1.0,
-                        chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                        sqrtveig_blacs.ptr(), 1, n_singular + 1, desc_nabf_nabf.desc, 0.0,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                        chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                        sqrtveig_blacs.ptr(), 1, n_singular + 1, desc_nabf_nabf_opt.desc, 0.0,
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                 ScalapackConnector::pgemm_f('C', 'N', n_nonsingular, n_nonsingular, n_abf, 1.0,
-                        sqrtveig_blacs.ptr(), 1, n_singular + 1, desc_nabf_nabf.desc,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
-                        chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
-                const int ilo = desc_nabf_nabf.indx_g2l_r(n_nonsingular - 1);
-                const int jlo = desc_nabf_nabf.indx_g2l_c(n_nonsingular - 1);
+                        sqrtveig_blacs.ptr(), 1, n_singular + 1, desc_nabf_nabf_opt.desc,
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
+                        chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
+                const int ilo = desc_nabf_nabf_opt.indx_g2l_r(n_nonsingular - 1);
+                const int jlo = desc_nabf_nabf_opt.indx_g2l_c(n_nonsingular - 1);
                 if (ilo >= 0 && jlo >= 0)
                 {
                     ofs_myid << get_timestamp() << "Perform the head element overwrite" << endl;
@@ -1904,26 +1923,26 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
                 }
                 // rotate back to ABF
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_nonsingular, n_nonsingular, 1.0,
-                        coul_eigen_block.ptr(), 1, n_singular + 1, desc_nabf_nabf.desc,
-                        chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                        coul_eigen_block.ptr(), 1, n_singular + 1, desc_nabf_nabf_opt.desc,
+                        chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                 ScalapackConnector::pgemm_f('N', 'C', n_abf, n_abf, n_nonsingular, 1.0,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                        coul_eigen_block.ptr(), 1, n_singular + 1, desc_nabf_nabf.desc, 0.0,
-                        chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                        coul_eigen_block.ptr(), 1, n_singular + 1, desc_nabf_nabf_opt.desc, 0.0,
+                        chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
             }
             else
             {
                 Profiler::start("epsilon_compute_eps_pgemm_1");
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
-                        coul_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                        chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                        coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                        chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                 Profiler::cease("epsilon_compute_eps_pgemm_1");
                 Profiler::start("epsilon_compute_eps_pgemm_2");
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
-                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                        coul_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
+                        coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                        coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
                         chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
                 Profiler::cease("epsilon_compute_eps_pgemm_2");
             }
@@ -1931,9 +1950,9 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             chi0_block *= -1.0;
             for (int i = 0; i != n_abf; i++)
             {
-                const int ilo = desc_nabf_nabf.indx_g2l_r(i);
+                const int ilo = desc_nabf_nabf_opt.indx_g2l_r(i);
                 if (ilo < 0) continue;
-                const int jlo = desc_nabf_nabf.indx_g2l_c(i);
+                const int jlo = desc_nabf_nabf_opt.indx_g2l_c(i);
                 if (jlo < 0) continue;
                 chi0_block(ilo, jlo) += 1.0;
             }
@@ -1941,13 +1960,13 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             // now chi0_block is actually the dielectric matrix
             // perform inversion
             Profiler::start("epsilon_invert_eps", "Invert dielectric matrix");
-            invert_scalapack(chi0_block, desc_nabf_nabf);
+            invert_scalapack(chi0_block, desc_nabf_nabf_opt);
             // subtract 1 from diagonal
             for (int i = 0; i != n_abf; i++)
             {
-                const int ilo = desc_nabf_nabf.indx_g2l_r(i);
+                const int ilo = desc_nabf_nabf_opt.indx_g2l_r(i);
                 if (ilo < 0) continue;
-                const int jlo = desc_nabf_nabf.indx_g2l_c(i);
+                const int jlo = desc_nabf_nabf_opt.indx_g2l_c(i);
                 if (jlo < 0) continue;
                 chi0_block(ilo, jlo) -= 1.0;
             }
@@ -1955,13 +1974,15 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
 
             Profiler::start("epsilon_multiply_coulwc", "Multiply truncated Coulomb");
             ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
-                    coulwc_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                    chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
-                    coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                    coulwc_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                    chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
+                    coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
             ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0,
-                    coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                    coulwc_block.ptr(), 1, 1, desc_nabf_nabf.desc, 0.0,
-                    chi0_block.ptr(), 1, 1, desc_nabf_nabf.desc);
+                    coul_chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                    coulwc_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc, 0.0,
+                    chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
+            ScalapackConnector::pgemr2d_f(n_abf, n_abf, chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                          temp_block.ptr(), 1, 1, desc_nabf_nabf.desc, blacs_ctxt_global_h.ictxt);
             Profiler::stop("epsilon_multiply_coulwc");
             // lib_printf("chi0_block\n%s", str(chi0_block).c_str());
             // now chi0_block is the screened Coulomb interaction Wc (i.e. W-V)
@@ -1973,7 +1994,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps, atpa
             //                         LIBRPA::atomic_basis_abf, chi0_block,
             //                         desc_nabf_nabf, MAJOR::ROW);
             map_block_to_IJ_storage_new(Wc_MNmap, LIBRPA::atomic_basis_abf, map_lor_v, map_loc_v,
-                                        chi0_block, desc_nabf_nabf, MAJOR::ROW);
+                                        temp_block, desc_nabf_nabf, MAJOR::ROW);
             Profiler::stop("epsilon_convert_wc_map_block");
 
             Profiler::start("epsilon_convert_wc_communicate", "Communicate");
