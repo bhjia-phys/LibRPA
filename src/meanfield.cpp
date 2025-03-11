@@ -13,7 +13,9 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
     {
         eskb.clear();
         wg.clear();
+        wg0.clear();
         wfc.clear();
+        wfc0.clear();
     }
 
     n_spins = ns;
@@ -23,15 +25,22 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
 
     eskb.resize(n_spins);
     wg.resize(n_spins);
+    wg0.resize(n_spins);
     wfc.resize(n_spins);
+    wfc0.resize(n_spins);
 
     for (int is = 0; is < n_spins; is++)
     {
         eskb[is].create(n_kpoints, n_bands);
         wg[is].create(n_kpoints, n_bands);
+        wg0[is].create(n_kpoints, n_bands);
         wfc[is].resize(n_kpoints);
-        for (int ik = 0; ik < n_kpoints; ik++)
+        wfc0[is].resize(n_kpoints);
+        for (int ik = 0; ik < n_kpoints; ik++){
             wfc[is][ik].create(n_bands, n_aos);
+            wfc0[is][ik].create(n_bands, n_aos);
+        }
+
     }
 }
 
@@ -56,7 +65,9 @@ MeanField::MeanField(const MeanField &mf)
     // FIXME: copy data, not tested
     eskb = mf.eskb;
     wg = mf.wg;
+    wg0 = mf.wg0;
     wfc = mf.wfc;
+    wfc0 = mf.wfc0;
     efermi = mf.efermi;
 }
 
@@ -105,6 +116,25 @@ double MeanField::get_band_gap() const
     }
     gap = lumo - homo;
     return gap;
+}
+
+
+double MeanField::get_total_weight() const
+{
+    double total_electrons = 0.0;
+
+    for (int is = 0; is < this->get_n_spins(); ++is)
+    {
+        for (int ik = 0; ik < this->get_n_kpoints(); ++ik)
+        {
+            for (int ib = 0; ib < this->get_n_bands(); ++ib)
+            {
+                total_electrons += this->get_weight()[is](ik, ib);
+            }
+        }
+    }
+
+    return total_electrons;
 }
 
 ComplexMatrix MeanField::get_dmat_cplx(int ispin, int ikpt) const
@@ -229,3 +259,66 @@ void MeanField::allredue_wfc_isk()
             }
 }
 MeanField meanfield = MeanField();
+
+void MeanField::broadcast(const LIBRPA::MPI_COMM_handler& comm_hdl, int root) {
+    // 保持原有广播顺序（与resize参数顺序一致）
+    comm_hdl.broadcast(n_spins, root);    // 自旋数
+    comm_hdl.broadcast(n_aos, root);      // 原子轨道数（第二参数）
+    comm_hdl.broadcast(n_bands, root);    // 能带数（第三参数）
+    comm_hdl.broadcast(n_kpoints, root);  // k点数量（第四参数）
+    comm_hdl.broadcast(efermi, root);     // 费米能级
+
+    // 动态调整非主进程内存（参数顺序与声明一致）
+    if (!comm_hdl.is_root()) {
+        resize(n_spins, n_kpoints, n_bands, n_aos);
+    }
+
+    // 恢复原有矩阵广播逻辑（broadcast_matrix已包含维度同步）
+    for (auto& mat : eskb) {
+        matrix temp_mat;
+        if (comm_hdl.is_root()) {
+            temp_mat = mat;
+        }
+        comm_hdl.broadcast_matrix(temp_mat, root);
+        mat = temp_mat;
+    }
+    for (auto& mat : wg) {
+        matrix temp_mat;
+        if (comm_hdl.is_root()) {
+            temp_mat = mat;
+        }
+        comm_hdl.broadcast_matrix(temp_mat, root);
+        mat = temp_mat;
+    }
+    for (auto& mat : wg0) {
+        matrix temp_mat;
+        if (comm_hdl.is_root()) {
+            temp_mat = mat;
+        }
+        comm_hdl.broadcast_matrix(temp_mat, root);
+        mat = temp_mat;
+    }
+    // ... wg0循环保持不变 ...
+
+    // 保持原有波函数广播逻辑（broadcast_ComplexMatrix已含维度同步）
+    for (auto& spin_wfc : wfc) {
+        for (auto& k_wfc : spin_wfc) {
+            ComplexMatrix temp_wfc;
+            if (comm_hdl.is_root()) {
+                temp_wfc = k_wfc;
+            }
+            comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
+            k_wfc = temp_wfc;
+        }
+    }
+    for (auto& spin_wfc : wfc0) {
+        for (auto& k_wfc : spin_wfc) {
+            ComplexMatrix temp_wfc;
+            if (comm_hdl.is_root()) {
+                temp_wfc = k_wfc;
+            }
+            comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
+            k_wfc = temp_wfc;
+        }
+    }
+}

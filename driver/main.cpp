@@ -18,6 +18,7 @@
 #include "task.h"
 #include "utils_cmake.h"
 #include "utils_mpi_io.h"
+#include "utils_io_parallel.h"
 #include "utils_mem.h"
 
 #include "task_rpa.h"
@@ -27,6 +28,13 @@
 #include "task_gw_band.h"
 #include "task_screened_coulomb.h"
 #include "task_test.h"
+#include "task_qsgw.h"
+#include "task_qsgwA.h"
+#include "task_qsgw_band.h"
+#include "task_hf_band.h"
+#include "task_scRPA.h"
+#include "task_scRPA_band.h"
+#include "task_screened_coulomb.h"
 
 static void initialize(int argc, char **argv)
 {
@@ -130,6 +138,18 @@ int main(int argc, char **argv)
         task = task_t::EXX;
     else if (task_lower == "exx_band")
         task = task_t::EXX_band;
+    else if (task_lower == "qsgw")
+        task = task_t::QSGW;
+    else if (task_lower == "qsgwa")
+        task = task_t::QSGWA;
+    else if (task_lower == "qsgw_band")
+        task = task_t::QSGW_band;    
+    else if (task_lower == "hf_band")
+        task = task_t::HF_band;  
+    else if (task_lower == "scrpa")
+        task = task_t::scRPA;
+    else if (task_lower == "scrpa_band")
+        task = task_t::scRPA_band;
     else if (task_lower == "wc_rf")
         task = task_t::Wc_Rf;
     else if (task_lower == "print_minimax")
@@ -409,6 +429,29 @@ int main(int argc, char **argv)
     else if (task == task_t::test)
     {
         task_test();
+    else if (task == task_t::QSGW)
+    {
+        task_qsgw();
+    }
+    else if (task == task_t::QSGWA)
+    {
+        task_qsgwA();
+    }
+    else if (task == task_t::QSGW_band)
+    {
+        task_qsgw_band();
+    }
+    else if (task == task_t::HF_band)
+    {
+        task_hf_band();
+    }
+    else if (task == task_t::scRPA)
+    {
+        task_scRPA();
+    }
+    else if (task == task_t::scRPA_band)
+    {
+        task_scRPA_band();
     }
 
     finalize(true);

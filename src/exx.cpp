@@ -464,7 +464,7 @@ void Exx::build_KS(const std::vector<std::vector<ComplexMatrix>> &wfc_target,
                                           Hexx_nband_nband.ptr(), 1, 1, desc_nband_nband.desc,
                                           Hexx_nband_nband_fb.ptr(), 1, 1, desc_nband_nband_fb.desc,
                                           desc_nband_nband_fb.ictxt());
-            this->exx_is_ik_KS[isp][ik] = Hexx_nband_nband_fb;
+            this->exx_is_ik_KS[isp][ik] = Hexx_nband_nband_fb.copy();
             // cout << "Hexx_nband_nband_fb isp " << isp  << " ik " << ik << endl << Hexx_nband_nband_fb;
             if (blacs_ctxt_global_h.myid == 0)
             {
@@ -480,7 +480,10 @@ void Exx::build_KS_kgrid()
 {
     this->build_KS(this->mf_.get_eigenvectors(), this->kfrac_list_);
 }
-
+void Exx::build_KS_kgrid0()
+{
+    this->build_KS(this->mf_.get_eigenvectors0(), this->kfrac_list_);
+}
 void Exx::build_KS_band(const std::vector<std::vector<ComplexMatrix>> &wfc_band,
                         const std::vector<Vector3_Order<double>> &kfrac_band)
 {
