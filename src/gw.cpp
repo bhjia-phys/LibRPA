@@ -548,6 +548,11 @@ void G0W0::build_sigc_matrix_KS_kgrid()
     this->build_sigc_matrix_KS(this->mf.get_eigenvectors(), this->kfrac_list);
 }
 
+void G0W0::build_sigc_matrix_KS_kgrid0()
+{
+    this->build_sigc_matrix_KS(this->mf.get_eigenvectors0(), this->kfrac_list);
+}
+
 void G0W0::build_sigc_matrix_KS_band(const std::vector<std::vector<ComplexMatrix>> &wfc,
                                      const std::vector<Vector3_Order<double>> &kfrac_band)
 {

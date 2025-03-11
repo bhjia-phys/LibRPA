@@ -62,6 +62,7 @@ class Exx
                    const atpair_R_mat_t& coul_mat);
 
         void build_KS_kgrid();
+        void build_KS_kgrid0();
         void build_KS_band(const std::vector<std::vector<ComplexMatrix>> &wfc_band,
                            const std::vector<Vector3_Order<double>> &kfrac_band);
         void reset_rspace();

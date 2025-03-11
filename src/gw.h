@@ -63,7 +63,7 @@ public:
 
     //! build the correlation self-energy matrix in Kohn-Sham basis at the SCF k-points
     void build_sigc_matrix_KS_kgrid();
-
+    void build_sigc_matrix_KS_kgrid0();
     //! build the correlation self-energy matrix in Kohn-Sham basis at the SCF k-points
     void build_sigc_matrix_KS_band(const std::vector<std::vector<ComplexMatrix>> &wfc,
                                    const std::vector<Vector3_Order<double>> &kfrac_band);
