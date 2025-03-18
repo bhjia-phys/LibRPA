@@ -123,6 +123,7 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
 
             collect_block_from_ALL_IJ_Tensor(coul_block, desc_nabf_nabf, LIBRPA::atomic_basis_abf,
                                              qa, true, CONE, IJq_coul, MAJOR::ROW);
+
             double block_end = omp_get_wtime();
             lib_printf(
                 "Vq Time  myid: %d  arr_time: %f  comm_time: %f   block_time: %f   pair_size: %d\n",

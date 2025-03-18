@@ -14,6 +14,8 @@ std::vector<Vector3_Order<double>> irk_points;
 map<Vector3_Order<double>, double> irk_weight;
 map<atom_t, size_t> atom_nw;
 map<atom_t, size_t> atom_mu;
+// before shrinked
+map<atom_t, size_t> atom_mu_l;
 map<atom_t, size_t> atom_nw_loc;
 map<atom_t, size_t> atom_mu_loc;
 vector<size_t> atom_mu_part_range;
@@ -88,6 +90,7 @@ void Cs_LRI_clx::clear()
 }
 
 Cs_LRI Cs_data;
+Cs_LRI Cs_shrinked_data;
 
 atpair_k_cplx_mat_t Vq;
 atpair_k_cplx_mat_t Vq_cut;
