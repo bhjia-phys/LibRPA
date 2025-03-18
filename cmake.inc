@@ -3,7 +3,7 @@
 set(CMAKE_CXX_COMPILER "mpiicpc" CACHE STRING "" FORCE)
 set(CMAKE_Fortran_COMPILER "ifort" CACHE STRING "" FORCE)
 
-set(CMAKE_CXX_FLAGS "-g -O2 -fopenmp" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS "-g -O2 -fopenmp -DLIBRPA_VERBOSE" CACHE STRING "" FORCE)
 if(DEBUG)
   set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fopenmp" CACHE STRING "" FORCE)
 endif()

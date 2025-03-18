@@ -27,6 +27,7 @@ extern std::vector<Vector3_Order<double>> irk_points;
 extern map<Vector3_Order<double>, double> irk_weight;
 extern map<atom_t, size_t> atom_nw;
 extern map<atom_t, size_t> atom_mu;
+extern map<atom_t, size_t> atom_mu_l;
 extern map<atom_t, size_t> atom_nw_loc;
 extern map<atom_t, size_t> atom_mu_loc;
 extern vector<size_t> atom_mu_part_range;
@@ -77,6 +78,7 @@ struct Cs_LRI_clx
 };
 
 extern Cs_LRI Cs_data;
+extern Cs_LRI Cs_shrinked_data;
 
 //! Coulomb matrix in ABF, represented in the reciprocal space.
 extern atpair_k_cplx_mat_t Vq;

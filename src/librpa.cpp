@@ -12,14 +12,11 @@
 
 #include <stdlib.h>
 
-#include "envs_mpi.h"
-#include "envs_blacs.h"
-#include "envs_io.h"
-#include "utils_io.h"
 #include <cstring>
 
 #include "atoms.h"
 #include "constants.h"
+#include "envs_blacs.h"
 #include "envs_io.h"
 #include "envs_mpi.h"
 #include "librpa_main.h"
@@ -208,10 +205,13 @@ void set_ibz2bz_index_and_weight(const int nk_irk, const int* ibz2bz_index, cons
 }
 
 void set_ao_basis_aux(int I, int J, int nbasis_i, int nbasis_j, int naux_mu, int* R, double* Cs_in,
-                      int insert_index_only)
+                      int insert_index_only, const std::string keyword)
 {
-    atom_nw.insert(pair<atom_t, size_t>(I, nbasis_i));
-    atom_mu.insert(pair<atom_t, size_t>(I, naux_mu));
+    if (keyword == "Cs_data")
+    {
+        atom_nw.insert(pair<atom_t, size_t>(I, nbasis_i));
+        atom_mu.insert(pair<atom_t, size_t>(I, naux_mu));
+    }
 
     if (insert_index_only)
     {
@@ -245,9 +245,17 @@ void set_ao_basis_aux(int I, int J, int nbasis_i, int nbasis_j, int naux_mu, int
                 (*data)[i_col * n_ij + i_row] = Cs_in[i_row * naux_mu + i_col];
             }
         }
-        const std::initializer_list<std::size_t>
-            shape{static_cast<std::size_t>(naux_mu), static_cast<std::size_t>(nbasis_i), static_cast<std::size_t>(nbasis_j)};
-        Cs_data.data_libri[I][{J, Ra}] = RI::Tensor<double>(shape, data);
+        const std::initializer_list<std::size_t> shape{static_cast<std::size_t>(naux_mu),
+                                                       static_cast<std::size_t>(nbasis_i),
+                                                       static_cast<std::size_t>(nbasis_j)};
+        if (keyword == "Cs_data")
+        {
+            Cs_data.data_libri[I][{J, Ra}] = RI::Tensor<double>(shape, data);
+        }
+        else if (keyword == "Cs_shrinked_data")
+        {
+            Cs_shrinked_data.data_libri[I][{J, Ra}] = RI::Tensor<double>(shape, data);
+        }
     }
     else
     {
@@ -255,7 +263,14 @@ void set_ao_basis_aux(int I, int J, int nbasis_i, int nbasis_j, int naux_mu, int
         shared_ptr<matrix> cs_ptr = make_shared<matrix>();
         cs_ptr->create(nbasis_i * nbasis_j, naux_mu);
         memcpy((*cs_ptr).c, Cs_in, sizeof(double) * cs_size);
-        Cs_data.data_IJR[I][J][box] = cs_ptr;
+        if (keyword == "Cs_data")
+        {
+            Cs_data.data_IJR[I][J][box] = cs_ptr;
+        }
+        else if (keyword == "Cs_shrinked_data")
+        {
+            Cs_shrinked_data.data_IJR[I][J][box] = cs_ptr;
+        }
         // LIBRPA::utils::lib_printf("Cs out:\n");
         // for(int i=0;i!=cs_size;i++)
         //     LIBRPA::utils::lib_printf("   %f",(*Cs[I][J][box]).c[i]);
@@ -375,8 +390,8 @@ void set_librpa_params(LibRPAParams* params_c)
 void get_default_librpa_params(LibRPAParams* params_c)
 {
     // All member of LibRPAParams must be set.
-    strcpy(params_c->output_file,      "stdout");
-    strcpy(params_c->output_dir,       "librpa.d");
+    strcpy(params_c->output_file, "stdout");
+    strcpy(params_c->output_dir, "librpa.d");
     strcpy(params_c->parallel_routing, "auto");
     strcpy(params_c->tfgrids_type, "minimax");
     strcpy(params_c->DFT_software, "auto");
@@ -413,12 +428,15 @@ void run_librpa_main()
 
 void get_frequency_grids(int ngrid, double* freqeuncy_grids) {}
 
-void get_rpa_correlation_energy(double* rpa_corr, double* rpa_corr_irk_contrib)
+void get_rpa_correlation_energy(double* rpa_corr, double* rpa_corr_irk_contrib,
+                                std::map<Vector3_Order<double>, ComplexMatrix>& sinvS,
+                                const std::string& input_dir, const bool use_shrink_abfs)
 {
     std::complex<double> rpa_corr_;
     std::vector<std::complex<double>> rpa_corr_irk_contrib_(n_irk_points);
 
-    LIBRPA::app::get_rpa_correlation_energy_(rpa_corr_, rpa_corr_irk_contrib_);
+    LIBRPA::app::get_rpa_correlation_energy_(rpa_corr_, rpa_corr_irk_contrib_, sinvS, input_dir,
+                                             use_shrink_abfs);
 
     auto dp = reinterpret_cast<double*>(rpa_corr_irk_contrib_.data());
 

@@ -34,9 +34,13 @@ size_t read_Cs(const string &dir_path, double threshold, const vector<atpair_t> 
 void read_velocity(const string &file_path, MeanField &mf);
 void read_velocity_aims(MeanField &mf, const string &file_path);
 
-size_t read_Cs_evenly_distribute(const string &dir_path, double threshold, int myid, int nprocs);
+size_t read_Cs_evenly_distribute(const string &dir_path, double threshold, int myid, int nprocs,
+                                 const string keyword = "Cs_data");
 
 size_t read_Vq_full(const string &dir_path, const string &vq_fprefix, bool is_cut_coulomb);
+
+size_t read_shrink_sinvS(const string &dir_path, const string &vq_fprefix,
+                         map<Vector3_Order<double>, ComplexMatrix> &sinvS);
 
 size_t read_Vq_row(const string &dir_path, const string &vq_fprefix, double threshold,
                    const vector<atpair_t> &local_atpair, bool is_cut_coulomb);

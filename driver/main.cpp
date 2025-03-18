@@ -318,6 +318,20 @@ int main(int argc, char **argv)
             mpi_comm_global_h.myid, Cs_data.n_keys(), local_atpair.size(),
             Cs_data.n_data_bytes() * 8.0e-6, Profiler::get_wall_time_last("driver_read_Cs") / 60.0,
             Profiler::get_cpu_time_last("driver_read_Cs") / 60.0);
+        if (Params::use_shrink_abfs)
+        {
+            // backup large atom_mu
+            atom_mu_l = atom_mu;
+            read_Cs_evenly_distribute(driver_params.input_dir, Params::cs_threshold,
+                                      mpi_comm_global_h.myid, mpi_comm_global_h.nprocs,
+                                      "Cs_shrinked_data");
+            std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
+            Profiler::start("read_shrink_sinvS", "Load shrink transformation");
+            // change atom_mu: number of {Mu,mu} in the later calculations
+            read_shrink_sinvS(driver_params.input_dir, "shrink_sinvS_", sinvS);
+            sinvS.clear();
+            Profiler::stop("read_shrink_sinvS");
+        }
         // Vq distributed using the same strategy
         // There should be no duplicate for V
 
@@ -326,6 +340,7 @@ int main(int argc, char **argv)
             natom, blacs_ctxt_global_h.myid, blacs_ctxt_global_h.nprows, blacs_ctxt_global_h.npcols,
             blacs_ctxt_global_h.myprow, blacs_ctxt_global_h.mypcol);
         for (auto &iap : trangular_loc_atpair) local_atpair.push_back(iap);
+
         read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
                     false);
         mpi_comm_global_h.barrier();

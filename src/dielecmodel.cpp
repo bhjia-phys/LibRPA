@@ -448,8 +448,17 @@ void diele_func::FT_R2k()
                         {
                             Vector3_Order<double> k_frac = kfrac_band[ik];
                             const std::array<double, 3> k_array = {k_frac.x, k_frac.y, k_frac.z};
-                            this->Ctri_ij.data_libri[I][{J, k_array}](mu, i, j) =
-                                compute_Cijk(mu, I, i, J, j, ik);
+                            if (Params::use_shrink_abfs)
+                            {
+                                this->Ctri_ij.data_libri[I][{J, k_array}](mu, i, j) =
+                                    compute_Cijk(Cs_data, mu, I, i, J, j, ik);
+                            }
+                            else
+                            {
+                                this->Ctri_ij.data_libri[I][{J, k_array}](mu, i, j) =
+                                    compute_Cijk(Cs_data, mu, I, i, J, j, ik);
+                            }
+
                             /*if (ik == 19 && I == 1 && J == 0 && i == 0 && j == 1)
                             {
                                 std::cout << "Cij: " << mu << ", "
@@ -468,13 +477,14 @@ void diele_func::FT_R2k()
     std::cout << "* Success: Fourier transform from Cs(R) to Cs(k)." << std::endl;
 };
 
-std::complex<double> diele_func::compute_Cijk(int mu, int I, int i, int J, int j, int ik)
+std::complex<double> diele_func::compute_Cijk(Cs_LRI &Cs_in, int mu, int I, int i, int J, int j,
+                                              int ik)
 {
     std::complex<double> Cijk = 0.0;
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
     Vector3_Order<double> k_frac = kfrac_band[ik];
-    for (auto outer : Cs_data.data_libri[I])
+    for (auto outer : Cs_in.data_libri[I])
     {
         auto J_Ra = outer.first;
         auto Ra = J_Ra.second;
@@ -485,7 +495,7 @@ std::complex<double> diele_func::compute_Cijk(int mu, int I, int i, int J, int j
         {
             // std::cout << I << "," << J << "," << Ra[0] << "," << Ra[1] << "," << Ra[2] <<
             // std::endl;
-            Cijk += kphase * Cs_data.data_libri[I][{J, Ra}](mu, i, j);
+            Cijk += kphase * Cs_in.data_libri[I][{J, Ra}](mu, i, j);
         }
     }
     return Cijk;
