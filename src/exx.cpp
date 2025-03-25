@@ -160,19 +160,44 @@ void Exx::build(const Cs_LRI &Cs,
     // initialize Coulomb matrix
     Profiler::start("build_real_space_exx_2", "Prepare V libRI object");
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<double>>> V_libri;
-    for (auto IJR: dispatch_vector_prod(get_atom_pair(coul_mat), Rlist, mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true, true))
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
     {
-        const auto I = IJR.first.first;
-        const auto J = IJR.first.second;
-        const auto R = IJR.second;
-        const auto& VIJR = coul_mat.at(I).at(J).at(R);
-        // debug
-        // printf("I J R %zu %zu %d %d %d, max(V) %f\n", I, J, R.x, R.y, R.z, VIJR->max());
-        std::array<int,3> Ra{R.x,R.y,R.z};
-        std::valarray<double> VIJR_va(VIJR->c, VIJR->size);
-        auto pv = std::make_shared<std::valarray<double>>();
-        *pv = VIJR_va;
-        V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(VIJR->nr), size_t(VIJR->nc)}, pv);
+        // Full Coulomb case, have to re-distribute
+        for (auto IJR: dispatch_vector_prod(get_atom_pair(coul_mat), Rlist, mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true, true))
+        {
+            const auto I = IJR.first.first;
+            const auto J = IJR.first.second;
+            const auto R = IJR.second;
+            const auto& VIJR = coul_mat.at(I).at(J).at(R);
+            // debug
+            // printf("I J R %zu %zu %d %d %d, max(V) %f\n", I, J, R.x, R.y, R.z, VIJR->max());
+            std::array<int,3> Ra{R.x,R.y,R.z};
+            std::valarray<double> VIJR_va(VIJR->c, VIJR->size);
+            auto pv = std::make_shared<std::valarray<double>>();
+            *pv = VIJR_va;
+            V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(VIJR->nr), size_t(VIJR->nc)}, pv);
+        }
+    }
+    else
+    {
+        for (const auto &I_JRV: coul_mat)
+        {
+            const auto I = I_JRV.first;
+            for (const auto &J_RV: I_JRV.second)
+            {
+                const auto J = J_RV.first;
+                for (const auto &R_V: J_RV.second)
+                {
+                    const auto &R = R_V.first;
+                    const auto &V = R_V.second;
+                    std::array<int,3> Ra{R.x,R.y,R.z};
+                    std::valarray<double> VIJR_va(V->c, V->size);
+                    auto pv = std::make_shared<std::valarray<double>>();
+                    *pv = VIJR_va;
+                    V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)}, pv);
+                }
+            }
+        }
     }
     envs::ofs_myid << "Number of V keys: " << get_num_keys(V_libri) << "\n";
     exx_libri.set_Vs(V_libri, Params::libri_exx_threshold_V);

@@ -22,6 +22,7 @@ void task_exx()
     using LIBRPA::utils::lib_printf;
 
     // Load the cut coulomb data
+    // TODO: replace read_Vq_full by read_Vq_row to reduce memory consumption
     read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
 
     // NOTE: since the internal object does not support parallel calculation with different k-points on each process
