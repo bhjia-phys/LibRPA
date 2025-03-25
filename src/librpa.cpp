@@ -231,6 +231,7 @@ void set_ao_basis_aux(int I, int J, int nbasis_i, int nbasis_j, int naux_mu, int
      * */
     // Cs_data.use_libri = LIBRPA::parallel_routing == LIBRPA::ParallelRouting::LIBRI;
     Cs_data.use_libri = Params::parallel_routing == "libri";
+    Cs_shrinked_data.use_libri = Params::parallel_routing == "libri";
 
     if (Cs_data.use_libri)
     {

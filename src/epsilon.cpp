@@ -50,7 +50,12 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
     const auto &mf = chi0.mf;
     const double CONE = 1.0;
     const int n_abf = LIBRPA::atomic_basis_abf.nb_total;
+    std::cout << "n_abf " << n_abf << std::endl;
+    std::cout << "n_atoms " << LIBRPA::atomic_basis_abf.n_atoms << std::endl;
     const auto part_range = LIBRPA::atomic_basis_abf.get_part_range();
+    std::cout << "part_range " << part_range[0] << " " << part_range[1] << std::endl;
+    auto nbs_ = LIBRPA::atomic_basis_abf.get_atom_nbs();
+    std::cout << "nbs_ " << nbs_[0] << " " << nbs_[1] << std::endl;
 
     mpi_comm_global_h.barrier();
 
@@ -255,7 +260,13 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
                     freq, q.x, q.y, q.z, pi_freq_end - pi_freq_begin, chi_arr_time, chi_comm_time,
                     chi_2d_time, pi_end - pi_begin, det_end - pi_end);
                 complex<double> rpa_for_omega_q = complex<double>(trace_pi + ln_det);
+                // std::cout << "q: " << iq << ", freq: " << ifreq << ", ln_det:" << ln_det
+                //           << ", trace_pi: " << trace_pi << std::endl;
                 cRPA_q[q] += rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI;  //! check
+                // std::cout << "rpa_for_omega_q: " << rpa_for_omega_q
+                //          << ", freq_weight: " << freq_weight << ", irk_weight[q]:" <<
+                //          irk_weight[q]
+                //          << ", cRPA_q[q]: " << cRPA_q[q] << std::endl;
                 tot_RPA_energy += rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI;
             }
         }
@@ -487,6 +498,8 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                 const int ilo = desc_nabf_nabf.indx_g2l_r(i);
                 const int jlo = desc_nabf_nabf.indx_g2l_c(i);
                 if (ilo >= 0 && jlo >= 0) coul_chi0_block(ilo, jlo) += CONE;
+                // std::cout << "1-Pi: " << ilo << "," << jlo << "," << coul_chi0_block(ilo, jlo)
+                //<< std::endl;
             }
             // if( ifreq== 0 && mpi_comm_global_h.is_root() )
             //     print_whole_matrix("pi-2D-loc", coul_chi0_block);
@@ -515,8 +528,6 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                     freq, q.x, q.y, q.z, pi_freq_end - pi_freq_begin, chi_arr_time, chi_comm_time,
                     chi_2d_time, pi_end - pi_begin, det_end - pi_end);
                 complex<double> rpa_for_omega_q = trace_pi + ln_det;
-                // cout << " ifreq:" << freq << "      rpa_for_omega_k: " << rpa_for_omega_q << "
-                // lnt_det: " << ln_det << "    trace_pi " << trace_pi << endl;
                 cRPA_q[q] += rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI;  //! check
                 tot_RPA_energy += rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI;
             }
