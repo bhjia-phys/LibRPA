@@ -80,8 +80,19 @@ void task_g0w0_band()
     }
 
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
-    Profiler::stop("read_vq_cut");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    {
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair, true);
+    }
+    Profiler::cease("read_vq_cut");
 
     std::vector<double> epsmac_LF_imagfreq_re;
 
