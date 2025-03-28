@@ -260,8 +260,10 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
                     freq, q.x, q.y, q.z, pi_freq_end - pi_freq_begin, chi_arr_time, chi_comm_time,
                     chi_2d_time, pi_end - pi_begin, det_end - pi_end);
                 complex<double> rpa_for_omega_q = complex<double>(trace_pi + ln_det);
-                // std::cout << "q: " << iq << ", freq: " << ifreq << ", ln_det:" << ln_det
-                //           << ", trace_pi: " << trace_pi << std::endl;
+                std::cout << "q: " << iq << ", freq: " << ifreq << ", ln_det:" << ln_det
+                          << ", trace_pi: " << trace_pi << ", rpa_for_omega_q" << rpa_for_omega_q
+                          << ", contribution: "
+                          << rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI << std::endl;
                 cRPA_q[q] += rpa_for_omega_q * freq_weight * irk_weight[q] / TWO_PI;  //! check
                 // std::cout << "rpa_for_omega_q: " << rpa_for_omega_q
                 //          << ", freq_weight: " << freq_weight << ", irk_weight[q]:" <<
