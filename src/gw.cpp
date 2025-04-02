@@ -316,6 +316,10 @@ void G0W0::build_spacetime(
                     }
                 }
             }
+
+            sigc_posi_tau.clear();
+            sigc_nega_tau.clear();
+
             Profiler::stop("g0w0_build_spacetime_6");
 
             if (Params::output_gw_sigc_mat_rt)
