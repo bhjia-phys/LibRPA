@@ -160,6 +160,7 @@ void Exx::build(const Cs_LRI &Cs,
     // initialize Coulomb matrix
     Profiler::start("build_real_space_exx_2", "Prepare V libRI object");
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<double>>> V_libri;
+    Profiler::start("build_real_space_exx_2_1");
     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
     {
         // Full Coulomb case, have to re-distribute
@@ -199,9 +200,12 @@ void Exx::build(const Cs_LRI &Cs,
             }
         }
     }
+    Profiler::cease("build_real_space_exx_2_1");
     envs::ofs_myid << "Number of V keys: " << get_num_keys(V_libri) << "\n";
+    Profiler::start("build_real_space_exx_2_2");
     exx_libri.set_Vs(V_libri, Params::libri_exx_threshold_V);
-    Profiler::stop("build_real_space_exx_2");
+    Profiler::cease("build_real_space_exx_2_2");
+    Profiler::cease("build_real_space_exx_2");
     utils::lib_printf("Task %4d: V setup for EXX\n", mpi_comm_global_h.myid);
     // cout << V_libri << endl;
 
