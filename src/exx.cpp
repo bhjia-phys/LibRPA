@@ -204,6 +204,7 @@ void Exx::build(const Cs_LRI &Cs,
     envs::ofs_myid << "Number of V keys: " << get_num_keys(V_libri) << "\n";
     Profiler::start("build_real_space_exx_2_2");
     exx_libri.set_Vs(V_libri, Params::libri_exx_threshold_V);
+    V_libri.clear();
     Profiler::cease("build_real_space_exx_2_2");
     Profiler::cease("build_real_space_exx_2");
     utils::lib_printf("Task %4d: V setup for EXX\n", mpi_comm_global_h.myid);
