@@ -429,6 +429,7 @@ int main(int argc, char **argv)
     else if (task == task_t::test)
     {
         task_test();
+    }
     else if (task == task_t::QSGW)
     {
         task_qsgw();
