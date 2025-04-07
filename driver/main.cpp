@@ -24,6 +24,7 @@
 #include "task_rpa.h"
 #include "task_screened_coulomb.h"
 #include "task_test.h"
+#include "timefreq.h"
 #include "utils_cmake.h"
 #include "utils_mem.h"
 #include "utils_mpi_io.h"
