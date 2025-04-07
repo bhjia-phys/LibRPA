@@ -2,7 +2,9 @@
 cmake_minimum_required(VERSION 3.13)
 
 project(LibRPA NONE)
-
+set(CEREAL_INCLUDE_DIR "/mnt/sg001/home/ks_iopcas_rxg/software/cereal-1.3.0/include")
+set(LIBRI_INCLUDE_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibRI/include")
+set(LIBCOMM_INCLUDE_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibComm/include")
 # extract version number from version.h file
 file(READ ${PROJECT_SOURCE_DIR}/src/version.h version_file)
 string(REGEX MATCH "LIBRPA_MAJOR_VERSION ([0-9]+)" librpa_major_version ${version_file})
@@ -122,6 +124,7 @@ if(NOT _loaded_cmake_inc)
 endif()
 
 include_directories(src)
+include_directories(src/lebedev-quadrature)
 
 # Switch on LibRI functionalities, which requires Cereal, LibComm and LibRI
 # When USE_LIBRI is switched on but the include direcotires of the required dependenccies are not specified
