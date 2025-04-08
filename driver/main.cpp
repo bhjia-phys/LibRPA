@@ -321,6 +321,16 @@ int main(int argc, char **argv)
             Profiler::get_cpu_time_last("driver_read_Cs") / 60.0);
         if (Params::use_shrink_abfs)
         {
+            if (mpi_comm_global_h.is_root())
+            {
+                std::cout << "iatom & large Nabfs: " << std::endl;
+                for (auto &Imu : atom_mu)
+                {
+                    auto I = Imu.first;
+                    auto mu = Imu.second;
+                    std::cout << I << "," << mu << std::endl;
+                }
+            }
             // backup large atom_mu
             atom_mu_l = atom_mu;
             read_Cs_evenly_distribute(driver_params.input_dir, Params::cs_threshold,
@@ -331,7 +341,17 @@ int main(int argc, char **argv)
             // change atom_mu: number of {Mu,mu} in the later calculations
             read_shrink_sinvS(driver_params.input_dir, "shrink_sinvS_", sinvS);
             sinvS.clear();
-            Profiler::stop("read_shrink_sinvS");
+            if (mpi_comm_global_h.is_root())
+            {
+                std::cout << "iatom & small Nabfs: " << std::endl;
+                for (auto &Imu : atom_mu)
+                {
+                    auto I = Imu.first;
+                    auto mu = Imu.second;
+                    std::cout << I << "," << mu << std::endl;
+                }
+                Profiler::stop("read_shrink_sinvS");
+            }
         }
         // Vq distributed using the same strategy
         // There should be no duplicate for V

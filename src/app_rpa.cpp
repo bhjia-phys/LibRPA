@@ -65,7 +65,6 @@ void get_rpa_correlation_energy_(std::complex<double> &rpa_corr,
     Profiler::start("chi0_build", "Build response function chi0");
     chi0.build(Cs_data, Rlist, period, local_atpair, qlist);
     Profiler::stop("chi0_build");
-    std::cout << "large atom_mu: " << atom_mu[0] << atom_mu[1] << std::endl;
     auto &chi0_q = chi0.get_chi0_q();
     int all_mu = 0;
     vector<int> mu_shift(atom_mu.size());
@@ -121,7 +120,6 @@ void get_rpa_correlation_energy_(std::complex<double> &rpa_corr,
             atom_mu_part_range[I] = atom_mu.at(I - 1) + atom_mu_part_range[I - 1];
 
         N_all_mu = atom_mu_part_range[natom - 1] + atom_mu[natom - 1];
-        std::cout << "small atom_mu: " << atom_mu[0] << atom_mu[1] << std::endl;
         Profiler::start("shrink_chi0_abfs", "Do shrink transformation");
         chi0.shrink_abfs_chi0(sinvS, qlist, atom_mu_l);
         Profiler::stop("shrink_chi0_abfs");
