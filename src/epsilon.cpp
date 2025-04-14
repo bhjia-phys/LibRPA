@@ -2182,7 +2182,6 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 }
                 Profiler::stop("epsilon_invert_eps");
             }
-            
 
             Profiler::start("epsilon_multiply_coulwc", "Multiply truncated Coulomb");
             ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0, coulwc_block.ptr(), 1,
@@ -2228,6 +2227,12 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                         // std::valarray<complex<double>> Wc_va(Wc.ptr(), Wc.size());
                         // auto pWc = std::make_shared<std::valarray<complex<double>>>();
                         // *pWc = Wc_va;
+                        if (iq == 10 && ifreq == 10)
+                        {
+                            char fn[100];
+                            sprintf(fn, "Wc_M_%zu_N_%zu.dat", M, N);
+                            print_matrix_mm_file(Wc, Params::output_dir + "/" + fn);
+                        }
                         Wc_libri[M][{N, qa}] = RI::Tensor<complex<double>>({n_mu, n_nu}, Wc.sptr());
                     }
                 }

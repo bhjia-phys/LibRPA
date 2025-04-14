@@ -108,7 +108,7 @@ void G0W0::build_spacetime(
 
     Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
     g0w0_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
-    g0w0_libri.set_Cs(Cs_data.data_libri, Params::libri_g0w0_threshold_C);
+    g0w0_libri.set_Cs(LRI_Cs.data_libri, Params::libri_g0w0_threshold_C);
     Profiler::stop("g0w0_build_spacetime_2");
     LIBRPA::utils::lib_printf_root("Time for LibRI G0W0 setup (seconds, Wall/CPU): %f %f\n",
                                    Profiler::get_wall_time_last("g0w0_build_spacetime_2"),

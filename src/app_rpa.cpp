@@ -121,7 +121,7 @@ void get_rpa_correlation_energy_(std::complex<double> &rpa_corr,
 
         N_all_mu = atom_mu_part_range[natom - 1] + atom_mu[natom - 1];
         Profiler::start("shrink_chi0_abfs", "Do shrink transformation");
-        chi0.shrink_abfs_chi0(sinvS, qlist, atom_mu_l);
+        chi0.shrink_abfs_chi0(sinvS, qlist, atom_mu_l, atom_mu);
         Profiler::stop("shrink_chi0_abfs");
         sinvS.clear();
     }
