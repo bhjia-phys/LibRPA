@@ -65,49 +65,6 @@ void get_rpa_correlation_energy_(std::complex<double> &rpa_corr,
     Profiler::start("chi0_build", "Build response function chi0");
     chi0.build(Cs_data, Rlist, period, local_atpair, qlist);
     Profiler::stop("chi0_build");
-    auto &chi0_q = chi0.get_chi0_q();
-    int all_mu = 0;
-    vector<int> mu_shift(atom_mu.size());
-    for (int I = 0; I != atom_mu.size(); I++)
-    {
-        mu_shift[I] = all_mu;
-        all_mu += atom_mu[I];
-    }
-    for (int ifreq = 0; ifreq < tfg.get_n_grids(); ++ifreq)
-    {
-        for (int iq = 0; iq < qlist.size(); iq++)
-        {
-            const auto &q = qlist[iq];
-            if (ifreq == 10 && iq == 0)
-            {
-                ComplexMatrix large_chi0(all_mu, all_mu);
-                const double freq = tfg.get_freq_nodes()[ifreq];
-                for (auto &Ip : chi0_q.at(freq).at(q))
-                {
-                    auto I = Ip.first;
-                    for (auto &Jm : Ip.second)
-                    {
-                        auto J = Jm.first;
-                        auto mu_I = Jm.second.nr;
-                        auto mu_J = Jm.second.nc;
-                        for (int ir = 0; ir < mu_I; ir++)
-                        {
-                            for (int ic = 0; ic < mu_J; ic++)
-                                large_chi0(mu_shift[I] + ir, mu_shift[J] + ic) = Jm.second(ir, ic);
-                        }
-                    }
-                }
-                for (int ir = 0; ir < all_mu; ir++)
-                {
-                    for (int ic = ir; ic < all_mu; ic++)
-                    {
-                        large_chi0(ic, ir) = conj(large_chi0(ir, ic));
-                    }
-                }
-                // print_complex_matrix_mm(large_chi0, "chi0_gamma", 0.);
-            }
-        }
-    }
 
     if (use_shrink_abfs)
     {

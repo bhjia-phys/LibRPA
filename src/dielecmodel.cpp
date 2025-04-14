@@ -451,7 +451,7 @@ void diele_func::FT_R2k()
                             if (Params::use_shrink_abfs)
                             {
                                 this->Ctri_ij.data_libri[I][{J, k_array}](mu, i, j) =
-                                    compute_Cijk(Cs_data, mu, I, i, J, j, ik);
+                                    compute_Cijk(Cs_shrinked_data, mu, I, i, J, j, ik);
                             }
                             else
                             {
