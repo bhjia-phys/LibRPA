@@ -18,6 +18,21 @@ struct libri_types
     typedef std::pair<TA, TC> TAC;
 };
 
+template <typename TA, typename Tcell, typename Tdata>
+size_t get_tensor_map_bytes(std::map<TA, std::map<std::pair<TA, Tcell>, RI::Tensor<Tdata>>> tensor_map)
+{
+    size_t msize = 0;
+    for (const auto &I_JR_mat: tensor_map)
+    {
+        for (const auto &JR_mat: I_JR_mat.second)
+        {
+            const auto &mat = JR_mat.second;
+            msize += mat.get_shape_all();
+        }
+    }
+    return msize * sizeof(Tdata);
+}
+
 template <typename TA, typename Tcell, typename TAout = TA, typename Tcellout = Tcell>
 std::pair<std::set<TAout>, std::set<typename libri_types<TAout, Tcellout>::TAC>>
 get_s0_s1_for_comm_map2(const std::vector<std::pair<TA, TA>>& atpairs,

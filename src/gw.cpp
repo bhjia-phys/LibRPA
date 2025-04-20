@@ -88,7 +88,7 @@ void G0W0::build_spacetime(
 #else
     // Transform 
     Profiler::start("g0w0_build_spacetime_ct_ft_wc", "Tranform Wc (q,w) -> (R,t)");
-    const auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
+    auto Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
     // HACK: Free up Wc_freq_q to save memory, especially for large Coulomb matrix case and many minimax grids
     Wc_freq_q.clear();
     utils::release_free_mem();
@@ -97,15 +97,15 @@ void G0W0::build_spacetime(
             Profiler::get_wall_time_last("g0w0_build_spacetime_ct_ft_wc"),
             Profiler::get_cpu_time_last("g0w0_build_spacetime_ct_ft_wc"));
 
-    RI::G0W0<int, int, 3, double> g0w0_libri;
+    RI::GW<int, int, 3, double> gw_libri;
     map<int,std::array<double,3>> atoms_pos;
     for (int i = 0; i != natom; i++)
         atoms_pos.insert(pair<int, std::array<double, 3>>{i, {0, 0, 0}});
     std::array<int,3> period_array{this->period_.x,this->period_.y,this->period_.z};
 
     Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
-    g0w0_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
-    g0w0_libri.set_Cs(Cs_data.data_libri, Params::libri_g0w0_threshold_C);
+    gw_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
+    gw_libri.set_Cs(Cs_data.data_libri, Params::libri_g0w0_threshold_C);
     Profiler::stop("g0w0_build_spacetime_2");
     LIBRPA::utils::lib_printf_root("Time for LibRI G0W0 setup (seconds, Wall/CPU): %f %f\n",
             Profiler::get_wall_time_last("g0w0_build_spacetime_2"),
@@ -157,12 +157,17 @@ void G0W0::build_spacetime(
                     }
                 }
             }
+            // NOTE: Wc(tau) will not be used any more, clean to free up memory
+            Wc_tau_R[tau].clear();
         }
         size_t n_obj_wc_libri = 0;
         for (const auto &w: Wc_libri)
         {
             n_obj_wc_libri += w.second.size();
         }
+        gw_libri.set_Ws(Wc_libri, Params::libri_g0w0_threshold_Wc);
+        Wc_libri.clear();
+
         Profiler::stop("g0w0_build_spacetime_3");
         LIBRPA::utils::lib_printf_root("Time for preparing LibRI Wc object, i_tau %d (seconds, Wall/CPU): %f %f\n",
                 itau + 1,
@@ -171,29 +176,22 @@ void G0W0::build_spacetime(
 
         for (int ispin = 0; ispin != mf.get_n_spins(); ispin++)
         {
-            auto sigc_posi_tau = g0w0_libri.Sigc_tau;
-            auto sigc_nega_tau = g0w0_libri.Sigc_tau;
+            std::map<int, std::map<std::pair<int, std::array<int, 3>>, Tensor<double>>> sigc_posi_tau;
+            std::map<int, std::map<std::pair<int, std::array<int, 3>>, Tensor<double>>> sigc_nega_tau;
 
             Profiler::start("g0w0_build_spacetime_4", "Compute G(R,t) and G(R,-t)");
-            const auto gf = mf.get_gf_real_imagtimes_Rs(ispin, kfrac_list, {tau, -tau}, {Rs_local.cbegin(), Rs_local.cend()});
-            Profiler::stop("g0w0_build_spacetime_4");
-            LIBRPA::utils::lib_printf_root("Time for Green's function, i_spin %d i_tau %d (seconds, Wall/CPU): %f %f\n",
-                    ispin + 1, itau + 1,
-                    Profiler::get_wall_time_last("g0w0_build_spacetime_4"),
-                    Profiler::get_cpu_time_last("g0w0_build_spacetime_4"));
-
-            for (auto t: {tau, -tau})
+            auto gf = mf.get_gf_real_imagtimes_Rs(ispin, kfrac_list, {tau, -tau}, {Rs_local.cbegin(), Rs_local.cend()});
+            std::map<double, std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>>> tau_gf_libri;
+            for (const auto &IJR: IJR_local_gf)
             {
-                std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> gf_libri;
-                for (const auto &IJR: IJR_local_gf)
+                const auto &I = IJR.first.first;
+                const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
+                const auto &J = IJR.first.second;
+                const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
+                const auto &R = IJR.second;
+                for (auto t: {tau, -tau})
                 {
-                    const auto &I = IJR.first.first;
-                    const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
-                    const auto &J = IJR.first.second;
-                    const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
-                    const auto &R = IJR.second;
                     const auto &gf_global = gf.at(t).at(R);
-
                     matrix gf_IJ_block(n_I, n_J);
                     {
                         for (int i = 0; i != n_I; i++)
@@ -203,26 +201,50 @@ void G0W0::build_spacetime(
                                                               atomic_basis_wfc.get_global_index(J, j));
                             }
                         std::shared_ptr<std::valarray<double>> mat_ptr = std::make_shared<std::valarray<double>>(gf_IJ_block.c, gf_IJ_block.size);
-                        gf_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] = RI::Tensor<double>({n_I, n_J}, mat_ptr);
+                        tau_gf_libri[t][static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] = RI::Tensor<double>({n_I, n_J}, mat_ptr);
                     }
                 }
+            }
+            gf.clear();
+            Profiler::stop("g0w0_build_spacetime_4");
+            LIBRPA::utils::lib_printf_root("Time for Green's function, i_spin %d i_tau %d (seconds, Wall/CPU): %f %f\n",
+                    ispin + 1, itau + 1,
+                    Profiler::get_wall_time_last("g0w0_build_spacetime_4"),
+                    Profiler::get_cpu_time_last("g0w0_build_spacetime_4"));
+
+            for (auto t: {tau, -tau})
+            {
+                const auto &gf_libri = tau_gf_libri.at(t);
                 size_t n_obj_gf_libri = 0;
                 for (const auto &gf: gf_libri)
                     n_obj_gf_libri += gf.second.size();
 
                 double wtime_g0w0_cal_sigc = omp_get_wtime();
+                gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
                 Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
-                g0w0_libri.cal_Sigc(gf_libri, Params::libri_g0w0_threshold_G, Wc_libri, Params::libri_g0w0_threshold_Wc);
+                gw_libri.cal_Sigmas();
                 Profiler::stop("g0w0_build_spacetime_5");
+                Profiler::start("g0w0_build_spacetime_5_clean");
+                gw_libri.free_Gs();
+                Profiler::stop("g0w0_build_spacetime_5_clean");
+
+                // Check size of data
+                double mem_mb = get_tensor_map_bytes(gw_libri.Sigmas) * 1e-6;
+                envs::ofs_myid << "Temporary Sigc_tau size for time " << t << " [MB]: " << mem_mb << endl;
+
                 if (t > 0)
-                    sigc_posi_tau = std::move(g0w0_libri.Sigc_tau);
+                    sigc_posi_tau = std::move(gw_libri.Sigmas);
                 else
-                    sigc_nega_tau = std::move(g0w0_libri.Sigc_tau);
-                g0w0_libri.Sigc_tau.clear();
+                    sigc_nega_tau = std::move(gw_libri.Sigmas);
+                gw_libri.Sigmas.clear();
+
                 wtime_g0w0_cal_sigc = omp_get_wtime() - wtime_g0w0_cal_sigc;
                 LIBRPA::utils::lib_printf("Task %4d. libRI G0W0, spin %1d, time grid %12.6f. Wc size %zu, GF size %zu. Wall time %f\n",
                        mpi_comm_global_h.myid, ispin, t, n_obj_wc_libri, n_obj_gf_libri, wtime_g0w0_cal_sigc);
             }
+            Profiler::start("g0w0_build_spacetime_free_Ws");
+            gw_libri.free_Ws();
+            Profiler::stop("g0w0_build_spacetime_free_Ws");
 
             size_t n_IJR_myid = 0; // for sigcmat output
 
@@ -257,12 +279,12 @@ void G0W0::build_spacetime(
                     const auto R = Vector3_Order<int>(Ra[0], Ra[1], Ra[2]);
                     const auto iR = std::distance(Rlist.cbegin(), std::find(Rlist.cbegin(), Rlist.cend(), R));
 
-                    auto sigc_cos = 0.5 * (sigc_posi_block + sigc_nega_block);
-                    auto sigc_sin = 0.5 * (sigc_posi_block - sigc_nega_block);
+                    const auto sigc_cos = 0.5 * (sigc_posi_block + sigc_nega_block);
+                    const auto sigc_sin = 0.5 * (sigc_posi_block - sigc_nega_block);
 
+                    n_IJR_myid++;
                     if (Params::output_gw_sigc_mat_rt)
                     {
-                        n_IJR_myid++;
                         // write indices and dimensions
                         size_t dims[5];
                         dims[0] = iR;
@@ -304,6 +326,10 @@ void G0W0::build_spacetime(
                     }
                 }
             }
+
+            sigc_posi_tau.clear();
+            sigc_nega_tau.clear();
+
             Profiler::stop("g0w0_build_spacetime_6");
 
             if (Params::output_gw_sigc_mat_rt)
