@@ -1066,7 +1066,9 @@ inline matrix_m<std::complex<T>> random_unitary(int n, MAJOR major = MAJOR::ROW)
     T *rwork = new T[std::max(1, 3 * n - 2)];
 
     LapackConnector::heev_f('V', 'U', n, mat.ptr(), mat.nr(), w, work, lwork, rwork, info);
-    delete [] rwork, w, work;
+    delete [] rwork;
+    delete [] w;
+    delete [] work;
     return matrix_m<std::complex<T>>(n, n, mat.ptr(), MAJOR::COL, major);
 }
 

@@ -100,7 +100,7 @@ void G0W0::build_spacetime(
         Profiler::get_wall_time_last("g0w0_build_spacetime_ct_ft_wc"),
         Profiler::get_cpu_time_last("g0w0_build_spacetime_ct_ft_wc"));
 
-    RI::G0W0<int, int, 3, double> g0w0_libri;
+    RI::GW<int, int, 3, double> gw_libri;
     map<int, std::array<double, 3>> atoms_pos;
     for (int i = 0; i != natom; i++)
         atoms_pos.insert(pair<int, std::array<double, 3>>{i, {0, 0, 0}});
@@ -172,6 +172,9 @@ void G0W0::build_spacetime(
         {
             n_obj_wc_libri += w.second.size();
         }
+        gw_libri.set_Ws(Wc_libri, Params::libri_g0w0_threshold_Wc);
+        Wc_libri.clear();
+
         Profiler::stop("g0w0_build_spacetime_3");
         LIBRPA::utils::lib_printf_root(
             "Time for preparing LibRI Wc object, i_tau %d (seconds, Wall/CPU): %f %f\n", itau + 1,
@@ -234,21 +237,24 @@ void G0W0::build_spacetime(
                 for (const auto &gf : gf_libri) n_obj_gf_libri += gf.second.size();
 
                 double wtime_g0w0_cal_sigc = omp_get_wtime();
+                gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
                 Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
-                g0w0_libri.cal_Sigc(gf_libri, Params::libri_g0w0_threshold_G, Wc_libri,
-                                    Params::libri_g0w0_threshold_Wc);
+                gw_libri.cal_Sigmas();
                 Profiler::stop("g0w0_build_spacetime_5");
+                Profiler::start("g0w0_build_spacetime_5_clean");
+                gw_libri.free_Gs();
+                Profiler::stop("g0w0_build_spacetime_5_clean");
 
                 // Check size of data
-                double mem_mb = get_tensor_map_bytes(g0w0_libri.Sigc_tau) * 1e-6;
+                double mem_mb = get_tensor_map_bytes(gw_libri.Sigmas) * 1e-6;
                 envs::ofs_myid << "Temporary Sigc_tau size for time " << t << " [MB]: " << mem_mb
                                << endl;
 
                 if (t > 0)
-                    sigc_posi_tau = std::move(g0w0_libri.Sigc_tau);
+                    sigc_posi_tau = std::move(gw_libri.Sigmas);
                 else
-                    sigc_nega_tau = std::move(g0w0_libri.Sigc_tau);
-                g0w0_libri.Sigc_tau.clear();
+                    sigc_nega_tau = std::move(gw_libri.Sigmas);
+                gw_libri.Sigmas.clear();
 
                 wtime_g0w0_cal_sigc = omp_get_wtime() - wtime_g0w0_cal_sigc;
                 LIBRPA::utils::lib_printf(
@@ -257,6 +263,9 @@ void G0W0::build_spacetime(
                     mpi_comm_global_h.myid, ispin, t, n_obj_wc_libri, n_obj_gf_libri,
                     wtime_g0w0_cal_sigc);
             }
+            Profiler::start("g0w0_build_spacetime_free_Ws");
+            gw_libri.free_Ws();
+            Profiler::stop("g0w0_build_spacetime_free_Ws");
 
             size_t n_IJR_myid = 0;  // for sigcmat output
 

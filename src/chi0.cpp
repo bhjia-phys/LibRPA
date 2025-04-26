@@ -539,16 +539,23 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
 
             // On-the-fly build of Green's function at specific spin channel and imaginary time
             build_gf_Rt_libri(this->mf, isp, this->klist, this->IJRs_gf_local, tau, gf_po_libri);
+            rpa.set_Gs_pos(gf_po_libri, Params::libri_chi0_threshold_G);
             build_gf_Rt_libri(this->mf, isp, this->klist, this->IJRs_gf_local, -tau, gf_ne_libri);
+            rpa.set_Gs_neg(gf_ne_libri, Params::libri_chi0_threshold_G);
             // ofs_myid << "gf_po_libri\n" << gf_po_libri << "\n";
             // ofs_myid << "gf_ne_libri\n" << gf_ne_libri << "\n";
             mpi_comm_global_h.barrier();
             // std::clock_t cpu_clock_done_init_gf = clock();
             ofs_myid << "rpa.cal_chi0s begin,    tau = " << tau << "\n";
             Profiler::start("chi0_libri_routing_cal_chi0s", "Call cal_chi0s");
-            rpa.cal_chi0s(gf_po_libri, gf_ne_libri, Params::libri_chi0_threshold_G);
+            rpa.cal_chi0s();
             Profiler::stop("chi0_libri_routing_cal_chi0s");
             ofs_myid << "rpa.cal_chi0s finished, tau = " << tau << "\n";
+
+            Profiler::start("chi0_libri_routing_free_gf");
+            rpa.free_Gs_neg();
+            rpa.free_Gs_pos();
+            Profiler::cease("chi0_libri_routing_free_gf");
 
             // collect chi0 on selected atpairs of all R
             Profiler::start("chi0_libri_routing_collect_Rs", "Collect all R blocks");
