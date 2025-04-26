@@ -337,7 +337,7 @@ int main(int argc, char **argv)
                                       mpi_comm_global_h.myid, mpi_comm_global_h.nprocs,
                                       "Cs_shrinked_data");
             std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
-            Profiler::start("read_shrink_sinvS", "Load shrink transformation");
+            Profiler::start("read_shrink_sinvS_fold", "Load shrink transformation");
             // change atom_mu: number of {Mu,mu} in the later calculations
             read_shrink_sinvS(driver_params.input_dir, "shrink_sinvS_", sinvS);
             sinvS.clear();
@@ -350,7 +350,7 @@ int main(int argc, char **argv)
                     auto mu = Imu.second;
                     std::cout << I << "," << mu << std::endl;
                 }
-                Profiler::stop("read_shrink_sinvS");
+                Profiler::stop("read_shrink_sinvS_fold");
             }
         }
         // Vq distributed using the same strategy

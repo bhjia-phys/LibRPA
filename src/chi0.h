@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "atoms.h"
+#include "matrix_m.h"
 #include "meanfield.h"
 #include "ri.h"
 #include "timefreq.h"
@@ -108,4 +109,11 @@ class Chi0
     void shrink_abfs_chi0(map<Vector3_Order<double>, ComplexMatrix> &sinvS,
                           const vector<Vector3_Order<double>> &qlist,
                           map<atom_t, size_t> &atom_mu_large, map<atom_t, size_t> &atom_mu_small);
+    void unfold_abfs_Wc(
+        map<Vector3_Order<double>, ComplexMatrix> &sinvS,
+        map<double,
+            atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
+            &Wc,
+        const vector<Vector3_Order<double>> &qlist, map<atom_t, size_t> &atom_mu_large,
+        map<atom_t, size_t> &atom_mu_small);
 };
