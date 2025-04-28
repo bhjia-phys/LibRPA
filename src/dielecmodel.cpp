@@ -488,7 +488,7 @@ std::complex<double> diele_func::compute_Cijk(Cs_LRI &Cs_in, int mu, int I, int 
     {
         auto J_Ra = outer.first;
         auto Ra = J_Ra.second;
-        Vector3_Order<double> R = {Ra[0], Ra[1], Ra[2]};
+        Vector3_Order<int> R = {Ra[0], Ra[1], Ra[2]};
         double ang = k_frac * R * TWO_PI;
         complex<double> kphase = complex<double>(cos(ang), sin(ang));
         if (J_Ra.first == J)
