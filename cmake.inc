@@ -6,11 +6,15 @@ set(CMAKE_Fortran_COMPILER "ifx" CACHE STRING "" FORCE)
 
 
 
-set(CMAKE_CXX_FLAGS "-g -O2 -fopenmp" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS "-g -O2 -fopenmp -DLIBRPA_VERBOSE" CACHE STRING "" FORCE)
 if(DEBUG)
   set(CMAKE_CXX_FLAGS "-g -O0 -Wall -fopenmp" CACHE STRING "" FORCE)
 endif()
 
+set(CEREAL_INCLUDE_DIR "/home/linpz/software/cereal/cereal-1.3.0/include")
+set(LIBRI_INCLUDE_DIR "/home/ghj/abacus/GW_240302/LibRI-loop3/include")
+# set(LIBRI_INCLUDE_DIR "/home/ghj/abacus/LibRI_time-out/include")
+set(LIBCOMM_INCLUDE_DIR "/home/ghj/abacus/241111_librpa/LibComm/include")
 
 
 
