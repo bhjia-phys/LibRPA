@@ -19,6 +19,7 @@
 #include "geometry.h"
 #include "librpa.h"
 #include "matrix.h"
+#include "params.h"
 #include "pbc.h"
 #include "profiler.h"
 #include "ri.h"
@@ -153,12 +154,15 @@ static int handle_KS_file(const string &file_path, MeanField &mf)
     string rvalue, ivalue, kstr;
 
     const auto nspin = mf.get_n_spins();
+    const auto nsoc = mf.get_n_soc();
     const auto nband = mf.get_n_bands();
     const auto nao = mf.get_n_aos();
-    const auto n = nband * nao;
+    const auto nbao = nband * nao;
+    const auto nbs = nband * nsoc;
+    const auto n = nsoc * nbao;
 
-    std::vector<double> re(nspin * nband * nao);
-    std::vector<double> im(nspin * nband * nao);
+    std::vector<double> re(nspin * n);
+    std::vector<double> im(nspin * n);
 
     while (infile.peek() != EOF)
     {
@@ -169,20 +173,33 @@ static int handle_KS_file(const string &file_path, MeanField &mf)
         // for aims !!!
         for (int iw = 0; iw != nao; iw++)
         {
-            for (int ib = 0; ib != nband; ib++)
+            for (int isoc = 0; isoc != nsoc; isoc++)
             {
-                for (int is = 0; is != nspin; is++)
+                for (int ib = 0; ib != nband; ib++)
                 {
-                    // cout<<iw<<ib<<is<<ik;
-                    infile >> rvalue >> ivalue;
-                    if (infile.bad())
+                    for (int is = 0; is != nspin; is++)
                     {
-                        ret = 1;
-                        break;
+                        // cout<<iw<<ib<<is<<ik;
+                        infile >> rvalue >> ivalue;
+                        if (infile.bad())
+                        {
+                            ret = 1;
+                            break;
+                        }
+                        // cout<<rvalue<<ivalue<<endl;
+                        if (Params::use_soc)
+                        {
+                            // re[is * n + isoc * nbao + iw * nband + ib] = stod(rvalue);
+                            // im[is * n + isoc * nbao + iw * nband + ib] = stod(ivalue);
+                            re[is * n + iw * nbs + isoc * nband + ib] = stod(rvalue);
+                            im[is * n + iw * nbs + isoc * nband + ib] = stod(ivalue);
+                        }
+                        else
+                        {
+                            re[is * n + isoc * nbao + ib * nao + iw] = stod(rvalue);
+                            im[is * n + isoc * nbao + ib * nao + iw] = stod(ivalue);
+                        }
                     }
-                    // cout<<rvalue<<ivalue<<endl;
-                    re[is * n + ib * nao + iw] = stod(rvalue);
-                    im[is * n + ib * nao + iw] = stod(ivalue);
                 }
             }
         }
@@ -309,7 +326,7 @@ void read_velocity(const string &file_path, MeanField &mf)
                 assert(a_index == ia);
                 for (int i = 0; i != n_bands; i++)
                 {
-                    for (int j = 0; j != n_aos; j++)
+                    for (int j = 0; j != n_bands; j++)
                     {
                         infile >> single_re >> single_im;
                         velocity.at(is).at(ik).at(ia)(i, j) =
@@ -1708,11 +1725,16 @@ std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path,
     return kfrac_band;
 }
 
-MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states, int n_spin,
+/* MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states, int n_spin,
                               int n_kpoints_band)
 {
     MeanField mf_band(n_spin, n_kpoints_band, n_states, n_basis);
     std::string s1, s2, s3, s4, s5;
+    if (Params::use_soc)
+    {
+        assert(n_basis % 2 == 0 && "Error: nbasis is not even when SOC!");
+        n_basis = n_basis / 2;
+    }
 
     for (int ik = 0; ik < n_kpoints_band; ik++)
     {
@@ -1741,17 +1763,133 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
         ss << dir_path << "band_KS_eigenvector_k_" << std::setfill('0') << std::setw(5) << ik + 1
            << ".txt";
         infile.open(ss.str(), std::ios::in | std::ios::binary);
-
+        int n_soc = 1;
+        if (Params::use_soc)
+        {
+            n_soc = 2;
+        }
         for (int i_spin = 0; i_spin < n_spin; i_spin++)
         {
-            const size_t nbytes = n_basis * n_states * sizeof(std::complex<double>);
-            infile.read((char *)mf_band.get_eigenvectors()[i_spin][ik].c, nbytes);
+            if (Params::use_soc)
+            {
+                for (int ib = 0; ib < n_states; ib++)
+                {
+                    for (int i_soc = 0; i_soc < n_soc; i_soc++)
+                    {
+                        for (int iw = 0; iw < n_basis; iw++)
+                        {
+                            const size_t nbytes = sizeof(std::complex<double>);
+                            infile.read(reinterpret_cast<char *>(
+                                            &mf_band.get_eigenvectors()[i_spin][i_soc][ik](ib, iw)),
+                                        nbytes);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (int i_soc = 0; i_soc < n_soc; i_soc++)
+                {
+                    const size_t nbytes = n_basis * n_states * sizeof(std::complex<double>);
+                    infile.read((char *)mf_band.get_eigenvectors()[i_spin][i_soc][ik].c, nbytes);
+                }
+            }
         }
 
         infile.close();
     }
 
     // TODO: Fermi energy is not set
+
+    return mf_band;
+} */
+
+MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states, int n_spin,
+                              int n_kpoints_band)
+{
+    MeanField mf_band(n_spin, n_kpoints_band, n_states, n_basis);
+    std::string s1, s2, s3, s4, s5;
+    if (Params::use_soc)
+    {
+        assert(n_basis % 2 == 0 && "Error: nbasis is not even when SOC!");
+        n_basis = n_basis / 2;
+    }
+
+    for (int ik = 0; ik < n_kpoints_band; ik++)
+    {
+        // Load occupation weights and eigenvalues
+        std::stringstream ss;
+        ss << dir_path << "band_KS_eigenvalue_k_" << std::setfill('0') << std::setw(5) << ik + 1
+           << ".txt";
+        ifstream infile;
+        infile.open(ss.str());
+
+        for (int i_spin = 0; i_spin < n_spin; i_spin++)
+        {
+            for (int i_state = 0; i_state < n_states; i_state++)
+            {
+                infile >> s1 >> s2 >> s3 >> s4 >> s5;
+                mf_band.get_weight()[i_spin](ik, i_state) = stod(s3);
+                mf_band.get_eigenvals()[i_spin](ik, i_state) = stod(s4);
+            }
+        }
+
+        infile.close();
+
+        // Load eigenvectors
+        ss.str("");
+        ss.clear();
+        ss << dir_path << "band_KS_eigenvector_k_" << std::setfill('0') << std::setw(5) << ik + 1
+           << ".txt";
+        infile.open(ss.str(), std::ios::binary);
+        if (!infile)
+        {
+            throw std::runtime_error("Error: Cannot open file " + ss.str());
+        }
+
+        int nbasis_full = Params::use_soc ? n_basis * 2 : n_basis;
+        size_t total_complex = static_cast<size_t>(n_states) * static_cast<size_t>(nbasis_full);
+        size_t total_doubles = total_complex * 2;
+
+        std::vector<double> double_buffer(total_doubles);
+        infile.read(reinterpret_cast<char *>(double_buffer.data()), total_doubles * sizeof(double));
+        if (!infile || infile.gcount() != static_cast<ptrdiff_t>(total_doubles * sizeof(double)))
+        {
+            throw std::runtime_error("Error: failed to read " + ss.str());
+        }
+
+        std::vector<std::complex<double>> vecs(total_complex);
+        for (size_t i = 0; i < total_complex; ++i)
+        {
+            vecs[i] = std::complex<double>(double_buffer[2 * i], double_buffer[2 * i + 1]);
+        }
+
+        int n_soc = Params::use_soc ? 2 : 1;
+        for (int i_spin = 0; i_spin < n_spin; ++i_spin)
+        {
+            for (int ib = 0; ib < n_states; ++ib)
+            {
+                for (int iw = 0; iw < n_basis; ++iw)
+                {
+                    for (int i_soc = 0; i_soc < n_soc; ++i_soc)
+                    {
+                        size_t index;
+                        if (Params::use_soc)
+                        {
+                            index = ib * n_basis * n_soc + iw * n_soc + i_soc;
+                        }
+                        else
+                        {
+                            index = ib * n_basis + iw;
+                        }
+                        mf_band.get_eigenvectors()[i_spin][i_soc][ik](ib, iw) = vecs[index];
+                    }
+                }
+            }
+        }
+
+        infile.close();
+    }
 
     return mf_band;
 }
