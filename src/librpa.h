@@ -315,8 +315,8 @@ extern "C"
      * only be called once.
      */
     void get_rpa_correlation_energy(double* rpa_corr, double* rpa_corr_irk_contrib,
-                                    std::map<Vector3_Order<double>, ComplexMatrix> &sinvS, const std::string& input_dir,
-                                    const bool use_shrink_abfs);
+                                    std::map<Vector3_Order<double>, ComplexMatrix>& sinvS,
+                                    const std::string& input_dir, const bool use_shrink_abfs);
 
     /*!
      * @brief Compute the exact exchange (EXX) energy for states at specified k-points

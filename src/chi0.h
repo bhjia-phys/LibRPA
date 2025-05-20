@@ -21,13 +21,15 @@ class Chi0
    private:
     size_t gf_save;
     size_t gf_discard;
-    //! space-time Green's function in occupied space, [ispin][I][J][R][tau]
+    //! space-time Green's function in occupied space, [ispin][isoc1][isoc2][I][J][R][tau]
     /*!
      * @note: tau (index) less than zero correspond to occupied GF,
      *        and larger than zero correspond to unoccpued GF.
      * @note: May need to use ComplexMatrix for GF.
      */
-    map<int, atom_mapping<map<Vector3_Order<int>, map<double, matrix>>>::pair_t_old> gf_is_R_tau;
+    map<int,
+        map<int, map<int, atom_mapping<map<Vector3_Order<int>, map<double, matrix>>>::pair_t_old>>>
+        gf_is_R_tau;
 
     //! R on which the space-time GF are created, used for atom-pair and rtau routings
     vector<Vector3_Order<int>> Rlist_gf;
@@ -59,6 +61,7 @@ class Chi0
     void build_chi0_q_space_time_R_tau_routing(const Cs_LRI &Cs, const Vector3_Order<int> &R_period,
                                                const vector<atpair_t> &atpairs_ABF,
                                                const vector<Vector3_Order<double>> &qlist);
+    template <typename Tdata>
     void build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs, const Vector3_Order<int> &R_period,
                                                const vector<atpair_t> &atpairs_ABF,
                                                const vector<Vector3_Order<double>> &qlist);
@@ -76,7 +79,8 @@ class Chi0
      */
     matrix compute_chi0_s_munu_tau_R(const atpair_R_mat_t &Cs_IJR,
                                      const Vector3_Order<int> &R_period, int spin_channel,
-                                     atom_t mu, atom_t nu, double tau, Vector3_Order<int> R);
+                                     int isoc1, int isoc2, atom_t mu, atom_t nu, double tau,
+                                     Vector3_Order<int> R);
     // copy some reshape method inside chi0, test performance
     /* matrix reshape_Cs(const size_t n1, const size_t n2, const size_t n3, const
      * std::shared_ptr<matrix> &Cs); */
