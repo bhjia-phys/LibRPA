@@ -62,9 +62,9 @@ class MeanField
     const std::vector<matrix>& get_eigenvals() const { return eskb; }
     std::vector<matrix>& get_weight() { return wg; }
     const std::vector<matrix>& get_weight() const { return wg; }
-        std::vector<matrix> & get_weight0() { return wg0; }
-        const std::vector<matrix> & get_weight0() const { return wg0; }
-        double get_total_weight() const;
+    std::vector<matrix> & get_weight0() { return wg0; }
+    const std::vector<matrix> & get_weight0() const { return wg0; }
+    double get_total_weight() const;
     //! get the density matrix of a particular spin and kpoint
     ComplexMatrix get_dmat_cplx(int ispin, int isoc1, int isoc2, int ikpt) const;
     ComplexMatrix get_dmat_cplx_R(int ispin, int isoc1, int isoc2,
@@ -72,11 +72,15 @@ class MeanField
                                   const Vector3_Order<int>& R) const;
     std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors() { return wfc; }
     const std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors() const
-    std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors0() { return wfc0; }
-    const std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors0() const
     {
         return wfc;
     }
+    std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors0() { return wfc0; }
+    const std::vector<std::vector<std::vector<ComplexMatrix>>>& get_eigenvectors0() const
+    {
+       return wfc0;
+    }
+
     std::vector<std::vector<std::vector<ComplexMatrix>>>& get_velocity() { return velocity; }
     double get_E_min_max(double& emin, double& emax) const;
     double get_band_gap() const;

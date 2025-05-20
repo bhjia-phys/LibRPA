@@ -50,11 +50,12 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
         wg[is].create(n_kpoints, n_bands);
         wg0[is].create(n_kpoints, n_bands);
         wfc.resize(n_spins);
+        wfc0.resize(n_spins);
         velocity.resize(n_spins);
         for (int is = 0; is < n_spins; is++)
         {
             wfc[is].resize(n_soc);
-            wfc0[is].resize(n_kpoints);
+            wfc0[is].resize(n_soc);
             velocity[is].resize(n_kpoints);
             for (int isoc = 0; isoc < n_soc; isoc++)
             {
@@ -168,24 +169,6 @@ double MeanField::get_total_weight() const
     return total_electrons;
 }
 
-
-double MeanField::get_total_weight() const
-{
-    double total_electrons = 0.0;
-
-    for (int is = 0; is < this->get_n_spins(); ++is)
-    {
-        for (int ik = 0; ik < this->get_n_kpoints(); ++ik)
-        {
-            for (int ib = 0; ib < this->get_n_bands(); ++ib)
-            {
-                total_electrons += this->get_weight()[is](ik, ib);
-            }
-        }
-    }
-
-    return total_electrons;
-}
 
 ComplexMatrix MeanField::get_dmat_cplx(int ispin, int isoc1, int isoc2, int ikpt) const
 {
@@ -370,23 +353,27 @@ void MeanField::broadcast(const LIBRPA::MPI_COMM_handler& comm_hdl, int root) {
 
     // 保持原有波函数广播逻辑（broadcast_ComplexMatrix已含维度同步）
     for (auto& spin_wfc : wfc) {
-        for (auto& k_wfc : spin_wfc) {
-            ComplexMatrix temp_wfc;
-            if (comm_hdl.is_root()) {
-                temp_wfc = k_wfc;
+        for (auto& soc_wfc : spin_wfc) {
+            for (auto& k_wfc : soc_wfc) {
+                ComplexMatrix temp_wfc;
+                if (comm_hdl.is_root()) {
+                    temp_wfc = k_wfc;
+                }
+                comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
+                k_wfc = temp_wfc;  // Now k_wfc is a ComplexMatrix, not a container
             }
-            comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
-            k_wfc = temp_wfc;
         }
     }
     for (auto& spin_wfc : wfc0) {
-        for (auto& k_wfc : spin_wfc) {
-            ComplexMatrix temp_wfc;
-            if (comm_hdl.is_root()) {
-                temp_wfc = k_wfc;
+        for (auto& soc_wfc : spin_wfc) {
+            for (auto& k_wfc : soc_wfc) {
+                ComplexMatrix temp_wfc;
+                if (comm_hdl.is_root()) {
+                    temp_wfc = k_wfc;
+                }
+                comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
+                k_wfc = temp_wfc;  // Now k_wfc is a ComplexMatrix, not a container
             }
-            comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
-            k_wfc = temp_wfc;
         }
     }
 }

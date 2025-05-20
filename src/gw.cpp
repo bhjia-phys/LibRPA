@@ -506,41 +506,41 @@ void G0W0::build_spacetime(
                             }
                         }
                     }
-                    for (int iomega = 0; iomega != tfg.get_n_grids(); iomega++)
-                    {
-                        const auto omega = tfg.get_freq_nodes()[iomega];
-                        const auto t2f_sin = tfg.get_sintrans_t2f()(iomega, itau);
-                        const auto t2f_cos = tfg.get_costrans_t2f()(iomega, itau);
-                        // row-major used here for libRI communication when building sigc_KS
-                        matrix_m<complex<double>> sigc_temp(n_I, n_J, MAJOR::ROW);
-                        matrix_m<complex<double>> sigc_temp_minus(n_I, n_J, MAJOR::ROW);
-                        for (int i = 0; i != n_I; i++)
-                            for (int j = 0; j != n_J; j++)
-                            {
-                                sigc_temp(i, j) = std::complex<double>{sigc_cos(i, j) * t2f_cos, sigc_sin(i, j) * t2f_sin};
-                                sigc_temp_minus(i, j) = std::complex<double>{sigc_cos(i, j) * t2f_cos, -sigc_sin(i, j) * t2f_sin};
-                            }
-                        if (sigc_is_f_R_IJ.count(ispin) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).count(omega) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).count(-omega) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(omega).count(R) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(-omega).count(R) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(omega).at(R).count(I) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).count(I) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(omega).at(R).at(I).count(J) == 0 ||
-                            sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).at(I).count(J) == 0)
-                        {
-                            sigc_is_f_R_IJ[ispin][omega][R][I][J] = std::move(sigc_temp);
-                            sigc_is_f_R_IJ[ispin][-omega][R][I][J] = std::move(sigc_temp_minus);
-                        }
-                        else
-                        {
-                            sigc_is_f_R_IJ[ispin][omega][R][I][J] += sigc_temp;
-                            sigc_is_f_R_IJ[ispin][-omega][R][I][J] += sigc_temp_minus;
-                        }
-                    }
-                }
-            }
+                    // for (int iomega = 0; iomega != tfg.get_n_grids(); iomega++)
+                    // {
+                    //     const auto omega = tfg.get_freq_nodes()[iomega];
+                    //     const auto t2f_sin = tfg.get_sintrans_t2f()(iomega, itau);
+                    //     const auto t2f_cos = tfg.get_costrans_t2f()(iomega, itau);
+                    //     // row-major used here for libRI communication when building sigc_KS
+                    //     matrix_m<complex<double>> sigc_temp(n_I, n_J, MAJOR::ROW);
+                    //     matrix_m<complex<double>> sigc_temp_minus(n_I, n_J, MAJOR::ROW);
+                    //     for (int i = 0; i != n_I; i++)
+                    //         for (int j = 0; j != n_J; j++)
+                    //         {
+                    //             sigc_temp(i, j) = std::complex<double>{sigc_cos(i, j) * t2f_cos, sigc_sin(i, j) * t2f_sin};
+                    //             sigc_temp_minus(i, j) = std::complex<double>{sigc_cos(i, j) * t2f_cos, -sigc_sin(i, j) * t2f_sin};
+                    //         }
+                    //     if (sigc_is_f_R_IJ.count(ispin) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).count(omega) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).count(-omega) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).count(R) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).count(R) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).at(R).count(I) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).count(I) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).at(R).at(I).count(J) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).at(I).count(J) == 0)
+                    //     {
+                    //         sigc_is_f_R_IJ[ispin][omega][R][I][J] = std::move(sigc_temp);
+                    //         sigc_is_f_R_IJ[ispin][-omega][R][I][J] = std::move(sigc_temp_minus);
+                    //     }
+                    //     else
+                    //     {
+                    //         sigc_is_f_R_IJ[ispin][omega][R][I][J] += sigc_temp;
+                    //         sigc_is_f_R_IJ[ispin][-omega][R][I][J] += sigc_temp_minus;
+                    //     }
+                    // }
+            //     }
+            // }
 
                     sigc_posi_tau.clear();
                     sigc_nega_tau.clear();
@@ -833,11 +833,7 @@ void G0W0::build_sigc_matrix_KS_kgrid()
     this->build_sigc_matrix_KS(this->mf.get_eigenvectors(), this->kfrac_list);
 }
 
-void G0W0::build_sigc_matrix_KS_kgrid0()
-{
-    this->build_sigc_matrix_KS(this->mf.get_eigenvectors0(), this->kfrac_list);
-}
-
+// 删除重复的函数定义
 void G0W0::build_sigc_matrix_KS_kgrid0()
 {
     this->build_sigc_matrix_KS(this->mf.get_eigenvectors0(), this->kfrac_list);
@@ -866,4 +862,5 @@ template void G0W0::build_spacetime<std::complex<double>>(
     map<double,
         atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old> &,
     const vector<Vector3_Order<int>> &);
+
 }  // namespace LIBRPA
