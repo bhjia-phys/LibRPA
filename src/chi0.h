@@ -19,6 +19,7 @@ using std::vector;
 class Chi0
 {
    private:
+    std::string input_dir;
     size_t gf_save;
     size_t gf_discard;
     //! space-time Green's function in occupied space, [ispin][isoc1][isoc2][I][J][R][tau]
@@ -51,7 +52,8 @@ class Chi0
      */
     void build_chi0_q_space_time(const Cs_LRI &Cs, const Vector3_Order<int> &R_period,
                                  const vector<atpair_t> &atpairs_ABF,
-                                 const vector<Vector3_Order<double>> &qlist);
+                                 const vector<Vector3_Order<double>> &qlist,
+                                 std::map<Vector3_Order<double>, ComplexMatrix> &sinvS);
 
     // NOTE: the following three methods could be converted to static functions in chi0.cpp
     void build_chi0_q_space_time_atom_pair_routing(const Cs_LRI &Cs,
@@ -62,9 +64,10 @@ class Chi0
                                                const vector<atpair_t> &atpairs_ABF,
                                                const vector<Vector3_Order<double>> &qlist);
     template <typename Tdata>
-    void build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs, const Vector3_Order<int> &R_period,
-                                               const vector<atpair_t> &atpairs_ABF,
-                                               const vector<Vector3_Order<double>> &qlist);
+    void build_chi0_q_space_time_LibRI_routing(
+        const Cs_LRI &Cs, const Vector3_Order<int> &R_period, const vector<atpair_t> &atpairs_ABF,
+        const vector<Vector3_Order<double>> &qlist,
+        std::map<Vector3_Order<double>, ComplexMatrix> &sinvS);
 
     //! Internal procedure to compute chi0_q in the conventional method, i.e. in frequency domain
     //! and reciprocal space
@@ -103,16 +106,19 @@ class Chi0
     //! atpair_ABF and q-vectors in qlist
     void build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                const Vector3_Order<int> &R_period, const vector<atpair_t> &atpair_ABF,
-               const vector<Vector3_Order<double>> &qlist);
+               const vector<Vector3_Order<double>> &qlist,
+               std::map<Vector3_Order<double>, ComplexMatrix> &sinvS);
     const map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &
     get_chi0_q() const
     {
         return chi0_q;
     }
+    void set_input_dir(std::string input_dir_in)
+    {
+        input_dir = input_dir_in;
+        return;
+    }
     void free_chi0_q(const double freq, const Vector3_Order<double> q);
-    void shrink_abfs_chi0(map<Vector3_Order<double>, ComplexMatrix> &sinvS,
-                          const vector<Vector3_Order<double>> &qlist,
-                          map<atom_t, size_t> &atom_mu_large, map<atom_t, size_t> &atom_mu_small);
     void unfold_abfs_Wc(
         map<Vector3_Order<double>, ComplexMatrix> &sinvS,
         map<double,

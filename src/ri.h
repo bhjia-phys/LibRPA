@@ -28,6 +28,7 @@ extern map<Vector3_Order<double>, double> irk_weight;
 extern map<atom_t, size_t> atom_nw;
 extern map<atom_t, size_t> atom_mu;
 extern map<atom_t, size_t> atom_mu_l;
+extern map<atom_t, size_t> atom_mu_s;
 extern map<atom_t, size_t> atom_nw_loc;
 extern map<atom_t, size_t> atom_mu_loc;
 extern vector<size_t> atom_mu_part_range;
