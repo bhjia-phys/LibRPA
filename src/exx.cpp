@@ -802,7 +802,7 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                         this->exx_is_ik_KS[isp].count(ik) == 0)
                     {
                         this->exx_is_ik_KS[isp][ik] =
-                            matrix_m<std::complex<double>>(n_bands, n_bands, MAJOR::COL);
+                            init_local_mat<complex<double>>(desc_nband_nband_fb, MAJOR::COL);
                     }
                     this->exx_is_ik_KS[isp][ik] += Hexx_nband_nband_fb.copy();
                     // cout << "Hexx_nband_nband_fb isp " << isp  << " ik " << ik << endl <<
@@ -818,10 +818,7 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
         }
     }
 }
-void Exx::build_KS_kgrid0()
-{
-    this->build_KS(this->mf_.get_eigenvectors0(), this->kfrac_list_);
-}
+void Exx::build_KS_kgrid0() { this->build_KS(this->mf_.get_eigenvectors0(), this->kfrac_list_); }
 void Exx::build_KS_kgrid() { this->build_KS(this->mf_.get_eigenvectors(), this->kfrac_list_); }
 
 void Exx::build_KS_band(const std::vector<std::vector<std::vector<ComplexMatrix>>> &wfc_band,
