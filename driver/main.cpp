@@ -17,19 +17,18 @@
 #include "read_data.h"
 #include "stl_io_helper.h"
 #include "task.h"
-#include "utils_cmake.h"
-#include "utils_mpi_io.h"
-#include "utils_io_parallel.h"
-#include "utils_mem.h"
-
-#include "task_rpa.h"
 #include "task_exx.h"
 #include "task_exx_band.h"
 #include "task_gw.h"
 #include "task_gw_band.h"
+#include "task_qsgw.h"
+#include "task_rpa.h"
 #include "task_screened_coulomb.h"
 #include "task_test.h"
-#include "task_qsgw.h"
+#include "utils_cmake.h"
+#include "utils_io_parallel.h"
+#include "utils_mem.h"
+#include "utils_mpi_io.h"
 // #include "task_qsgwA.h"
 #include "task_qsgw_band.h"
 // #include "task_hf_band.h"
@@ -150,9 +149,9 @@ int main(int argc, char **argv)
     // else if (task_lower == "qsgwa")
     //     task = task_t::QSGWA;
     else if (task_lower == "qsgw_band")
-        task = task_t::QSGW_band;    
+        task = task_t::QSGW_band;
     // else if (task_lower == "hf_band")
-    //     task = task_t::HF_band;  
+    //     task = task_t::HF_band;
     // else if (task_lower == "scrpa")
     //     task = task_t::scRPA;
     // else if (task_lower == "scrpa_band")
@@ -287,6 +286,7 @@ int main(int argc, char **argv)
     Profiler::start("driver_read_Cs_Vq");
     // para_mpi.chi_parallel_type=Parallel_MPI::parallel_type::ATOM_PAIR;
     //  vector<atpair_t> local_atpair;
+    std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
     if (parallel_routing == ParallelRouting::ATOM_PAIR)
     {
         // vector<int> atoms_list(natom);
@@ -343,6 +343,7 @@ int main(int argc, char **argv)
             mpi_comm_global_h.myid, Cs_data.n_keys(), local_atpair.size(),
             Cs_data.n_data_bytes() * 8.0e-6, Profiler::get_wall_time_last("driver_read_Cs") / 60.0,
             Profiler::get_cpu_time_last("driver_read_Cs") / 60.0);
+
         if (Params::use_shrink_abfs)
         {
             if (mpi_comm_global_h.is_root())
@@ -360,11 +361,11 @@ int main(int argc, char **argv)
             read_Cs_evenly_distribute(driver_params.input_dir, Params::cs_threshold,
                                       mpi_comm_global_h.myid, mpi_comm_global_h.nprocs,
                                       "Cs_shrinked_data");
-            std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
+
             Profiler::start("read_shrink_sinvS_fold", "Load shrink transformation");
             // change atom_mu: number of {Mu,mu} in the later calculations
             read_shrink_sinvS(driver_params.input_dir, "shrink_sinvS_", sinvS);
-            sinvS.clear();
+            atom_mu_s = atom_mu;
             if (mpi_comm_global_h.is_root())
             {
                 std::cout << "iatom & small Nabfs: " << std::endl;
@@ -454,19 +455,19 @@ int main(int argc, char **argv)
 
     if (task == task_t::RPA)
     {
-        task_rpa();
+        task_rpa(sinvS);
     }
     else if (task == task_t::Wc_Rf)
     {
-        task_screened_coulomb_real_freq();
+        task_screened_coulomb_real_freq(sinvS);
     }
     else if (task == task_t::G0W0)
     {
-        task_g0w0();
+        task_g0w0(sinvS);
     }
     else if (task == task_t::G0W0_band)
     {
-        task_g0w0_band();
+        task_g0w0_band(sinvS);
     }
     else if (task == task_t::EXX)
     {
@@ -482,7 +483,7 @@ int main(int argc, char **argv)
     }
     else if (task == task_t::QSGW)
     {
-        task_qsgw();
+        task_qsgw(sinvS);
     }
     // else if (task == task_t::QSGWA)
     // {
@@ -490,7 +491,7 @@ int main(int argc, char **argv)
     // }
     else if (task == task_t::QSGW_band)
     {
-        task_qsgw_band();
+        task_qsgw_band(sinvS);
     }
     // else if (task == task_t::HF_band)
     // {

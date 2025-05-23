@@ -7,15 +7,9 @@
 namespace LIBRPA
 {
 
-int qpe_solver_pade_self_consistent(
-        const AnalyContPade &pade,
-        const double &e_mf,
-        const double &e_fermi,
-        const double &vxc,
-        const double &sigma_x,
-        double &e_qp,
-        cplxdb &sigc,
-        double thres)
+int qpe_solver_pade_self_consistent(const AnalyContPade &pade, const double &e_mf,
+                                    const double &e_fermi, const double &vxc, const double &sigma_x,
+                                    double &e_qp, cplxdb &sigc, double thres)
 {
     int info = 0;
     const double escale = 0.1;
@@ -35,13 +29,13 @@ int qpe_solver_pade_self_consistent(
             e_qp = e_qp + escale * diff;
             sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
             diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
-            if (n_iter == n_iter_max-1)
+            if (n_iter == n_iter_max - 1)
             {
                 // check;
-                std::cout << "Iteration " << n_iter << ": "
-                        << "e_qp = " << e_qp << ", "
-                        << "sigc = " << sigc << ", "
-                        << "diff = " << diff << std::endl;
+                // std::cout << "Iteration " << n_iter << ": "
+                //         << "e_qp = " << e_qp << ", "
+                //         << "sigc = " << sigc << ", "
+                //         << "diff = " << diff << std::endl;
                 break;
             }
         }
@@ -50,19 +44,19 @@ int qpe_solver_pade_self_consistent(
             e_qp = e_qp + escale * diff * 0.1;
             sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
             diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
-            if (std::abs(diff) < thres || n_iter == n_iter_max-1)
+            if (std::abs(diff) < thres || n_iter == n_iter_max - 1)
             {
                 // check;
-                std::cout << "Iteration " << n_iter << ": "
-                        << "e_qp = " << e_qp << ", "
-                        << "sigc = " << sigc << ", "
-                        << "diff = " << diff << std::endl;
+                // std::cout << "Iteration " << n_iter << ": "
+                //           << "e_qp = " << e_qp << ", "
+                //           << "sigc = " << sigc << ", "
+                //           << "diff = " << diff << std::endl;
                 break;
             }
         }
-        
     }
-    // std::cout << "Finished QPE solve: " << n_iter << " " << std::scientific << diff << " " << std::abs(diff) << "\n";
+    // std::cout << "Finished QPE solve: " << n_iter << " " << std::scientific << diff << " " <<
+    // std::abs(diff) << "\n";
 
     if (n_iter > n_iter_max)
     {

@@ -16,6 +16,8 @@ map<atom_t, size_t> atom_nw;
 map<atom_t, size_t> atom_mu;
 // before shrinked
 map<atom_t, size_t> atom_mu_l;
+// after shrinked
+map<atom_t, size_t> atom_mu_s;
 map<atom_t, size_t> atom_nw_loc;
 map<atom_t, size_t> atom_mu_loc;
 vector<size_t> atom_mu_part_range;
