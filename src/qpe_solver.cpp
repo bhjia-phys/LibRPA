@@ -47,10 +47,10 @@ int qpe_solver_pade_self_consistent(const AnalyContPade &pade, const double &e_m
             if (std::abs(diff) < thres || n_iter == n_iter_max - 1)
             {
                 // check;
-                std::cout << "Iteration " << n_iter << ": "
-                          << "e_qp = " << e_qp << ", "
-                          << "sigc = " << sigc << ", "
-                          << "diff = " << diff << std::endl;
+                // std::cout << "Iteration " << n_iter << ": "
+                //           << "e_qp = " << e_qp << ", "
+                //           << "sigc = " << sigc << ", "
+                //           << "diff = " << diff << std::endl;
                 break;
             }
         }
