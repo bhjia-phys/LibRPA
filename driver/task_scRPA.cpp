@@ -37,6 +37,7 @@
 #include "ri.h"
 #include "utils_timefreq.h"
 #include "write_aims.h"
+#include "pulay_mixing.h" // 引入 Pulay 混合头文件
 
 
 void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
@@ -51,16 +52,31 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     Vector3_Order<int> period {kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
-
+    vector<Vector3_Order<int>> Rlist_hartree;
+    // const auto Cs_0R = Cs_data.data_libri.at(0).at({0, {}});
+    for (const auto&I_JR : Cs_data.data_libri) {
+        const auto& I = I_JR.first;
+        for (const auto& JR_Cs : I_JR.second) {
+            const auto& J = JR_Cs.first.first;
+            const auto& Rc = JR_Cs.first.second;
+            Rlist_hartree.push_back({Rc[0], Rc[1], Rc[2]});
+            // if( I==1 && J==1 ){
+            //     Rlist_hartree.push_back({Rc[0], Rc[1], Rc[2]});
+            //     // printf("Checking  R111: (%d,%d,%d)\n", 
+            //     //             Rc[0], Rc[1], Rc[2]);
+            // }
+            
+            // printf("Checking  R: (%d,%d,%d)\n", 
+            //                 Rc[0], Rc[2], Rc[2]);
+            
+        }
+    }
     vector<Vector3_Order<double>> qlist;
     for (auto q_weight: irk_weight)
     {
         qlist.push_back(q_weight.first);
     }
 
-    
-
-    
     const auto n_spins = meanfield.get_n_spins();
     const auto n_bands = meanfield.get_n_bands();
     const auto n_kpoints = meanfield.get_n_kpoints();
@@ -96,17 +112,19 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
         for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
             std::map<std::string, Matz> arrays;
-            std::string key_hf, key_vxc;
+            std::string key_hf, key_vxc, key_s;
 
             // 使用 ostringstream 构建文件名
-            std::ostringstream oss_hf, oss_vxc, oss_s;  // 新增S矩阵文件名生成器
+            std::ostringstream oss_hf, oss_vxc, oss_s, oss_s2;  // 新增S矩阵文件名生成器
             oss_hf << "hf_exchange_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
             oss_vxc << "xc_matr_spin_" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
-            oss_s << "S_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";  // 新增S矩阵文件名
+            oss_s << "sks" << (ispin + 1) << "k" << (ikpt + 1) << "_nao.txt";  // 新增S矩阵文件名
+            oss_s2 << "S_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
 
             std::string hfFilePath = oss_hf.str();
             std::string vxcFilePath = oss_vxc.str();
             std::string sFilePath = oss_s.str();  // 获取S矩阵文件路径
+            std::string sFilePath_2 = oss_s2.str();
             
             Matz wfc1(n_bands, n_aos * n_soc, MAJOR::COL);
             for (int ib1 = 0; ib1 < n_bands; ++ib1)
@@ -142,26 +160,74 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             bool vxc_file_found = false;
             bool s_file_found = false;  // 新增S文件存在标志
 
-            // 新增S矩阵文件读取
-            std::string key_s;
-            std::ifstream s_file(sFilePath.c_str());
-            if (s_file.good()) {
-                if (!convert_csc(sFilePath, arrays, key_s)) {
+            // 首先尝试读取原有格式的 S 矩阵文件
+            std::ifstream s_file_2(sFilePath_2.c_str());
+            if (s_file_2.good()) {
+                if (!convert_csc(sFilePath_2, arrays, key_s)) {
                     all_files_processed_successfully = false;
-                    std::cerr << "Failed to process S matrix file: " << sFilePath << std::endl;
-                } else {
+                    std::cerr << "Failed to process file: " << sFilePath_2 << std::endl;
+                }
+                else {
                     s_nao[ispin][ikpt] = arrays[key_s];
                     s_file_found = true;
                 }
-            } else {
-                std::cerr << "S matrix file not found: " << sFilePath << std::endl;
             }
 
-            // 修改文件存在性检查，包含S矩阵
-            if (!hf_file_found && !vxc_file_found && !s_file_found) {
-                all_files_processed_successfully = false;
-                std::cerr << "HF, VXC and S files not found for spin " << ispin + 1 << ", k-point " << ikpt + 1 << std::endl;
-                continue;
+            // 如果原有格式未找到或读取失败，尝试新格式
+            if (!s_file_found) {
+                // 构建新格式文件名（与原有代码一致）
+                std::ostringstream oss_s_new;
+                oss_s_new << "s" << (ispin + 1) << "k" << (ikpt + 1) << "_nao.txt";
+                std::string sNewFilePath = oss_s_new.str();
+
+                std::ifstream s_new_format_file(sNewFilePath.c_str());
+                if (s_new_format_file.good()) {
+                    try {
+                        // 读取矩阵维数（第一个数）
+                        int matrix_size = 0;
+                        s_new_format_file >> matrix_size;
+                        if (matrix_size <= 0) {
+                            throw std::runtime_error("Invalid matrix size in file: " + sNewFilePath);
+                        }
+
+                        // 初始化矩阵
+                        Matz s_matrix(matrix_size, matrix_size, MAJOR::COL);
+
+                        // 读取矩阵数据
+                        for (int row = 0; row < matrix_size; ++row) {
+                            for (int col = row; col < matrix_size; ++col) {
+                                char ch; // 用于读取括号和逗号
+                                double real_part, imag_part;
+
+                                // 读取格式为 (real,imag)
+                                s_new_format_file >> ch >> real_part >> ch >> imag_part >> ch;
+                                if (s_new_format_file.fail()) {
+                                    throw std::runtime_error("Error reading matrix data in file: " + sNewFilePath);
+                                }
+
+                                // 存储到上三角矩阵
+                                s_matrix(row, col) = std::complex<double>(real_part, imag_part);
+                            }
+                        }
+
+                        // 将上三角矩阵扩展为完整矩阵
+                        for (int i = 0; i < matrix_size; ++i) {
+                            for (int j = 0; j < i; ++j) {
+                                s_matrix(i, j) = std::conj(s_matrix(j, i));
+                            }
+                        }
+
+                        // 存储到 s_nao
+                        s_nao[ispin][ikpt] = s_matrix;
+                        s_file_found = true;
+                    } catch (const std::exception& e) {
+                        all_files_processed_successfully = false;
+                        std::cerr << "Failed to process new format file: " << sNewFilePath
+                                << ". Error: " << e.what() << std::endl;
+                    }
+                } else {
+                    std::cerr << "S matrix file not found: " << sFilePath << " or " << sNewFilePath << std::endl;
+                }
             }
 
             // 读取 hf 文件
@@ -199,7 +265,60 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             } 
             else 
             {
-                std::cerr << "VXC file not found: " << vxcFilePath << std::endl;
+                // 如果原有格式的文件未找到，尝试新的格式读取
+                std::ostringstream oss_vxc_new;
+                oss_vxc_new << "vxcs" << (ispin + 1) << "k" << (ikpt + 1) << "_nao.txt";
+                std::string vxcNewFilePath = oss_vxc_new.str();
+
+                // 打开文件
+                std::ifstream vxc_new_format_file(vxcNewFilePath.c_str());
+                if (vxc_new_format_file.good()) {
+                    try {
+                        // 读取矩阵维数（第一个数）
+                        int matrix_size = 0;
+                        vxc_new_format_file >> matrix_size;
+                        if (matrix_size <= 0) {
+                            throw std::runtime_error("Invalid matrix size in file: " + vxcNewFilePath);
+                        }
+
+                        // 初始化矩阵
+                        Matz vxc_matrix(matrix_size, matrix_size, MAJOR::COL);
+
+                        // 读取矩阵数据
+                        for (int row = 0; row < matrix_size; ++row) {
+                            for (int col = row; col < matrix_size; ++col) {
+                                char ch; // 用于读取括号和逗号
+                                double real_part, imag_part;
+
+                                // 读取格式为 (real,imag)
+                                vxc_new_format_file >> ch >> real_part >> ch >> imag_part >> ch;
+                                if (vxc_new_format_file.fail()) {
+                                    throw std::runtime_error("Error reading matrix data in file: " + vxcNewFilePath);
+                                }
+
+                                // 存储到上三角矩阵
+                                vxc_matrix(row, col) = std::complex<double>(real_part, imag_part);
+                            }
+                        }
+
+                        // 将上三角矩阵扩展为完整矩阵
+                        for (int i = 0; i < matrix_size; ++i) {
+                            for (int j = j; j < i; ++j) {
+                                vxc_matrix(i, j) = std::conj(vxc_matrix(j, i));
+                            }
+                        }
+
+                        // 存储到 vxc0
+                        vxc0[ispin][ikpt] = 0.5 * vxc_matrix;
+                        vxc_file_found = true;
+                    } catch (const std::exception& e) {
+                        all_files_processed_successfully = false;
+                        std::cerr << "Failed to process new format file: " << vxcNewFilePath
+                                << ". Error: " << e.what() << std::endl;
+                    }
+                } else {
+                    std::cerr << "VXC file not found: " << vxcFilePath << " or " << vxcNewFilePath << std::endl;
+                }
             }
 
             // 如果两个文件都不存在，报错并跳过该 k 点
@@ -215,14 +334,7 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             hf[ispin][ikpt] = Matz(n_aos, n_aos, MAJOR::COL);     
             hf[ispin][ikpt] = conj(wfc1) * hf_nao[ispin][ikpt] * transpose(wfc1);//row hf,KS basis
             inverse(s_nao[ispin][ikpt],s_inverse[ispin][ikpt]);
-            // s_nao[ispin][ikpt] = conj(wfc1) * s_nao[ispin][ikpt] * transpose(wfc1);  // 检验完备性
-            // for (int i = 0; i < n_aos; ++i)
-            // {
-            //     for (int j = 0; j < n_aos; ++j)
-            //     {
-            //         printf("s_nao[%d][%d](%d,%d) = %f\n", ispin, ikpt, i, j, s_nao[ispin][ikpt](i, j));
-            //     }
-            // }
+            
             // 将 hf 和 vxc 在 KS 基下相加，生成最终的 vxc 矩阵
             
             vxc[ispin][ikpt] = vxc0[ispin][ikpt] + hf[ispin][ikpt];
@@ -288,8 +400,8 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     printf("%5f\n",total_electrons);
     
     // 设置收敛条件
-    double eigenvalue_tolerance = 1e-4; // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations =200;           // 最大迭代次数
+    double eigenvalue_tolerance = 1e-5; // 设置一个适当的小值，作为本征值收敛的判断标准
+    int max_iterations = 200;           // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -297,6 +409,14 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::vector<std::pair<int, int>> significant_positions;
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
+    
+    // ==========================================
+    // Initialize Pulay Mixer
+    // ==========================================
+    // History size: 12, Mixing beta: 0.2
+    PulayMixer mixer(12, 0.2); 
+    bool mixer_initialized = false;
+
     mpi_comm_global_h.barrier();
     if (mpi_comm_global_h.is_root()) 
     {
@@ -470,44 +590,10 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         auto Hartree = LIBRPA::Hartree(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR1 = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR1 = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist_hartree, true);
             Profiler::stop("ft_vq_cut"); 
             Profiler::start("qsgw_hartree_real_work");
-            Hartree.build(Cs_data, Rlist, VR1); 
-            // // 新增调试输出
-            // for (int isp = 0; isp < meanfield.get_n_spins(); ++isp) {
-            //     for (int is1 = 0; is1 < meanfield.get_n_soc(); ++is1) {
-            //         for (int is2 = 0; is2 < meanfield.get_n_soc(); ++is2) {
-            //             // 遍历R空间
-            //             for (const auto& R_entry : Hartree.hartree[isp][is1][is2]) {
-            //                 Vector3_Order<int> R = R_entry.first;
-            //                 // 只检查R=0的情况
-            //                 // if (R.x == 0 && R.y == 0 && R.z == 0) {
-            //                     for (const auto& P_entry : R_entry.second) {
-            //                         atom_t P = P_entry.first;
-            //                         for (const auto& Q_entry : P_entry.second) {
-            //                             atom_t Q = Q_entry.first;
-            //                             const Matd& hartree_mat = Q_entry.second;
-                                        
-            //                             // 输出矩阵基本信息
-            //                             std::cout << "Hartree[" << isp << "][" << is1 << "][" << is2 << "]" 
-            //                                     << "[R=(" << R.x << "," << R.y << "," << R.z << ")]"
-            //                                     << "[P=" << P << "][Q=" << Q << "] Matrix:" << std::endl;
-                                        
-            //                             // 输出矩阵前3x3部分
-            //                             for (int i = 0; i < 20 && i < hartree_mat.nr(); ++i) {
-            //                                 for (int j = 0; j < 20 && j < hartree_mat.nc(); ++j) {
-            //                                     std::cout << std::setw(12) << hartree_mat(i,j) << " ";
-            //                                 }
-            //                                 std::cout << std::endl;
-            //                             }
-            //                         }
-            //                     }
-            //                 // }
-            //             }
-            //         }
-            //     }
-            // }
+            Hartree.build(Cs_data, Rlist_hartree, VR1); 
             Hartree.build_KS_kgrid0();//rotate  
             Profiler::stop("qsgw_hartree_real_work");
         
@@ -654,8 +740,8 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
             lib_printf("Exchange self-energy (Hartree)\n");
             lib_printf("| Exx_energy: %18.9f\n", exx_energy.real());
-            lib_printf("| XC_energy: %18.9f\n", rpa_corr.real()+exx_energy.real());
-            lib_printf("| Total_energy: %18.9f\n", hartree_energy.real()+rpa_corr.real()+exx_energy.real()+T_ext_energy.real());
+            lib_printf("| XC_energy: %18.9f\n", rpa_corr.real() + exx_energy.real());
+            lib_printf("| Total_energy: %18.9f\n", hartree_energy.real()+ rpa_corr.real() + exx_energy.real() + T_ext_energy.real() );
 
         }
         
@@ -761,25 +847,6 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                             delta_Hartree_is_ik = Hartree_i_delta[i_spin][i_kpoint];
                             Vc_all[i_spin][i_kpoint] = Vc_all[i_spin][i_kpoint] + delta_Hartree_is_ik;
                         }
-
-
-                        // printf("%77s\n", final_banner.c_str());
-                        // printf("Vc_all.real:\n");
-                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-                        //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-                        //         const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
-                        //         printf("%20.16f ", Vc_all_0.real()); 
-                        //     }
-                        //     printf("\n"); // 换行
-                        // }
-                        // printf("Vc_all.imag:\n");
-                        // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-                        //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-                        //         const auto &Vc_all_0 = Vc_all[i_spin][i_kpoint](i, j) ;
-                        //         printf("%20.16f ", Vc_all_0.imag()); 
-                        //     }
-                        //     printf("\n"); // 换行
-                        // }
                     }
 
           
@@ -789,16 +856,72 @@ void task_scRPA(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 
                 auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints, n_bands);
                 
-            
-                // //混合
-                // if(iteration > 1){
-                //     for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
-                //         for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
-                //             H0_GW_all[ispin][ikpt] = 0.2 * H0_GW_all[ispin][ikpt] + 0.8 * H_KS[ispin][ikpt];
-                //         }
-                //     }
-                // }
-                // H_KS = H0_GW_all;
+                // ==========================================
+                // Pulay Mixing Execution
+                // ==========================================
+                {
+                    std::cout << "Performing Pulay Mixing..." << std::endl;
+                    
+                    // 1. Prepare data dimensions
+                    int total_matrices = n_spins * n_kpoints;
+                    int rows_per_matrix = n_bands;
+                    int cols_per_matrix = n_bands;
+                    
+                    // We pack all k-points and spins into one large matrix.
+                    // To handle complex numbers, we double the width: [Real, Imag]
+                    matrix mixed_input(total_matrices * rows_per_matrix, 2 * cols_per_matrix);
+                    
+                    // 2. Pack H0_GW_all into mixed_input
+                    int row_offset = 0;
+                    for (int i_spin = 0; i_spin < n_spins; i_spin++) {
+                        for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
+                            const Matz& mat = H0_GW_all[i_spin][i_kpoint];
+                            for (int i = 0; i < rows_per_matrix; i++) {
+                                for (int j = 0; j < cols_per_matrix; j++) {
+                                    std::complex<double> val = mat(i, j);
+                                    mixed_input(row_offset + i, j) = val.real();
+                                    mixed_input(row_offset + i, j + cols_per_matrix) = val.imag();
+                                }
+                            }
+                            row_offset += rows_per_matrix;
+                        }
+                    }
+
+                    // 3. Execute Mixing
+                    if (!mixer_initialized) {
+                        mixer.initialize(mixed_input);
+                        mixer_initialized = true;
+                        std::cout << "Pulay Mixer Initialized with dimension " << mixed_input.nr << "x" << mixed_input.nc << std::endl;
+                    } else {
+                        try {
+                            matrix mixed_output = mixer.mix(mixed_input);
+                            
+                            // 4. Unpack result back to H0_GW_all
+                            row_offset = 0;
+                            for (int i_spin = 0; i_spin < n_spins; i_spin++) {
+                                for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
+                                    Matz& mat = H0_GW_all[i_spin][i_kpoint];
+                                    for (int i = 0; i < rows_per_matrix; i++) {
+                                        for (int j = 0; j < cols_per_matrix; j++) {
+                                            double re = mixed_output(row_offset + i, j);
+                                            double im = mixed_output(row_offset + i, j + cols_per_matrix);
+                                            mat(i, j) = std::complex<double>(re, im);
+                                        }
+                                    }
+                                    row_offset += rows_per_matrix;
+                                }
+                            }
+                            std::cout << "Pulay Mixing applied successfully." << std::endl;
+                        } catch (const std::exception& e) {
+                            std::cerr << "Pulay Mixing failed: " << e.what() << ". Continuing with unmixed Hamiltonian." << std::endl;
+                            // If mixing fails, we just use the current H0_GW_all (unmixed)
+                        }
+                    }
+                }
+                // ==========================================
+                // End Pulay Mixing
+                // ==========================================
+
                 // 第三步：对 Hamiltonian 进行对角化并存储本征值
                 diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
   

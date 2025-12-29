@@ -40,7 +40,6 @@
 #include "utils_io.h"
 #include "utils_timefreq.h"
 #include "write_aims.h"
-#include "pulay_mixing.h" 
 
 void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
@@ -256,9 +255,9 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             // 如果原有格式未找到或读取失败，尝试新格式
             if (!s_file_found) {
                 // 构建新格式文件名（与原有代码一致）
-                std::ostringstream oss_s_new;
-                oss_s_new << "s" << (ispin + 1) << "k" << (ikpt + 1) << "_nao.txt";
-                std::string sNewFilePath = oss_s_new.str();
+                // std::ostringstream oss_s_new;
+                // oss_s_new << "s" << (ispin + 1) << "k" << (ikpt + 1) << "_nao.txt";
+                std::string sNewFilePath = oss_s.str();
 
                 std::ifstream s_new_format_file(sNewFilePath.c_str());
                 if (s_new_format_file.good()) {
@@ -306,7 +305,7 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 << ". Error: " << e.what() << std::endl;
                     }
                 } else {
-                    std::cerr << "S matrix file not found: " << sFilePath << " or " << sNewFilePath << std::endl;
+                    std::cerr << "S matrix file not found: " << sFilePath_2 << " or " << sNewFilePath << std::endl;
                 }
             }
             
@@ -820,7 +819,7 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     // 设置收敛条件
     double eigenvalue_tolerance = 1e-4;  // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 20;             // 最大迭代次数
+    int max_iterations = 1;             // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -828,15 +827,6 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::vector<std::pair<int, int>> significant_positions;
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
-    
-    // ==========================================
-    // Initialize Pulay Mixer
-    // ==========================================
-    // History size: 7, Mixing beta: 0.5
-    // 建议：对于难收敛体系，可将 beta 调小至 0.2-0.3，history 增加至 10-12
-    PulayMixer mixer(7, 0.5); 
-    bool mixer_initialized = false;
-
     mpi_comm_global_h.barrier();
     if (mpi_comm_global_h.is_root())
     {
@@ -885,7 +875,7 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         Profiler::cease("read_vq_cut");
 
         std::vector<double> epsmac_LF_imagfreq_re;
-        if (Params::replace_w_head)
+        if (Params::replace_w_head )
         {
             std::vector<double> omegas_dielect;
             std::vector<double> dielect_func;
@@ -936,9 +926,19 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
-            Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
-            Profiler::stop("ft_vq_cut");
+            atpair_R_mat_t VR;
+            if (Params::use_fullcoul_exx)
+            {
+                Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
+                VR = FT_Vq(Vq, meanfield.get_n_kpoints(), Rlist, true);
+                Profiler::stop("ft_vq_full");
+            }
+            else
+            {
+                Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
+                VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+                Profiler::stop("ft_vq_cut");
+            }
 
             Profiler::start("g0w0_exx_real_work");
             if (Params::use_shrink_abfs)
@@ -954,7 +954,7 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     exx.build<std::complex<double>>(Cs_data, Rlist, VR);
                 else
                     exx.build<double>(Cs_data, Rlist, VR);
-            }
+            }  
             exx.build_KS_kgrid0();  // rotate
             Profiler::stop("g0w0_exx_real_work");
         }
@@ -1040,417 +1040,359 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         std::map<int, std::map<int, std::map<int, double>>> e_qp_all;
         std::map<int, std::map<int, std::map<int, cplxdb>>> sigc_all;
 
-        if (all_files_processed_successfully)
+        
+        Profiler::start("qsgw_solve_qpe", "Solve quasi-particle equation");
+
+        if (mpi_comm_global_h.is_root())
         {
-            Profiler::start("qsgw_solve_qpe", "Solve quasi-particle equation");
-
-            if (mpi_comm_global_h.is_root())
-            {
-                std::cout << "Solving quasi-particle equation\n";
-            }
-
-            if (mpi_comm_global_h.is_root())
-            {
-                // 遍历自旋、k点和能带状态
-                for (int i_spin = 0; i_spin < n_spins; i_spin++)
-                {
-                    for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++)
-                    {
-                        std::vector<std::vector<std::vector<cplxdb>>> sigcmat(
-                            n_bands, std::vector<std::vector<cplxdb>>(
-                                         n_bands, std::vector<cplxdb>(n_bands + 1)));
-                        const auto &sigc_sk = s_g0w0.sigc_is_ik_f_KS[i_spin][i_kpoint];
-                        for (int i_state_row = 0; i_state_row < n_bands; i_state_row++)
-                        {
-                            for (int i_state_col = 0; i_state_col < meanfield.get_n_bands();
-                                 i_state_col++)
-                            {
-                                std::vector<cplxdb> sigc_mn;
-                                for (const auto &freq : chi0.tfg.get_freq_nodes())
-                                {
-                                    sigc_mn.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
-                                }
-                                LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs,
-                                                           sigc_mn);
-                                // LIBRPA::AnalyContNevanlinna nevanlinna(Params::n_params_anacon, imagfreqs,
-                                //                            sigc_mn);
-                                auto energy0 =
-                                    meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
-                                efermi = meanfield.get_efermi();
-                                // 计算得到的值
-                                auto result = pade.get(energy0 - efermi);
-                                auto result1 = pade.get(0.0);
-                                // auto result = nevanlinna.get(energy0 - efermi);
-                                // auto result1 = nevanlinna.get(0.0);
-                                // 存储值到 sigcmat
-                                sigcmat[i_state_row][i_state_col][i_state_row] = result;
-                                sigcmat[i_state_row][i_state_col][n_bands] = result1;
-                            }
-                        }
-
-                        Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat, n_bands);
-                        // Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k_modeA(sigcmat, n_bands);
-                    }
-                }
-                Profiler::stop("qsgw_solve_qpe");
-                
-                auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
-                                                 n_spins, n_kpoints, n_bands);
-                
-                
-                //check
-                //output H_nao_R
-                for (int i_spin = 0; i_spin < n_spins; i_spin++)
-                {
-                    for(int i_soc1 = 0 ; i_soc1 < n_soc; i_soc1++)
-                    {
-                        for(int i_soc2 =0 ; i_soc2 < n_soc; i_soc2++)
-                        {
-                            for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++)
-                            {
-
-                                Matz wfc2(n_bands, n_aos * n_soc, MAJOR::COL);
-
-                                for (int ib1 = 0; ib1 < n_bands; ++ib1)
-                                {
-                                    for (int isoc = 0; isoc < n_soc; isoc++)
-                                    {
-                                        for (int iao = 0; iao < n_aos; iao++)
-                                        {
-                                            int ib2 = iao * n_soc + isoc;
-                                            wfc2(ib1, ib2) = meanfield.get_eigenvectors0()[i_spin][isoc][i_kpoint](ib1, iao);       
-                                            
-                                        }
-                                    }
-                                }
-                                // conj(wfc1) * hf_nao[ispin][ikpt] * transpose(wfc1);
-                                
-                                H_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc2) * H0_GW_all[i_spin][i_kpoint] * conj(wfc2) * transpose(s_nao[i_spin][i_kpoint],true);
-                                // H_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc2) * H_KS0[i_spin][i_kpoint] * conj(wfc2) * transpose(s_nao[i_spin][i_kpoint],true);
-                                
-                            }
-                                   
-                            for (const auto &R : Rlist_abacus){
-                                Matz mat_R_cplx(meanfield.get_n_aos(), meanfield.get_n_aos());
-                                for(int i=0 ; i < n_bands; i++)
-                                {
-                                    for(int j=0 ; j < n_bands; j++)
-                                    {
-                                        for (int ik = 0; ik != meanfield.get_n_kpoints(); ik++)
-                                        {
-                                            
-                                            auto ang = -(kfrac_list[ik] * R) * TWO_PI;
-                                            complex<double> kphase = complex<double>(cos(ang), sin(ang));
-                                            mat_R_cplx(i,j) += kphase * H_nao[i_spin][ik](i,j) ;
-                                        }
-                                        // printf("R=(%d,%d,%d) H_nao_R(%d,%d)=(%f,%f)\n", R.x, R.y, R.z, i, j, mat_R_cplx(i,j).real(), mat_R_cplx(i,j).imag());
-                                        mat_R_cplx(i,j) = mat_R_cplx(i,j) / static_cast<double>(meanfield.get_n_kpoints());
-
-                                    }
-                                    
-                                
-                                }
-                                H_nao_R[i_spin][i_soc1][i_soc2][R] = mat_R_cplx ;
-                                
-                            }
-                            
-                        }
-                    }
-                }
-                std::cout << "开始写入 hrs_nao 文件" << std::endl;
-
-                
-                std::ostringstream filename;
-                filename << "hrs1_nao_" << iteration << ".csr";
-                std::ofstream ofs(filename.str());
-                // if (!ofs) {
-                //     std::cerr << "无法创建或打开 hrs1_nao_1.csr 文件，错误码: " << errno << std::endl;
-                    
-                // }
-
-                // 写入文件头信息
-                int nlocal = meanfield.get_n_aos();
-                ofs << "STEP: 0" << std::endl;
-                ofs << "Matrix Dimension of H(R): " << nlocal << std::endl;
-                
-                // 统计有效的R向量数量
-                int output_R_number = 0;
-                for (int i_spin = 0; i_spin < n_spins; ++i_spin) {
-                    for (int i_soc1 = 0; i_soc1 < n_soc; ++i_soc1) {
-                        for (int i_soc2 = 0; i_soc2 < n_soc; ++i_soc2) {
-                            for (const auto& R_entry : H_nao_R[i_spin][i_soc1][i_soc2]) {
-                                bool has_nonzero = false;
-                                const Matz& mat = R_entry.second;
-                                int rows = mat.nr();
-                                int cols = mat.nc();
-                                for (int row = 0; row < rows; ++row) {
-                                    for (int col = 0; col < cols; ++col) {
-                                        std::complex<double> value = mat(row, col);
-                                        if (std::abs(value.real()*2.0) > 1e-10) {
-                                            has_nonzero = true;
-                                            break;//imaginary part
-                                        }
-                                    }
-                                    if (has_nonzero) break;
-                                }
-                                if (has_nonzero) {
-                                    ++output_R_number;
-                                }
-                            }
-                        }
-                    }
-                }
-                ofs << "Matrix number of H(R): " << output_R_number << std::endl;
-
-                // 遍历 H_nao_R，按照新格式写入数据
-                for (int i_spin = 0; i_spin < n_spins; ++i_spin) {
-                    for (int i_soc1 = 0; i_soc1 < n_soc; ++i_soc1) {
-                        for (int i_soc2 = 0; i_soc2 < n_soc; ++i_soc2) {
-                            for (const auto& R_entry : H_nao_R[i_spin][i_soc1][i_soc2]) {
-                                const auto& R = R_entry.first;
-                                int dRx = R.x, dRy = R.y, dRz = R.z;
-                                const Matz& mat = R_entry.second;
-                                int rows = mat.nr();
-                                int cols = mat.nc();
-
-                                // 收集非零元素信息
-                                std::vector<double> matrix_values;
-                                std::vector<int> col_indices;
-                                std::vector<int> row_nonzero_counts;
-                                int nonZero = 0;
-                                
-                                // 按行收集数据
-                                for (int row = 0; row < rows; ++row) {
-                                    int row_nonzero = 0;
-                                    for (int col = 0; col < cols; ++col) {
-                                        std::complex<double> value = mat(row, col);
-                                        if (std::abs(value.real() * 2.0) > 1e-10) {
-                                            matrix_values.push_back(value.real());
-                                            // matrix_values.push_back(value.imag());
-                                            col_indices.push_back(col);
-                                            ++nonZero;
-                                            ++row_nonzero;
-                                        }
-                                    }
-                                    row_nonzero_counts.push_back(row_nonzero);
-                                }
-
-                                // 只写入有非零元素的R向量
-                                if (nonZero > 0) {
-                                    // 第4行：Rlist的点和对应R点的非0矩阵元的个数
-                                    ofs << dRx << " " << dRy << " " << dRz << " " << nonZero << std::endl;
-
-                                    // 第5行：该R点的非0矩阵元按行输出到一整行
-                                    for (size_t i = 0; i < matrix_values.size(); ++i) {
-                                        ofs << " " << std::scientific << std::setprecision(16) << matrix_values[i] * 2.0;//Ryd
-                                    }
-                                    ofs << std::endl;
-
-                                    // 第6行：记录的是第五行非0矩阵元的列指标
-                                    for (size_t i = 0; i < col_indices.size(); ++i) {
-                                        ofs << " " << col_indices[i];
-                                    }
-                                    ofs << std::endl;
-
-                                    // 第7行：先输出一个0，然后依次输出矩阵的各行存在的非0矩阵元的个数
-                                    ofs << " 0";
-                                    int cumulative_sum = 0;
-                                    for (size_t i = 0; i < row_nonzero_counts.size(); ++i) {
-                                        cumulative_sum += row_nonzero_counts[i];
-                                        ofs << " " << cumulative_sum;
-                                    }
-                                    ofs << std::endl;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                ofs.close();
-                std::cout << "hrs1_nao_iteration.csr 文件 (文本格式) 写入完成" << std::endl;
-                
-                // ==========================================
-                // Pulay Mixing Execution
-                // ==========================================
-                {
-                    std::cout << "Performing Pulay Mixing..." << std::endl;
-                    
-                    // 1. Prepare data dimensions
-                    int total_matrices = n_spins * n_kpoints;
-                    int rows_per_matrix = n_bands;
-                    int cols_per_matrix = n_bands;
-                    
-                    // We pack all k-points and spins into one large matrix.
-                    // To handle complex numbers, we double the width: [Real, Imag]
-                    matrix mixed_input(total_matrices * rows_per_matrix, 2 * cols_per_matrix);
-                    
-                    // 2. Pack H0_GW_all into mixed_input
-                    int row_offset = 0;
-                    for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                        for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                            const Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                            for (int i = 0; i < rows_per_matrix; i++) {
-                                for (int j = 0; j < cols_per_matrix; j++) {
-                                    std::complex<double> val = mat(i, j);
-                                    mixed_input(row_offset + i, j) = val.real();
-                                    mixed_input(row_offset + i, j + cols_per_matrix) = val.imag();
-                                }
-                            }
-                            row_offset += rows_per_matrix;
-                        }
-                    }
-
-                    // 3. Execute Mixing
-                    if (!mixer_initialized) {
-                        mixer.initialize(mixed_input);
-                        mixer_initialized = true;
-                        std::cout << "Pulay Mixer Initialized with dimension " << mixed_input.nr << "x" << mixed_input.nc << std::endl;
-                    } else {
-                        try {
-                            matrix mixed_output = mixer.mix(mixed_input);
-                            
-                            // 4. Unpack result back to H0_GW_all
-                            row_offset = 0;
-                            for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                                for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                                    Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                                    for (int i = 0; i < rows_per_matrix; i++) {
-                                        for (int j = 0; j < cols_per_matrix; j++) {
-                                            double re = mixed_output(row_offset + i, j);
-                                            double im = mixed_output(row_offset + i, j + cols_per_matrix);
-                                            mat(i, j) = std::complex<double>(re, im);
-                                        }
-                                    }
-                                    row_offset += rows_per_matrix;
-                                }
-                            }
-                            std::cout << "Pulay Mixing applied successfully." << std::endl;
-                        } catch (const std::exception& e) {
-                            std::cerr << "Pulay Mixing failed: " << e.what() << ". Continuing with unmixed Hamiltonian." << std::endl;
-                            // If mixing fails, we just use the current H0_GW_all (unmixed)
-                        }
-                    }
-                }
-                // ==========================================
-                // End Pulay Mixing
-                // ==========================================
-
-                // 第三步：对 Hamiltonian 进行对角化并存储本征值
-                diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
-
-                // 计算全局费米能和占据数
-                const auto &Efermi0 = meanfield.get_efermi();
-                printf("%5s\n", "efermi0");
-                printf("%5f\n", Efermi0);
-                // 计算费米能级
-
-                double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
-                printf("%5s\n", "efermi0");
-                printf("%5f\n", efermi);
-
-                // 将占据数和费米能级更新到 MeanField 对象中
-                update_fermi_energy_and_occupations(meanfield, temperature, efermi);
-                efermi_values.push_back(efermi * HA2EV);
-
-                // const std::string final_banner(90, '-');
-                lib_printf("Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
-                const auto &Efermi = meanfield.get_efermi();
-                printf("%5s\n", "efermi");
-                printf("%5f\n", Efermi);
-                for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-                {
-                    for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-                    {
-                        const auto &k = kfrac_list[i_kpoint];
-                        printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1,
-                               i_kpoint + 1, k.x, k.y, k.z);
-                        printf("%77s\n", final_banner.c_str());
-                        printf("%5s %16s %16s %16s \n", "State", "e_mf", "v_xc",
-                               "v_exx");
-                        printf("%77s\n", final_banner.c_str());
-                        for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-                        {
-                            const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                            // const auto &eks_state = H0_GW_all[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            const auto &exx_state1 = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                            const auto &exx_state2 =
-                                exx.exx_is_ik_KS[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            const auto &vxc_state =
-                                vxc0[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
-                            const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
-                            printf("%5d %20.15f %16.5f %16.5f \n", i_state + 1,eks_state, vxc_state.real(), exx_state1);
-                        }
-                        printf("\n");
-                    }
-                }
-
-                // 计算 HOMO 和 LUMO
-                homo = -1e6;  //
-                lumo = 1e6;   //
-                for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
-                {
-                    for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
-                    {
-                        int homo_level = -1;
-                        for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
-                        {
-                            double weight = meanfield.get_weight()[ispin](ikpt, ib);
-                            double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
-
-                            if (weight >=
-                                1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
-                            {
-                                homo_level = ib;
-                            }
-                        }
-
-                        //
-                        if (homo_level != -1)
-                        {
-                            //
-                            homo =
-                                std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
-                            //
-                            lumo = std::min(lumo,
-                                            meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
-                        }
-                    }
-                }
-
-                homo_values.push_back(homo * HA2EV);  //
-                lumo_values.push_back(lumo * HA2EV);  //
-                iteration_numbers.push_back(iteration);
-
-                // 输出当前 HOMO 和 LUMO 值
-                std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "
-                          << "LUMO = " << lumo * HA2EV << " eV, "
-                          << "Efermi = " << efermi * HA2EV << " eV\n";
-
-                // 保存 HOMO、LUMO 和费米能级数据
-                {
-                    std::ofstream file("homo_lumo_vs_iterations.dat",
-                                       std::ios::app);  // 使用 std::ios::app 以追加模式打开文件
-                    file << iteration << " " << homo_values[iteration] << " "
-                         << lumo_values[iteration] << " " << efermi_values[iteration] << std::endl;
-                }
-                // 比较本轮和前一轮的本征值判断是否收敛
-                converged = true;
-                for (int ispin = 0; ispin < n_spins; ++ispin)
-                {
-                    const auto &current_eigenvals = meanfield.get_eigenvals()[ispin];
-                    const auto max_diff =
-                        (current_eigenvals - previous_eigenvalues[ispin]).absmax();
-                    if (max_diff > eigenvalue_tolerance)
-                    {
-                        converged = false;
-                        break;
-                    }
-                }
-
-                std::cout << "Converged after " << iteration << " iterations.\n";
-            }
+            std::cout << "Solving quasi-particle equation\n";
         }
+
+        if (mpi_comm_global_h.is_root())
+        {
+            // 遍历自旋、k点和能带状态
+            for (int i_spin = 0; i_spin < n_spins; i_spin++)
+            {
+                for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++)
+                {
+                    std::vector<std::vector<std::vector<cplxdb>>> sigcmat(
+                        n_bands, std::vector<std::vector<cplxdb>>(
+                                        n_bands, std::vector<cplxdb>(n_bands + 1)));
+                    const auto &sigc_sk = s_g0w0.sigc_is_ik_f_KS[i_spin][i_kpoint];
+                    for (int i_state_row = 0; i_state_row < n_bands; i_state_row++)
+                    {
+                        for (int i_state_col = 0; i_state_col < meanfield.get_n_bands();
+                                i_state_col++)
+                        {
+                            std::vector<cplxdb> sigc_mn;
+                            for (const auto &freq : chi0.tfg.get_freq_nodes())
+                            {
+                                sigc_mn.push_back(sigc_sk.at(freq)(i_state_row, i_state_col));
+                            }
+                            LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs,
+                                                        sigc_mn);
+                            // LIBRPA::AnalyContNevanlinna nevanlinna(Params::n_params_anacon, imagfreqs,
+                            //                            sigc_mn);
+                            auto energy0 =
+                                meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                            efermi = meanfield.get_efermi();
+                            // 计算得到的值
+                            auto result = pade.get(energy0 - efermi);
+                            auto result1 = pade.get(0.0);
+                            // auto result = nevanlinna.get(energy0 - efermi);
+                            // auto result1 = nevanlinna.get(0.0);
+                            // 存储值到 sigcmat
+                            sigcmat[i_state_row][i_state_col][i_state_row] = result;
+                            sigcmat[i_state_row][i_state_col][n_bands] = result1;
+                        }
+                    }
+
+                    Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat, n_bands);
+                    // Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k_modeA(sigcmat, n_bands);
+                }
+            }
+            Profiler::stop("qsgw_solve_qpe");
+            
+            auto H0_GW_all = construct_H0_GW_cut(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                                                n_spins, n_kpoints, n_bands);
+            
+            
+            //check
+            //output H_nao_R
+            for (int i_spin = 0; i_spin < n_spins; i_spin++)
+            {
+                for(int i_soc1 = 0 ; i_soc1 < n_soc; i_soc1++)
+                {
+                    for(int i_soc2 =0 ; i_soc2 < n_soc; i_soc2++)
+                    {
+                        for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++)
+                        {
+
+                            Matz wfc2(n_bands, n_aos * n_soc, MAJOR::COL);
+
+                            for (int ib1 = 0; ib1 < n_bands; ++ib1)
+                            {
+                                for (int isoc = 0; isoc < n_soc; isoc++)
+                                {
+                                    for (int iao = 0; iao < n_aos; iao++)
+                                    {
+                                        int ib2 = iao * n_soc + isoc;
+                                        wfc2(ib1, ib2) = meanfield.get_eigenvectors0()[i_spin][isoc][i_kpoint](ib1, iao);       
+                                        
+                                    }
+                                }
+                            }
+                            // conj(wfc1) * hf_nao[ispin][ikpt] * transpose(wfc1);
+                            
+                            H_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc2) * H0_GW_all[i_spin][i_kpoint] * conj(wfc2) * transpose(s_nao[i_spin][i_kpoint],true);
+                            // H_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc2) * H_KS0[i_spin][i_kpoint] * conj(wfc2) * transpose(s_nao[i_spin][i_kpoint],true);
+                            
+                        }
+                                
+                        for (const auto &R : Rlist_abacus){
+                            Matz mat_R_cplx(meanfield.get_n_aos(), meanfield.get_n_aos());
+                            for(int i=0 ; i < n_bands; i++)
+                            {
+                                for(int j=0 ; j < n_bands; j++)
+                                {
+                                    for (int ik = 0; ik != meanfield.get_n_kpoints(); ik++)
+                                    {
+                                        
+                                        auto ang = -(kfrac_list[ik] * R) * TWO_PI;
+                                        complex<double> kphase = complex<double>(cos(ang), sin(ang));
+                                        mat_R_cplx(i,j) += kphase * H_nao[i_spin][ik](i,j) ;
+                                    }
+                                    // printf("R=(%d,%d,%d) H_nao_R(%d,%d)=(%f,%f)\n", R.x, R.y, R.z, i, j, mat_R_cplx(i,j).real(), mat_R_cplx(i,j).imag());
+                                    mat_R_cplx(i,j) = mat_R_cplx(i,j) / static_cast<double>(meanfield.get_n_kpoints());
+
+                                }
+                                
+                            
+                            }
+                            H_nao_R[i_spin][i_soc1][i_soc2][R] = mat_R_cplx ;
+                            
+                        }
+                        
+                    }
+                }
+            }
+            std::cout << "开始写入 hrs_nao 文件" << std::endl;
+
+            
+            std::ostringstream filename;
+            filename << "hrs1_nao_" << iteration << ".csr";
+            std::ofstream ofs(filename.str());
+            // if (!ofs) {
+            //     std::cerr << "无法创建或打开 hrs1_nao_1.csr 文件，错误码: " << errno << std::endl;
+                
+            // }
+
+            // 写入文件头信息
+            int nlocal = meanfield.get_n_aos();
+            ofs << "STEP: 0" << std::endl;
+            ofs << "Matrix Dimension of H(R): " << nlocal << std::endl;
+            
+            // 统计有效的R向量数量
+            int output_R_number = 0;
+            for (int i_spin = 0; i_spin < n_spins; ++i_spin) {
+                for (int i_soc1 = 0; i_soc1 < n_soc; ++i_soc1) {
+                    for (int i_soc2 = 0; i_soc2 < n_soc; ++i_soc2) {
+                        for (const auto& R_entry : H_nao_R[i_spin][i_soc1][i_soc2]) {
+                            bool has_nonzero = false;
+                            const Matz& mat = R_entry.second;
+                            int rows = mat.nr();
+                            int cols = mat.nc();
+                            for (int row = 0; row < rows; ++row) {
+                                for (int col = 0; col < cols; ++col) {
+                                    std::complex<double> value = mat(row, col);
+                                    if (std::abs(value.real()*2.0) > 1e-10) {
+                                        has_nonzero = true;
+                                        break;//imaginary part
+                                    }
+                                }
+                                if (has_nonzero) break;
+                            }
+                            if (has_nonzero) {
+                                ++output_R_number;
+                            }
+                        }
+                    }
+                }
+            }
+            ofs << "Matrix number of H(R): " << output_R_number << std::endl;
+
+            // 遍历 H_nao_R，按照新格式写入数据
+            for (int i_spin = 0; i_spin < n_spins; ++i_spin) {
+                for (int i_soc1 = 0; i_soc1 < n_soc; ++i_soc1) {
+                    for (int i_soc2 = 0; i_soc2 < n_soc; ++i_soc2) {
+                        for (const auto& R_entry : H_nao_R[i_spin][i_soc1][i_soc2]) {
+                            const auto& R = R_entry.first;
+                            int dRx = R.x, dRy = R.y, dRz = R.z;
+                            const Matz& mat = R_entry.second;
+                            int rows = mat.nr();
+                            int cols = mat.nc();
+
+                            // 收集非零元素信息
+                            std::vector<double> matrix_values;
+                            std::vector<int> col_indices;
+                            std::vector<int> row_nonzero_counts;
+                            int nonZero = 0;
+                            
+                            // 按行收集数据
+                            for (int row = 0; row < rows; ++row) {
+                                int row_nonzero = 0;
+                                for (int col = 0; col < cols; ++col) {
+                                    std::complex<double> value = mat(row, col);
+                                    if (std::abs(value.real() * 2.0) > 1e-10) {
+                                        matrix_values.push_back(value.real());
+                                        // matrix_values.push_back(value.imag());
+                                        col_indices.push_back(col);
+                                        ++nonZero;
+                                        ++row_nonzero;
+                                    }
+                                }
+                                row_nonzero_counts.push_back(row_nonzero);
+                            }
+
+                            // 只写入有非零元素的R向量
+                            if (nonZero > 0) {
+                                // 第4行：Rlist的点和对应R点的非0矩阵元的个数
+                                ofs << dRx << " " << dRy << " " << dRz << " " << nonZero << std::endl;
+
+                                // 第5行：该R点的非0矩阵元按行输出到一整行
+                                for (size_t i = 0; i < matrix_values.size(); ++i) {
+                                    ofs << " " << std::scientific << std::setprecision(16) << matrix_values[i] * 2.0;//Ryd
+                                }
+                                ofs << std::endl;
+
+                                // 第6行：记录的是第五行非0矩阵元的列指标
+                                for (size_t i = 0; i < col_indices.size(); ++i) {
+                                    ofs << " " << col_indices[i];
+                                }
+                                ofs << std::endl;
+
+                                // 第7行：先输出一个0，然后依次输出矩阵的各行存在的非0矩阵元的个数
+                                ofs << " 0";
+                                int cumulative_sum = 0;
+                                for (size_t i = 0; i < row_nonzero_counts.size(); ++i) {
+                                    cumulative_sum += row_nonzero_counts[i];
+                                    ofs << " " << cumulative_sum;
+                                }
+                                ofs << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+
+            ofs.close();
+            std::cout << "hrs1_nao_iteration.csr 文件 (文本格式) 写入完成" << std::endl;
+            // 混合
+            //  if(iteration > 1){
+            //      for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
+            //          for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt) {
+            //              H0_GW_all[ispin][ikpt] = 0.2 * H0_GW_all[ispin][ikpt] + 0.8 *
+            //              H_KS[ispin][ikpt];
+            //          }
+            //      }
+            //  }
+
+            // 第三步：对 Hamiltonian 进行对角化并存储本征值
+            diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
+
+            // 计算全局费米能和占据数
+            const auto &Efermi0 = meanfield.get_efermi();
+            printf("%5s\n", "efermi0");
+            printf("%5f\n", Efermi0);
+            // 计算费米能级
+
+            double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
+            printf("%5s\n", "efermi0");
+            printf("%5f\n", efermi);
+
+            // 将占据数和费米能级更新到 MeanField 对象中
+            update_fermi_energy_and_occupations(meanfield, temperature, efermi);
+            efermi_values.push_back(efermi * HA2EV);
+
+            // const std::string final_banner(90, '-');
+            lib_printf("Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
+            const auto &Efermi = meanfield.get_efermi();
+            printf("%5s\n", "efermi");
+            printf("%5f\n", Efermi);
+            for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+            {
+                for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+                {
+                    const auto &k = kfrac_list[i_kpoint];
+                    printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1,
+                            i_kpoint + 1, k.x, k.y, k.z);
+                    printf("%77s\n", final_banner.c_str());
+                    printf("%5s %16s %16s %16s \n", "State", "e_mf", "v_xc",
+                            "v_exx");
+                    printf("%77s\n", final_banner.c_str());
+                    for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                    {
+                        const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+                        // const auto &eks_state = H0_GW_all[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+                        const auto &exx_state1 = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                        const auto &exx_state2 =
+                            exx.exx_is_ik_KS[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+                        const auto &vxc_state =
+                            vxc0[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+                        const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
+                        const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
+                        printf("%5d %20.15f %16.5f %16.5f \n", i_state + 1,eks_state, vxc_state.real(), exx_state1);
+                    }
+                    printf("\n");
+                }
+            }
+
+            // 计算 HOMO 和 LUMO
+            homo = -1e6;  //
+            lumo = 1e6;   //
+            for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
+            {
+                for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
+                {
+                    int homo_level = -1;
+                    for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
+                    {
+                        double weight = meanfield.get_weight()[ispin](ikpt, ib);
+                        double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
+
+                        if (weight >=
+                            1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
+                        {
+                            homo_level = ib;
+                        }
+                    }
+
+                    //
+                    if (homo_level != -1)
+                    {
+                        //
+                        homo =
+                            std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
+                        //
+                        lumo = std::min(lumo,
+                                        meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
+                    }
+                }
+            }
+
+            homo_values.push_back(homo * HA2EV);  //
+            lumo_values.push_back(lumo * HA2EV);  //
+            iteration_numbers.push_back(iteration);
+
+            // 输出当前 HOMO 和 LUMO 值
+            std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "
+                        << "LUMO = " << lumo * HA2EV << " eV, "
+                        << "Efermi = " << efermi * HA2EV << " eV\n";
+
+            // 保存 HOMO、LUMO 和费米能级数据
+            {
+                std::ofstream file("homo_lumo_vs_iterations.dat",
+                                    std::ios::app);  // 使用 std::ios::app 以追加模式打开文件
+                file << iteration << " " << homo_values[iteration] << " "
+                        << lumo_values[iteration] << " " << efermi_values[iteration] << std::endl;
+            }
+            // 比较本轮和前一轮的本征值判断是否收敛
+            converged = true;
+            for (int ispin = 0; ispin < n_spins; ++ispin)
+            {
+                const auto &current_eigenvals = meanfield.get_eigenvals()[ispin];
+                const auto max_diff =
+                    (current_eigenvals - previous_eigenvalues[ispin]).absmax();
+                if (max_diff > eigenvalue_tolerance)
+                {
+                    converged = false;
+                    break;
+                }
+            }
+
+            std::cout << "Converged after " << iteration << " iterations.\n";
+        }
+        
         mpi_comm_global_h.barrier();
 
         mpi_comm_global_h.broadcast(converged, 0);
@@ -1536,10 +1478,9 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
 
             // reconstruct H0_GW_all
-            auto H0_GW_all_band = construct_H0_GW(
+            auto H0_GW_all_band = construct_H0_GW_cut(
                 meanfield_band, H_KS0_band, vxc_band, exx.exx_is_ik_KS, Vc_all,
                 meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands);
-
 
             diagonalize_and_store_fixed_basis(meanfield_band, H0_GW_all_band, meanfield_band.get_n_spins(),
                                   meanfield_band.get_n_kpoints(), n_bands);
@@ -1603,7 +1544,7 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 fn.str("");
                 fn.clear();
-                fn << "QSGW_band_spin_" << i_spin + 1 << "_" << iteration << ".dat";
+                fn << "QSGW_band_spin_" << i_spin + 1 << "_" << iteration << "_cut10.dat";
                 ofs_qsgw.open(fn.str());
 
                 ofs_hf << std::fixed;

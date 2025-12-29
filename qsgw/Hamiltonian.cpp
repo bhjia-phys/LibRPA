@@ -212,7 +212,7 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
     std::map<int, std::map<int, Matz>> H0_GW_all;
     
     double efermi = meanfield.get_efermi();
-    int c_cut = 5 ;
+    
     for (int ispin = 0; ispin < n_spins; ++ispin)
     {
         for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
@@ -256,6 +256,65 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
             //         }
             //     }
             // }
+            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
+        }
+    }
+
+    return H0_GW_all;
+}
+
+std::map<int, std::map<int, Matz>> construct_H0_GW_cut(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & vxc_all,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_bands) {
+
+    // 初始化 GW 哈密顿量矩阵
+    std::map<int, std::map<int, Matz>> H0_GW_all;
+    
+    double efermi = meanfield.get_efermi();
+    int band_alived = 8 ;
+    int a = 1;
+    int b = 1;
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
+            Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
+            // // realize in k-space
+            // for (int i = 0; i < n_bands; ++i){   
+            //     for (int j = 0; j < n_bands; ++j){
+            //         Vxc_construct_ispin_ik(i,j) = std::real(Vxc_construct_ispin_ik(i,j));
+            //         // Vxc_construct_ispin_ik(i,j) = std::real(Vc_all.at(ispin).at(ikpt)(i,j)) + Hexx_ispin_ik(i,j);
+            //     }
+            // }
+            
+            // 构建 GW 哈密顿量矩阵
+            int N0 = 0;
+            Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
+            Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
+            for (int i = 0; i < n_bands; ++i){
+                double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
+                if(energy_i < efermi){
+                    N0 = N0 +1 ;
+                }
+            }
+            for (int i = 0; i < n_bands; ++i){     
+                for (int j = 0; j < n_bands; ++j){
+                    if( (i > N0 + band_alived ) || (j > N0 + band_alived ) ){
+                        if(i==j){
+                            H0_GW_spin_k(i, j) = H0_KS_spin_k(i,j) + 20.0 ;     
+                        }
+                        else{
+                            H0_GW_spin_k(i, j) = 0.0 ;   
+                        }
+                                         
+                    }
+                }
+            }
             H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
         }
     }

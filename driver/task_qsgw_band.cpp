@@ -926,9 +926,19 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
-            Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
-            Profiler::stop("ft_vq_cut");
+            atpair_R_mat_t VR;
+            if (Params::use_fullcoul_exx)
+            {
+                Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
+                VR = FT_Vq(Vq, meanfield.get_n_kpoints(), Rlist, true);
+                Profiler::stop("ft_vq_full");
+            }
+            else
+            {
+                Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
+                VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+                Profiler::stop("ft_vq_cut");
+            }
 
             Profiler::start("g0w0_exx_real_work");
             if (Params::use_shrink_abfs)
@@ -944,9 +954,9 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     exx.build<std::complex<double>>(Cs_data, Rlist, VR);
                 else
                     exx.build<double>(Cs_data, Rlist, VR);
-            }
+            } 
             exx.build_KS_kgrid0();  // rotate
-            Profiler::stop("g0w0_exx_real_work");
+            Profiler::stop("qsgw_exx_real_work");
         }
         Profiler::stop("qsgw_exx");
         std::flush(ofs_myid);
