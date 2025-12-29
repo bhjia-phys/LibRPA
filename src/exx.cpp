@@ -807,7 +807,7 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                                 Hexx_nao_nao.ptr(), 1, 1, desc_nao_nao.desc, 0.0,
                                                 temp_nband_nao.ptr(), 1, 1, desc_nband_nao.desc);
                     ScalapackConnector::pgemm_f(
-                        'N', 'C', n_bands, n_bands, n_aos, -1.0, temp_nband_nao.ptr(), 1, 1,
+                        'N', 'C', n_bands, n_bands, n_aos, -1.0/*EXX ONLY*/, temp_nband_nao.ptr(), 1, 1,
                         desc_nband_nao.desc, wfc2_block.ptr(), 1, 1, desc_nband_nao.desc, 0.0,
                         Hexx_nband_nband.ptr(), 1, 1, desc_nband_nband.desc);
                     Profiler::stop("build_real_space_exx_7");

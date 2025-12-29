@@ -56,26 +56,6 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    vector<Vector3_Order<int>> Rlist_hartree;
-    // const auto Cs_0R = Cs_data.data_libri.at(0).at({0, {}});
-    for (const auto&I_JR : Cs_data.data_libri) {
-        const auto& I = I_JR.first;
-        for (const auto& JR_Cs : I_JR.second) {
-            const auto& J = JR_Cs.first.first;
-            const auto& Rc = JR_Cs.first.second;
-            Rlist_hartree.push_back({Rc[0], Rc[1], Rc[2]});
-            // if( I==1 && J==1 ){
-            //     Rlist_hartree.push_back({Rc[0], Rc[1], Rc[2]});
-            //     // printf("Checking  R111: (%d,%d,%d)\n", 
-            //     //             Rc[0], Rc[1], Rc[2]);
-            // }
-            
-            // printf("Checking  R: (%d,%d,%d)\n", 
-            //                 Rc[0], Rc[2], Rc[2]);
-            
-        }
-    }
-
     vector<Vector3_Order<double>> qlist;
     for (auto q_weight : irk_weight)
     {
@@ -382,6 +362,23 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     mpi_comm_global_h.barrier();
     std::flush(ofs_myid);
 
+    // 读取库伦相互作用
+    Profiler::start("read_vq_cut", "Load truncated Coulomb");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    {
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
+                    true);
+    }
+    Profiler::stop("read_vq_cut");
+    
     // 在迭代开始前计算初始 HOMO, LUMO 和费米能级
     double efermi = meanfield.get_efermi();
     double homo = -1e6;
@@ -466,97 +463,16 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
         mpi_comm_global_h.barrier();
-        // Prepare time-frequency grids
-        auto tfg =
-            LIBRPA::utils::generate_timefreq_grids(Params::nfreq, Params::tfgrids_type, meanfield);
-
-        Chi0 chi0(meanfield, klist, tfg);
-        chi0.gf_R_threshold = Params::gf_R_threshold;
-        chi0.set_input_dir(driver_params.input_dir);
-        Profiler::start("chi0_build", "Build response function chi0");
-        chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
-        Profiler::stop("chi0_build");
-        std::flush(ofs_myid);
-        mpi_comm_global_h.barrier();
-
-        if (Params::debug)
-        {  // debug, check chi0
-            char fn[80];
-            for (const auto &chi0q : chi0.get_chi0_q())
-            {
-                const int ifreq = chi0.tfg.get_freq_index(chi0q.first);
-                for (const auto &q_IJchi0 : chi0q.second)
-                {
-                    const int iq = std::distance(
-                        klist.begin(), std::find(klist.begin(), klist.end(), q_IJchi0.first));
-                    for (const auto &I_Jchi0 : q_IJchi0.second)
-                    {
-                        const auto &I = I_Jchi0.first;
-                        for (const auto &J_chi0 : I_Jchi0.second)
-                        {
-                            const auto &J = J_chi0.first;
-                            sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I,
-                                    J, mpi_comm_global_h.myid);
-                            print_complex_matrix_mm(J_chi0.second, Params::output_dir + "/" + fn,
-                                                    1e-15);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 读取库伦相互作用
-        Profiler::start("read_vq_cut", "Load truncated Coulomb");
-        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
-        {
-            read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
-        }
-        else
-        {
-            // NOTE: local_atpair already set in the main.cpp.
-            //       It can consists of distributed atom pairs of only upper half.
-            //       Setup of local_atpair may be better to extracted as some util function,
-            //       instead of in the main driver.
-            read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
-                        true);
-        }
-        Profiler::stop("read_vq_cut");
-
-        // 读取和处理介电函数
-        std::vector<double> epsmac_LF_imagfreq_re;
-        if (Params::replace_w_head)
-        {
-            std::vector<double> omegas_dielect;
-            std::vector<double> dielect_func;
-            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
-                             dielect_func);
-
-            epsmac_LF_imagfreq_re =
-                interpolate_dielec_func(Params::option_dielect_func, omegas_dielect, dielect_func,
-                                        chi0.tfg.get_freq_nodes());
-            if (Params::debug)
-            {
-                if (mpi_comm_global_h.is_root())
-                {
-                    lib_printf("Dielectric function parsed:\n");
-                    for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
-                        lib_printf("%d %f %f\n", i + 1, chi0.tfg.get_freq_nodes()[i],
-                                   epsmac_LF_imagfreq_re[i]);
-                }
-                mpi_comm_global_h.barrier();
-            }
-        }
-
 
         //构建V^{Hartree}矩阵
         Profiler::start("qsgw_hartree", "Build Hartree potential");
         auto Hartree = LIBRPA::Hartree(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR1 = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist_hartree, true);
+            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
             Profiler::stop("ft_vq_cut"); 
             Profiler::start("qsgw_hartree_real_work");
-            Hartree.build(Cs_data, Rlist_hartree, VR1); 
+            Hartree.build(Cs_data, Rlist, VR); 
             // // 新增调试输出
             // for (int isp = 0; isp < meanfield.get_n_spins(); ++isp) {
             //     for (int is1 = 0; is1 < meanfield.get_n_soc(); ++is1) {
@@ -633,6 +549,70 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         
         }
+        // Prepare time-frequency grids
+        auto tfg =
+            LIBRPA::utils::generate_timefreq_grids(Params::nfreq, Params::tfgrids_type, meanfield);
+
+        Chi0 chi0(meanfield, klist, tfg);
+        chi0.gf_R_threshold = Params::gf_R_threshold;
+        chi0.set_input_dir(driver_params.input_dir);
+        Profiler::start("chi0_build", "Build response function chi0");
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
+        Profiler::stop("chi0_build");
+        std::flush(ofs_myid);
+        mpi_comm_global_h.barrier();
+
+        if (Params::debug)
+        {  // debug, check chi0
+            char fn[80];
+            for (const auto &chi0q : chi0.get_chi0_q())
+            {
+                const int ifreq = chi0.tfg.get_freq_index(chi0q.first);
+                for (const auto &q_IJchi0 : chi0q.second)
+                {
+                    const int iq = std::distance(
+                        klist.begin(), std::find(klist.begin(), klist.end(), q_IJchi0.first));
+                    for (const auto &I_Jchi0 : q_IJchi0.second)
+                    {
+                        const auto &I = I_Jchi0.first;
+                        for (const auto &J_chi0 : I_Jchi0.second)
+                        {
+                            const auto &J = J_chi0.first;
+                            sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I,
+                                    J, mpi_comm_global_h.myid);
+                            print_complex_matrix_mm(J_chi0.second, Params::output_dir + "/" + fn,
+                                                    1e-15);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 读取和处理介电函数
+        std::vector<double> epsmac_LF_imagfreq_re;
+        if (Params::replace_w_head)
+        {
+            std::vector<double> omegas_dielect;
+            std::vector<double> dielect_func;
+            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
+                             dielect_func);
+
+            epsmac_LF_imagfreq_re =
+                interpolate_dielec_func(Params::option_dielect_func, omegas_dielect, dielect_func,
+                                        chi0.tfg.get_freq_nodes());
+            if (Params::debug)
+            {
+                if (mpi_comm_global_h.is_root())
+                {
+                    lib_printf("Dielectric function parsed:\n");
+                    for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
+                        lib_printf("%d %f %f\n", i + 1, chi0.tfg.get_freq_nodes()[i],
+                                   epsmac_LF_imagfreq_re[i]);
+                }
+                mpi_comm_global_h.barrier();
+            }
+        }
+
 
         // 构建V^{exx}矩阵,得到Hexx_nband_nband: exx.exx_is_ik_KS
 
