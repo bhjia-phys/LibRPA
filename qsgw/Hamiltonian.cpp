@@ -47,6 +47,7 @@ Matz build_correlation_potential_spin_k_modeA(
     Matz Vc_spin_k(n_bands, n_bands, MAJOR::COL);
     std::map<int, Matz> Re_sigma;
     std::map<int, Matz> sigma;
+    const double threshold = 1e-6; // 定义截断阈值
     // std::cout << "check112 " << std::endl;
     for (int k = 0 ; k < n_bands; ++k)
     {
@@ -61,14 +62,16 @@ Matz build_correlation_potential_spin_k_modeA(
         }
         Re_sigma[k] = 0.5 * (sigma[k] + transpose(sigma[k],true));
     }
-    // std::cout << "check113 " << std::endl;
+
     for (int i = 0; i < n_bands; ++i)
     {
         for (int j = 0; j < n_bands; ++j)
         { 
-            
             // 构建关联势矩阵
             std::complex<double> Vc_ij = 0.5 * (Re_sigma[i](i,j) + Re_sigma[j](i,j));
+            if (std::abs(Vc_ij) < threshold) {
+                    Vc_ij = 0.0;
+                }
             Vc_spin_k(i, j) = Vc_ij;  
         }
     }    
@@ -81,6 +84,7 @@ Matz build_correlation_potential_spin_k(
     const std::vector<std::vector<std::vector<cplxdb>>>& sigc_spin_k,
     int n_bands) {
     // std::cout << "QSGW: mode B" << std::endl;
+    const double threshold = 1e-6; // 定义截断阈值
     Matz Vc_spin_k(n_bands, n_bands, MAJOR::COL);
     std::map<int, Matz> Re_sigma;
     std::map<int, Matz> sigma;
@@ -102,16 +106,23 @@ Matz build_correlation_potential_spin_k(
     {
         
         std::complex<double> Vc_ii = Re_sigma[i](i,i);
+        if (std::abs(Vc_ii) < threshold) {
+            Vc_ii = 0.0;
+        }
         Vc_spin_k(i, i) = Vc_ii;
         for (int j = 0; j < n_bands; ++j)
         {
             if(i!=j){
-                
                 std::complex<double> Vc_ij = Re_sigma[n_bands](i,j);
+                // 非对角元阈值判断
+                if (std::abs(Vc_ij) < threshold) {
+                    Vc_ij = 0.0;
+                }
                 Vc_spin_k(i, j) = Vc_ij;  
             }  
         }
     }
+
     return Vc_spin_k;
 }
 
@@ -219,43 +230,12 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
         {
             Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
             Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
-            // // realize in k-space
-            // for (int i = 0; i < n_bands; ++i){   
-            //     for (int j = 0; j < n_bands; ++j){
-            //         Vxc_construct_ispin_ik(i,j) = std::real(Vxc_construct_ispin_ik(i,j));
-            //         // Vxc_construct_ispin_ik(i,j) = std::real(Vc_all.at(ispin).at(ikpt)(i,j)) + Hexx_ispin_ik(i,j);
-            //     }
-            // }
             
-            // cut if possible
-            // Matz Vxc_diff_spin_k = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt);
-            // for (int i = 0; i < n_bands; ++i){
-            //     double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
-            //     for (int j = 0; j < n_bands; ++j){
-            //         double energy_j = meanfield.get_eigenvals()[ispin](ikpt, j);
-            //         if(energy_i > efermi+1.75||energy_j > efermi+1.75){
-            //             Vxc_diff_spin_k(i, j)= 0.0 ;                    
-            //         }
-            //     }
-            // }
             // 构建 GW 哈密顿量矩阵
             
             Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
             Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
-            // for (int i = 0; i < n_bands; ++i){
-            //     // double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
-            //     for (int j = 0; j < n_bands; ++j){
-            //         // double energy_j = meanfield.get_eigenvals()[ispin](ikpt, j);
-            //         if(i > n_bands -1 - c_cut && j > n_bands -1 - c_cut){
-            //             if(i!=j){
-            //                 H0_GW_spin_k(i, j) = 0.0 ;     
-            //             }           
-            //             else{
-            //                 H0_GW_spin_k(i, j) = H0_KS_spin_k(i,j) + 100.0 ;     
-            //             }
-            //         }
-            //     }
-            // }
+            
             H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
         }
     }
@@ -284,14 +264,7 @@ std::map<int, std::map<int, Matz>> construct_H0_GW_cut(
         {
             Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
             Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
-            // // realize in k-space
-            // for (int i = 0; i < n_bands; ++i){   
-            //     for (int j = 0; j < n_bands; ++j){
-            //         Vxc_construct_ispin_ik(i,j) = std::real(Vxc_construct_ispin_ik(i,j));
-            //         // Vxc_construct_ispin_ik(i,j) = std::real(Vc_all.at(ispin).at(ikpt)(i,j)) + Hexx_ispin_ik(i,j);
-            //     }
-            // }
-            
+                        
             // 构建 GW 哈密顿量矩阵
             int N0 = 0;
             Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
@@ -331,7 +304,6 @@ std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
     int n_spins, int n_kpoints, int n_bands) {
     
     double efermi = meanfield.get_efermi();
-    int c_cut = 10 ;
     // 初始化 GW 哈密顿量矩阵
     std::map<int, std::map<int, Matz>> H0_GW_all;
     
@@ -352,35 +324,92 @@ std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
                     {
                         int ib2 = iao * n_soc + isoc;
                         wfc1(ib1, ib2) = meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao);
-                        meanfield.get_eigenvectors0()[ispin][isoc][ikpt](ib1, iao) = wfc1(ib1, ib2);
                     }
                 }
             }
+
             // 构建 GW 哈密顿量矩阵
             Matz H_DFT_spin_k = conj(wfc1) * H_DFT_nao.at(ispin).at(ikpt) * transpose(wfc1);
             Matz H0_GW_spin_k = H_DFT_spin_k + Vxc_construct_ispin_ik;
             
             Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
-            // for (int i = 0; i < n_bands; ++i){
-            //     // double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
-            //     for (int j = 0; j < n_bands; ++j){
-            //         // double energy_j = meanfield.get_eigenvals()[ispin](ikpt, j);
-            //         if(i > n_bands -1 - c_cut && j > n_bands -1 - c_cut){
-            //             if(i!=j){
-            //                 H0_GW_spin_k(i, j) = 0.0 ;     
-            //             }           
-            //             else{
-            //                 H0_GW_spin_k(i, j) = H0_KS_spin_k(i,j) + 100.0 ;     
-            //             }
+            
+            // const double threshold = 1e-6;
+            // for (int i = 0; i < n_bands; ++i) {
+            //     for (int j = 0; j < n_bands; ++j) {
+            //         if (std::abs(H0_GW_spin_k(i, j)) < threshold) 
+            //         {
+            //             H0_GW_spin_k(i, j) = 0.0;
             //         }
             //     }
             // }
-            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
+
+            H0_GW_spin_k = 0.5 * (H0_GW_spin_k + transpose(H0_GW_spin_k,true));
+            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;  
+            
         }
     }
 
     return H0_GW_all;
 }
+
+// std::map<int, std::map<int, Matz>> construct_H0_GW_inner_new_basis(
+//     MeanField& meanfield,
+//     const std::map<int, std::map<int, Matz>> & H_KS_all,
+//     const std::map<int, std::map<int, Matz>> & H_DFT_nao,
+//     const std::map<int, std::map<int, Matz>> & Hexx_all,
+//     const std::map<int, std::map<int, Matz>> & Vc_all,
+//     int n_spins, int n_kpoints, int n_bands) {
+    
+//     double efermi = meanfield.get_efermi();
+//     // 初始化 GW 哈密顿量矩阵
+//     std::map<int, std::map<int, Matz>> H0_GW_all;
+    
+//     int n_aos = meanfield.get_n_aos();
+//     int n_soc = meanfield.get_n_soc();
+//     for (int ispin = 0; ispin < n_spins; ++ispin)
+//     {
+//         for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+//         {
+//             Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
+//             Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
+//             Matz wfc1(n_bands, n_aos * n_soc, MAJOR::COL);
+//             for (int ib1 = 0; ib1 < n_bands; ++ib1)
+//             {
+//                 for (int isoc = 0; isoc < n_soc; isoc++)
+//                 {
+//                     for (int iao = 0; iao < n_aos; iao++)
+//                     {
+//                         int ib2 = iao * n_soc + isoc;
+//                         wfc1(ib1, ib2) = meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao);
+//                     }
+//                 }
+//             }
+
+//             // 构建 GW 哈密顿量矩阵
+//             Matz H_DFT_spin_k = conj(wfc1) * H_DFT_nao.at(ispin).at(ikpt) * transpose(wfc1);
+//             Matz H0_GW_spin_k = H_DFT_spin_k + Vxc_construct_ispin_ik;
+            
+//             Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
+            
+//             // const double threshold = 1e-6;
+//             // for (int i = 0; i < n_bands; ++i) {
+//             //     for (int j = 0; j < n_bands; ++j) {
+//             //         if (std::abs(H0_GW_spin_k(i, j)) < threshold) 
+//             //         {
+//             //             H0_GW_spin_k(i, j) = 0.0;
+//             //         }
+//             //     }
+//             // }
+
+//             H0_GW_spin_k = 0.5 * (H0_GW_spin_k + transpose(H0_GW_spin_k,true));
+//             H0_GW_all[ispin][ikpt] = H0_GW_spin_k;  
+            
+//         }
+//     }
+
+//     return H0_GW_all;
+// }
 
 std::map<int, std::map<int, Matz>> construct_H0_HF(
     MeanField& meanfield,
@@ -468,7 +497,6 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
                     for (int iao = 0; iao < nao; iao++)
                     {
                         int ib2 = iao * n_soc + isoc;
-                        // wfc(ib1, ib2) = meanfield.get_eigenvectors0()[ispin][isoc][ikpt](ib1, iao);
                         wfc(ib1, ib2) = meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao);
                     }   
                 }

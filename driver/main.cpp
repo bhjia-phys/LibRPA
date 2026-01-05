@@ -29,7 +29,7 @@
 #include "utils_io_parallel.h"
 #include "utils_mem.h"
 #include "utils_mpi_io.h"
-// #include "task_qsgwA.h"
+#include "task_qsgwA.h"
 #include "task_qsgw_band.h"
 // #include "task_hf_band.h"
 #include "task_scRPA.h"
@@ -147,8 +147,8 @@ int main(int argc, char **argv)
         task = task_t::EXX_band;
     else if (task_lower == "qsgw")
         task = task_t::QSGW;
-    // else if (task_lower == "qsgwa")
-    //     task = task_t::QSGWA;
+    else if (task_lower == "qsgwa")
+        task = task_t::QSGWA;
     else if (task_lower == "qsgw_band")
         task = task_t::QSGW_band;
     else if (task_lower == "qsgw_band0")
@@ -488,10 +488,10 @@ int main(int argc, char **argv)
     {
         task_qsgw(sinvS);
     }
-    // else if (task == task_t::QSGWA)
-    // {
-    //     task_qsgwA();
-    // }
+    else if (task == task_t::QSGWA)
+    {
+        task_qsgwA(sinvS);
+    }
     else if (task == task_t::QSGW_band)
     {
         task_qsgw_band(sinvS);

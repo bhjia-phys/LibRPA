@@ -14,7 +14,7 @@ endif()
 
 
 set(CEREAL_INCLUDE_DIR "/home/elhacedor/librpa-abacus-pyatb/LibRPA/thirdparty/cereal-1.3.0/include")
-set(LIBRI_INCLUDE_DIR "/home/elhacedor/librpa-abacus-pyatb/LibRPA/thirdparty/LibRI/include")
+set(LIBRI_INCLUDE_DIR "/home/elhacedor/LibRI-cvc-lr/include")
 set(LIBCOMM_INCLUDE_DIR "/home/elhacedor/librpa-abacus-pyatb/LibRPA/thirdparty/LibComm/include")
 # set(LAPACK_LIBRARIES "-L$ENV{MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core")
 set(LAPACK_LIBRARIES "-L$ENV{MKLROOT}/lib/intel64 -lmkl_scalapack_lp64 -lmkl_intel_lp64 -lmkl_core -lmkl_intel_thread -lmkl_blacs_intelmpi_lp64 -lpthread -lm -ldl")
