@@ -11,6 +11,7 @@
 #include "parallel_mpi.h"
 #include "profiler.h"
 #include "scalapack_connector.h"
+#include "lapack_connector.h"
 #include "utils_io.h"
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
@@ -586,6 +587,7 @@ matrix_m<std::complex<T>> power_hemat_blacs(matrix_m<std::complex<T>> &A_local,
     // Optimized A no longer used
     Profiler::start("power_hemat_blacs_3");
     A_local_opt.clear();
+
     // send back the eigenvector matrix
     ScalapackConnector::pgemr2d_f(n, n, Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, Z_local.ptr(), 1, 1,
                                   ad_Z.desc, ad_Z.ictxt());
@@ -821,6 +823,7 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
     ad_A_opt.init(n, n, blocksize_row_opt, blocksize_col_opt, 0, 0);
     // Initialize as real matrix for diagonalization
     auto A_local_opt = init_local_mat<T>(ad_A_opt, MAJOR::COL);
+    A_local_opt.zero_out();
     ScalapackConnector::pgemr2d_f(n, n, A_local_real.ptr(), 1, 1, ad_A.desc, A_local_opt.ptr(), 1,
                                   1, ad_A_opt.desc, ad_A.ictxt());
 
@@ -856,10 +859,17 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
     Profiler::stop("power_hemat_blacs_1");
 
     Profiler::start("power_hemat_blacs_2");
+    for (int i = 0; i < n; i++)
+    {
+        W[i] = 0.0;
+    }
+    Z_local_opt.zero_out();
     // Perform real symmetric diagonalization using the provided interface
     ScalapackConnector::psyev_f(jobz, uplo, n, A_local_opt.ptr(), 1, 1, ad_A_opt.desc, W,
                                 Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, work, lwork, rwork, lrwork,
                                 info);
+    // std::vector<T> Wvec;
+    // eigss(A_local_opt, Wvec, Z_local_opt);
 
     // Cleanup workspace
     delete[] work;
@@ -868,12 +878,57 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
     // Eigenvalues need sign flip due to initial negation
     for (int i = 0; i < n; i++)
     {
+        // W[i] *= -1.0 * Wvec[i];
         W[i] *= -1.0;
+        // printf("Eigenvalue %d: %20.20f\n", i, W[i]);
     }
     A_local_opt.clear();
 
+    // // ---> ADD START: Denoising / Quantization for consistency <---
+    // // Force truncation of numerical noise (< 1e-14) to ensure bitwise reproducibility
+    // // across parallel runs with potentially different reduction orders.
+    // {
+    //     const double precision_scale = 1.0e12; // Keep ~14 digits
+    //     T* ptr = Z_local_opt.ptr();
+    //     size_t size = Z_local_opt.size();
+    //     for(size_t i = 0; i < size; ++i) {
+    //          // Round to nearest 1e-14
+    //          ptr[i] = std::round(ptr[i] * precision_scale) / precision_scale;
+    //     }
+    // }
+    // // ---> ADD END <---
+
     // Convert real eigenvectors to complex (with zero imaginary part)
     auto Z_local_opt_complex = Z_local_opt.to_complex();
+    
+    // // ---> ADD START: Print Eigenvectors Z (Debug) <---
+    // {
+    //     // Use BLACS to get grid coordinates to avoid dependency on global MPI object
+    //     int myrow, mycol, nprow, npcol;
+    //     Cblacs_gridinfo(ad_Z_opt.ictxt(), &nprow, &npcol, &myrow, &mycol);
+
+    //     if (myrow == 0 && mycol == 0) {
+    //         printf("DEBUG_Z_local_opt_complex_REAL: GridRank(0,0) LocDim=(%d,%d) GlobalN=%d\n", 
+    //                 Z_local_opt_complex.nr(), Z_local_opt_complex.nc(), n);
+    //     }
+        
+    //     for(int i = 0; i < Z_local_opt_complex.nr(); ++i) {
+    //         for(int j = 0; j < Z_local_opt_complex.nc(); ++j) {
+    //             std::complex<T> val = Z_local_opt_complex(i, j);
+    //             // 仅打印模长大于阈值的元素
+    //             if(std::abs(val) > 1e-8) {
+    //                 int global_row = ad_Z_opt.indx_l2g_r(i); // Global row index (component of eigenvector)
+    //                 int global_col = ad_Z_opt.indx_l2g_c(j); // Global col index (which eigenvector)
+                    
+    //                 printf("  EigVec_Val: GridRank(%d,%d) Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+    //                     myrow, mycol, i, j, global_row, global_col, std::real(val), std::imag(val));
+    //             }
+    //         }
+    //     }
+    //     fflush(stdout);
+    // }
+    // // ---> ADD END <---
+
     // Transfer using complex matrix descriptor
     ScalapackConnector::pgemr2d_f(n, n, Z_local_opt_complex.ptr(), 1, 1, ad_Z_opt.desc,
                                   Z_local.ptr(), 1, 1, ad_Z.desc, ad_Z.ictxt());
@@ -910,6 +965,7 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
                 i, W[i], power);
         }
         W_temp[i] = std::pow(W[i], power);
+        //W_temp[i] = W[i];
     }
     Profiler::stop("power_hemat_blacs_3");
 

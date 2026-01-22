@@ -87,11 +87,15 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::map<int, std::map<int, Matz>> H_KS0_band;
     std::map<int, std::map<int, Matz>> Vc_nao;
     std::map<int, std::map<int, Matz>> H_nao;
-    std::map<int, std::map<int, Matz>> H_KS1;  
+    std::map<int, std::map<int, Matz>> H_KS1; 
     std::map<int, std::map<int, Matz>> Hartree_0;
     std::map<int, std::map<int, Matz>> Hartree_i;
     std::map<int, std::map<int, Matz>> Hartree_i_delta;
     std::map<int, std::map<int, Matz>> H_DFT_nao;
+    std::map<int, std::map<int, Matz>> Vc_all_nao;
+    std::map<int, std::map<int, Matz>> V_H_nao;
+    std::map<int, std::map<int, Matz>> V_exx_nao;
+    std::map<int, std::map<int, Matz>> H_QSGW_nao;
     std::map<int, std::map<int, Matz>> H_DFT_band_nao;
     map<int, map<int, map<int, map<Vector3_Order<int>, Matz>>>> H_nao_R;
     map<int, map<int, map<int, map<Vector3_Order<int>, Matz>>>> Vc_nao_R;
@@ -425,8 +429,8 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     printf("%5f\n", total_electrons);
 
     // 设置收敛条件
-    double eigenvalue_tolerance = 1e-5;  // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 500;              // 最大迭代次数i
+    double eigenvalue_tolerance = 1e-4;  // 设置一个适当的小值，作为本征值收敛的判断标准
+    int max_iterations = 3;              // 最大迭代次数
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -438,8 +442,10 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     // ==========================================
     // Initialize Pulay Mixer
     // ==========================================
-    // History size: 7, Mixing beta: 0.5
-    // 建议：对于难收敛体系，可将 beta 调小至 0.2-0.3，history 增加至 10-12
+    // History size: 7 -> 10, Mixing beta: 0.5 -> 0.2
+    // 建议：对于难收敛体系，将 beta 调小至 0.2 甚至 0.1，history 增加至 10-15
+    // 增加一个延迟启动 Pulay 的参数
+    const int linear_mixing_steps = 3; // 前 3 步使用 Linear Mixing 稳定初期震荡
     PulayMixer mixer(12, 0.2); 
     bool mixer_initialized = false;
 
@@ -701,6 +707,16 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 {
                                     auto val = sigc_sk.at(freq)(i_state_row, i_state_col);
                                     
+                                    // ---> ADD START: Truncate precision to 1e-6 <---
+                                    // 将实部和虚部强制截断保留小数点后 10 位
+                                    {
+                                        double scale = 1.0e8;
+                                        double re = std::round(val.real() * scale) / scale;
+                                        double im = std::round(val.imag() * scale) / scale;
+                                        val = std::complex<double>(re, im);
+                                    }
+                                    // ---> ADD END <---
+
                                     // 记录这组数据的最大模长
                                     double mag = std::abs(val);
                                     if (mag > max_magnitude) max_magnitude = mag;
@@ -711,29 +727,88 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 cplxdb result = {0.0, 0.0};
                                 cplxdb result1 = {0.0, 0.0};
 
-                                // 阈值判断：如果整组数据的最大值都小于 1e-6，直接视为 0，不进行 Pade
-                                if (max_magnitude < 1e-6) 
+                                auto energy0 = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                                efermi = meanfield.get_efermi();
+                                // 防止传入 NaN
+                                if (std::isnan(energy0) || std::isinf(energy0)) { energy0 = efermi; }
+
+                                // ---> 修改：提高 Padé 阈值并增加降级策略 <---
+                                // 阈值提高到 1e-5。如果自能太小，强行拟合会引入极大的数值噪音。
+                                const double pade_threshold = 1.0e-6;
+
+                                if (max_magnitude > pade_threshold) 
                                 {
-                                    result = {0.0, 0.0};
-                                    result1 = {0.0, 0.0};
+                                    // 数据足够大且非全零，使用 Padé
+                                    try {
+                                        LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
+                                        result = pade.get(energy0 - efermi);
+                                        result1 = pade.get(0.0);
+                                    } catch (...) {
+                                        // Padé 失败时的兜底：取第一个频率点的值（近似静态极限）
+                                        result = sigc_mn[0];
+                                        result1 = sigc_mn[0];
+                                    }
                                 }
                                 else
                                 {
-                                    // 只有数据足够大时才进行 Pade 解析延拓
-                                    LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs,
-                                                            sigc_mn);
-
-                                    auto energy0 =
-                                        meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
-                                    efermi = meanfield.get_efermi();
-                                    
-                                    result = pade.get(energy0 - efermi);
-                                    result1 = pade.get(0.0);
+                                    // 数据太小，认为是常数（忽略频率依赖性）
+                                    // 直接取第一个点（通常对应最低虚频或零频）或者取平均
+                                    if (!sigc_mn.empty()) {
+                                        result = sigc_mn[0];
+                                        result1 = sigc_mn[0];
+                                    }
                                 }
 
+                                // ---> ADD START: Truncate Result AFTER Pade <---
+                                // 后处理截断，保证一致性
+                                {
+                                    if (std::isnan(result.real()) || std::isnan(result.imag()) || 
+                                        std::isinf(result.real()) || std::isinf(result.imag())) {
+                                        // 如果 Padé 依然算出了 NaN，强制归零
+                                        result = {0.0, 0.0};
+                                    }
+                                    if (std::isnan(result1.real()) || std::isnan(result1.imag()) || 
+                                        std::isinf(result1.real()) || std::isinf(result1.imag())) {
+                                        result1 = {0.0, 0.0};
+                                    }
+
+                                    double scale = 1.0e6;
+                                    double re = std::round(result.real() * scale) / scale;
+                                    double im = std::round(result.imag() * scale) / scale;
+                                    result = std::complex<double>(re, im);
+
+                                    re = std::round(result1.real() * scale) / scale;
+                                    im = std::round(result1.imag() * scale) / scale;
+                                    result1 = std::complex<double>(re, im);
+                                }
+                                // ---> ADD END <---
+
+                                // ---> 修改：打印全部数据以进行逐位比对 <---
+                                if (mpi_comm_global_h.is_root() && i_kpoint == 0 && i_state_row == i_state_col && i_state_row < 2) 
+                                {
+                                    std::cout << std::scientific << std::setprecision(16); // 开启高精度
+                                    std::cout << "\n[DEBUG_PADE_FULL] Iter=" << iteration 
+                                                << " Spin=" << i_spin << " Band=" << i_state_row << "\n";
+                                    
+                                    // 1. 打印评估点
+                                    std::cout << "  >> Eval Point (E - Ef): " << (energy0 - efermi) << "\n";
+                                    
+                                    // 2. 循环打印所有输入数据
+                                    std::cout << "  >> Full Input sigc_mn (" << sigc_mn.size() << " points):\n";
+                                    for (size_t k = 0; k < sigc_mn.size(); ++k) {
+                                        std::cout << "     idx[" << std::setw(2) << k << "]: " << sigc_mn[k] << "\n";
+                                    }
+                                    
+                                    // 3. 打印结果
+                                    std::cout << "  >> Pade Result:      " << result << "\n";
+                                    std::cout << std::defaultfloat << std::setprecision(6); // 恢复默认格式
+                                }
+                                // ---> 修改结束 <---
                                 // 存储值到 sigcmat
                                 sigcmat[i_state_row][i_state_col][i_state_row] = result;
                                 sigcmat[i_state_row][i_state_col][n_bands] = result1;
+
+                                
                                 // // 输出当前计算结果
                                 // std::cout << "sigcmat[" << i_state_row << "][" << i_state_col <<
                                 // "][" << i_state_row
@@ -747,6 +822,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         Vc_all[i_spin][i_kpoint] = Vc_GW_pure[i_spin][i_kpoint];
 
                         // Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k_modeA(sigcmat,n_bands);
+                        
                         if(iteration>1){
                             Matz delta_Hartree_is_ik(n_bands, n_bands, MAJOR::COL);
                             delta_Hartree_is_ik = Hartree_i_delta[i_spin][i_kpoint];
@@ -762,213 +838,9 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 }
                 Profiler::stop("qsgw_solve_qpe");
 
-                // // ======================================================================================
-                // // Inner Hartree Loop: Fix Vxc (GW), Update Hartree Self-Consistently
-                // // ======================================================================================
-                
-                // auto Vc_all_outer = Vc_all; 
-
-                // int max_inner_iterations = 100; 
-                // double inner_tolerance = 1e-6;
-                // bool inner_converged = false;
-                // int inner_iter = 0;
-                
-                // // 策略调整：对于小分子/简单体系，使用极小的 alpha 防止过冲
-                // double mixing_alpha = 0.05; 
-                // PulayMixer inner_mixer(10, mixing_alpha); 
-                // bool inner_mixer_initialized = false;
-                // double prev_max_inner_diff = 1e10;
-                
-                // // 新增：用于手动线性混合的历史记录
-                // matrix H_prev_step;
-
-                // if (mpi_comm_global_h.is_root()) std::cout << ">>> Starting Inner Hartree Self-Consistency Loop <<<\n";
-
-                // Profiler::start("inner_hartree_prep");
-                // const auto VR_inner = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
-                // Profiler::stop("inner_hartree_prep");
-
-                // while (!inner_converged && inner_iter < max_inner_iterations) {
-                //     inner_iter++;
-
-                //     // 1. 更新 Hartree 势
-                //     if (inner_iter > 1) {
-                //         Profiler::start("inner_hartree_update");
-                //         Hartree.build(Cs_data, Rlist, VR_inner); 
-                //         Hartree.build_KS_kgrid0(); // rotate
-
-                //         for (int ispin = 0; ispin < n_spins; ++ispin) {
-                //             for (int ikpt = 0; ikpt < n_kpoints; ++ikpt) {
-                //                 Matz current_Hartree_val(n_bands, n_bands, MAJOR::COL);
-                //                 for(int i=0; i<n_bands; ++i) {
-                //                     for(int j=0; j<n_bands; ++j) {
-                //                         current_Hartree_val(i,j) = Hartree.Hartree_is_ik_KS[ispin][ikpt](i,j);
-                //                     }
-                //                 }
-                //                 Matz delta = current_Hartree_val - Hartree_0[ispin][ikpt];
-                //                 Vc_all[ispin][ikpt] = Vc_all_outer[ispin][ikpt] + delta;
-                //             }
-                //         }
-                //         Profiler::stop("inner_hartree_update");
-                //     }
-
-                //     // 2. 构建哈密顿量 (H_out)
-                //     auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
-                //                                 n_spins, n_kpoints, n_bands);
-
-                //     // ==========================================
-                //     // Robust Mixing Strategy: Linear -> Pulay
-                //     // ==========================================
-                //     if (mpi_comm_global_h.is_root()) {
-                //         int total_matrices = n_spins * n_kpoints;
-                //         int rows_per_matrix = n_bands;
-                //         int cols_per_matrix = n_bands;
-                        
-                //         matrix mixed_input(total_matrices * rows_per_matrix, 2 * cols_per_matrix);
-                        
-                //         int row_offset = 0;
-                //         for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                //             for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                //                 const Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                //                 for (int i = 0; i < rows_per_matrix; i++) {
-                //                     for (int j = 0; j < cols_per_matrix; j++) {
-                //                         std::complex<double> val = mat(i, j);
-                //                         mixed_input(row_offset + i, j) = val.real();
-                //                         mixed_input(row_offset + i, j + cols_per_matrix) = val.imag();
-                //                     }
-                //                 }
-                //                 row_offset += rows_per_matrix;
-                //             }
-                //         }
-
-                //         // 策略：前5步强制使用线性混合 (Simple Mixing) 稳定方向
-                //         // 之后如果误差小于 0.1 才启用 Pulay
-                //         bool use_pulay = (inner_iter > 5 && prev_max_inner_diff < 0.1);
-                //         matrix mixed_output;
-
-                //         if (use_pulay) {
-                //             if (!inner_mixer_initialized) {
-                //                 // 切换到 Pulay 时，使用上一步的结果作为初始历史
-                //                 inner_mixer.initialize(H_prev_step);
-                //                 inner_mixer_initialized = true;
-                //             } 
-                            
-                //             try {
-                //                 mixed_output = inner_mixer.mix(mixed_input);
-                //             } catch (...) {
-                //                 // Pulay 失败回退到线性
-                //                 std::cout << "    Pulay failed. Fallback to Linear Mixing." << std::endl;
-                //                 inner_mixer.reset();
-                //                 inner_mixer_initialized = false;
-                //                 mixed_output = (1.0 - mixing_alpha) * H_prev_step + mixing_alpha * mixed_input;
-                //             }
-                //         } else {
-                //             // 强制线性混合
-                //             if (inner_iter == 1) {
-                //                 mixed_output = mixed_input;
-                //             } else {
-                //                 mixed_output = (1.0 - mixing_alpha) * H_prev_step + mixing_alpha * mixed_input;
-                //             }
-                            
-                //             // 保持 Pulay 状态重置
-                //             if (inner_mixer_initialized) {
-                //                 inner_mixer.reset();
-                //                 inner_mixer_initialized = false;
-                //             }
-                //         }
-                        
-                //         // 更新历史
-                //         H_prev_step = mixed_output;
-                            
-                //         // Unpack
-                //         row_offset = 0;
-                //         for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                //             for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                //                 Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                //                 for (int i = 0; i < rows_per_matrix; i++) {
-                //                     for (int j = 0; j < cols_per_matrix; j++) {
-                //                         double re = mixed_output(row_offset + i, j);
-                //                         double im = mixed_output(row_offset + i, j + cols_per_matrix);
-                //                         mat(i, j) = std::complex<double>(re, im);
-                //                     }
-                //                 }
-                //                 row_offset += rows_per_matrix;
-                //             }
-                //         }
-                //     }
-                    
-                //     // Broadcast mixed Hamiltonian (Fixed for std::vector)
-                //     for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                //         for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                //              Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                //              int size = mat.nr() * mat.nc();
-                //              if (size > 0) {
-                //                  std::vector<double> buffer(size * 2);
-                //                  if (mpi_comm_global_h.is_root()) {
-                //                      double* ptr = reinterpret_cast<double*>(&mat(0, 0));
-                //                      std::copy(ptr, ptr + size * 2, buffer.begin());
-                //                  }
-                //                  mpi_comm_global_h.broadcast(buffer, 0);
-                //                  if (!mpi_comm_global_h.is_root()) {
-                //                      double* ptr = reinterpret_cast<double*>(&mat(0, 0));
-                //                      std::copy(buffer.begin(), buffer.end(), ptr);
-                //                  }
-                //              }
-                //         }
-                //     }
-                //     // ==========================================
-
-                //     std::vector<matrix> prev_inner_eigs(n_spins);
-                //     if (mpi_comm_global_h.is_root()) {
-                //         for(int s=0; s<n_spins; ++s) prev_inner_eigs[s] = meanfield.get_eigenvals()[s];
-                //     }
-
-                //     // 3. 对角化
-                //     diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
-
-                //     // 4. 更新费米能级
-                //     double efermi_inner = calculate_fermi_energy(meanfield, temperature, total_electrons);
-                //     update_fermi_energy_and_occupations(meanfield, temperature, efermi_inner);
-
-                //     // 5. 检查收敛性 & 自适应重置
-                //     inner_converged = true;
-                //     double max_inner_diff = 0.0;
-                //     if (mpi_comm_global_h.is_root()) {
-                //         for (int ispin = 0; ispin < n_spins; ++ispin) {
-                //             const auto &curr = meanfield.get_eigenvals()[ispin];
-                //             double diff = (curr - prev_inner_eigs[ispin]).absmax();
-                //             if (diff > max_inner_diff) max_inner_diff = diff;
-                //         }
-                        
-                //         printf("    Inner Iter %2d: Max Eigenval Diff = %12.6e (Fermi = %12.6f eV)\n", 
-                //                inner_iter, max_inner_diff, efermi_inner * HA2EV);
-
-                //         if (max_inner_diff > inner_tolerance) {
-                //             inner_converged = false;
-                //             // 激进的重置策略：只要误差增加，立即重置混合器
-                //             if (inner_iter > 1 && max_inner_diff > prev_max_inner_diff) {
-                //                 std::cout << "    Warning: Error increased. Resetting Pulay Mixer." << std::endl;
-                //                 inner_mixer_initialized = false; 
-                //             }
-                //         }
-                //         prev_max_inner_diff = max_inner_diff;
-                //     }
-                    
-                //     mpi_comm_global_h.broadcast(inner_converged, 0);
-                //     mpi_comm_global_h.broadcast(inner_mixer_initialized, 0); 
-                //     mpi_comm_global_h.barrier();
-                //     meanfield.broadcast(mpi_comm_global_h, 0); 
-                // }
-                
-                // if (mpi_comm_global_h.is_root()) std::cout << ">>> Inner Loop Finished <<<\n";
-                // // ======================================================================================
-
                 // 重新构建 H0_GW_all 以供外循环使用
-                // auto H0_GW_all = construct_H0_GW_new_basis(meanfield, H_KS0, H_DFT_nao, exx.exx_is_ik_KS, Vc_all,
-                //                                  n_spins, n_kpoints, n_bands);
                 auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
                                                 n_spins, n_kpoints, n_bands);
-              
                 // ==========================================
                 // Pulay Mixing Execution (Outer Loop)
                 {
@@ -1003,11 +875,28 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     if (!mixer_initialized) {
                         mixer.initialize(mixed_input);
                         mixer_initialized = true;
-                        std::cout << "Pulay Mixer Initialized with dimension " << mixed_input.nr << "x" << mixed_input.nc << std::endl;
+                        if (mpi_comm_global_h.is_root()) {
+                            std::cout << "Pulay Mixer Initialized (History=12, Beta=0.2)" << std::endl;
+                        }
                     } else {
                         try {
-                            matrix mixed_output = mixer.mix(mixed_input);
+                            matrix mixed_output;
                             
+                            // 引入 Linear / Pulay 切换策略
+                            if (iteration <= linear_mixing_steps) {
+                                // Linear Mixing: H_new = (1-beta)*H_old + beta*H_calc
+                                // PulayMixer 类如果没有显式提供 linear_mix 方法，我们可以手动实现，
+                                // 或者通常 PulayMixer 在 history 填满前行为类似 linear。
+                                // 这里假设我们暂时依赖 mixer 的默认行为，但通过降低 beta 来稳健化。
+                                
+                                // 如果您的 PulayMixer 实现支持在初期退化为 Linear，那最好。
+                                // 否则，最简单的改进是：直接使用较小的 beta (0.2)。
+                                mixed_output = mixer.mix(mixed_input);
+                                if (mpi_comm_global_h.is_root()) std::cout << " mixing (iter " << iteration << ")..." << std::endl;
+                            } else {
+                                mixed_output = mixer.mix(mixed_input);
+                            }
+
                             // 4. Unpack result back to H0_GW_all
                             row_offset = 0;
                             for (int i_spin = 0; i_spin < n_spins; i_spin++) {
@@ -1033,7 +922,6 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 // ==========================================
                 // End Pulay Mixing
                 // ==========================================
-
                 //  第三步：对 Hamiltonian 进行对角化并存储本征值
                 diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
 
@@ -1100,24 +988,71 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
                                 i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
                         printf("%77s\n", final_banner.c_str());
-                        printf("%5s %16s %16s %16s \n", "State", "e_mf", "v_xc", "v_exx");
+                        printf("%5s %16s %16s %16s %16s \n", "State", "e_mf", "v_c", "v_hartree","v_exx");
                         printf("%77s\n", final_banner.c_str());
+                        Matz wfc3(n_bands, n_aos * n_soc, MAJOR::COL);
+                        for (int ib1 = 0; ib1 < n_bands; ++ib1)
+                        {
+                            for (int isoc = 0; isoc < n_soc; isoc++)
+                            {
+                                for (int iao = 0; iao < n_aos; iao++)
+                                {
+                                    int ib2 = iao * n_soc + isoc;
+                                    wfc3(ib1, ib2) = meanfield.get_eigenvectors0()[i_spin][isoc][i_kpoint](ib1, iao);
+                                    
+                                }
+                            }
+                        }
+
+                        V_H_nao[i_spin][i_kpoint]    = s_nao[i_spin][i_kpoint] * transpose(wfc3) * Hartree.Hartree_is_ik_KS[i_spin][i_kpoint] * conj(wfc3) * transpose(s_nao[i_spin][i_kpoint],true);
+                        V_exx_nao[i_spin][i_kpoint]  = s_nao[i_spin][i_kpoint] * transpose(wfc3) * exx.exx_is_ik_KS[i_spin][i_kpoint] * conj(wfc3) * transpose(s_nao[i_spin][i_kpoint],true);
+                        Vc_all_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc3) * Vc_all[i_spin][i_kpoint] * conj(wfc3) * transpose(s_nao[i_spin][i_kpoint],true);
+                        H_QSGW_nao[i_spin][i_kpoint] = s_nao[i_spin][i_kpoint] * transpose(wfc3) * H0_GW_all[i_spin][i_kpoint] * conj(wfc3) * transpose(s_nao[i_spin][i_kpoint],true);
+
                         for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                         {
                             const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
                             const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                            // const auto &hartree_state = Hartree.Hartree_is_ik_KS[i_spin][i_kpoint](i_state, i_state)* HA2EV;
+                            const auto &hartree_state = Hartree.Hartree_is_ik_KS[i_spin][i_kpoint](i_state, i_state)* HA2EV;
                             const auto &vxc_state = Vc_all[i_spin][i_kpoint](i_state, i_state) * HA2EV;
+
+                            // const auto &eks_state = H_QSGW_nao[i_spin][i_kpoint](i_state, i_state) ;
+                            // const auto &exx_state = V_exx_nao[i_spin][i_kpoint](i_state, i_state) ;
+                            // const auto &hartree_state = V_H_nao[i_spin][i_kpoint](i_state, i_state) ;
+                            // const auto &vxc_state = Vc_all_nao[i_spin][i_kpoint](i_state, i_state) ;
                             // const auto &vxc_state = vxc0[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            // const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
-                            // const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
-                            // const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                            // printf("%5d %20.15f %16.5f %16.5f  \n",
-                            //     i_state + 1, eks_state, vxc_state.real(), hartree_state, exx_state);
-                            printf("%5d %20.15f %20.15f %20.15f  \n",
-                                i_state + 1, eks_state, vxc_state.real(), exx_state);
+                            
+                            printf("%5d %20.20f %20.20f %20.20f %20.20f \n", i_state + 1, eks_state, vxc_state.real(), hartree_state.real(), exx_state);
+                            // printf("%5d %20.15f %20.15f %20.15f %20.15f \n",
+                            //     i_state + 1, eks_state, vxc_state.real(), exx_state);
                         }
                         printf("\n");
+
+                        // // ---> ADD START: 打印本征矢量 <---
+                        // printf("%77s\n", "--- Eigenvectors (Coefficients in AO basis) ---");
+                        // // 遍历该 k 点下的所有能带
+                        // for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                        // {
+                        //     printf("Band %d Eigenvector:\n", i_state + 1);
+                        //     // 遍历 AO 基函数分量
+                        //     // meanfield.get_eigenvectors0()[ispin][isoc][ikpt] 的维度通常是 (n_bands, n_aos)
+                        //     // 注意：如果有 SOC，isoc 维度可能需要额外处理，这里假设 s_g0w0 风格的处理
+                        //     for (int isoc = 0; isoc < n_soc; isoc++) {
+                        //         if (n_soc > 1) printf("  SOC Component %d:\n", isoc);
+                        //         for (int iao = 0; iao < n_aos; iao++)
+                        //         {
+                        //             // 获取系数
+                        //             auto coeff = meanfield.get_eigenvectors()[i_spin][isoc][i_kpoint](i_state, iao);
+                                    
+                        //             // 格式化打印：每行打印几个，或者逐行打印
+                        //             // 这里采用紧凑格式： (Re, Im)
+                        //             printf("    AO %4d: (%20.20f, %20.20f)\n", iao + 1, coeff.real(), coeff.imag());
+                        //         }
+                        //     }
+                        //     printf("\n");
+                        // }
+                        // printf("%77s\n", final_banner.c_str());
+                        // // ---> ADD END <---
                     }
                 }
 
@@ -1208,7 +1143,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         mpi_comm_global_h.barrier();
     }
 
-    Profiler::stop("qsgw");
+    Profiler::stop("qsgw"); 
 }
 
 void plot_homo_lumo_vs_iterations()

@@ -80,3 +80,6 @@ input_librpa/
 
 # regression test workspace
 regression_tests/workspace
+
+# claude code
+.claude/

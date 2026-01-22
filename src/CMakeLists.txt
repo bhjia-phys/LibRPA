@@ -67,8 +67,28 @@ if(USE_GREENX_API)
   list(APPEND lib_sources get_minimax_gx.cpp gx_minimax_wrp.f90)
   target_link_libraries(rpa_lib PRIVATE GXCommon LibGXMiniMax)
   target_include_directories(rpa_lib
-    PRIVATE ${PROJECT_BINARY_DIR}/thirdparty/greenX-6ff8a00/modules
+    PRIVATE
+    ${PROJECT_BINARY_DIR}/thirdparty/greenX-c90d131/modules
+    ${PROJECT_BINARY_DIR}/thirdparty/greenX-c90d131/GX-AnalyticContinuation/modules
     )
+  
+  # 添加GreenX解析延拓支持（需要GMP库）
+  find_package(GMP)
+  if(GMP_FOUND)
+    add_compile_definitions(LIBRPA_USE_GREENX_AC)
+    message(STATUS "GreenX Analytic Continuation enabled with GMP support")
+    target_link_libraries(rpa_lib PRIVATE LibGXAC ${GMP_LIBRARIES})
+    target_include_directories(rpa_lib PRIVATE
+      ${GMP_INCLUDE_DIRS}
+      ${PROJECT_SOURCE_DIR}/thirdparty/greenX-c90d131/GX-AnalyticContinuation/src
+    )
+  else()
+    message(WARNING "GMP library not found. GreenX Analytic Continuation will use double precision only")
+    target_link_libraries(rpa_lib PRIVATE LibGXAC)
+    target_include_directories(rpa_lib PRIVATE
+      ${PROJECT_SOURCE_DIR}/thirdparty/greenX-c90d131/GX-AnalyticContinuation/src
+    )
+  endif()
 else()
   list(APPEND lib_sources get_minimax_local.cpp)
 endif()

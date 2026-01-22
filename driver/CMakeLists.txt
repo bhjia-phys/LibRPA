@@ -47,6 +47,9 @@ if(USE_LIBRI)
     )
 endif()
 
+# Enable GreenX Analytic Continuation support
+target_compile_definitions(rpa_exe PRIVATE LIBRPA_USE_GREENX_AC)
+
 target_link_libraries(rpa_exe PRIVATE rpa_lib qsgw_lib ${math_libs} ${parallel_libs})
 
 install(TARGETS rpa_exe DESTINATION ${CMAKE_INSTALL_BINDIR})

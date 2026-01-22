@@ -258,6 +258,13 @@ public:
 		const char uplo_changed = change_uplo(uplo);
 		dsyev_(&jobz, &uplo_changed, &n, a, &lda, w, work, &lwork, &info);
 	}
+
+    static inline
+	void dsyev_f(const char jobz,const char uplo,const int n,double *a,
+			const int lda,double *w,double *work,const int lwork, int &info)
+	{
+		dsyev_(&jobz, &uplo, &n, a, &lda, w, work, &lwork, &info);
+	}
     // static inline
 	// void dsyev( const char jobz, const char uplo, matrix &a, double* w, int info )		// Peize Lin update 2017-10-17
 	// {

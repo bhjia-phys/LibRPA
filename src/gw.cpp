@@ -445,8 +445,29 @@ void G0W0::build_spacetime(
                                                                  R_Wc.second.sptr());
                         else
                             Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
-                                RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
-                        // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl
+                                RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());//print
+                        // // ---> ADD START: Print Wc for debugging <---
+                        // {
+                        //     // R_Wc.second 是原始的 matrix_m<complex<double>>
+                        //     const auto& mat = R_Wc.second;
+                        //     printf("DEBUG_WC_DUMP: rank=%d tau=%.6e I=%d J=%d R=(%d,%d,%d) Shape=(%d,%d)\n", 
+                        //            LIBRPA::envs::mpi_comm_global_h.myid, tau, 
+                        //            static_cast<int>(I), static_cast<int>(J), 
+                        //            R.x, R.y, R.z, mat.nr(), mat.nc());
+                            
+                        //     for (int i = 0; i < mat.nr(); ++i) {
+                        //         for (int j = 0; j < mat.nc(); ++j) {
+                        //             std::complex<double> val = mat(i, j);
+                        //             if (std::abs(val) > 1e-10) { 
+                        //                 printf("  Wc_Elem: (%4d, %4d) = %20.20e + %20.20ei\n", 
+                        //                        i, j, val.real(), val.imag());
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                        // // ---> ADD END <---
+                         
+                                // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl
                         // ; cout << Wc_libri[I][{J, {R.x, R.y, R.z}}] << endl; handle the <JI(R)>
                         // block
                         if (I == J) continue;
@@ -460,7 +481,7 @@ void G0W0::build_spacetime(
                         }
                         else
                         {
-                            const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();
+                            const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();//
                             Wc_libri[static_cast<int>(J)][{static_cast<int>(I), {R.x, R.y, R.z}}] =
                                 RI::Tensor<double>({nabf_J, nabf_I}, Wc_IJmR.sptr());
                         }
@@ -501,7 +522,9 @@ void G0W0::build_spacetime(
                     {
                         auto gf = mf.get_gf_cplx_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list,
                                                               {tau, -tau},
-                                                              {Rs_local.cbegin(), Rs_local.cend()});
+                                                              {Rs_local.cbegin(), Rs_local.cend()}); // print
+                        
+
                         std::map<double, std::map<int, std::map<std::pair<int, std::array<int, 3>>,
                                                                 RI::Tensor<Tdata>>>>
                             tau_gf_libri;
@@ -588,9 +611,35 @@ void G0W0::build_spacetime(
                         auto gf = mf.get_gf_real_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list,
                                                               {tau, -tau},
                                                               {Rs_local.cbegin(), Rs_local.cend()});
+                        // // ---> ADD START: Print Green's Function for debugging <---
+                        // // 仅在主进程或所有进程打印（视需求而定，这里默认所有持有数据的进程打印）
+                        // for (auto const& [time_val, r_map] : gf) {
+                        //     for (auto const& [r_vec, mat] : r_map) {
+                        //         // 打印头部信息：自旋、时间点、R矢量
+                        //         // FIX: mat.nr 和 mat.nc 是成员变量，移除括号
+                        //         printf("DEBUG_GF_DUMP: rank=%d ispin=%d tau=%.6e R=(%d,%d,%d) Shape=(%d,%d)\n", 
+                        //                LIBRPA::envs::mpi_comm_global_h.myid, ispin, time_val, 
+                        //                r_vec.x, r_vec.y, r_vec.z, mat.nr, mat.nc);
+                                
+                        //         // 遍历打印矩阵元素
+                        //         for (int i = 0; i < mat.nr; ++i) {
+                        //             for (int j = 0; j < mat.nc; ++j) {
+                        //                 // 这里的 mat(i, j) 应该是 complex<double>
+                        //                 // 假设矩阵元素是 (row, col) 索引
+                        //                 std::complex<double> val = mat(i, j);
+                        //                 // 筛选打印非零元素以减少输出量，或者全部打印
+                        //                 if (std::abs(val) > 1e-10) { 
+                        //                     printf("  GF_Elem: (%4d, %4d) = %20.20e + %20.20ei\n", 
+                        //                            i, j, val.real(), val.imag());
+                        //                 }
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                        // // ---> ADD END <--- 
+
                         std::map<double, std::map<int, std::map<std::pair<int, std::array<int, 3>>,
-                                                                RI::Tensor<Tdata>>>>
-                            tau_gf_libri;
+                                                                RI::Tensor<Tdata>>>> tau_gf_libri;
                         for (auto t : {tau, -tau})
                         {
                             tau_gf_libri[t] = {};
@@ -867,7 +916,7 @@ void G0W0::build_spacetime(
 
                         const auto omega = tfg.get_freq_nodes()[iomega];
                         const auto &sigc_RIJ =
-                            sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega];  // 有点意思
+                            sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega];  
                         for (const auto &R_IJsigc : sigc_RIJ)
                         {
                             const auto &R = R_IJsigc.first;

@@ -4,18 +4,167 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <algorithm>
 
-// 手动声明 LAPACK 函数，因为 LapackConnector 中缺失这些函数
-// 注意：Fortran 函数名通常在 C++ 中需要加下划线
+// 注意：MKL 使用 LAPACKE 接口而不是 Fortran _ 后缀接口
+// 我们将通过 C 接口调用 LAPACKE 函数
 extern "C" {
-    void dgetrf_(const int* m, const int* n, double* a, const int* lda, int* ipiv, int* info);
-    void dgetrs_(const char* trans, const int* n, const int* nrhs, const double* a, const int* lda, const int* ipiv, double* b, const int* ldb, int* info);
+    // LAPACKE C 接口 (Intel MKL)
+    int LAPACKE_dgetrf(int matrix_layout, int m, int n, double* a, int lda, int* ipiv);
+    int LAPACKE_dgetrs(int matrix_layout, char trans, int n, int nrhs,
+                       const double* a, int lda, const int* ipiv, double* b, int ldb);
 }
+class ConvergenceMonitor {
+private:
+    std::deque<double> residual_history_;
+    int window_size_;
+    double convergence_threshold_;
+    int stagnation_counter_;
+    int oscillation_counter_;
 
+public:
+    ConvergenceMonitor(int window = 5, double threshold = 1e-6)
+        : window_size_(window), convergence_threshold_(threshold),
+          stagnation_counter_(0), oscillation_counter_(0) {}
+
+    enum ConvergenceState {
+        CONVERGING,      // 残差稳定下降
+        OSCILLATING,     // 残差震荡
+        STAGNATING,      // 收敛停滞
+        DIVERGING,       // 发散
+        STABLE           // 稳定
+    };
+
+    // 获取收敛状态描述
+    std::string get_state_name(ConvergenceState state) const {
+        switch(state) {
+            case CONVERGING: return "CONVERGING";
+            case OSCILLATING: return "OSCILLATING";
+            case STAGNATING: return "STAGNATING";
+            case DIVERGING: return "DIVERGING";
+            case STABLE: return "STABLE";
+            default: return "UNKNOWN";
+        }
+    }
+
+    // 获取建议的 beta 调整因子
+    double get_beta_factor(ConvergenceState state, double current_residual) const {
+        switch(state) {
+            case CONVERGING:
+                // 收敛良好，可以适当增大 beta
+                return std::min(1.2, 1.0 + current_residual * 0.1);
+            case OSCILLATING:
+                // 震荡，大幅减小 beta
+                return 0.5;
+            case STAGNATING:
+                // 停滞，稍微减小 beta
+                return 0.8;
+            case DIVERGING:
+                // 发散，大幅减小 beta
+                return 0.3;
+            case STABLE:
+                // 稳定，保持或微调
+                return 1.0;
+            default:
+                return 1.0;
+        }
+    }
+
+    // 获取建议的历史记录大小
+    int get_history_size(ConvergenceState state, int current_size, int max_size) const {
+        switch(state) {
+            case OSCILLATING:
+                // 震荡时减少历史记录
+                return std::max(2, current_size / 2);
+            case DIVERGING:
+                // 发散时大幅减少历史记录
+                return std::max(2, 3);
+            case STAGNATING:
+                // 停滞时增加历史记录
+                return std::min(max_size, current_size + 2);
+            default:
+                return current_size;
+        }
+    }
+
+    // 分析残差趋势
+    ConvergenceState analyze(const std::vector<double>& recent_residuals) {
+        if (recent_residuals.size() < 3) return CONVERGING;
+
+        double avg_decrease = 0.0;
+        int oscillation_count = 0;
+        double max_residual = recent_residuals[0];
+        double min_residual = recent_residuals[0];
+
+        for (size_t i = 1; i < recent_residuals.size(); i++) {
+            double change = recent_residuals[i] - recent_residuals[i-1];
+            avg_decrease += change;
+
+            max_residual = std::max(max_residual, recent_residuals[i]);
+            min_residual = std::min(min_residual, recent_residuals[i]);
+
+            // 检测震荡：符号交替变化
+            if (i >= 2 && (change * (recent_residuals[i-1] - recent_residuals[i-2])) < 0) {
+                oscillation_count++;
+            }
+        }
+        avg_decrease /= (recent_residuals.size() - 1);
+
+        double oscillation_ratio = static_cast<double>(oscillation_count) / (recent_residuals.size() - 2);
+        double relative_change = (max_residual - min_residual) / (min_residual + 1e-10);
+
+        // 发散检测
+        if (avg_decrease > 0 && avg_decrease > min_residual * 0.1) {
+            return DIVERGING;
+        }
+
+        // 震荡检测
+        if (oscillation_ratio > 0.6 || relative_change > 0.5) {
+            oscillation_counter_++;
+            if (oscillation_counter_ >= 2) {
+                oscillation_counter_ = 0;
+                return OSCILLATING;
+            }
+        } else {
+            oscillation_counter_ = 0;
+        }
+
+        // 停滞检测
+        if (std::abs(avg_decrease) < convergence_threshold_) {
+            stagnation_counter_++;
+            if (stagnation_counter_ >= 3) {
+                stagnation_counter_ = 0;
+                return STAGNATING;
+            }
+        } else {
+            stagnation_counter_ = 0;
+        }
+
+        // 稳定检测
+        if (relative_change < 0.05 && avg_decrease < 0) {
+            return STABLE;
+        }
+
+        // 默认收敛中
+        return CONVERGING;
+    }
+
+    // 重置计数器
+    void reset() {
+        stagnation_counter_ = 0;
+        oscillation_counter_ = 0;
+    }
+};
 // 构造函数
-PulayMixer::PulayMixer(int max_history, double mixing_beta) 
-    : max_history_(max_history), current_step_(0), mixing_beta_(mixing_beta), 
-      initialized_(false), nrows_(0), ncols_(0) {}
+PulayMixer::PulayMixer(int max_history, double mixing_beta)
+    : max_history_(max_history), current_step_(0), mixing_beta_(mixing_beta),
+      initialized_(false), input_history_(), residual_history_(),
+      nrows_(0), ncols_(0),
+      adaptive_enabled_(true),
+      beta_min_(0.02),
+      beta_max_(0.5),
+      residual_history_norms_(),
+      last_beta_adjustment_step_(0) {}
 
 // 初始化混合器
 void PulayMixer::initialize(const matrix& initial_guess) {
@@ -38,90 +187,208 @@ matrix PulayMixer::mix(const matrix& current_output) {
     if (!initialized_) {
         throw std::runtime_error("[PulayMixer] Not initialized. Call initialize() first.");
     }
-    
+
     if (current_output.nr != nrows_ || current_output.nc != ncols_) {
         throw std::runtime_error("[PulayMixer] Matrix dimensions do not match initialization.");
     }
-    
+
     current_step_++;
-    
+
     // 计算当前残差
     matrix current_residual = current_output - input_history_.back();
-    
-    // 将残差加入历史
+    double current_residual_norm = std::sqrt(matrix_inner_product(current_residual, current_residual));
+
+    // 保存残差历史用于自适应调整
+    residual_history_norms_.push_back(current_residual_norm);
+    if (residual_history_norms_.size() > 20) {
+        residual_history_norms_.erase(residual_history_norms_.begin());
+    }
+
+    bool residual_increased = false;
+    double previous_residual_norm = 0.0;
+    double residual_change_ratio = 0.0;
+
+    // 检查残差是否增长
+    if (current_step_ > 1) {
+        previous_residual_norm = residual_history_norms_[residual_history_norms_.size() - 2];
+
+        // 计算残差变化比例
+        if (previous_residual_norm > 1e-12) {
+            residual_change_ratio = (current_residual_norm - previous_residual_norm) / previous_residual_norm;
+        }
+
+        // 如果残差增长超过15%，标记为残差增长
+        if (current_residual_norm > previous_residual_norm * 1.15) {
+            residual_increased = true;
+            std::cout << "[PulayMixer] Warning: Residual increased from " << previous_residual_norm
+                      << " to " << current_residual_norm << " (" << (current_residual_norm/previous_residual_norm-1)*100
+                      << "% increase)" << std::endl;
+        }
+    }
+
+    // 将当前残差添加到历史记录中（无论是否增长）
     residual_history_.push_back(current_residual);
-    
-    // 如果历史记录过多，删除最旧的
-    // 修复：vector 没有 pop_front，使用 erase(begin())
+
+    // 历史记录管理
     if (residual_history_.size() > max_history_) {
         residual_history_.erase(residual_history_.begin());
         input_history_.erase(input_history_.begin());
     }
-    
+
     int history_size = residual_history_.size();
     bool use_linear_mixing = (history_size <= 1);
     matrix alpha;
 
-    // 尝试 Pulay 混合
+    // === 自适应参数调整 ===
+    if (adaptive_enabled_ && residual_history_norms_.size() >= 5 &&
+        (current_step_ - last_beta_adjustment_step_) >= 2) {
+
+        ConvergenceMonitor monitor(5, 1e-6);
+
+        std::vector<double> recent_residuals(
+            residual_history_norms_.end() - std::min(5, (int)residual_history_norms_.size()),
+            residual_history_norms_.end()
+        );
+
+        ConvergenceMonitor::ConvergenceState state = monitor.analyze(recent_residuals);
+
+        std::cout << "[PulayMixer] Convergence state: " << monitor.get_state_name(state)
+                  << " at step " << current_step_ << std::endl;
+
+        // 根据收敛状态调整参数
+        if (state != ConvergenceMonitor::CONVERGING) {
+            double beta_factor = monitor.get_beta_factor(state, current_residual_norm);
+            double new_beta = std::max(beta_min_, std::min(beta_max_, mixing_beta_ * beta_factor));
+
+            if (new_beta != mixing_beta_ && current_step_ > 3) {
+                std::cout << "[PulayMixer] Adaptive beta adjustment: " << mixing_beta_
+                          << " -> " << new_beta << " (factor=" << beta_factor << ")" << std::endl;
+                set_mixing_beta(new_beta);
+                last_beta_adjustment_step_ = current_step_;
+            }
+        }
+    }
+
+    // 如果残差增长，强制使用线性混合并调整参数
+    if (residual_increased) {
+        use_linear_mixing = true;
+
+        // 减小beta值
+        double current_beta = get_mixing_beta();
+        double new_beta = std::max(beta_min_, current_beta * 0.6);
+        if (new_beta < current_beta) {
+            set_mixing_beta(new_beta);
+            std::cout << "[PulayMixer] Emergency beta reduction: " << current_beta
+                      << " -> " << new_beta << " due to residual increase" << std::endl;
+        }
+
+        // 清除部分历史记录，保留最近2个
+        while (residual_history_.size() > 2) {
+            residual_history_.erase(residual_history_.begin());
+            input_history_.erase(input_history_.begin());
+        }
+        history_size = residual_history_.size();
+    }
+
+    // 尝试Pulay混合
     if (!use_linear_mixing) {
         try {
-            // Pulay 混合：构建并求解线性方程组
+            // Pulay混合：构建并求解线性方程组
             matrix B(history_size + 1, history_size + 1, true);  // 内积矩阵（带约束）
             matrix rhs(history_size + 1, 1, true);               // 右端项
-            
-            // 构建内积矩阵 B
+
+            // 构建内积矩阵B
+            double residual_norm = current_residual_norm;
+            double regularization = 1.0e-5;
+
+            // 根据残差大小和历史记录数量动态调整正则化参数
+            if (residual_norm > 1.0) {
+                regularization = 1.0e-4 * (1.0 + history_size * 0.1);
+            } else if (residual_norm < 1.0e-3) {
+                regularization = 1.0e-7;
+            } else {
+                regularization = 1.0e-6 * (1.0 + history_size * 0.05);
+            }
+
             for (int i = 0; i < history_size; i++) {
                 for (int j = i; j < history_size; j++) {
                     double inner_prod = matrix_inner_product(residual_history_[i], residual_history_[j]);
+
+                    // 添加对角正则化
+                    if (i == j) {
+                        inner_prod += regularization;
+                    }
+
                     B(i, j) = inner_prod;
                     B(j, i) = inner_prod;  // 对称矩阵
                 }
-                // 约束条件对应的列和行：Sum(alpha) = 1
-                // 使用 -1.0 是标准推导形式，对应拉格朗日乘子 -lambda
                 B(i, history_size) = -1.0;
                 B(history_size, i) = -1.0;
             }
             B(history_size, history_size) = 0.0;  // 约束位置的0
-            
+
             // 构建右端项 [0, 0, ..., 0, -1]^T
             rhs(history_size, 0) = -1.0;
-            
+
             // 求解线性方程组 B * alpha = rhs
             alpha = solve_linear_system(B, rhs);
-            
+
         } catch (const std::exception& e) {
-            std::cerr << "[PulayMixer] Warning: Pulay mixing failed (" << e.what() << "). Resetting history and falling back to linear mixing." << std::endl;
-            
-            // 混合失败（通常是矩阵奇异），重置历史，仅保留当前步
-            // 修复：使用 erase 清理历史
-            while (residual_history_.size() > 1) {
+            std::cerr << "[PulayMixer] Warning: Pulay mixing failed (" << e.what()
+                      << "). Falling back to linear mixing with smaller beta." << std::endl;
+
+            // 混合失败时，减小beta值
+            double current_beta = get_mixing_beta();
+            set_mixing_beta(std::max(beta_min_, current_beta * 0.4));
+
+            // 仅保留最近的历史记录
+            while ((int)residual_history_.size() > 2) {
                 residual_history_.erase(residual_history_.begin());
                 input_history_.erase(input_history_.begin());
             }
-            history_size = 1;
+            history_size = (int)residual_history_.size();
             use_linear_mixing = true;
         }
     }
-    
+
+    // 输出调试信息
+    if (use_linear_mixing) {
+        std::cout << "[PulayMixer] Linear mixing with beta=" << mixing_beta_
+                  << ", residual norm=" << current_residual_norm
+                  << ", change=" << (residual_change_ratio*100) << "%" << std::endl;
+    } else {
+        std::cout << "[PulayMixer] Pulay mixing at step " << current_step_
+                  << ", history_size=" << history_size
+                  << ", beta=" << mixing_beta_
+                  << ", residual norm=" << current_residual_norm
+                  << ", change=" << (residual_change_ratio*100) << "%" << std::endl;
+    }
+
+    matrix new_input;
     if (use_linear_mixing) {
         // 简单线性混合 (Linear Mixing)
-        matrix new_input = input_history_.back() + mixing_beta_ * current_residual;
-        input_history_.push_back(new_input);
-        std::cout << "[PulayMixer] Performed simple linear mixing." << std::endl;
-        return new_input;
+        new_input = input_history_.back() + mixing_beta_ * current_residual;
+    } else {
+        // Pulay 混合：计算新的输入矩阵
+        new_input = matrix(nrows_, ncols_, true);
+        for (int i = 0; i < history_size; i++) {
+            matrix term = input_history_[i] + mixing_beta_ * residual_history_[i];
+            new_input += alpha(i, 0) * term;
+        }
     }
-    
-    // Pulay 混合：计算新的输入矩阵
-    matrix new_input(nrows_, ncols_, true);
-    for (int i = 0; i < history_size; i++) {
-        matrix term = input_history_[i] + mixing_beta_ * residual_history_[i];
-        new_input += alpha(i, 0) * term;
-    }
-    
-    // 将新输入加入历史
-    input_history_.push_back(new_input);
 
-    std::cout << "[PulayMixer] Performed Pulay mixing at step " << current_step_ << "." << std::endl;
+    // 仅当残差没有显著增长时，才将新输入加入历史记录
+    // 如果残差增长，保留旧的历史记录
+    if (!residual_increased) {
+        input_history_.push_back(new_input);
+    } else {
+        // 残差增长时，不更新历史记录，使用线性混合的结果但不加入历史
+        std::cout << "[PulayMixer] Residual increased, not updating history record" << std::endl;
+    }
+
+    std::cout << "[PulayMixer] Performed " << (use_linear_mixing ? "linear" : "Pulay")
+              << " mixing at step " << current_step_ << "." << std::endl;
+
     return new_input;
 }
 
@@ -164,7 +431,7 @@ double PulayMixer::matrix_inner_product(const matrix& A, const matrix& B) {
     if (A.nr != B.nr || A.nc != B.nc) {
         throw std::runtime_error("[PulayMixer] Matrix dimensions must match for inner product.");
     }
-    
+
     double result = 0.0;
     for (int i = 0; i < A.size; i++) {
         result += A.c[i] * B.c[i];
@@ -183,32 +450,32 @@ matrix PulayMixer::solve_linear_system(const matrix& A, const matrix& b) {
     if (A.nr != b.nr) {
         throw std::runtime_error("[PulayMixer] Matrix A and vector b must have compatible dimensions.");
     }
-    
+
     int n = A.nr;
     matrix A_copy = A;  // 工作副本
     matrix x = b;       // 解向量
-    
-    // 使用LU分解求解
+
+    // 使用LU分解求解 (LAPACKE 接口)
     int* ipiv = new int[n];
     int info;
-    
-    // 修复：直接调用 LAPACK dgetrf_
-    dgetrf_(&n, &n, A_copy.c, &n, ipiv, &info);
+
+    // LAPACKE_dgetrf 参数: matrix_layout (101=列主序), m, n, a, lda, ipiv
+    info = LAPACKE_dgetrf(101, n, n, A_copy.c, n, ipiv);
     if (info != 0) {
         delete[] ipiv;
         throw std::runtime_error("[PulayMixer] LU factorization failed.");
     }
-    
-    // 修复：直接调用 LAPACK dgetrs_
+
+    // LAPACKE_dgetrs 参数: matrix_layout, trans, n, nrhs, a, lda, ipiv, b, ldb
     char trans = 'N';
     int nrhs = 1;
-    dgetrs_(&trans, &n, &nrhs, A_copy.c, &n, ipiv, x.c, &n, &info);
-    
+    info = LAPACKE_dgetrs(101, trans, n, nrhs, A_copy.c, n, ipiv, x.c, n);
+
     delete[] ipiv;
-    
+
     if (info != 0) {
         throw std::runtime_error("[PulayMixer] Linear system solving failed.");
     }
-    
+
     return x;
 }

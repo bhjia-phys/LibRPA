@@ -13,6 +13,7 @@ std::string Params::output_file = "stdout";
 std::string Params::output_dir = "librpa.d/";
 std::string Params::tfgrids_type = "minimax";
 std::string Params::DFT_software = "auto";
+std::string Params::analycont_method = "both";
 std::string Params::parallel_routing = "auto";
 
 int Params::nfreq = 0;
@@ -93,6 +94,7 @@ void Params::print()
         {"output_file", output_file},
         {"tfgrids_type", tfgrids_type},
         {"parallel_routing", parallel_routing},
+        {"analycont_method", analycont_method},
     };
 
     const std::vector<std::pair<std::string, bool>> bool_params{

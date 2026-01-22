@@ -8,6 +8,13 @@
 #include <vector>
 #include <complex>
 #include <algorithm>
+#include <iostream>
+
+// 如果启用了GreenX解析延拓，包含相关头文件
+#ifdef LIBRPA_USE_GREENX_AC
+// 注意：不要直接包含pade_mp.h，因为它包含内联函数会导致多重定义
+// 函数声明已在analycont.h中通过extern "C"提供
+#endif
 
 namespace LIBRPA
 {
@@ -337,6 +344,75 @@ cplxdb AnalyContNevanlinnaSelfEnergy::get(const cplxdb &x) const
     }
     
     return result_val;
+}
+
+// AnalyContPadeGreenX 实现
+AnalyContPadeGreenX::AnalyContPadeGreenX(int n_pars_in, const std::vector<cplxdb> &xs, 
+                                          const std::vector<cplxdb> &data,
+                                          int precision_in, int use_greedy_in, int symmetry_in)
+    : n_pars(n_pars_in), precision(precision_in), use_greedy(use_greedy_in), symmetry(symmetry_in), model(nullptr)
+{
+    int n_data = data.size();
+    std::vector<cplxdb> data_npar;
+    std::vector<cplxdb> xs_npar;
+
+    assert(n_pars > 0);
+
+    // 数据点选取策略与AnalyContPade相同
+    if (n_data <= n_pars)
+    {
+        n_pars = n_data;
+        par_x = xs;
+        data_npar = data;
+    }
+    else
+    {
+        par_x.resize(n_pars);
+        data_npar.resize(n_pars);
+        int step = n_data / (n_pars - 1);
+        for (int ipar = 0; ipar < n_pars - 1; ipar++)
+        {
+            par_x[ipar] = xs[ipar * step];
+            data_npar[ipar] = data[ipar * step];
+        }
+        par_x[n_pars-1] = xs[n_data-1];
+        data_npar[n_pars-1] = data[n_data-1];
+    }
+
+    // 保存数据用于后续使用
+    par_y = data_npar;
+
+    // 调用GreenX的thiele_pade_mp函数创建Pade模型
+    // 注意：pade_mp.h中已经通过extern "C"声明了这些函数
+    ::pade_model *model_ptr = thiele_pade_mp(n_pars, par_x.data(), data_npar.data(), use_greedy, precision, symmetry);
+    model = model_ptr;
+
+    if (model == nullptr)
+    {
+        std::cerr << "Error: Failed to create GreenX Pade model" << std::endl;
+    }
+}
+
+AnalyContPadeGreenX::~AnalyContPadeGreenX()
+{
+    if (model != nullptr)
+    {
+        ::free_pade_model(model);
+        model = nullptr;
+    }
+}
+
+cplxdb AnalyContPadeGreenX::get(const cplxdb &x) const
+{
+    if (model == nullptr)
+    {
+        std::cerr << "Error: GreenX Pade model not initialized" << std::endl;
+        return cplxdb(0.0, 0.0);
+    }
+
+    // 使用全局命名空间中的evaluate_thiele_pade_mp函数
+    std::complex<double> result = ::evaluate_thiele_pade_mp(x, model);
+    return result;
 }
 
 } // namespace LIBRPA

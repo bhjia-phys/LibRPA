@@ -215,7 +215,9 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
                 chi_2d_time = (chi_end_2d - chi_end_comm);
             }
 
-            double pi_begin = omp_get_wtime();
+            double pi_begin = omp_get_wtime();//print
+
+
             ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0, coul_block.ptr(), 1, 1,
                                         desc_nabf_nabf.desc, chi0_block.ptr(), 1, 1,
                                         desc_nabf_nabf.desc, 0.0, coul_chi0_block.ptr(), 1, 1,
@@ -2077,9 +2079,33 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
         {
             // choice of power_hemat_blacs_real/power_hemat_blacs_desc
             // leads to sub-meV difference
+            // sqrtveig_blacs = power_hemat_blacs(
             sqrtveig_blacs = power_hemat_blacs_real(
                 coul_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt, n_singular,
                 eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
+            // // ---> ADD START: Print sqrtveig_blacs (Debug) <---
+            // // 该矩阵在频率循环外计算，不依赖频率。这里只在第一个q点打印以避免刷屏。
+            // if (iq == 0) 
+            // {
+            //     printf("DEBUG_sqrtveig_blacs_Gamma: rank=%d iq=%d LocDim=(%d,%d)\n", 
+            //             mpi_comm_global_h.myid, iq, sqrtveig_blacs.nr(), sqrtveig_blacs.nc());
+                
+            //     for(int i = 0; i < sqrtveig_blacs.nr(); ++i) {
+            //         for(int j = 0; j < sqrtveig_blacs.nc(); ++j) {
+            //             std::complex<double> val = sqrtveig_blacs(i, j);
+            //             // 仅打印非零（模长大于阈值）元素
+            //             if(std::abs(val) > 1e-8) {
+            //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
+            //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
+                            
+            //                 printf("  sqrtV_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+            //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
+            //             }
+            //         }
+            //     }
+            //     fflush(stdout);
+            // }
+            // // ---> ADD END <---
             if (Params::replace_w_head && Params::option_dielect_func == 3)
             {
                 df_headwing.wing_mu_to_lambda(sqrtveig_blacs, desc_nabf_nabf_opt);
@@ -2246,7 +2272,34 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
             }
             else
             {
-                Profiler::start("epsilon_compute_eps_pgemm_1");
+
+                Profiler::start("epsilon_compute_eps_pgemm_1");//print
+                // // ---> ADD START: Print chi0_block (Wc) local elements <---
+                // {
+                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
+                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
+                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
+                //     printf("DEBUG_CHI0_BLOCK_Wc: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
+                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
+                    
+                //     // 遍历局部矩阵元素
+                //     for(int i = 0; i < chi0_block.nr(); ++i) {
+                //         for(int j = 0; j < chi0_block.nc(); ++j) {
+                //             std::complex<double> val = chi0_block(i, j);
+                //             // 仅打印模长大于阈值的元素，减少输出干扰
+                //             if(std::abs(val) > 1e-8) {
+                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
+                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
+                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
+                                
+                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
+                //             }
+                //         }
+                //     }
+                //     fflush(stdout);
+                // }
+                // // ---> ADD END <---
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0, coul_block.ptr(), 1,
                                             1, desc_nabf_nabf_opt.desc, chi0_block.ptr(), 1, 1,
                                             desc_nabf_nabf_opt.desc, 0.0, coul_chi0_block.ptr(), 1,
@@ -2259,6 +2312,33 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                                             chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                 Profiler::cease("epsilon_compute_eps_pgemm_2");
                 // now chi0_block is actually v1/2 chi v1/2
+                
+                // // ---> ADD START: Print chi0_block (Wc) local elements <---
+                // {
+                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
+                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
+                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
+                //     printf("DEBUG_v1/2_chi_v1/2: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
+                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
+                    
+                //     // 遍历局部矩阵元素
+                //     for(int i = 0; i < chi0_block.nr(); ++i) {
+                //         for(int j = 0; j < chi0_block.nc(); ++j) {
+                //             std::complex<double> val = chi0_block(i, j);
+                //             // 仅打印模长大于阈值的元素，减少输出干扰
+                //             if(std::abs(val) > 1e-8) {
+                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
+                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
+                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
+                                
+                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
+                //             }
+                //         }
+                //     }
+                //     fflush(stdout);
+                // }
+                // ---> ADD END <--- 
                 chi0_block *= -1.0;
                 for (int i = 0; i != n_abf; i++)
                 {
@@ -2270,6 +2350,33 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 }
                 Profiler::stop("epsilon_compute_eps");
                 // now chi0_block is actually the dielectric matrix
+                // // ---> ADD START: Print chi0_block (Wc) local elements <---
+                // {
+                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
+                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
+                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
+                //     printf("DEBUG_dielectric_matrix: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
+                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
+                    
+                //     // 遍历局部矩阵元素
+                //     for(int i = 0; i < chi0_block.nr(); ++i) {
+                //         for(int j = 0; j < chi0_block.nc(); ++j) {
+                //             std::complex<double> val = chi0_block(i, j);
+                //             // 仅打印模长大于阈值的元素，减少输出干扰
+                //             if(std::abs(val) > 1e-8) {
+                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
+                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
+                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
+                                
+                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
+                //             }
+                //         }
+                //     }
+                //     fflush(stdout);
+                // }
+                // // ---> ADD END <--- 
+                
                 // perform inversion
                 Profiler::start("epsilon_invert_eps", "Invert dielectric matrix");
                 invert_scalapack(chi0_block, desc_nabf_nabf_opt);
@@ -2283,6 +2390,33 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                     chi0_block(ilo, jlo) -= 1.0;
                 }
                 Profiler::stop("epsilon_invert_eps");
+                // // ---> ADD START: Print chi0_block (Wc) local elements <---
+                // {
+                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
+                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
+                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
+                //     printf("DEBUG_epsilon_invert: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
+                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
+                    
+                //     // 遍历局部矩阵元素
+                //     for(int i = 0; i < chi0_block.nr(); ++i) {
+                //         for(int j = 0; j < chi0_block.nc(); ++j) {
+                //             std::complex<double> val = chi0_block(i, j);
+                //             // 仅打印模长大于阈值的元素，减少输出干扰
+                //             if(std::abs(val) > 1e-8) {
+                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
+                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
+                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
+                                
+                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
+                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
+                //             }
+                //         }
+                //     }
+                //     fflush(stdout);
+                // }
+                // // ---> ADD END <--- 
+                
             }
             // debug for GaAs
             // for (int i = 0; i != n_abf; i++)

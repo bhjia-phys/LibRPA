@@ -29,6 +29,9 @@ struct Params
     //! the number of parameters for analytic continuation
     static int n_params_anacon;
 
+    //! method for analytic continuation: "pade", "greenx64", "greenx128", or "both"
+    static std::string analycont_method;
+
     //! type of parallel routing
     static std::string parallel_routing;
 
