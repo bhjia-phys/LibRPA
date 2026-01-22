@@ -16,6 +16,8 @@ std::string Params::DFT_software = "auto";
 std::string Params::analycont_method = "both";
 std::string Params::parallel_routing = "auto";
 
+double Params::perturbation_magnitude = 0.0;
+
 int Params::nfreq = 0;
 int Params::n_params_anacon = -1;
 int Params::option_dielect_func = 2;
@@ -79,6 +81,7 @@ void Params::print()
         {"libri_g0w0_threshold_Wc", libri_g0w0_threshold_Wc},
         {"minimax_min_gap", minimax_min_gap},
         {"minimax_max_transition", minimax_max_transition},
+        {"perturbation_magnitude", perturbation_magnitude},
     };
 
     const std::vector<std::pair<std::string, int>> int_params{

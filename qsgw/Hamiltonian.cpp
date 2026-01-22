@@ -236,22 +236,22 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
             Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
             Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
 
-            // ---> ADD START: Truncate precision to 1e-10 <---
-            // 将 GW 哈密顿量矩阵的实部和虚部强制截断保留小数点后 10 位
-            {
-                const double scale = 1.0e10;
-                // 注意：这里需要遍历 H0_GW_spin_k 的每一个元素
-                // 假设 Matz 提供了行和列的访问
-                for(int i_row = 0; i_row < n_bands; ++i_row) {
-                    for(int i_col = 0; i_col < n_bands; ++i_col) {
-                        std::complex<double> val = H0_GW_spin_k(i_row, i_col);
-                        double re = std::round(val.real() * scale) / scale;
-                        double im = std::round(val.imag() * scale) / scale;
-                        H0_GW_spin_k(i_row, i_col) = std::complex<double>(re, im);
-                    }
-                }
-            }
-            // ---> ADD END <---
+            // // ---> ADD START: Truncate precision to 1e-10 <---
+            // // 将 GW 哈密顿量矩阵的实部和虚部强制截断保留小数点后 10 位
+            // {
+            //     const double scale = 1.0e20;
+            //     // 注意：这里需要遍历 H0_GW_spin_k 的每一个元素
+            //     // 假设 Matz 提供了行和列的访问
+            //     for(int i_row = 0; i_row < n_bands; ++i_row) {
+            //         for(int i_col = 0; i_col < n_bands; ++i_col) {
+            //             std::complex<double> val = H0_GW_spin_k(i_row, i_col);
+            //             double re = std::round(val.real() * scale) / scale;
+            //             double im = std::round(val.imag() * scale) / scale;
+            //             H0_GW_spin_k(i_row, i_col) = std::complex<double>(re, im);
+            //         }
+            //     }
+            // }
+            // // ---> ADD END <---
             
             H0_GW_all[ispin][ikpt] = H0_GW_spin_k;   
         }

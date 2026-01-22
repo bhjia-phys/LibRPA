@@ -13,5 +13,9 @@ extern std::vector<double> efermi_values;
 extern std::vector<int> iteration_numbers;
 // 声明 QSGW 计算任务的函数
 void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix>& sinvS);
+// 新增：GreenX Pade 解析延拓支持
+#ifdef LIBRPA_USE_GREENX_AC
+    void task_qsgw_greenx(std::map<Vector3_Order<double>, ComplexMatrix>& sinvS);
+#endif
 void plot_homo_lumo_vs_iterations();
 #endif  // TASK_QSGW_H

@@ -32,6 +32,9 @@ struct Params
     //! method for analytic continuation: "pade", "greenx64", "greenx128", or "both"
     static std::string analycont_method;
 
+    //! perturbation magnitude for testing numerical stability (default: 0.0)
+    static double perturbation_magnitude;
+
     //! type of parallel routing
     static std::string parallel_routing;
 

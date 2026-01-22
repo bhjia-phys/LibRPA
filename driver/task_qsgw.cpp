@@ -430,7 +430,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     // 设置收敛条件
     double eigenvalue_tolerance = 1e-4;  // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 3;              // 最大迭代次数
+    int max_iterations = 5;              // 最大迭代次数 (error amplification test - shorter)
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -706,16 +706,26 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 for (const auto &freq : chi0.tfg.get_freq_nodes())
                                 {
                                     auto val = sigc_sk.at(freq)(i_state_row, i_state_col);
-                                    
-                                    // ---> ADD START: Truncate precision to 1e-6 <---
-                                    // 将实部和虚部强制截断保留小数点后 10 位
-                                    {
-                                        double scale = 1.0e8;
-                                        double re = std::round(val.real() * scale) / scale;
-                                        double im = std::round(val.imag() * scale) / scale;
-                                        val = std::complex<double>(re, im);
-                                    }
-                                    // ---> ADD END <---
+
+                                    // // ---> ADD START: Truncate precision to 1e-6 <---
+                                    // // 将实部和虚部强制截断保留小数点后 10 位
+                                    // {
+                                    //     double scale = 1.0e8;
+                                    //     double re = std::round(val.real() * scale) / scale;
+                                    //     double im = std::round(val.imag() * scale) / scale;
+                                    //     val = std::complex<double>(re, im);
+                                    // }
+                                    // // ---> ADD END <---
+
+                                    // // ---> TEST START: Controlled perturbation for numerical stability testing <---
+                                    // // Uncomment to add controlled perturbation for testing
+                                    // if (Params::perturbation_magnitude > 0.0) {
+                                    //     // Add controlled perturbation: perturbation_magnitude * (random between -1 and 1)
+                                    //     double perturb_real = Params::perturbation_magnitude * (2.0 * rand() / RAND_MAX - 1.0);
+                                    //     double perturb_imag = Params::perturbation_magnitude * (2.0 * rand() / RAND_MAX - 1.0);
+                                    //     val = std::complex<double>(val.real() + perturb_real, val.imag() + perturb_imag);
+                                    // }
+                                    // // ---> TEST END <---
 
                                     // 记录这组数据的最大模长
                                     double mag = std::abs(val);
@@ -734,15 +744,62 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                                 // ---> 修改：提高 Padé 阈值并增加降级策略 <---
                                 // 阈值提高到 1e-5。如果自能太小，强行拟合会引入极大的数值噪音。
-                                const double pade_threshold = 1.0e-6;
+                                const double pade_threshold = 1.0e-20;
 
                                 if (max_magnitude > pade_threshold) 
                                 {
                                     // 数据足够大且非全零，使用 Padé
                                     try {
-                                        LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
-                                        result = pade.get(energy0 - efermi);
-                                        result1 = pade.get(0.0);
+                                        // ========== Analytic Continuation Method Selection ==========
+                                        // Available methods (set via analycont_method in librpa.in):
+                                        //   - "pade"       : Standard 64-bit Pade (default, most stable)
+                                        //   - "greenx64"   : GreenX 64-bit Pade (for comparison)
+                                        //   - "greenx128"  : GreenX 128-bit Pade (high precision)
+                                        //   - "greenx256"  : GreenX 256-bit Pade (very high precision)
+                                        //
+                                        // Note: Higher precision does NOT reduce error amplification in Pade.
+                                        // The problem is algorithm ill-conditioning, not floating-point precision.
+                                        // See: /home/elhacedor/long-term-project/pade_precision_effect_test/
+                                        // ================================================================
+                                        if (Params::analycont_method == "pade") {
+                                            // Standard Pade (old method)
+                                            LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
+                                            result = pade.get(energy0 - efermi);
+                                            result1 = pade.get(0.0);
+                                        }
+                                        else if (Params::analycont_method == "greenx64") {
+                                            // GreenX 64-bit Pade
+                                            LIBRPA::AnalyContPadeGreenX pade_gx64(Params::n_params_anacon, imagfreqs, sigc_mn,
+                                                                               64,  // 64-bit precision
+                                                                               0,  // use_greedy = 0
+                                                                               0); // symmetry = 0
+                                            result = pade_gx64.get(energy0 - efermi);
+                                            result1 = pade_gx64.get(0.0);
+                                        }
+                                        else if (Params::analycont_method == "greenx128") {
+                                            // GreenX 128-bit Pade
+                                            LIBRPA::AnalyContPadeGreenX pade_gx128(Params::n_params_anacon, imagfreqs, sigc_mn,
+                                                                                128,  // 128-bit precision
+                                                                                0,  // use_greedy = 0
+                                                                                0); // symmetry = 0
+                                            result = pade_gx128.get(energy0 - efermi);
+                                            result1 = pade_gx128.get(0.0);
+                                        }
+                                        else if (Params::analycont_method == "greenx256") {
+                                            // GreenX 256-bit Pade
+                                            LIBRPA::AnalyContPadeGreenX pade_gx256(Params::n_params_anacon, imagfreqs, sigc_mn,
+                                                                                256, // 256-bit precision
+                                                                                0,  // use_greedy = 0
+                                                                                0); // symmetry = 0
+                                            result = pade_gx256.get(energy0 - efermi);
+                                            result1 = pade_gx256.get(0.0);
+                                        }
+                                        else {
+                                            // Default: use standard Pade
+                                            LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
+                                            result = pade.get(energy0 - efermi);
+                                            result1 = pade.get(0.0);
+                                        }
                                     } catch (...) {
                                         // Padé 失败时的兜底：取第一个频率点的值（近似静态极限）
                                         result = sigc_mn[0];
@@ -783,27 +840,34 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 }
                                 // ---> ADD END <---
 
-                                // ---> 修改：打印全部数据以进行逐位比对 <---
-                                if (mpi_comm_global_h.is_root() && i_kpoint == 0 && i_state_row == i_state_col && i_state_row < 2) 
-                                {
-                                    std::cout << std::scientific << std::setprecision(16); // 开启高精度
-                                    std::cout << "\n[DEBUG_PADE_FULL] Iter=" << iteration 
-                                                << " Spin=" << i_spin << " Band=" << i_state_row << "\n";
-                                    
-                                    // 1. 打印评估点
-                                    std::cout << "  >> Eval Point (E - Ef): " << (energy0 - efermi) << "\n";
-                                    
-                                    // 2. 循环打印所有输入数据
-                                    std::cout << "  >> Full Input sigc_mn (" << sigc_mn.size() << " points):\n";
-                                    for (size_t k = 0; k < sigc_mn.size(); ++k) {
-                                        std::cout << "     idx[" << std::setw(2) << k << "]: " << sigc_mn[k] << "\n";
-                                    }
-                                    
-                                    // 3. 打印结果
-                                    std::cout << "  >> Pade Result:      " << result << "\n";
-                                    std::cout << std::defaultfloat << std::setprecision(6); // 恢复默认格式
-                                }
-                                // ---> 修改结束 <---
+                                // // ---> TEST START: Debug output for Pade analysis <---
+                                // // Uncomment to enable detailed Pade debugging output
+                                // if (mpi_comm_global_h.is_root() && i_kpoint == 0 && i_state_row == i_state_col && i_state_row < 2)
+                                // {
+                                //     std::cout << std::scientific << std::setprecision(16);
+                                //     std::cout << "\n[DEBUG_PADE_FULL] Iter=" << iteration
+                                //                 << " Spin=" << i_spin << " Band=" << i_state_row << "\n";
+                                //     std::cout << "  >> Eval Point (E - Ef): " << (energy0 - efermi) << "\n";
+                                //
+                                //     double sigc_real_mean = 0.0, sigc_imag_mean = 0.0;
+                                //     for (const auto& val : sigc_mn) {
+                                //         sigc_real_mean += val.real();
+                                //         sigc_imag_mean += val.imag();
+                                //     }
+                                //     sigc_real_mean /= sigc_mn.size();
+                                //     sigc_imag_mean /= sigc_mn.size();
+                                //
+                                //     std::cout << "  >> sigc_mn[0] (iω₀):           " << sigc_mn[0] << "\n";
+                                //     std::cout << "  >> sigc_mn mean (" << sigc_mn.size() << "): " << sigc_real_mean << " + " << sigc_imag_mean << "i\n";
+                                //     std::cout << "  >> Pade Result (ω):         " << result << "\n";
+                                //
+                                //     double diff_real = result.real() - sigc_mn[0].real();
+                                //     double diff_imag = result.imag() - sigc_mn[0].imag();
+                                //     std::cout << "  >> Δ (ω - iω₀):              " << diff_real << " + " << diff_imag << "i\n";
+                                //
+                                //     std::cout << std::defaultfloat << std::setprecision(6);
+                                // }
+                                // // ---> TEST END <---
                                 // 存储值到 sigcmat
                                 sigcmat[i_state_row][i_state_col][i_state_row] = result;
                                 sigcmat[i_state_row][i_state_col][n_bands] = result1;
@@ -842,85 +906,85 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
                                                 n_spins, n_kpoints, n_bands);
                 // ==========================================
-                // Pulay Mixing Execution (Outer Loop)
-                {
-                    std::cout << "Performing Pulay Mixing..." << std::endl;
+                // // Pulay Mixing Execution (Outer Loop)
+                // {
+                //     std::cout << "Performing Pulay Mixing..." << std::endl;
                     
-                    // 1. Prepare data dimensions
-                    int total_matrices = n_spins * n_kpoints;
-                    int rows_per_matrix = n_bands;
-                    int cols_per_matrix = n_bands;
+                //     // 1. Prepare data dimensions
+                //     int total_matrices = n_spins * n_kpoints;
+                //     int rows_per_matrix = n_bands;
+                //     int cols_per_matrix = n_bands;
                     
-                    // We pack all k-points and spins into one large matrix.
-                    // To handle complex numbers, we double the width: [Real, Imag]
-                    matrix mixed_input(total_matrices * rows_per_matrix, 2 * cols_per_matrix);
+                //     // We pack all k-points and spins into one large matrix.
+                //     // To handle complex numbers, we double the width: [Real, Imag]
+                //     matrix mixed_input(total_matrices * rows_per_matrix, 2 * cols_per_matrix);
                     
-                    // 2. Pack H0_GW_all into mixed_input
-                    int row_offset = 0;
-                    for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                        for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                            const Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                            for (int i = 0; i < rows_per_matrix; i++) {
-                                for (int j = 0; j < cols_per_matrix; j++) {
-                                    std::complex<double> val = mat(i, j);
-                                    mixed_input(row_offset + i, j) = val.real();
-                                    mixed_input(row_offset + i, j + cols_per_matrix) = val.imag();
-                                }
-                            }
-                            row_offset += rows_per_matrix;
-                        }
-                    }
+                //     // 2. Pack H0_GW_all into mixed_input
+                //     int row_offset = 0;
+                //     for (int i_spin = 0; i_spin < n_spins; i_spin++) {
+                //         for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
+                //             const Matz& mat = H0_GW_all[i_spin][i_kpoint];
+                //             for (int i = 0; i < rows_per_matrix; i++) {
+                //                 for (int j = 0; j < cols_per_matrix; j++) {
+                //                     std::complex<double> val = mat(i, j);
+                //                     mixed_input(row_offset + i, j) = val.real();
+                //                     mixed_input(row_offset + i, j + cols_per_matrix) = val.imag();
+                //                 }
+                //             }
+                //             row_offset += rows_per_matrix;
+                //         }
+                //     }
 
-                    // 3. Execute Mixing
-                    if (!mixer_initialized) {
-                        mixer.initialize(mixed_input);
-                        mixer_initialized = true;
-                        if (mpi_comm_global_h.is_root()) {
-                            std::cout << "Pulay Mixer Initialized (History=12, Beta=0.2)" << std::endl;
-                        }
-                    } else {
-                        try {
-                            matrix mixed_output;
+                //     // 3. Execute Mixing
+                //     if (!mixer_initialized) {
+                //         mixer.initialize(mixed_input);
+                //         mixer_initialized = true;
+                //         if (mpi_comm_global_h.is_root()) {
+                //             std::cout << "Pulay Mixer Initialized (History=12, Beta=0.2)" << std::endl;
+                //         }
+                //     } else {
+                //         try {
+                //             matrix mixed_output;
                             
-                            // 引入 Linear / Pulay 切换策略
-                            if (iteration <= linear_mixing_steps) {
-                                // Linear Mixing: H_new = (1-beta)*H_old + beta*H_calc
-                                // PulayMixer 类如果没有显式提供 linear_mix 方法，我们可以手动实现，
-                                // 或者通常 PulayMixer 在 history 填满前行为类似 linear。
-                                // 这里假设我们暂时依赖 mixer 的默认行为，但通过降低 beta 来稳健化。
+                //             // 引入 Linear / Pulay 切换策略
+                //             if (iteration <= linear_mixing_steps) {
+                //                 // Linear Mixing: H_new = (1-beta)*H_old + beta*H_calc
+                //                 // PulayMixer 类如果没有显式提供 linear_mix 方法，我们可以手动实现，
+                //                 // 或者通常 PulayMixer 在 history 填满前行为类似 linear。
+                //                 // 这里假设我们暂时依赖 mixer 的默认行为，但通过降低 beta 来稳健化。
                                 
-                                // 如果您的 PulayMixer 实现支持在初期退化为 Linear，那最好。
-                                // 否则，最简单的改进是：直接使用较小的 beta (0.2)。
-                                mixed_output = mixer.mix(mixed_input);
-                                if (mpi_comm_global_h.is_root()) std::cout << " mixing (iter " << iteration << ")..." << std::endl;
-                            } else {
-                                mixed_output = mixer.mix(mixed_input);
-                            }
+                //                 // 如果您的 PulayMixer 实现支持在初期退化为 Linear，那最好。
+                //                 // 否则，最简单的改进是：直接使用较小的 beta (0.2)。
+                //                 mixed_output = mixer.mix(mixed_input);
+                //                 if (mpi_comm_global_h.is_root()) std::cout << " mixing (iter " << iteration << ")..." << std::endl;
+                //             } else {
+                //                 mixed_output = mixer.mix(mixed_input);
+                //             }
 
-                            // 4. Unpack result back to H0_GW_all
-                            row_offset = 0;
-                            for (int i_spin = 0; i_spin < n_spins; i_spin++) {
-                                for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
-                                    Matz& mat = H0_GW_all[i_spin][i_kpoint];
-                                    for (int i = 0; i < rows_per_matrix; i++) {
-                                        for (int j = 0; j < cols_per_matrix; j++) {
-                                            double re = mixed_output(row_offset + i, j);
-                                            double im = mixed_output(row_offset + i, j + cols_per_matrix);
-                                            mat(i, j) = std::complex<double>(re, im);
-                                        }
-                                    }
-                                    row_offset += rows_per_matrix;
-                                }
-                            }
-                            std::cout << "Pulay Mixing applied successfully." << std::endl;
-                        } catch (const std::exception& e) {
-                            std::cerr << "Pulay Mixing failed: " << e.what() << ". Continuing with unmixed Hamiltonian." << std::endl;
-                            // If mixing fails, we just use the current H0_GW_all (unmixed)
-                        }
-                    }
-                }
-                // ==========================================
-                // End Pulay Mixing
+                //             // 4. Unpack result back to H0_GW_all
+                //             row_offset = 0;
+                //             for (int i_spin = 0; i_spin < n_spins; i_spin++) {
+                //                 for (int i_kpoint = 0; i_kpoint < n_kpoints; i_kpoint++) {
+                //                     Matz& mat = H0_GW_all[i_spin][i_kpoint];
+                //                     for (int i = 0; i < rows_per_matrix; i++) {
+                //                         for (int j = 0; j < cols_per_matrix; j++) {
+                //                             double re = mixed_output(row_offset + i, j);
+                //                             double im = mixed_output(row_offset + i, j + cols_per_matrix);
+                //                             mat(i, j) = std::complex<double>(re, im);
+                //                         }
+                //                     }
+                //                     row_offset += rows_per_matrix;
+                //                 }
+                //             }
+                //             std::cout << "Pulay Mixing applied successfully." << std::endl;
+                //         } catch (const std::exception& e) {
+                //             std::cerr << "Pulay Mixing failed: " << e.what() << ". Continuing with unmixed Hamiltonian." << std::endl;
+                //             // If mixing fails, we just use the current H0_GW_all (unmixed)
+                //         }
+                //     }
+                // }
+                // // ==========================================
+                // // End Pulay Mixing
                 // ==========================================
                 //  第三步：对 Hamiltonian 进行对角化并存储本征值
                 diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
