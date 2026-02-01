@@ -1053,19 +1053,16 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         try {
                             matrix mixed_output;
 
-                            // 引入 Linear / Pulay 切换策略
+                            // 引入 Linear / Pulay 切换策略（与task_qsgwA.cpp一致）
+                            // PulayMixer 在 history 填满前会自动退化为 linear mixing
                             if (iteration <= linear_mixing_steps) {
-                                // 前5次迭代完全跳过 Pulay Mixing，直接使用未混合的 H0_GW
-                                // 这样可以避免 PulayMixer 内部过早切换到 Pulay 模式
-                                mixed_output = mixed_input;  // 不做任何混合
+                                // 前5次迭代使用 mixer，自动退化为linear模式
+                                mixed_output = mixer.mix(mixed_input);
                                 if (mpi_comm_global_h.is_root()) {
-                                    std::cout << " Skipping mixing (iter " << iteration << " <= " << linear_mixing_steps << ") - using raw H0_GW" << std::endl;
+                                    std::cout << " mixing (iter " << iteration << " <= " << linear_mixing_steps << ")..." << std::endl;
                                 }
                             } else {
                                 // 第6次迭代开始使用完整的 Pulay 混合
-                                if (mpi_comm_global_h.is_root()) {
-                                    std::cout << " Enabling Pulay mixing (iter " << iteration << ")..." << std::endl;
-                                }
                                 mixed_output = mixer.mix(mixed_input);
                             }
 
