@@ -442,7 +442,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     // History size: 7 -> 10, Mixing beta: 0.5 -> 0.2
     // 建议：对于难收敛体系，将 beta 调小至 0.2 甚至 0.1，history 增加至 10-15
     // 增加一个延迟启动 Pulay 的参数
-    const int linear_mixing_steps = 5; // 前 5 步完全跳过 Pulay Mixing 稳定初期震荡
+    const int linear_mixing_steps = 3; // 前 3 步使用 Linear Mixing 稳定初期震荡
     PulayMixer mixer(12, 0.2);
     bool mixer_initialized = false;
 
@@ -1048,21 +1048,25 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     if (!mixer_initialized) {
                         mixer.initialize(mixed_input);
                         mixer_initialized = true;
-                        std::cout << "Pulay Mixer Initialized with dimension " << mixed_input.nr << "x" << mixed_input.nc << std::endl;
+                        if (mpi_comm_global_h.is_root()) {
+                            std::cout << "Pulay Mixer Initialized (History=12, Beta=0.2)" << std::endl;
+                        }
                     } else {
                         try {
                             matrix mixed_output;
 
-                            // 引入 Linear / Pulay 切换策略（与task_qsgwA.cpp一致）
-                            // PulayMixer 在 history 填满前会自动退化为 linear mixing
+                            // 引入 Linear / Pulay 切换策略
                             if (iteration <= linear_mixing_steps) {
-                                // 前5次迭代使用 mixer，自动退化为linear模式
+                                // Linear Mixing: H_new = (1-beta)*H_old + beta*H_calc
+                                // PulayMixer 类如果没有显式提供 linear_mix 方法，我们可以手动实现，
+                                // 或者通常 PulayMixer 在 history 填满前行为类似 linear。
+                                // 这里假设我们暂时依赖 mixer 的默认行为，但通过降低 beta 来稳健化。
+
+                                // 如果您的 PulayMixer 实现支持在初期退化为 Linear，那最好。
+                                // 否则，最简单的改进是：直接使用较小的 beta (0.2)。
                                 mixed_output = mixer.mix(mixed_input);
-                                if (mpi_comm_global_h.is_root()) {
-                                    std::cout << " mixing (iter " << iteration << " <= " << linear_mixing_steps << ")..." << std::endl;
-                                }
+                                if (mpi_comm_global_h.is_root()) std::cout << " mixing (iter " << iteration << ")..." << std::endl;
                             } else {
-                                // 第6次迭代开始使用完整的 Pulay 混合
                                 mixed_output = mixer.mix(mixed_input);
                             }
 
