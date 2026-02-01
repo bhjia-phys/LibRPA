@@ -39,8 +39,6 @@
 #include "utils_timefreq.h"
 #include "write_aims.h"
 #include "pulay_mixing.h"
-// 线性混合阶段参数：前几次迭代使用更稳定的线性混合策略
-const int linear_mixing_steps = 5;
 
 std::vector<double> efermi_values;
 std::vector<double> homo_values;
@@ -444,7 +442,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     // History size: 7 -> 10, Mixing beta: 0.5 -> 0.2
     // 建议：对于难收敛体系，将 beta 调小至 0.2 甚至 0.1，history 增加至 10-15
     // 增加一个延迟启动 Pulay 的参数
-    const int linear_mixing_steps = 3; // 前 3 步使用 Linear Mixing 稳定初期震荡
+    const int linear_mixing_steps = 5; // 前 5 步完全跳过 Pulay Mixing 稳定初期震荡
     PulayMixer mixer(12, 0.2);
     bool mixer_initialized = false;
 
@@ -1057,14 +1055,17 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                             // 引入 Linear / Pulay 切换策略
                             if (iteration <= linear_mixing_steps) {
-                                // Linear Mixing: 前5次迭代使用简单的线性混合策略，提高稳定性
-                                // PulayMixer 在 history 填满前行为类似 linear mixing
-                                mixed_output = mixer.mix(mixed_input);
+                                // 前5次迭代完全跳过 Pulay Mixing，直接使用未混合的 H0_GW
+                                // 这样可以避免 PulayMixer 内部过早切换到 Pulay 模式
+                                mixed_output = mixed_input;  // 不做任何混合
                                 if (mpi_comm_global_h.is_root()) {
-                                    std::cout << " mixing (iter " << iteration << ")..." << std::endl;
+                                    std::cout << " Skipping mixing (iter " << iteration << " <= " << linear_mixing_steps << ") - using raw H0_GW" << std::endl;
                                 }
                             } else {
-                                // 后续迭代使用完整的 Pulay 混合
+                                // 第6次迭代开始使用完整的 Pulay 混合
+                                if (mpi_comm_global_h.is_root()) {
+                                    std::cout << " Enabling Pulay mixing (iter " << iteration << ")..." << std::endl;
+                                }
                                 mixed_output = mixer.mix(mixed_input);
                             }
 
