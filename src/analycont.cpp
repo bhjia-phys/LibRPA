@@ -342,10 +342,11 @@ cplxdb AnalyContNevanlinnaSelfEnergy::get(const cplxdb &x) const
         
         return constrained;
     }
-    
+
     return result_val;
 }
 
+#ifdef LIBRPA_USE_GREENX_AC
 // AnalyContPadeGreenX 实现
 AnalyContPadeGreenX::AnalyContPadeGreenX(int n_pars_in, const std::vector<cplxdb> &xs, 
                                           const std::vector<cplxdb> &data,
@@ -414,5 +415,7 @@ cplxdb AnalyContPadeGreenX::get(const cplxdb &x) const
     std::complex<double> result = ::evaluate_thiele_pade_mp(x, model);
     return result;
 }
+
+#endif // LIBRPA_USE_GREENX_AC
 
 } // namespace LIBRPA
