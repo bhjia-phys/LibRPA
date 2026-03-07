@@ -301,10 +301,30 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                                 dmat_va = std::valarray<Tdata>(dmat_IJR.c, dmat_IJR.size);
                             else
                                 dmat_va = std::valarray<Tdata>(dmat_IJR.real().c, dmat_IJR.size);
+                            // const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
+                            // const auto &n_J = atomic_basis_wfc.get_atom_nb(J); 
+                            // for (int i = 0; i!= n_I; i++) {
+                            //     for(int j =0 ; j!= n_J; j++){
+                                    
+                            //         utils::lib_printf(
+                            //         "dmat, spin, %d is1,is2,I,J,R,i,j %d %d %zu %zu (%d, %d, %d) %zu %zu = (%.10e,%.10e)\n", isp, is1, is2, I , J , R.x, R.y, R.z, i, j, dmat_IJR(i,j).real(),dmat_IJR(i,j).imag());
+                            //     }
+                            // }
+                            
                             auto pdmat = std::make_shared<std::valarray<Tdata>>();
                             *pdmat = dmat_va;
                             dmat_libri[I][{J, Ra}] = RI::Tensor<Tdata>(
                                 {size_t(dmat_IJR.nr), size_t(dmat_IJR.nc)}, pdmat);
+
+                            // const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
+                            // const auto &n_J = atomic_basis_wfc.get_atom_nb(J); 
+                            // for (int i = 0; i!= n_I; i++) {
+                            //     for(int j =0 ; j!= n_J; j++){
+                            //         utils::lib_printf(
+                            //         "dmat, spin, %d is1,is2,I,J,R,i,j %d %d %zu %zu (%d, %d, %d) %zu %zu = %.10e\n", isp, is1, is2, I , J , R.x, R.y, R.z, i, j, dmat_libri[I][{J, Ra}](i,j));
+                            //     }
+                            // }
+                            
                         }
                     }
                 }
@@ -339,22 +359,25 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                         {
                             Matz exx_temp(n_I, n_J, JR_exx.second.ptr(), MAJOR::ROW);
                             this->exx_cplx[isp][is1][is2][R][I][J] = exx_temp;
-                            // utils::lib_printf("print:EXX[%d][%d][%d](%d,%d,%d)[%d][%d] = %e\n",
-                            //     isp, is1, is2, R.x, R.y, R.z, I, J, this->exx[isp][is1][is2][R][I][J](0,0));
                         }
                         else
                         {
                             Matd exx_temp(n_I, n_J, JR_exx.second.ptr(), MAJOR::ROW);
                             this->exx[isp][is1][is2][R][I][J] = exx_temp;
-                            // utils::lib_printf("print:EXX[%d][%d][%d](%d,%d,%d)[%d][%d] = %e\n",
-                            //     isp, is1, is2, R.x, R.y, R.z, I, J, this->exx[isp][is1][is2][R][I][J](0,0));
+                            // for (int i = 0; i!= n_I; i++) {
+                            //     for(int j =0 ; j!= n_J; j++){
+                            //         utils::lib_printf(
+                            //         "EXX, spin, %d is1,is2,I,J,R,i,j %d %d %zu %zu (%d, %d, %d) %zu %zu = %.10e\n", isp, is1, is2, I , J , R.x, R.y, R.z, i, j, exx_temp(i,j));
+                            //     }
+                            // }
+                            
                         }
                     }
                 }
             }
         }
     }
-    // debug, print the Hexx matrices
+    // // debug, print the Hexx matrices
     // for (const auto& isp_IJkH: this->Hexx)
     // {
     //     const auto& isp = isp_IJkH.first;
@@ -783,14 +806,6 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                         exx_I_JR_local);
                     Profiler::stop("build_real_space_exx_6");
                     // utils::lib_printf("%s\n", str(Hexx_nao_nao).c_str());
-                    if (this->exx_is_ik_nao.count(isp) == 0 ||
-                        this->exx_is_ik_nao[isp].count(ik) == 0)
-                    {
-                        this->exx_is_ik_nao[isp][ik] =
-                            init_local_mat<complex<double>>(desc_nao_nao, MAJOR::COL);
-                    }
-                    this->exx_is_ik_nao[isp][ik] += Hexx_nao_nao.copy();
-                    
                     const auto &wfc_isp1_k = wfc_target[isp][isoc1][ik];
                     const auto &wfc_isp2_k = wfc_target[isp][isoc2][ik];
                     blacs_ctxt_global_h.barrier();
@@ -807,7 +822,7 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                                 Hexx_nao_nao.ptr(), 1, 1, desc_nao_nao.desc, 0.0,
                                                 temp_nband_nao.ptr(), 1, 1, desc_nband_nao.desc);
                     ScalapackConnector::pgemm_f(
-                        'N', 'C', n_bands, n_bands, n_aos, -1.0/*EXX ONLY*/, temp_nband_nao.ptr(), 1, 1,
+                        'N', 'C', n_bands, n_bands, n_aos, -1.0, temp_nband_nao.ptr(), 1, 1,
                         desc_nband_nao.desc, wfc2_block.ptr(), 1, 1, desc_nband_nao.desc, 0.0,
                         Hexx_nband_nband.ptr(), 1, 1, desc_nband_nband.desc);
                     Profiler::stop("build_real_space_exx_7");
@@ -824,13 +839,18 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                         this->exx_is_ik_KS[isp][ik] =
                             init_local_mat<complex<double>>(desc_nband_nband_fb, MAJOR::COL);
                     }
+
                     this->exx_is_ik_KS[isp][ik] += Hexx_nband_nband_fb.copy();
                     // cout << "Hexx_nband_nband_fb isp " << isp  << " ik " << ik << endl <<
                     // Hexx_nband_nband_fb;
                     if (blacs_ctxt_global_h.myid == 0)
                     {
-                        for (int ib = 0; ib != n_bands; ib++)
+                        for (int ib = 0; ib != n_bands; ib++){
                             this->Eexx[isp][ik][ib] += Hexx_nband_nband_fb(ib, ib).real();
+                            // this->Eexx[isp][ik][ib] += Hexx_nband_nband_fb.copy()(ib, ib).real();
+                        }
+                            
+
                     }
                     Profiler::stop("build_real_space_exx_8");
                 }

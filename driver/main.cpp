@@ -31,10 +31,10 @@
 #include "utils_mpi_io.h"
 #include "task_qsgwA.h"
 #include "task_qsgw_band.h"
+#include "task_qsgw_band_0.h"
 // #include "task_hf_band.h"
 #include "task_scRPA.h"
 // #include "task_scRPA_band.h"
-#include "task_qsgw_band_0.h"
 #include "task_screened_coulomb.h"
 #include "timefreq.h"
 #include "utils_cmake.h"
@@ -368,7 +368,7 @@ int main(int argc, char **argv)
             Profiler::start("read_shrink_sinvS_fold", "Load shrink transformation");
             // change atom_mu: number of {Mu,mu} in the later calculations
             read_shrink_sinvS(driver_params.input_dir, "shrink_sinvS_", sinvS);
-
+            atom_mu_s = atom_mu;
             if (mpi_comm_global_h.is_root())
             {
                 std::cout << "iatom & small Nabfs: " << std::endl;
@@ -490,7 +490,7 @@ int main(int argc, char **argv)
     }
     else if (task == task_t::QSGWA)
     {
-        task_qsgwA(sinvS);
+        task_qsgwA();
     }
     else if (task == task_t::QSGW_band)
     {
@@ -502,7 +502,7 @@ int main(int argc, char **argv)
     // }
     else if (task == task_t::scRPA)
     {
-        task_scRPA(sinvS);
+        task_scRPA();
     }
     else if (task == task_t::QSGW_band0)
     {

@@ -53,7 +53,7 @@ class Exx
     //! exact-exchange Hamiltonian in the basis of KS states, dimension (nspins, n_kpoints, n_bands,
     //! n_bands)
     map<int, map<int, Matz>> exx_is_ik_KS;
-    map<int, map<int, Matz>> exx_is_ik_nao;
+
     //! exact-exchange energy of each state, dimension (nspins, n_kpoints, n_bands). This is
     //! actually the diagonal elements of Heex_KS.
     map<int, map<int, map<int, double>>> Eexx;

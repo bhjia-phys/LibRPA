@@ -11,7 +11,7 @@
 #include "parallel_mpi.h"
 #include "profiler.h"
 #include "scalapack_connector.h"
-#include "lapack_connector.h"
+#include "constants.h"
 #include "utils_io.h"
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
@@ -189,63 +189,6 @@ void collect_block_from_IJ_storage_tensor_transform(
                         continue;
                     }
                     tmp_loc_row[jlo] += mat(i_ab, j_ab) * transform(I_loc, acell);
-                }
-            }
-        }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
-    }
-#pragma omp barrier
-    omp_destroy_lock(&mat_lock);
-    if (mat_lo.is_col_major())
-    {
-        tmp_loc.swap_to_col_major();
-    }
-    mat_lo = tmp_loc;
-}
-
-// Used for tranformation from Cs[I][{J, R}](i,j,mu)
-// to 2d-block Cs[I][{J,k}](i,j)
-template <typename Tdst, typename Tsrc, typename TA, typename TAC>
-void collect_block_from_IJ_storage_tensor_transform_triple(
-    matrix_m<Tdst> &mat_lo, const LIBRPA::Array_Desc &ad, const LIBRPA::AtomicBasis &atbasis_row,
-    const LIBRPA::AtomicBasis &atbasis_col,
-    const std::function<Tdst(const TA &, const TAC &)> &transform,
-    const std::map<TA, std::map<TAC, RI::Tensor<Tsrc>>> &TMAP, const TA &Mu, const int &mu_local)
-{
-    // assert(mat_lo.nr() == ad.m_loc() && mat_lo.nc() == ad.n_loc());
-    assert(ad.m() == atbasis_row.nb_total && ad.n() == atbasis_col.nb_total);
-
-    matrix_m<Tdst> tmp_loc(mat_lo.nr(), mat_lo.nc(), MAJOR::ROW);
-    size_t cp_size = ad.n_loc() * sizeof(Tdst);
-
-    omp_lock_t mat_lock;
-    omp_init_lock(&mat_lock);
-
-#pragma omp parallel for
-    for (int ilo = 0; ilo != ad.m_loc(); ilo++)
-    {
-        int I_loc, J_loc, i_ab, j_ab;
-        int i_gl = ad.indx_l2g_r(ilo);
-        atbasis_row.get_local_index(i_gl, I_loc, i_ab);
-        vector<Tdst> tmp_loc_row(ad.n_loc(), 0);
-        for (int jlo = 0; jlo != ad.n_loc(); jlo++)
-        {
-            int j_gl = ad.indx_l2g_c(jlo);
-            atbasis_col.get_local_index(j_gl, J_loc, j_ab);
-            if (TMAP.count(I_loc) > 0 && I_loc == Mu)
-            {
-                for (const auto &acell_mat : TMAP.at(I_loc))
-                {
-                    const auto &acell = acell_mat.first;
-                    const auto &mat = acell_mat.second;
-                    if (acell.first != J_loc)
-                    {
-                        continue;
-                    }
-                    tmp_loc_row[jlo] += mat(mu_local, i_ab, j_ab) * transform(Mu, acell);
                 }
             }
         }
@@ -587,7 +530,6 @@ matrix_m<std::complex<T>> power_hemat_blacs(matrix_m<std::complex<T>> &A_local,
     // Optimized A no longer used
     Profiler::start("power_hemat_blacs_3");
     A_local_opt.clear();
-
     // send back the eigenvector matrix
     ScalapackConnector::pgemr2d_f(n, n, Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, Z_local.ptr(), 1, 1,
                                   ad_Z.desc, ad_Z.ictxt());
@@ -797,35 +739,32 @@ matrix_m<std::complex<T>> power_hemat_blacs_desc(matrix_m<std::complex<T>> &A_lo
     return scaled;
 }
 
-template <typename T>
-matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_local,
-                                                 const LIBRPA::Array_Desc &ad_A,
-                                                 matrix_m<std::complex<T>> &Z_local,
-                                                 const LIBRPA::Array_Desc &ad_Z, size_t &n_filtered,
-                                                 T *W, T power, const T &threshold = -1.e5)
+inline matrix_m<double> power_hemat_blacs_real(matrix_m<double> &A_local,
+                                               const LIBRPA::Array_Desc &ad_A,
+                                               matrix_m<double> &Z_local,
+                                               const LIBRPA::Array_Desc &ad_Z, size_t &n_filtered,
+                                               double *W, double power,
+                                               const double &threshold = -1.e5)
 {
     using LIBRPA::envs::ofs_myid;
-    // Step 1: Extract real part of the complex matrix
-    auto A_local_real = A_local.get_real();
-    A_local_real *= -1.0;
+    A_local *= -1.0;
     assert(A_local.is_col_major() && Z_local.is_col_major());
     const bool is_int_power = fabs(power - int(power)) < 1e-4;
     const int n = ad_A.m();
     const char jobz = 'V';
     const char uplo = 'U';
 
-    // temporary array for syev with optimized block size
+    // temporary array for heev with optmized block size
     const int blocksize_row_opt = min(ad_A.mb(), 128);
     const int blocksize_col_opt = min(ad_A.nb(), 128);
 
     // initialize descriptor of array A for optimized block size
     LIBRPA::Array_Desc ad_A_opt(ad_A.ictxt());
     ad_A_opt.init(n, n, blocksize_row_opt, blocksize_col_opt, 0, 0);
-    // Initialize as real matrix for diagonalization
-    auto A_local_opt = init_local_mat<T>(ad_A_opt, MAJOR::COL);
-    A_local_opt.zero_out();
-    ScalapackConnector::pgemr2d_f(n, n, A_local_real.ptr(), 1, 1, ad_A.desc, A_local_opt.ptr(), 1,
-                                  1, ad_A_opt.desc, ad_A.ictxt());
+    auto A_local_opt = init_local_mat<double>(ad_A_opt, MAJOR::COL);
+    // NOTE: imply A and Z should be in the same context
+    ScalapackConnector::pgemr2d_f(n, n, A_local.ptr(), 1, 1, ad_A.desc, A_local_opt.ptr(), 1, 1,
+                                  ad_A_opt.desc, ad_A.ictxt());
 
     // initialize descriptor of array Z for optimized block size
     if (ad_A.ictxt() != ad_Z.ictxt())
@@ -834,121 +773,63 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
     }
     LIBRPA::Array_Desc ad_Z_opt(ad_Z.ictxt());
     ad_Z_opt.init(n, n, blocksize_row_opt, blocksize_col_opt, 0, 0);
-    // Initialize Z as real matrix initially
-    auto Z_local_opt = init_local_mat<T>(ad_Z_opt, MAJOR::COL);
+    auto Z_local_opt = init_local_mat<double>(ad_Z_opt, MAJOR::COL);
+    // printf("Z_local_opt size: %d\n", Z_local_opt.size());
 
-    Profiler::start("power_hemat_blacs_1");
+    Profiler::start("power_hemat_blacs_real_1");
     int lwork = -1, lrwork = -1, info = 0;
-    T *work = nullptr;
-    T *rwork = nullptr;    // rwork is required by the provided psyev_f interface
-    T *Wquery = new T[1];  // Temporary array for size query
-
-    // Query optimal workspace using the provided psyev_f interface
-    double work_query, rwork_query;
-    ScalapackConnector::psyev_f(jobz, uplo, n, A_local_opt.ptr(), 1, 1, ad_A_opt.desc, Wquery,
-                                Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, &work_query, lwork,
-                                &rwork_query, lrwork, info);
-    lwork = static_cast<int>(work_query);
-    lrwork = static_cast<int>(rwork_query);
-
-    delete[] Wquery;
-
-    // Allocate workspace arrays
-    work = new T[lwork];
-    rwork = new T[lrwork];
-    Profiler::stop("power_hemat_blacs_1");
-
-    Profiler::start("power_hemat_blacs_2");
-    for (int i = 0; i < n; i++)
+    double *work;
+    double *rwork;
     {
-        W[i] = 0.0;
+        work = new double[1];
+        rwork = new double[1];
+        // query the optimal lwork and lrwork
+        double *Wquery = new double[1];
+        // LIBRPA::utils::lib_printf("power_hemat_blacs descA %s\n", ad_A.info_desc().c_str());
+        ScalapackConnector::psyev_f(jobz, uplo, n, A_local_opt.ptr(), 1, 1, ad_A_opt.desc, Wquery,
+                                    Z_local_opt.ptr(), 1, 1, ad_A_opt.desc, work, lwork, rwork,
+                                    lrwork, info);
+        lwork = int(work[0]);
+        lrwork = int(rwork[0]);
+        delete[] work;
+        delete[] Wquery;
+        delete[] rwork;
     }
-    Z_local_opt.zero_out();
-    // Perform real symmetric diagonalization using the provided interface
+    Profiler::stop("power_hemat_blacs_real_1");
+
+    Profiler::start("power_hemat_blacs_real_2");
+    work = new double[lwork];
+    rwork = new double[lrwork];
     ScalapackConnector::psyev_f(jobz, uplo, n, A_local_opt.ptr(), 1, 1, ad_A_opt.desc, W,
                                 Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, work, lwork, rwork, lrwork,
                                 info);
-    // std::vector<T> Wvec;
-    // eigss(A_local_opt, Wvec, Z_local_opt);
-
-    // Cleanup workspace
     delete[] work;
     delete[] rwork;
-
-    // Eigenvalues need sign flip due to initial negation
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i != n; i++)
     {
-        // W[i] *= -1.0 * Wvec[i];
         W[i] *= -1.0;
-        // printf("Eigenvalue %d: %20.20f\n", i, W[i]);
     }
+    // Optimized A no longer used
     A_local_opt.clear();
+    ScalapackConnector::pgemr2d_f(n, n, Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc, Z_local.ptr(), 1, 1,
+                                  ad_Z.desc, ad_Z.ictxt());
+    Profiler::stop("power_hemat_blacs_real_2");
 
-    // // ---> ADD START: Denoising / Quantization for consistency <---
-    // // Force truncation of numerical noise (< 1e-14) to ensure bitwise reproducibility
-    // // across parallel runs with potentially different reduction orders.
-    // {
-    //     const double precision_scale = 1.0e12; // Keep ~14 digits
-    //     T* ptr = Z_local_opt.ptr();
-    //     size_t size = Z_local_opt.size();
-    //     for(size_t i = 0; i < size; ++i) {
-    //          // Round to nearest 1e-14
-    //          ptr[i] = std::round(ptr[i] * precision_scale) / precision_scale;
-    //     }
-    // }
-    // // ---> ADD END <---
-
-    // Convert real eigenvectors to complex (with zero imaginary part)
-    auto Z_local_opt_complex = Z_local_opt.to_complex();
-    
-    // // ---> ADD START: Print Eigenvectors Z (Debug) <---
-    // {
-    //     // Use BLACS to get grid coordinates to avoid dependency on global MPI object
-    //     int myrow, mycol, nprow, npcol;
-    //     Cblacs_gridinfo(ad_Z_opt.ictxt(), &nprow, &npcol, &myrow, &mycol);
-
-    //     if (myrow == 0 && mycol == 0) {
-    //         printf("DEBUG_Z_local_opt_complex_REAL: GridRank(0,0) LocDim=(%d,%d) GlobalN=%d\n", 
-    //                 Z_local_opt_complex.nr(), Z_local_opt_complex.nc(), n);
-    //     }
-        
-    //     for(int i = 0; i < Z_local_opt_complex.nr(); ++i) {
-    //         for(int j = 0; j < Z_local_opt_complex.nc(); ++j) {
-    //             std::complex<T> val = Z_local_opt_complex(i, j);
-    //             // 仅打印模长大于阈值的元素
-    //             if(std::abs(val) > 1e-8) {
-    //                 int global_row = ad_Z_opt.indx_l2g_r(i); // Global row index (component of eigenvector)
-    //                 int global_col = ad_Z_opt.indx_l2g_c(j); // Global col index (which eigenvector)
-                    
-    //                 printf("  EigVec_Val: GridRank(%d,%d) Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-    //                     myrow, mycol, i, j, global_row, global_col, std::real(val), std::imag(val));
-    //             }
-    //         }
-    //     }
-    //     fflush(stdout);
-    // }
-    // // ---> ADD END <---
-
-    // Transfer using complex matrix descriptor
-    ScalapackConnector::pgemr2d_f(n, n, Z_local_opt_complex.ptr(), 1, 1, ad_Z_opt.desc,
-                                  Z_local.ptr(), 1, 1, ad_Z.desc, ad_Z.ictxt());
-    Profiler::stop("power_hemat_blacs_2");
-
-    // Check number of non-singular eigenvalues
+    // check the number of non-singular eigenvalues,
+    // using the fact that W is in descending order
     n_filtered = n;
-    for (int i = 0; i < n; i++)
-    {
+    for (int i = 0; i != n; i++)
         if (W[n - 1 - i] >= threshold)
         {
             n_filtered = i;
             break;
         }
-    }
 
-    // Filter and scale eigenvalues
-    Profiler::start("power_hemat_blacs_3");
-    std::vector<T> W_temp(n, T(0));
-    for (int i = 0; i < n - n_filtered; i++)
+    // filter and scale the eigenvalues, store in a temp array
+    Profiler::start("power_hemat_blacs_real_3");
+    double W_temp[n];
+    for (int i = n - n_filtered; i != n; i++) W_temp[i] = 0.0;
+    for (int i = 0; i != n - n_filtered; i++)
     {
         if (W[i] < 0 && !is_int_power)
         {
@@ -965,29 +846,30 @@ matrix_m<std::complex<T>> power_hemat_blacs_real(matrix_m<std::complex<T>> &A_lo
                 i, W[i], power);
         }
         W_temp[i] = std::pow(W[i], power);
-        //W_temp[i] = W[i];
     }
-    Profiler::stop("power_hemat_blacs_3");
+    Profiler::stop("power_hemat_blacs_real_3");
+    // debug print
+    // for (int i = 0; i != n; i++)
+    // {
+    //     LIBRPA::utils::lib_printf("%d %f %f\n", i, W[i], W_temp[i]);
+    // }
 
-    Profiler::start("power_hemat_blacs_4");
-    // Scale eigenvectors using complex matrix operations
-    auto scaled_opt = Z_local_opt_complex.copy();
-    for (int i = 0; i < n; i++)
+    Profiler::start("power_hemat_blacs_real_4");
+    // create scaled eigenvectors
+    auto scaled_opt = Z_local_opt.copy();
+    for (int i = 0; i != n; i++)
     {
-        // Use ScaLAPACK scaling function with complex matrix
         ScalapackConnector::pscal_f(n, W_temp[i], scaled_opt.ptr(), 1, 1 + i, ad_Z_opt.desc, 1);
     }
-
-    // Compute Z * diag(W_temp) * Z^H
-    ScalapackConnector::pgemm_f('N', 'C', n, n, n, 1.0, Z_local_opt_complex.ptr(), 1, 1,
-                                ad_Z_opt.desc, scaled_opt.ptr(), 1, 1, ad_Z_opt.desc, 0.0,
-                                A_local.ptr(), 1, 1, ad_A.desc);
-
+    ScalapackConnector::pgemm_f('N', 'C', n, n, n, 1.0, Z_local_opt.ptr(), 1, 1, ad_Z_opt.desc,
+                                scaled_opt.ptr(), 1, 1, ad_Z_opt.desc, 0.0, A_local.ptr(), 1, 1,
+                                ad_A.desc);
     auto scaled = Z_local.copy();
-    // Transfer back to original complex matrix
+    // send back the scaled eigenvector matrix with descriptor using optimized block size to that
+    // with input descriptor
     ScalapackConnector::pgemr2d_f(n, n, scaled_opt.ptr(), 1, 1, ad_Z_opt.desc, scaled.ptr(), 1, 1,
                                   ad_Z.desc, ad_Z.ictxt());
-    Profiler::stop("power_hemat_blacs_4");
+    Profiler::stop("power_hemat_blacs_real_4");
 
     return scaled;
 }

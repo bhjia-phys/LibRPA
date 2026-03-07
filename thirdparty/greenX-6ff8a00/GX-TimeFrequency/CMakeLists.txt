@@ -37,6 +37,7 @@ target_link_libraries(LibGXMiniMax GXCommon ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES
 add_executable(GXTabulateGrids)
 
 set_target_properties(GXTabulateGrids
+        PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_Fortran_BIN_DIRECTORY}
         RUNTIME_OUTPUT_NAME gx_tabulate_grids.exe)
 
@@ -115,6 +116,7 @@ target_link_libraries(test_gx_minimax_grid
 # Build location of the binary
 # TODO(Alex) Consider move this to test/, to sit with the python drivers
 set_target_properties(test_gx_minimax_grid
+        PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_Fortran_BIN_DIRECTORY})
 
 # Copy .py test to the `build/test` directory, such that one can run pytest there

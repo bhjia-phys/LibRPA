@@ -86,8 +86,8 @@ static Matz loadMatrix(const std::string& filePath) {
 
 
 bool convert_csc(const std::string& filePath, std::map<std::string, Matz>& matrices, std::string& key) {
-    // 修改后的正则表达式，添加第三种格式支持
-    std::regex filePattern(R"((\w+)_spin_(\d+)_kpt_(\d{6})(?:_freq_(\d+))?|band_vxc_mat_spin_(\d+)_k_(\d{5})|band_ovlp_k_(\d{5})|band_([a-zA-Z_]+)_spin_(\d+)_k_(\d{5}))");
+    // 定义正则表达式，用于匹配两种文件名格式
+    std::regex filePattern(R"((\w+)_spin_(\d+)_kpt_(\d{6})(?:_freq_(\d+))?.csc|band_vxc_mat_spin_(\d+)_k_(\d{5}).csc)");
     std::smatch match;
 
     // 如果文件名符合正则表达式模式
@@ -96,33 +96,24 @@ bool convert_csc(const std::string& filePath, std::map<std::string, Matz>& matri
 
         // 检查是否匹配到第二种格式
         if (!match[5].str().empty()) {
-            // 第二种格式: band_vxc_mat_spin_(\d+)_k_(\d{5})
+            // 第二种格式
             oss << "band_vxc_mat_spin_" << match[5] << "_k_" << match[6];
-        } 
-        // 检查是否匹配到第三种格式
-        else if (!match[7].str().empty()) {
-            // 第三种格式: band_ovlp_k_(\d{5})
-            oss << "band_ovlp_k_" << match[7];
-        }
-        // 新增：检查是否匹配到第四种格式
-        else if (!match[8].str().empty()) {
-            // 第四种格式: band_(\w+)_spin_(\d+)_k_(\d{5})
-            oss << "band_" << match[8] << "_spin_" << match[9] << "_k_" << match[10];
-        }
-        else {
-            // 第一种格式: (\w+)_spin_(\d+)_kpt_(\d{6})
+        } else {
+            // 第一种格式
             oss << match[1] << "_spin_" << match[2] << "_kpt_" << std::setw(6) << std::setfill('0') << match[3];
             if (!match[4].str().empty()) {
                 oss << "_freq_" << match[4];
             }
         }
-        
+
         key = oss.str(); // 生成的key
 
         // 尝试加载矩阵，并处理可能的异常
         try {
             Matz matrix = loadMatrix(filePath);
+            
             matrices[key] = matrix;
+
             std::cout << "Matrix loaded and stored successfully under key: " << key << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "Failed to load matrix from file: " << filePath << " Error: " << e.what() << std::endl;

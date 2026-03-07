@@ -28,10 +28,12 @@ private:
     bool adaptive_enabled_;               // 是否启用自适应调整
     double beta_min_;                    // 最小 beta 值
     double beta_max_;                    // 最大 beta 值
-    std::deque<double> residual_history_norms_;  // 残差范数历史（用于自适应分析）
+    std::deque<double> residual_history_norms_;
+    std::deque<double> eigenvalue_change_history_;  // 残差范数历史（用于自适应分析）
     int last_beta_adjustment_step_;      // 上次调整 beta 的步数
 
     // 私有成员函数声明
+    double get_adaptive_beta();  // 自适应 beta 调整
     double matrix_inner_product(const matrix& A, const matrix& B);
     matrix solve_linear_system(const matrix& A, const matrix& b);
     
@@ -51,6 +53,7 @@ public:
      * @return 混合后的新输入矩阵
      */
     matrix mix(const matrix& current_output);
+    matrix mix(const matrix& current_output, double eigenvalue_change_ev);
     
     /**
      * @brief 获取当前历史记录大小

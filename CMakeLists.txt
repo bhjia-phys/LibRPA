@@ -3,15 +3,6 @@ cmake_minimum_required(VERSION 3.13)
 
 project(LibRPA NONE)
 
-# 设置全局编译选项 - 添加fPIC以支持动态链接
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(CMAKE_Fortran_COMPILER_ID MATCHES "Intel" OR CMAKE_Fortran_COMPILER_ID MATCHES "IntelLLVM")
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fPIC")
-endif()
-if(CMAKE_CXX_COMPILER_ID MATCHES "Intel" OR CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-endif()
-
 # extract version number from version.h file
 file(READ ${PROJECT_SOURCE_DIR}/src/version.h version_file)
 string(REGEX MATCH "LIBRPA_MAJOR_VERSION ([0-9]+)" librpa_major_version ${version_file})
@@ -200,13 +191,7 @@ endif()
 if(USE_GREENX_API)
   if(NOT USE_EXTERNAL_GREENX)
     message(STATUS "Generate MiniMax grids by using API of GreenX library")
-    # 启用GreenX解析延拓组件（必须在add_subdirectory之前设置）
-    set(AC_COMPONENT ON CACHE BOOL "Enable Analytic Continuation component" FORCE)
-    set(ENABLE_GNU_GMP ON CACHE BOOL "Enable GNU GMP library" FORCE)
-    # 为GreenX添加fPIC编译选项
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Position independent code" FORCE)
-    # add_subdirectory(./thirdparty/greenX-6ff8a00)
-    add_subdirectory(./thirdparty/greenX-c90d131)
+    add_subdirectory(./thirdparty/greenX-6ff8a00)
   endif()
 else()
   message(STATUS "Generate MiniMax grids by loading plain data accessed from old GreenX repository")

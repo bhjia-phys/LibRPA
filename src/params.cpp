@@ -13,10 +13,7 @@ std::string Params::output_file = "stdout";
 std::string Params::output_dir = "librpa.d/";
 std::string Params::tfgrids_type = "minimax";
 std::string Params::DFT_software = "auto";
-std::string Params::analycont_method = "both";
 std::string Params::parallel_routing = "auto";
-
-double Params::perturbation_magnitude = 0.0;
 
 int Params::nfreq = 0;
 int Params::n_params_anacon = -1;
@@ -34,9 +31,6 @@ double Params::libri_exx_threshold_V = 0.0;
 double Params::libri_g0w0_threshold_C = 0.0;
 double Params::libri_g0w0_threshold_G = 0.0;
 double Params::libri_g0w0_threshold_Wc = 0.0;
-double Params::minimax_min_gap = -1.0;
-double Params::minimax_max_transition = -1.0;
-bool Params::use_fullcoul_exx = false;
 
 bool Params::use_scalapack_ecrpa = true;
 bool Params::use_scalapack_gw_wc = false;
@@ -79,9 +73,6 @@ void Params::print()
         {"libri_g0w0_threshold_C", libri_g0w0_threshold_C},
         {"libri_g0w0_threshold_G", libri_g0w0_threshold_G},
         {"libri_g0w0_threshold_Wc", libri_g0w0_threshold_Wc},
-        {"minimax_min_gap", minimax_min_gap},
-        {"minimax_max_transition", minimax_max_transition},
-        {"perturbation_magnitude", perturbation_magnitude},
     };
 
     const std::vector<std::pair<std::string, int>> int_params{
@@ -97,7 +88,6 @@ void Params::print()
         {"output_file", output_file},
         {"tfgrids_type", tfgrids_type},
         {"parallel_routing", parallel_routing},
-        {"analycont_method", analycont_method},
     };
 
     const std::vector<std::pair<std::string, bool>> bool_params{
@@ -108,7 +98,6 @@ void Params::print()
         {"replace_w_head", replace_w_head},
         {"use_shrink_abfs", use_shrink_abfs},
         {"use_soc", use_soc},
-        {"use_fullcoul_exx", use_fullcoul_exx},
     };
 
     for (const auto &param : str_params)

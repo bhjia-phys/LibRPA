@@ -15,10 +15,10 @@ enum class task_t {
     QSGW,
     QSGWA,
     QSGW_band,
+    QSGW_band0,
     HF_band,
     scRPA,
     scRPA_band,
-    QSGW_band0,
 };
 
 }

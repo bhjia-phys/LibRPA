@@ -47,31 +47,39 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
         case 3: /* Read velocity matrix and calculate head and wing */
         {
             int n_basis, n_states, n_spin;
+            // using LIBRPA::envs::mpi_comm_global_h;
+            /*read_scf_occ_eigenvalues("./pyatb_librpa_df/band_out", pyatb_meanfield);
+            read_eigenvector("./pyatb_librpa_df/", pyatb_meanfield);
+            read_velocity("./pyatb_librpa_df/velocity_matrix", pyatb_meanfield);
+            std::vector<Vector3_Order<double>> kfrac_band;
+            kfrac_band =
+                read_band_kpath_info(n_basis, n_states, n_spin, "./pyatb_librpa_df/k_path_info");
+
+            df_headwing.set(pyatb_meanfield, kfrac_band, frequencies_target, n_basis, n_states,
+                            n_spin);*/
 
             std::string file_abacus = driver_params.input_dir + "pyatb_librpa_df/velocity_matrix";
-            // std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
-            std::string file_aims = driver_params.input_dir + "mommat_ks_kpt_000001.dat";
+            std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
             ifstream infile_abacus;
             ifstream infile_aims;
             infile_abacus.open(file_abacus);
             infile_aims.open(file_aims);
             if (infile_abacus.is_open())
             {
-                read_scf_occ_eigenvalues(driver_params.input_dir + "pyatb_librpa_df/band_out",
-                                         pyatb_meanfield);
-                read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/", pyatb_meanfield);
+                /*read_velocity(file_abacus, meanfield);
+                std::vector<Vector3_Order<double>> kfrac_band = read_band_kpath_info(
+                    n_basis, n_states, n_spin, "./pyatb_librpa_df/k_path_info");
+                df_headwing.set(meanfield, kfrac_band, frequencies_target, n_basis, n_states,
+                                n_spin);*/
+                // read_scf_occ_eigenvalues("./pyatb_librpa_df/band_out", pyatb_meanfield);
+                // read_eigenvector("./pyatb_librpa_df/", pyatb_meanfield);
 
-                read_velocity(file_abacus, pyatb_meanfield);
+                read_velocity(file_abacus, meanfield);
                 int flag;
                 std::vector<Vector3_Order<double>> kfrac_band =
                     read_band_kpath_info(driver_params.input_dir + "pyatb_librpa_df/k_path_info",
                                          n_basis, n_states, n_spin, flag);
-                if (Params::use_soc)
-                {
-                    assert(n_basis % 2 == 0 && "Error: nbasis is not even when SOC!");
-                    n_basis = n_basis / 2;
-                }
-                df_headwing.set(pyatb_meanfield, kfrac_band, frequencies_target, n_basis, n_states,
+                df_headwing.set(meanfield, kfrac_band, frequencies_target, n_basis, n_states,
                                 n_spin);
             }
             else if (infile_aims.is_open())
@@ -91,13 +99,12 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
             infile_aims.close();
 
             df_headwing.cal_head();
-            df_target = df_headwing.get_head_vec();
-            df_headwing.test_head();
             df_headwing.cal_wing();
             // for debug
             // df_headwing.set_0_wing();
 
-            if (Params::debug) df_headwing.test_wing();
+            df_target = df_headwing.get_head_vec();
+            df_headwing.test_head();
             break;
         }
         case 4: /* Read velocity matrix and calculate head only */
@@ -105,8 +112,7 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
             int n_basis, n_states, n_spin;
 
             std::string file_abacus = driver_params.input_dir + "pyatb_librpa_df/velocity_matrix";
-            // std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
-            std::string file_aims = driver_params.input_dir + "mommat_ks_kpt_000001.dat";
+            std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
             ifstream infile_abacus;
             ifstream infile_aims;
             infile_abacus.open(file_abacus);

@@ -1,6 +1,8 @@
-input_dir = ./input_librpa/
-task = g0w0
+task = g0w0_band
 nfreq = 16
-replace_w_head = f
+
+option_dielect_func = 0
+replace_w_head = t
 use_scalapack_gw_wc = t
 parallel_routing = libri
+binary_input = t

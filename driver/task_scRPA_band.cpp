@@ -2,40 +2,47 @@
 #include "task_scRPA_band.h"
 
 // 标准库头文件
-#include <cmath>
-#include <fstream>   // 用于文件存在检查
-#include <iomanip>   // 用于格式化
-#include <iostream>  // 用于输入输出操作
-#include <map>       // 用于std::map容器
+#include <iostream>         // 用于输入输出操作
+#include <map>              // 用于std::map容器
+#include <string>           // 用于std::string类
+#include <fstream> // 用于文件存在检查
 #include <sstream>
-#include <string>  // 用于std::string类
+#include <iomanip> // 用于格式化
 #include <vector>
+#include <cmath>
 // 自定义头文件
+     
+#include "meanfield.h"              // MeanField类相关
+#include "params.h"                 // 参数设置相关
+#include "pbc.h"                    // 周期性边界条件相关
+#include "chi0.h"                   // 响应函数相关
+#include "gw.h"                     // GW计算相关
+#include "analycont.h"              // 分析延拓相关
+#include "qpe_solver.h"             // 准粒子方程求解器
+#include "epsilon.h"                // 介电函数相关
+#include "exx.h"                    // Exact exchange相关
+#include "constants.h"              // 常量定义
+#include "coulmat.h"                // 库仑矩阵相关
+#include "profiler.h"               // 性能分析工具
+#include "ri.h"     
 
-#include "Hamiltonian.h"  // 哈密顿量相关
-#include "analycont.h"    // 分析延拓相关
-#include "chi0.h"         // 响应函数相关
-#include "constants.h"    // 常量定义
-#include "convert_csc.h"
-#include "coulmat.h"  // 库仑矩阵相关
-#include "driver_params.h"
-#include "driver_utils.h"
-#include "envs_io.h"
 #include "envs_mpi.h"
-#include "epsilon.h"                  // 介电函数相关
-#include "exx.h"                      // Exact exchange相关
-#include "fermi_energy_occupation.h"  // 费米能和占据数计算相关
-#include "gw.h"                       // GW计算相关
-#include "matrix.h"
-#include "meanfield.h"   // MeanField类相关
-#include "params.h"      // 参数设置相关
-#include "pbc.h"         // 周期性边界条件相关
-#include "profiler.h"    // 性能分析工具
-#include "qpe_solver.h"  // 准粒子方程求解器
-#include "read_data.h"
-#include "ri.h"
+#include "envs_io.h"
 #include "utils_timefreq.h"
-#include "write_aims.h"
+
+#include "read_data.h"       
+#include "write_aims.h"    
+#include "driver_params.h"  
+#include "driver_utils.h"  
+
+#include "matrix.h"
+#include "read_data.h"     
+#include "fermi_energy_occupation.h"// 费米能和占据数计算相关
+#include "convert_csc.h"
+#include "Hamiltonian.h"            // 哈密顿量相关
+
+
+
 
 void task_scRPA_band()
 {
@@ -62,7 +69,6 @@ void task_scRPA_band()
     const auto n_bands = meanfield.get_n_bands();
     const auto n_kpoints = meanfield.get_n_kpoints();
     const auto n_aos = meanfield.get_n_aos();
-    const auto n_soc = meanfield.get_n_soc();
 
 
     // 初始化

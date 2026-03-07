@@ -181,6 +181,13 @@ ComplexMatrix MeanField::get_dmat_cplx(int ispin, int isoc1, int isoc2, int ikpt
         LapackConnector::scal(this->n_aos, this->wg[ispin](ikpt, ib),
                               scaled_wfc_conj.c + n_aos * ib, 1);
     auto dmat_cplx = transpose(this->wfc[ispin][isoc1][ikpt], false) * scaled_wfc_conj;
+    // for (int i = 0; i!= this->n_bands; i++) {
+    //     for(int j =0 ; j!= this->n_aos; j++){
+    //         printf(
+    //         "dmat_cplx, ispin, %d ikpt,i,j %d %zu %zu  = (%.10e,%.10e)\n", ispin, ikpt , i, j, dmat_cplx(i,j).real(),dmat_cplx(i,j).imag());
+    //     }
+    // }
+
     return dmat_cplx;
 }
 

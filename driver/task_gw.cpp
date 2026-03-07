@@ -48,47 +48,6 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Chi0 chi0(meanfield, klist, tfg);
     chi0.gf_R_threshold = Params::gf_R_threshold;
 
-    Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
-    {
-        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
-    }
-    else
-    {
-        // NOTE: local_atpair already set in the main.cpp.
-        //       It can consists of distributed atom pairs of only upper half.
-        //       Setup of local_atpair may be better to extracted as some util function,
-        //       instead of in the main driver.
-        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
-                    true);
-    }
-    Profiler::cease("read_vq_cut");
-    std::vector<double> epsmac_LF_imagfreq_re;
-
-    if (Params::replace_w_head)
-    {
-        std::vector<double> omegas_dielect;
-        std::vector<double> dielect_func;
-        if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
-            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
-                             dielect_func);
-
-        epsmac_LF_imagfreq_re = interpolate_dielec_func(Params::option_dielect_func, omegas_dielect,
-                                                        dielect_func, chi0.tfg.get_freq_nodes());
-
-        if (Params::debug)
-        {
-            if (mpi_comm_global_h.is_root())
-            {
-                lib_printf("Dielectric function parsed:\n");
-                for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
-                    lib_printf("%d %f %f\n", i + 1, chi0.tfg.get_freq_nodes()[i],
-                               epsmac_LF_imagfreq_re[i]);
-            }
-            mpi_comm_global_h.barrier();
-        }
-    }
-
     chi0.set_input_dir(driver_params.input_dir);
     Profiler::start("chi0_build", "Build response function chi0");
     chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
@@ -123,6 +82,22 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         }
     }
 
+    Profiler::start("read_vq_cut", "Load truncated Coulomb");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    {
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
+                    true);
+    }
+    Profiler::cease("read_vq_cut");
+
     Profiler::start("read_vxc", "Load DFT xc potential");
     std::vector<matrix> vxc;
     int flag_read_vxc = read_vxc(driver_params.input_dir + "vxc_out", vxc);
@@ -141,6 +116,32 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::stop("read_vxc");
     std::flush(ofs_myid);
 
+    std::vector<double> epsmac_LF_imagfreq_re;
+
+    if (Params::replace_w_head)
+    {
+        std::vector<double> omegas_dielect;
+        std::vector<double> dielect_func;
+        if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
+                             dielect_func);
+
+        epsmac_LF_imagfreq_re = interpolate_dielec_func(Params::option_dielect_func, omegas_dielect,
+                                                        dielect_func, chi0.tfg.get_freq_nodes());
+
+        if (Params::debug)
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("Dielectric function parsed:\n");
+                for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
+                    lib_printf("%d %f %f\n", i + 1, chi0.tfg.get_freq_nodes()[i],
+                               epsmac_LF_imagfreq_re[i]);
+            }
+            mpi_comm_global_h.barrier();
+        }
+    }
+
     Profiler::start("g0w0_exx", "Build exchange self-energy");
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
@@ -149,20 +150,10 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         Profiler::stop("ft_vq_cut");
 
         Profiler::start("g0w0_exx_real_work");
-        if (Params::use_shrink_abfs)
-        {
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
-            else
-                exx.build<double>(Cs_shrinked_data, Rlist, VR);
-        }
+        if (Params::use_soc)
+            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
         else
-        {
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_data, Rlist, VR);
-            else
-                exx.build<double>(Cs_data, Rlist, VR);
-        }
+            exx.build<double>(Cs_data, Rlist, VR);
         exx.build_KS_kgrid();
         Profiler::stop("g0w0_exx_real_work");
     }
@@ -380,7 +371,7 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
                         const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
                         const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                        printf("%5d %16.5f %16.15f %16.15f %16.15f %16.15f %16.15f %16.15f\n",
+                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
                                i_state + 1, occ_state, eks_state, vxc_state, exx_state, resigc,
                                imsigc, eqp);
 

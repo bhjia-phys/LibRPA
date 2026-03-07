@@ -1,5 +1,5 @@
 #include "epsilon.h"
-#define OPEN_TEST_FOR_LU_DECOMPOSITION
+
 #include <math.h>
 #include <omp.h>
 
@@ -215,9 +215,7 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
                 chi_2d_time = (chi_end_2d - chi_end_comm);
             }
 
-            double pi_begin = omp_get_wtime();//print
-
-
+            double pi_begin = omp_get_wtime();
             ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0, coul_block.ptr(), 1, 1,
                                         desc_nabf_nabf.desc, chi0_block.ptr(), 1, 1,
                                         desc_nabf_nabf.desc, 0.0, coul_chi0_block.ptr(), 1, 1,
@@ -319,41 +317,15 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
     // ofs_myid << "Iset Jset " << s0_s1 << endl;
     // ofs_myid << "atpair_unordered_local of myid " << blacs_ctxt_global_h.myid << " " <<
     // atpair_unordered_local << endl;
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    // printf("success before vector qpts processid:%d,chi0.tfg.get_freq_nodes()[0]:%f,chi0.get_chi0_q().size():%d\n", mpi_comm_global_h.myid,
-        //    chi0.tfg.get_freq_nodes()[0], chi0.get_chi0_q().size());
-    // printf("chi0.get_chi0_q().empty():%d\n", chi0.get_chi0_q().empty());
-    printf("processId:%d,chi0.klist.size():%zu\n", mpi_comm_global_h.myid, chi0.klist.size());
-    // for(const auto &k : chi0.klist)
-    // {
-    //     printf("processId:%d, k: (%f, %f, %f)\n", mpi_comm_global_h.myid, k.x, k.y, k.z);
-    // }
-    #endif
+
     vector<Vector3_Order<double>> qpts;
-    
-    // for (const auto &qMuNuchi : chi0.get_chi0_q().at(chi0.tfg.get_freq_nodes()[0]))
-    // {
-    //     qpts.push_back(qMuNuchi.first);
-    //     #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    //     const auto &q = qMuNuchi.first;
-    //     printf("processId:%d, q: (%f, %f, %f)\n", mpi_comm_global_h.myid, q.x, q.y, q.z);
-    //     #endif
-    // }
-    for(const auto &q : chi0.klist)
-    {
-        qpts.push_back(q);
-        #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-        printf("processId:%d, q: (%f, %f, %f)\n", mpi_comm_global_h.myid, q.x, q.y, q.z);
-        #endif
-    }
+    for (const auto &qMuNuchi : chi0.get_chi0_q().at(chi0.tfg.get_freq_nodes()[0]))
+        qpts.push_back(qMuNuchi.first);
+
     complex<double> tot_RPA_energy(0.0, 0.0);
     map<Vector3_Order<double>, complex<double>> cRPA_q;
     if (mpi_comm_global_h.is_root()) lib_printf("Finish init RPA blacs 2d\n");
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    printf("success before for loop processid:%d\n", mpi_comm_global_h.myid);
-    #endif
 #ifdef LIBRPA_USE_LIBRI
-    
     for (const auto &q : qpts)
     {
         coul_block.zero_out();
@@ -373,15 +345,9 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                 const auto Nu = Mu_Nu.second;
                 // ofs_myid << "myid " << blacs_ctxt_global_h.myid << "Mu " << Mu << " Nu " << Nu <<
                 // endl;
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success before if coulmat.count:%d\n", mpi_comm_global_h.myid);
-                #endif
                 if (coulmat.count(Mu) == 0 || coulmat.at(Mu).count(Nu) == 0 ||
                     coulmat.at(Mu).at(Nu).count(q) == 0)
                     continue;
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success after if coulmat.count:%d\n", mpi_comm_global_h.myid);
-                #endif
                 const auto &Vq = coulmat.at(Mu).at(Nu).at(q);
                 const auto n_mu = LIBRPA::atomic_basis_abf.get_atom_nb(Mu);
                 const auto n_nu = LIBRPA::atomic_basis_abf.get_atom_nb(Nu);
@@ -454,19 +420,8 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                 std::map<int,
                          std::map<std::pair<int, std::array<double, 3>>, Tensor<complex<double>>>>
                     chi0_libri;
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success before chi0.get_chi0_q().at(freq).at(q) processId:%d\n", mpi_comm_global_h.myid);
-                // printf("processId:%d,chi0.get_chi0_q().empty():%d\n", mpi_comm_global_h.myid, chi0.get_chi0_q().empty());
-                #endif
-                atom_mapping<ComplexMatrix>::pair_t_old chi0_wq;
-                if(!chi0.get_chi0_q().empty())
-                    chi0_wq = chi0.get_chi0_q().at(freq).at(q);
-                // const auto &chi0_wq = chi0.get_chi0_q().at(freq).at(q);
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success after chi0.get_chi0_q().at(freq).at(q) processId:%d\n", mpi_comm_global_h.myid);
-                #endif
+                const auto &chi0_wq = chi0.get_chi0_q().at(freq).at(q);
                 chi0_libri.clear();
-                if(!chi0.get_chi0_q().empty())
                 for (const auto &M_Nchi : chi0_wq)
                 {
                     const auto &M = M_Nchi.first;
@@ -489,15 +444,7 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                     lib_printf("chi0_freq_q size: %d,  freq: %f, q:( %f, %f, %f )\n",
                                chi0_wq.size(), freq, q.x, q.y, q.z);
                 }
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success before chi0.free_chi0_q(freq, q) processId:%d\n", mpi_comm_global_h.myid);
-                #endif
-                if(!chi0.get_chi0_q().empty())
-                    chi0.free_chi0_q(freq, q);
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // printf("success after chi0.free_chi0_q(freq, q) processId:%d\n", mpi_comm_global_h.myid);
-                #endif
-
+                chi0.free_chi0_q(freq, q);
 
                 LIBRPA::utils::release_free_mem();
                 // if(mpi_comm_global_h.is_root())
@@ -658,10 +605,6 @@ complex<double> compute_pi_det_blacs_2d(matrix_m<complex<double>> &loc_piT,
     //     print_complex_real_matrix("first_pi",pi_freq_q.at(0).at(0));
     //     print_complex_real_matrix("first_loc_piT_mat",loc_piT);
     // }
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    printf("success before pzgetrf_ processid:%d,range_all: %d, loc_piT.nr(): %d, loc_piT.nc(): %d\n",
-           mpi_comm_global_h.myid, range_all, loc_piT.nr(), loc_piT.nc());
-    #endif
     double det_begin = omp_get_wtime();
     // ScalapackConnector::transpose_desc(DESCPI_T, arrdesc_pi.desc);
     pzgetrf_(&range_all, &range_all, loc_piT.ptr(), &one, &one, arrdesc_pi.desc, ipiv, &info);
@@ -1058,19 +1001,11 @@ CorrEnergy compute_RPA_correlation(const Chi0 &chi0, const atpair_k_cplx_mat_t &
     part_range.resize(atom_mu.size());
     part_range[0] = 0;
     int count_range = 0;
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    // printf("success before part_range processid:%d, atom_mu.size(): %zu\n",
-        //    mpi_comm_global_h.myid, atom_mu.size());
-    #endif
     for (int I = 0; I != atom_mu.size() - 1; I++)
     {
         count_range += atom_mu[I];
         part_range[I + 1] = count_range;
     }
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    // printf("success after part_range processid:%d, atom_mu.size(): %zu\n",
-    //        mpi_comm_global_h.myid, atom_mu.size());
-    #endif
 
     // cout << "part_range:" << endl;
     // for (int I = 0; I != atom_mu.size(); I++)
@@ -1081,29 +1016,20 @@ CorrEnergy compute_RPA_correlation(const Chi0 &chi0, const atpair_k_cplx_mat_t &
 
     // pi_freq_q contains all atoms
     map<double, map<Vector3_Order<double>, ComplexMatrix>> pi_freq_q;
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    // printf("| process %d, qpts.size(): %zu,freq.size():%zu\n", mpi_comm_global_h.myid, chi0.klist.size(),chi0.tfg.get_freq_nodes().size());
-    #endif
-    for(const auto &freq : chi0.tfg.get_freq_nodes())
+
+    for (const auto &freq_q_MuNupi : pi_freq_q_Mu_Nu)
     {
-        // printf("| process %d, freq: %f\n", mpi_comm_global_h.myid, freq);
-        map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old> freq_q_MuNupi;
-        if(!chi0.get_chi0_q().empty())
-            freq_q_MuNupi=pi_freq_q_Mu_Nu.at(freq);
-        #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-        // printf("success before freq_q_MuNupi processid:%d, freq_q_MuNupi.size(): %zu\n",
-        //        mpi_comm_global_h.myid, freq_q_MuNupi.size());
-        #endif
-        for(const auto &q:chi0.klist){
-            atom_mapping<ComplexMatrix>::pair_t_old q_MuNupi;
-            if(!chi0.get_chi0_q().empty())
-                q_MuNupi = freq_q_MuNupi.at(q);
-            const auto MuNupi = q_MuNupi;
+        const auto freq = freq_q_MuNupi.first;
+
+        for (const auto &q_MuNupi : freq_q_MuNupi.second)
+        {
+            const auto q = q_MuNupi.first;
+            const auto MuNupi = q_MuNupi.second;
             pi_freq_q[freq][q].create(range_all, range_all);
 
             ComplexMatrix pi_munu_tmp(range_all, range_all);
             pi_munu_tmp.zero_out();
-            if(!chi0.get_chi0_q().empty())
+
             for (const auto &Mu_Nupi : MuNupi)
             {
                 const auto Mu = Mu_Nupi.first;
@@ -1142,9 +1068,6 @@ CorrEnergy compute_RPA_correlation(const Chi0 &chi0, const atpair_k_cplx_mat_t &
     {
         complex<double> tot_RPA_energy(0.0, 0.0);
         map<Vector3_Order<double>, complex<double>> cRPA_q;
-        #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-        int num_iteration = 0;
-        #endif
         for (const auto &freq_qpi : pi_freq_q)
         {
             const auto freq = freq_qpi.first;
@@ -1158,21 +1081,6 @@ CorrEnergy compute_RPA_correlation(const Chi0 &chi0, const atpair_k_cplx_mat_t &
                 ComplexMatrix identity_minus_pi(range_all, range_all);
                 identity.set_as_identity_matrix();
                 identity_minus_pi = identity - pi_freq_q[freq][q];
-                #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-                // if(num_iteration==0)
-                // if(mpi_comm_global_h.myid == 1)
-                // {
-                //     complex<double>* test_c= identity_minus_pi.c;
-                //     for(int i=0;i<range_all;i++){
-                //         for(int j=0;j<range_all;j++){
-                //             printf("%f+%fi ",
-                //                    test_c[i*range_all+j].real(), test_c[i*range_all+j].imag());
-                //         }
-                //         printf("\n");
-                //     }
-                // }
-                num_iteration++;
-                #endif
                 complex<double> det_for_rpa(1.0, 0.0);
                 int info_LU = 0;
                 int *ipiv = new int[range_all];
@@ -1403,21 +1311,12 @@ map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>>
     // std::stringstream ss;
     // ss<<"out_pi_rank_"<<mpi_comm_global_h.myid<<".txt";
     // fp.open(ss.str());
-    #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    // printf("success before irk_weight, pid: %d\n", mpi_comm_global_h.myid);
-    #endif
     for (auto &k_pair : irk_weight)
     {
         Vector3_Order<double> ik_vec = k_pair.first;
         for (int I = 0; I != natom; I++)
         {
-            #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-            // printf("success before gather_vp_row_q irk_weight, pid: %d\n", mpi_comm_global_h.myid);
-            #endif
             atom_mapping<ComplexMatrix>::pair_t_old Vq_row = gather_vq_row_q(I, coulmat, ik_vec);
-            #ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-            // printf("success after gather_vp_row_q irk_weight, pid: %d\n", mpi_comm_global_h.myid);
-            #endif
             for (auto &freq_p : chi0.get_chi0_q())
             {
                 const double freq = freq_p.first;
@@ -2077,38 +1976,12 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
         matrix_m<std::complex<double>> sqrtveig_blacs;
         if (is_gamma_point(q))
         {
-            // choice of power_hemat_blacs_real/power_hemat_blacs_desc
-            // leads to sub-meV difference
-            // sqrtveig_blacs = power_hemat_blacs(
-            sqrtveig_blacs = power_hemat_blacs_real(
+            sqrtveig_blacs = power_hemat_blacs_desc(
                 coul_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt, n_singular,
                 eigenvalues.c, 0.5, Params::sqrt_coulomb_threshold);
-            // // ---> ADD START: Print sqrtveig_blacs (Debug) <---
-            // // 该矩阵在频率循环外计算，不依赖频率。这里只在第一个q点打印以避免刷屏。
-            // if (iq == 0) 
-            // {
-            //     printf("DEBUG_sqrtveig_blacs_Gamma: rank=%d iq=%d LocDim=(%d,%d)\n", 
-            //             mpi_comm_global_h.myid, iq, sqrtveig_blacs.nr(), sqrtveig_blacs.nc());
-                
-            //     for(int i = 0; i < sqrtveig_blacs.nr(); ++i) {
-            //         for(int j = 0; j < sqrtveig_blacs.nc(); ++j) {
-            //             std::complex<double> val = sqrtveig_blacs(i, j);
-            //             // 仅打印非零（模长大于阈值）元素
-            //             if(std::abs(val) > 1e-8) {
-            //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
-            //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
-                            
-            //                 printf("  sqrtV_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-            //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
-            //             }
-            //         }
-            //     }
-            //     fflush(stdout);
-            // }
-            // // ---> ADD END <---
-            if (Params::replace_w_head && Params::option_dielect_func == 3)
+            if (Params::option_dielect_func == 3)
             {
-                df_headwing.wing_mu_to_lambda(sqrtveig_blacs, desc_nabf_nabf_opt);
+                df_headwing.wing_mu_to_lambda(sqrtveig_blacs);
             }
         }
         else
@@ -2192,7 +2065,6 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
             Profiler::stop("epsilon_prepare_chi0_2d");
 
             Profiler::start("epsilon_compute_eps", "Compute dielectric matrix");
-
             // for Gamma point, overwrite the head term
             if (epsmac_LF_imagfreq.size() > 0 && is_gamma_point(q))
             {
@@ -2221,7 +2093,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                     }
                     ofs_myid << get_timestamp() << "Perform the head & wing element overwrite"
                              << endl;
-                    df_headwing.rewrite_eps(chi0_block, ifreq, desc_nabf_nabf_opt);
+                    df_headwing.rewrite_eps(chi0_block, ifreq);
                 }
                 else
                 {
@@ -2272,34 +2144,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
             }
             else
             {
-
-                Profiler::start("epsilon_compute_eps_pgemm_1");//print
-                // // ---> ADD START: Print chi0_block (Wc) local elements <---
-                // {
-                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
-                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
-                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
-                //     printf("DEBUG_CHI0_BLOCK_Wc: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
-                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
-                    
-                //     // 遍历局部矩阵元素
-                //     for(int i = 0; i < chi0_block.nr(); ++i) {
-                //         for(int j = 0; j < chi0_block.nc(); ++j) {
-                //             std::complex<double> val = chi0_block(i, j);
-                //             // 仅打印模长大于阈值的元素，减少输出干扰
-                //             if(std::abs(val) > 1e-8) {
-                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
-                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
-                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
-                                
-                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
-                //             }
-                //         }
-                //     }
-                //     fflush(stdout);
-                // }
-                // // ---> ADD END <---
+                Profiler::start("epsilon_compute_eps_pgemm_1");
                 ScalapackConnector::pgemm_f('N', 'N', n_abf, n_abf, n_abf, 1.0, coul_block.ptr(), 1,
                                             1, desc_nabf_nabf_opt.desc, chi0_block.ptr(), 1, 1,
                                             desc_nabf_nabf_opt.desc, 0.0, coul_chi0_block.ptr(), 1,
@@ -2312,33 +2157,6 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                                             chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                 Profiler::cease("epsilon_compute_eps_pgemm_2");
                 // now chi0_block is actually v1/2 chi v1/2
-                
-                // // ---> ADD START: Print chi0_block (Wc) local elements <---
-                // {
-                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
-                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
-                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
-                //     printf("DEBUG_v1/2_chi_v1/2: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
-                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
-                    
-                //     // 遍历局部矩阵元素
-                //     for(int i = 0; i < chi0_block.nr(); ++i) {
-                //         for(int j = 0; j < chi0_block.nc(); ++j) {
-                //             std::complex<double> val = chi0_block(i, j);
-                //             // 仅打印模长大于阈值的元素，减少输出干扰
-                //             if(std::abs(val) > 1e-8) {
-                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
-                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
-                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
-                                
-                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
-                //             }
-                //         }
-                //     }
-                //     fflush(stdout);
-                // }
-                // ---> ADD END <--- 
                 chi0_block *= -1.0;
                 for (int i = 0; i != n_abf; i++)
                 {
@@ -2350,33 +2168,6 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 }
                 Profiler::stop("epsilon_compute_eps");
                 // now chi0_block is actually the dielectric matrix
-                // // ---> ADD START: Print chi0_block (Wc) local elements <---
-                // {
-                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
-                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
-                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
-                //     printf("DEBUG_dielectric_matrix: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
-                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
-                    
-                //     // 遍历局部矩阵元素
-                //     for(int i = 0; i < chi0_block.nr(); ++i) {
-                //         for(int j = 0; j < chi0_block.nc(); ++j) {
-                //             std::complex<double> val = chi0_block(i, j);
-                //             // 仅打印模长大于阈值的元素，减少输出干扰
-                //             if(std::abs(val) > 1e-8) {
-                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
-                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
-                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
-                                
-                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
-                //             }
-                //         }
-                //     }
-                //     fflush(stdout);
-                // }
-                // // ---> ADD END <--- 
-                
                 // perform inversion
                 Profiler::start("epsilon_invert_eps", "Invert dielectric matrix");
                 invert_scalapack(chi0_block, desc_nabf_nabf_opt);
@@ -2390,49 +2181,7 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                     chi0_block(ilo, jlo) -= 1.0;
                 }
                 Profiler::stop("epsilon_invert_eps");
-                // // ---> ADD START: Print chi0_block (Wc) local elements <---
-                // {
-                //     // 注意：chi0_block 是分布式的，这里只打印当前进程持有的局部数据块
-                //     // 如果矩阵很大，建议限制打印数量或只在特定 iq/ifreq 打印
-                //     // 这里我们假设你只在调试少量点，或者通过 grep 过滤
-                //     printf("DEBUG_epsilon_invert: rank=%d iq=%d iw=%d LocDim=(%d,%d)\n", 
-                //             mpi_comm_global_h.myid, iq, ifreq, chi0_block.nr(), chi0_block.nc());
-                    
-                //     // 遍历局部矩阵元素
-                //     for(int i = 0; i < chi0_block.nr(); ++i) {
-                //         for(int j = 0; j < chi0_block.nc(); ++j) {
-                //             std::complex<double> val = chi0_block(i, j);
-                //             // 仅打印模长大于阈值的元素，减少输出干扰
-                //             if(std::abs(val) > 1e-8) {
-                //                 // 获取该元素的全局索引以便对照（可选，也可以只看局部索引）
-                //                 int global_row = desc_nabf_nabf_opt.indx_l2g_r(i);
-                //                 int global_col = desc_nabf_nabf_opt.indx_l2g_c(j);
-                                
-                //                 printf("  chi0_Val: Rank%d Loc(%3d,%3d) Glo(%4d,%4d) = %20.20e + %20.20ei\n", 
-                //                     mpi_comm_global_h.myid, i, j, global_row, global_col, val.real(), val.imag());
-                //             }
-                //         }
-                //     }
-                //     fflush(stdout);
-                // }
-                // // ---> ADD END <--- 
-                
             }
-            // debug for GaAs
-            // for (int i = 0; i != n_abf; i++)
-            // {
-            //     for (int j = 0; j != n_abf; j++)
-            //     {
-            //     const int ilo = desc_nabf_nabf_opt.indx_g2l_r(i);
-            //     if (ilo < 0) continue;
-            //     const int jlo = desc_nabf_nabf_opt.indx_g2l_c(j);
-            //     if (jlo < 0) continue;
-            //     if(i==j)
-            //         chi0_block(ilo, jlo) = 1.0;
-            //     else
-            //         chi0_block(ilo, jlo) = 0.0;
-            //     }
-            // }
             // debug for unfold shrink Wc
             // for (int i = 0; i != n_abf; i++)
             //{

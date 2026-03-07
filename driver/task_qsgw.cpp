@@ -1,9 +1,13 @@
-#include "task_qsgw.h"
+﻿#include "task_qsgw.h"
 // 标准库头文件
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
 #include <fstream>   // 用于文件存在检查
 #include <iomanip>   // 用于格式化
 #include <iostream>  // 用于输入输出操作
+#include <limits>   // std::numeric_limits
 #include <map>       // 用于std::map容器
 #include <sstream>
 #include <string>  // 用于std::string类
@@ -18,6 +22,7 @@
 #include "coulmat.h"  // 库仑矩阵相关
 #include "driver_params.h"
 #include "driver_utils.h"
+#include "inputfile.h"
 #include "envs_blacs.h"
 #include "envs_io.h"
 #include "envs_mpi.h"
@@ -114,10 +119,11 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             oss_s2 << "S_spin_0" << (ispin + 1) << "_kpt_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".csc";
 
 
-            std::string hfFilePath = oss_hf.str();
-            std::string vxcFilePath = oss_vxc.str();
-            std::string sFilePath = oss_s.str();  // 获取S矩阵文件路径
-            std::string sFilePath_2 = oss_s2.str();
+            const std::string input_dir = driver_params.input_dir;
+            std::string hfFilePath = input_dir + "/" + oss_hf.str();
+            std::string vxcFilePath = input_dir + "/" + oss_vxc.str();
+            std::string sFilePath = input_dir + "/" + oss_s.str();  // 获取S矩阵文件路径
+            std::string sFilePath_2 = input_dir + "/" + oss_s2.str();
             
             Matz wfc1(n_bands, n_aos * n_soc, MAJOR::COL);
             for (int ib1 = 0; ib1 < n_bands; ++ib1)
@@ -144,8 +150,8 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 for (int j = 0; j < n_aos; ++j) {
                     hf_nao[ispin][ikpt](i, j) = 0.0;
                     vxc0[ispin][ikpt](i, j) = 0.0;
-                    s_nao[ispin][ikpt](i, j) = 0.0;  // 初始化S矩阵元素
-                    s_inverse[ispin][ikpt](i, j) = 0.0;  // 初始化S矩阵元素
+                    s_nao[ispin][ikpt](i, j) = (i == j ? 1.0 : 0.0);  // default: identity if no S file
+                    s_inverse[ispin][ikpt](i, j) = (i == j ? 1.0 : 0.0);  // default: identity if no S file
                 }
             }
 
@@ -425,25 +431,112 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     printf("%5s\n", "Total_electrons");
     printf("%5f\n", total_electrons);
 
-    // 设置收敛条件
-    double eigenvalue_tolerance = 1e-4;  // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 10;              // 最大迭代次数（测试用，先跑10次看看）
+    // ==============================
+    // QSGW convergence + mixing controls
+    // ==============================
+    // NOTE: driver/inputfile.cpp does NOT parse max_iter/mixing/mixing_history into Params.
+    // We re-parse librpa.in locally here so users can control these via input file.
+    double eigenvalue_diff_tolerance = 1e-3;  // eV (strict)
+    int max_iterations = 500;
+
+    // Convergence focus window around Fermi (0 => full-band). Default: focus 10 bands near Fermi.
+    // For an insulator (efermi in the gap), this corresponds roughly to {HOMO-4..HOMO} + {LUMO..LUMO+4}.
+    int eigdiff_focus_nbands = 10;
+
+    // Aggressive: focus-window weighted Hamiltonian mixing (0 => disable; default ties to eigdiff_focus_nbands)
+    int mix_focus_nbands = eigdiff_focus_nbands;
+    // Damping factor for updates outside focus window (0 => freeze outside window)
+    double mix_focus_outside_damp = 0.1;
+
+    // Repro scheme (from LibRPA-develop-fix/task_qsgwA.cpp): fixed Pulay mixer knobs.
+    // Optional diagnostic override via environment variables:
+    //   LIBRPA_QSGW_MIXING_HISTORY (int >= 1)
+    //   LIBRPA_QSGW_MIXING_BETA    (double > 0)
+    double mixing_beta = 0.2;
+    int mixing_history = 12;
+    const int linear_mixing_steps = 3; // first N steps rely on mixer’s linear fallback
+
+    {
+        const char* env_hist = std::getenv("LIBRPA_QSGW_MIXING_HISTORY");
+        if (env_hist != nullptr) {
+            try {
+                mixing_history = std::stoi(std::string(env_hist));
+            } catch (...) {
+                if (mpi_comm_global_h.is_root()) {
+                    std::cerr << "[QSGW] Warning: invalid LIBRPA_QSGW_MIXING_HISTORY='" << env_hist
+                              << "', keep default " << mixing_history << std::endl;
+                }
+            }
+        }
+        if (mixing_history < 1) {
+            if (mpi_comm_global_h.is_root()) {
+                std::cerr << "[QSGW] Warning: mixing_history=" << mixing_history
+                          << " < 1, reset to 1." << std::endl;
+            }
+            mixing_history = 1;
+        }
+
+        const char* env_beta = std::getenv("LIBRPA_QSGW_MIXING_BETA");
+        if (env_beta != nullptr) {
+            try {
+                mixing_beta = std::stod(std::string(env_beta));
+            } catch (...) {
+                if (mpi_comm_global_h.is_root()) {
+                    std::cerr << "[QSGW] Warning: invalid LIBRPA_QSGW_MIXING_BETA='" << env_beta
+                              << "', keep default " << mixing_beta << std::endl;
+                }
+            }
+        }
+        if (!(mixing_beta > 0.0)) {
+            if (mpi_comm_global_h.is_root()) {
+                std::cerr << "[QSGW] Warning: mixing_beta=" << mixing_beta
+                          << " <= 0, reset to 0.2." << std::endl;
+            }
+            mixing_beta = 0.2;
+        }
+
+        if (mpi_comm_global_h.is_root()) {
+            std::cout << "[QSGW] Mixer knobs: history=" << mixing_history
+                      << ", beta=" << mixing_beta << std::endl;
+        }
+    }
+
+    // Optional Hamiltonian band window (diagnostic acceleration)
+    int hamiltonian_cut_above_fermi = -1;
+    double hamiltonian_cut_diag_shift_ev = 20.0;
+
+    {
+        int flag = 0;
+        InputFile inputf;
+        auto parser = inputf.load(input_filename, false);
+        parser.parse_int("max_iter", max_iterations, max_iterations, flag);
+        // NOTE: ignore librpa.in mixing knobs for reproducibility with historical scheme
+        parser.parse_int("hamiltonian_cut_above_fermi", hamiltonian_cut_above_fermi, hamiltonian_cut_above_fermi, flag);
+        parser.parse_double("hamiltonian_cut_diag_shift_ev", hamiltonian_cut_diag_shift_ev, hamiltonian_cut_diag_shift_ev, flag);
+        // optional override
+        parser.parse_double("eigenvalue_diff_tolerance", eigenvalue_diff_tolerance, eigenvalue_diff_tolerance, flag);
+        parser.parse_int("eigdiff_focus_nbands", eigdiff_focus_nbands, eigdiff_focus_nbands, flag);
+        parser.parse_int("mix_focus_nbands", mix_focus_nbands, mix_focus_nbands, flag);
+        parser.parse_double("mix_focus_outside_damp", mix_focus_outside_damp, mix_focus_outside_damp, flag);
+    }
+
+    // No beta clamping / adaptive caps here: follow historical fixed settings.
+
+    double previous_homo = homo * HA2EV;   // 保存前一轮HOMO
+    double previous_lumo = lumo * HA2EV;   // 保存前一轮LUMO
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
     int frequency = n_bands + 1;
     std::vector<std::pair<int, int>> significant_positions;
-    // 定义存储前一轮的本征值以检查收敛性
+
+    // For convergence check: store previous iteration eigenvalues
     std::vector<matrix> previous_eigenvalues(n_spins);
-    
+
     // ==========================================
-    // Initialize Pulay Mixer
+    // Initialize Pulay Mixer (mixing Hamiltonian H0_GW_all)
     // ==========================================
-    // History size: 7 -> 10, Mixing beta: 0.5 -> 0.2
-    // 建议：对于难收敛体系，将 beta 调小至 0.2 甚至 0.1，history 增加至 10-15
-    // 增加一个延迟启动 Pulay 的参数
-    const int linear_mixing_steps = 3; // 前 3 步使用 Linear Mixing 稳定初期震荡
-    PulayMixer mixer(12, 0.2);
+    PulayMixer mixer(mixing_history, mixing_beta);
     bool mixer_initialized = false;
 
     mpi_comm_global_h.barrier();
@@ -687,6 +780,17 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                             n_bands, std::vector<std::vector<cplxdb>>(
                                          n_bands, std::vector<cplxdb>(n_bands + 1)));
                         const auto &sigc_sk = s_g0w0.sigc_is_ik_f_KS[i_spin][i_kpoint];
+
+                        // Optional: evaluate retarded Sigma at w + i*eta (stabilize AC)
+                        // AC scheme (from LibRPA-develop-fix/task_qsgwA.cpp):
+                        // - pre-AC truncate sigc(iω) to 1e-8
+                        // - if max(|sigc(iω)|) <= 1e-6: skip Pade and use sigc(iω0) as constant
+                        // - post-AC truncate result to 1e-6 (and sanitize NaN/Inf -> 0)
+                        const double sigc_trunc_in_scale = 1.0e8;
+                        const double ac_trunc_out_scale = 1.0e6;
+                        const double pade_threshold = 1.0e-6;
+
+
                         // const auto& freq = chi0.tfg.get_freq_nodes();
                         // std::vector<cplxdb> Omega_values(n_bands);
                         // // printf("%zu\n ",freq.size());
@@ -698,82 +802,82 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                  i_state_col++)
                             {
                                 std::vector<cplxdb> sigc_mn;
-                                double max_magnitude = 0.0; // 用于记录最大模长
-
+                                double max_magnitude = 0.0;
+                                // if(i_state_row==i_state_col){
+                                //     for (size_t w = 0; w < f_weight.size(); ++w) {
+                                //         cplxdb sigc_nn_iw = sigc_sk.at(freq[w])(i_state_row,
+                                //         i_state_row);
+                                //         Sigma_iskwnn[iteration-1][i_spin][i_kpoint][w][i_state_row]
+                                //         = sigc_nn_iw; Omega_values[i_state_row] += f_weight[w] *
+                                //         sigc_nn_iw * G0_matrix[i_state_row][w] *
+                                //         G0_matrix[i_state_row][w];
+                                //     }
+                                // }
                                 for (const auto &freq : chi0.tfg.get_freq_nodes())
                                 {
                                     auto val = sigc_sk.at(freq)(i_state_row, i_state_col);
 
-                                    // 截断精度到1e-8
+                                    // pre-AC rounding (match historical qsgwA scheme)
                                     {
-                                        const double scale = 1.0e8;
-                                        double re = std::round(val.real() * scale) / scale;
-                                        double im = std::round(val.imag() * scale) / scale;
-                                        val = std::complex<double>(re, im);
+                                        const double re = std::round(val.real() * sigc_trunc_in_scale) / sigc_trunc_in_scale;
+                                        const double im = std::round(val.imag() * sigc_trunc_in_scale) / sigc_trunc_in_scale;
+                                        val = cplxdb{re, im};
                                     }
 
-                                    // 记录这组数据的最大模长
-                                    double mag = std::abs(val);
+                                    const double mag = std::abs(val);
                                     if (mag > max_magnitude) max_magnitude = mag;
-
                                     sigc_mn.push_back(val);
                                 }
-                                
-                                cplxdb result = {0.0, 0.0};
-                                cplxdb result1 = {0.0, 0.0};
 
-                                // 阈值判断：如果整组数据的最大值都小于 1e-6，直接视为 0，不进行 Pade
-                                if (max_magnitude < 1e-6) 
+                                auto energy0 =
+                                    meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
+                                efermi = meanfield.get_efermi();
+                                if (!std::isfinite(energy0)) energy0 = efermi;
+
+                                auto result = cplxdb{0.0, 0.0};
+                                auto result1 = cplxdb{0.0, 0.0};
+
+                                if (max_magnitude > pade_threshold)
                                 {
-                                    result = {0.0, 0.0};
-                                    result1 = {0.0, 0.0};
+                                    try
+                                    {
+                                        LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs, sigc_mn);
+                                        result = pade.get(energy0 - efermi);
+                                        result1 = pade.get(0.0);
+                                    }
+                                    catch (...)
+                                    {
+                                        if (!sigc_mn.empty())
+                                        {
+                                            result = sigc_mn[0];
+                                            result1 = sigc_mn[0];
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    // 只有数据足够大时才进行 Pade 解析延拓
-                                    auto energy0 =
-                                        meanfield.get_eigenvals()[i_spin](i_kpoint, i_state_row);
-                                    efermi = meanfield.get_efermi();
-
-                                    // ---> ADD START: 防止 NaN 传入 <---
-                                    if (std::isnan(energy0) || std::isinf(energy0)) {
-                                        energy0 = efermi;
-                                    }
-                                    // ---> ADD END <---
-
-                                    try {
-                                        LIBRPA::AnalyContPade pade(Params::n_params_anacon, imagfreqs,
-                                                                    sigc_mn);
-                                        result = pade.get(energy0 - efermi);
-                                        result1 = pade.get(0.0);
-                                    } catch (...) {
-                                        // Pade 失败时的兜底：取第一个频率点的值
+                                    if (!sigc_mn.empty())
+                                    {
                                         result = sigc_mn[0];
                                         result1 = sigc_mn[0];
                                     }
+                                }
 
-                                    // ---> ADD START: Truncate Result AFTER Pade <---
-                                    // 后处理截断，保证一致性
-                                    {
-                                        if (std::isnan(result.real()) || std::isnan(result.imag()) ||
-                                            std::isinf(result.real()) || std::isinf(result.imag())) {
-                                            result = {0.0, 0.0};
-                                        }
-                                        if (std::isnan(result1.real()) || std::isnan(result1.imag()) ||
-                                            std::isinf(result1.real()) || std::isinf(result1.imag())) {
-                                            result1 = {0.0, 0.0};
-                                        }
+                                if (!std::isfinite(result.real()) || !std::isfinite(result.imag())) result = cplxdb{0.0, 0.0};
+                                if (!std::isfinite(result1.real()) || !std::isfinite(result1.imag())) result1 = cplxdb{0.0, 0.0};
 
-                                        const double scale = 1.0e6;
-                                        double re = std::round(result.real() * scale) / scale;
-                                        double im = std::round(result.imag() * scale) / scale;
-                                        result = std::complex<double>(re, im);
-
-                                        re = std::round(result1.real() * scale) / scale;
-                                        im = std::round(result1.imag() * scale) / scale;
-                                        result1 = std::complex<double>(re, im);
-                                    }
-                                    // ---> ADD END <---
+                                {
+                                    // Try nearbyint (ties-to-even) for bitwise reproducibility vs historical reference.
+                                    // const double re = std::round(result.real() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    // const double im = std::round(result.imag() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    const double re = std::round(result.real() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    const double im = std::round(result.imag() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    result = cplxdb{re, im};
+                                    // const double re1 = std::round(result1.real() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    // const double im1 = std::round(result1.imag() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    const double re1 = std::round(result1.real() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    const double im1 = std::round(result1.imag() * ac_trunc_out_scale) / ac_trunc_out_scale;
+                                    result1 = cplxdb{re1, im1};
                                 }
 
                                 // 存储值到 sigcmat
@@ -791,7 +895,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         Vc_GW_pure[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat, n_bands);
                         Vc_all[i_spin][i_kpoint] = Vc_GW_pure[i_spin][i_kpoint];
 
-                        // Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k_modeA(sigcmat,n_bands);
+                        // Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k_modeA(sigcmat, n_bands);
                         if(iteration>1){
                             Matz delta_Hartree_is_ik(n_bands, n_bands, MAJOR::COL);
                             delta_Hartree_is_ik = Hartree_i_delta[i_spin][i_kpoint];
@@ -1011,8 +1115,16 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 // 重新构建 H0_GW_all 以供外循环使用
                 // auto H0_GW_all = construct_H0_GW_new_basis(meanfield, H_KS0, H_DFT_nao, exx.exx_is_ik_KS, Vc_all,
                 //                                  n_spins, n_kpoints, n_bands);
-                auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
-                                                n_spins, n_kpoints, n_bands);
+                std::map<int, std::map<int, Matz>> H0_GW_all;
+                if (hamiltonian_cut_above_fermi >= 0) {
+                    H0_GW_all = construct_H0_GW_fermi_window(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                                                           n_spins, n_kpoints, n_bands,
+                                                           hamiltonian_cut_above_fermi,
+                                                           hamiltonian_cut_diag_shift_ev);
+                } else {
+                    H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                                               n_spins, n_kpoints, n_bands);
+                }
               
                 // ==========================================
                 // Pulay Mixing Execution (Outer Loop)
@@ -1049,7 +1161,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         mixer.initialize(mixed_input);
                         mixer_initialized = true;
                         if (mpi_comm_global_h.is_root()) {
-                            std::cout << "Pulay Mixer Initialized (History=12, Beta=0.2)" << std::endl;
+                            std::cout << "Pulay Mixer Initialized (History=" << mixing_history << ", Beta=" << mixer.get_mixing_beta() << ")" << std::endl;
                         }
                     } else {
                         try {
@@ -1069,6 +1181,8 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                             } else {
                                 mixed_output = mixer.mix(mixed_input);
                             }
+
+
 
                             // 4. Unpack result back to H0_GW_all
                             row_offset = 0;
@@ -1104,7 +1218,9 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 // 如果需要调试，可以取消注释
                 // ==========================================
                 // 打印 H0_GW_all 矩阵内容以供检查
-                /*
+                
+                if (Params::debug)
+                {
                 std::cout << "\n" << std::string(60, '=') << "\n";
                 std::cout << " DEBUG: H0_GW_all Matrix Dump (Iteration " << iteration << ")\n";
                 std::cout << std::string(60, '=') << "\n";
@@ -1127,7 +1243,9 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     }
                 }
                 std::cout << std::string(60, '=') << "\n";
-                */
+                
+                }
+
                 // ==========================================
                 // 计算全局费米能和占据数
                 const auto &Efermi0 = meanfield.get_efermi();
@@ -1141,54 +1259,6 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
                 efermi_values.push_back(efermi * HA2EV);
-                // 比较本轮和前一轮的本征值判断是否收敛
-                converged = true;
-                for (int ispin = 0; ispin < n_spins; ++ispin)
-                {
-                    const auto &current_eigenvals = meanfield.get_eigenvals()[ispin];
-                    const auto max_diff =
-                        (current_eigenvals - previous_eigenvalues[ispin]).absmax();
-                    if (max_diff > eigenvalue_tolerance)
-                    {
-                        converged = false;
-                        break;
-                    }
-                }
-
-                std::cout << "Converged after " << iteration << " iterations.\n";
-                // const std::string final_banner(90, '-');
-                lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
-                const auto &Efermi = meanfield.get_efermi();
-                printf("%5s\n", "efermi");
-                printf("%5f\n", Efermi);
-                for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
-                {
-                    for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
-                    {
-                        const auto &k = kfrac_list[i_kpoint];
-                        printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n",
-                                i_spin + 1, i_kpoint + 1, k.x, k.y, k.z);
-                        printf("%77s\n", final_banner.c_str());
-                        printf("%5s %16s %16s %16s \n", "State", "e_mf", "v_xc", "v_exx");
-                        printf("%77s\n", final_banner.c_str());
-                        for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
-                        {
-                            const auto &eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
-                            const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
-                            // const auto &hartree_state = Hartree.Hartree_is_ik_KS[i_spin][i_kpoint](i_state, i_state)* HA2EV;
-                            const auto &vxc_state = Vc_all[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            // const auto &vxc_state = vxc0[i_spin][i_kpoint](i_state, i_state) * HA2EV;
-                            // const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
-                            // const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
-                            // const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
-                            // printf("%5d %20.15f %16.5f %16.5f  \n",
-                            //     i_state + 1, eks_state, vxc_state.real(), hartree_state, exx_state);
-                            printf("%5d %20.15f %20.15f %20.15f  \n",
-                                i_state + 1, eks_state, vxc_state.real(), exx_state);
-                        }
-                        printf("\n");
-                    }
-                }
 
                 // 计算 HOMO 和 LUMO
                 homo = -1e6;  //
@@ -1241,21 +1311,132 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     file << iteration << " " << homo_values[iteration] << " "
                          << lumo_values[iteration] << " " << efermi_values[iteration] << std::endl;
                 }
-                // 比较本轮和前一轮的本征值判断是否收敛
-                converged = true;
-                for (int ispin = 0; ispin < n_spins; ++ispin)
+
+
+                // Convergence check:
+                //  - Full-band sorted diff is permutation-invariant diagnostics.
+                //  - Focus-window sorted diff near Fermi (eigdiff_focus_nbands) is used for convergence.
+                double max_eigenvalue_diff_ev = 0.0;
+                double max_eigenvalue_diff_ev_sorted = 0.0;
+                double max_eigenvalue_diff_ev_sorted_focus = 0.0;
+                int max_spin = -1, max_kpt = -1, max_band = -1;
+
+                if (mpi_comm_global_h.is_root())
                 {
-                    const auto &current_eigenvals = meanfield.get_eigenvals()[ispin];
-                    const auto max_diff =
-                        (current_eigenvals - previous_eigenvalues[ispin]).absmax();
-                    if (max_diff > eigenvalue_tolerance)
+                    for (int i_spin = 0; i_spin < n_spins; i_spin++)
                     {
-                        converged = false;
-                        break;
+                        const auto &curr_mat = meanfield.get_eigenvals()[i_spin];
+                        const auto &prev_mat = previous_eigenvalues[i_spin];
+
+                        for (int ikpt = 0; ikpt < n_kpoints; ikpt++)
+                        {
+                            std::vector<double> curr_eigs(n_bands);
+                            std::vector<double> prev_eigs(n_bands);
+                            for (int ib = 0; ib < n_bands; ib++)
+                            {
+                                double c = curr_mat(ikpt, ib);
+                                double p_ = prev_mat(ikpt, ib);
+                                curr_eigs[ib] = c;
+                                prev_eigs[ib] = p_;
+
+                                double d = std::abs(c - p_) * HA2EV;
+                                if (d > max_eigenvalue_diff_ev)
+                                {
+                                    max_eigenvalue_diff_ev = d;
+                                    max_spin = i_spin;
+                                    max_kpt = ikpt;
+                                    max_band = ib;
+                                }
+                            }
+
+                            std::sort(curr_eigs.begin(), curr_eigs.end());
+                            std::sort(prev_eigs.begin(), prev_eigs.end());
+
+                            for (int ib = 0; ib < n_bands; ib++)
+                            {
+                                double d = std::abs(curr_eigs[ib] - prev_eigs[ib]) * HA2EV;
+                                if (d > max_eigenvalue_diff_ev_sorted)
+                                {
+                                    max_eigenvalue_diff_ev_sorted = d;
+                                }
+                            }
+
+                            if (eigdiff_focus_nbands > 0)
+                            {
+                                // Determine occupied count by energy relative to current efermi.
+                                // For an insulator, efermi is in the gap so Nocc is stable.
+                                const int nbelow = eigdiff_focus_nbands / 2;
+                                const int nabove = eigdiff_focus_nbands - nbelow;
+                                int Nocc = 0;
+                                for (int ib = 0; ib < n_bands; ib++)
+                                {
+                                    if (curr_mat(ikpt, ib) < efermi)
+                                        Nocc++;
+                                }
+                                int start_ib = std::max(0, Nocc - nbelow);
+                                int end_ib = std::min(n_bands, Nocc + nabove);
+                                if (end_ib > start_ib)
+                                {
+                                    std::vector<double> curr_focus;
+                                    std::vector<double> prev_focus;
+                                    curr_focus.reserve(end_ib - start_ib);
+                                    prev_focus.reserve(end_ib - start_ib);
+                                    for (int ib = start_ib; ib < end_ib; ib++)
+                                    {
+                                        curr_focus.push_back(curr_mat(ikpt, ib));
+                                        prev_focus.push_back(prev_mat(ikpt, ib));
+                                    }
+
+                                    // Sort within the window (permutation-invariant within focus subspace).
+                                    std::sort(curr_focus.begin(), curr_focus.end());
+                                    std::sort(prev_focus.begin(), prev_focus.end());
+                                    for (size_t ii = 0; ii < curr_focus.size(); ii++)
+                                    {
+                                        double d = std::abs(curr_focus[ii] - prev_focus[ii]) * HA2EV;
+                                        if (d > max_eigenvalue_diff_ev_sorted_focus)
+                                        {
+                                            max_eigenvalue_diff_ev_sorted_focus = d;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    std::cout << "    max eigenvalue diff (raw)    = " << max_eigenvalue_diff_ev;
+                    if (max_spin >= 0)
+                    {
+                        std::cout << " eV @ (spin=" << max_spin << ", k=" << max_kpt
+                                  << ", band=" << max_band << ")";
+                    }
+                    std::cout << std::endl;
+
+                    std::cout << "    max eigenvalue diff (sorted) = " << max_eigenvalue_diff_ev_sorted
+                              << " eV (tol=" << eigenvalue_diff_tolerance << " eV)" << std::endl;
+
+                    if (eigdiff_focus_nbands > 0)
+                    {
+                        std::cout << "    max eigenvalue diff (sorted, focus=" << eigdiff_focus_nbands
+                                  << ") = " << max_eigenvalue_diff_ev_sorted_focus
+                                  << " eV (tol=" << eigenvalue_diff_tolerance << " eV)" << std::endl;
+                    }
+
+                    const double eigdiff_for_conv = (eigdiff_focus_nbands > 0)
+                        ? max_eigenvalue_diff_ev_sorted_focus
+                        : max_eigenvalue_diff_ev_sorted;
+
+                    converged = (eigdiff_for_conv < eigenvalue_diff_tolerance);
+                    if (converged)
+                    {
+                        std::cout << "Converged after " << iteration << " iterations: "
+                                  << "max eigenvalue diff(";
+                        if (eigdiff_focus_nbands > 0)
+                            std::cout << "sorted, focus=" << eigdiff_focus_nbands;
+                        else
+                            std::cout << "sorted";
+                        std::cout << ") = " << eigdiff_for_conv << " eV" << std::endl;
                     }
                 }
-
-                std::cout << "Converged after " << iteration << " iterations.\n";
             }
         }
         mpi_comm_global_h.barrier();

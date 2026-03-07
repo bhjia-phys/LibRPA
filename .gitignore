@@ -77,9 +77,3 @@ mybuild*.sh
 
 # extracted test input data
 input_librpa/
-
-# regression test workspace
-regression_tests/workspace
-
-# claude code
-.claude/

@@ -42,7 +42,6 @@
 #include "driver_params.h"
 
 
-//只做exx迭代
 
 void task_hf_band()
 {

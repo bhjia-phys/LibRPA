@@ -1,4 +1,15 @@
 #include "task_qsgw_band_0.h"
+
+#include "utils_io.h"
+
+// COMPILE_STUB: qsgw_band0 task is disabled in merge-target build.
+void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix>&)
+{
+    LIBRPA::utils::lib_printf("task_qsgw_band_0: stub (disabled)");
+}
+
+#if 0
+#include "task_qsgw_band_0.h"
 #include "task_qsgw.h"
 // 标准库头文件
 #include <cmath>
@@ -1613,3 +1624,5 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     }
     Profiler::stop("qsgw_band");
 }
+
+#endif

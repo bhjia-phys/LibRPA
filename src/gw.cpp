@@ -137,7 +137,7 @@ void static unfold_abfs_Wc(
         const auto &q = qlist[iq];
         std::array<double, 3> qa = {q.x, q.y, q.z};
         const auto &U = sinvS.at(q);
-        // Profiler::start("unfold_prepare_Wc_2d", "Prepare Wc 2D block for unfold");
+        Profiler::start("unfold_prepare_Wc_2d", "Prepare Wc 2D block for unfold");
         Wc_block.zero_out();
         Wcll_block.zero_out();
         u_block.zero_out();
@@ -195,16 +195,16 @@ void static unfold_abfs_Wc(
             // wait for all mpi to calculate chi0_libri
             // then collect chi0_libri to chi0_block
             mpi_comm_global_h.barrier();
-            // Profiler::start("unfold_prepare_Wc_2d_comm_map2");
+            Profiler::start("unfold_prepare_Wc_2d_comm_map2");
             const auto IJq_wc = RI::Communicate_Tensors_Map_Judge::comm_map2_first(
                 mpi_comm_global_h.comm, wc_libri, s0_s1.first, s0_s1.second);
-            // Profiler::stop("unfold_prepare_Wc_2d_comm_map2");
-            // Profiler::start("unfold_prepare_Wc_2d_collect_block");
+            Profiler::stop("unfold_prepare_Wc_2d_comm_map2");
+            Profiler::start("unfold_prepare_Wc_2d_collect_block");
             collect_block_from_ALL_IJ_Tensor(Wc_block, desc_nabf_nabf_ss, LIBRPA::atomic_basis_abf,
                                              qa, true, CONE, IJq_wc, MAJOR::ROW);
-            // Profiler::stop("unfold_prepare_Wc_2d_collect_block");
+            Profiler::stop("unfold_prepare_Wc_2d_collect_block");
         }
-        // Profiler::stop("unfold_prepare_Wc_2d");
+        Profiler::stop("unfold_prepare_Wc_2d");
         for (int ir = 0; ir < U.nr; ir++)
         {
             const int ilo = desc_nabf_nabf_sl.indx_g2l_r(ir);
@@ -445,29 +445,8 @@ void G0W0::build_spacetime(
                                                                  R_Wc.second.sptr());
                         else
                             Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
-                                RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());//print
-                        // // ---> ADD START: Print Wc for debugging <---
-                        // {
-                        //     // R_Wc.second 是原始的 matrix_m<complex<double>>
-                        //     const auto& mat = R_Wc.second;
-                        //     printf("DEBUG_WC_DUMP: rank=%d tau=%.6e I=%d J=%d R=(%d,%d,%d) Shape=(%d,%d)\n", 
-                        //            LIBRPA::envs::mpi_comm_global_h.myid, tau, 
-                        //            static_cast<int>(I), static_cast<int>(J), 
-                        //            R.x, R.y, R.z, mat.nr(), mat.nc());
-                            
-                        //     for (int i = 0; i < mat.nr(); ++i) {
-                        //         for (int j = 0; j < mat.nc(); ++j) {
-                        //             std::complex<double> val = mat(i, j);
-                        //             if (std::abs(val) > 1e-10) { 
-                        //                 printf("  Wc_Elem: (%4d, %4d) = %20.20e + %20.20ei\n", 
-                        //                        i, j, val.real(), val.imag());
-                        //             }
-                        //         }
-                        //     }
-                        // }
-                        // // ---> ADD END <---
-                         
-                                // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl
+                                RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
+                        // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl
                         // ; cout << Wc_libri[I][{J, {R.x, R.y, R.z}}] << endl; handle the <JI(R)>
                         // block
                         if (I == J) continue;
@@ -481,7 +460,7 @@ void G0W0::build_spacetime(
                         }
                         else
                         {
-                            const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();//
+                            const auto Wc_IJmR = J_RWc.second.at(minusR).get_real().get_transpose();
                             Wc_libri[static_cast<int>(J)][{static_cast<int>(I), {R.x, R.y, R.z}}] =
                                 RI::Tensor<double>({nabf_J, nabf_I}, Wc_IJmR.sptr());
                         }
@@ -522,9 +501,7 @@ void G0W0::build_spacetime(
                     {
                         auto gf = mf.get_gf_cplx_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list,
                                                               {tau, -tau},
-                                                              {Rs_local.cbegin(), Rs_local.cend()}); // print
-                        
-
+                                                              {Rs_local.cbegin(), Rs_local.cend()});
                         std::map<double, std::map<int, std::map<std::pair<int, std::array<int, 3>>,
                                                                 RI::Tensor<Tdata>>>>
                             tau_gf_libri;
@@ -611,35 +588,9 @@ void G0W0::build_spacetime(
                         auto gf = mf.get_gf_real_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list,
                                                               {tau, -tau},
                                                               {Rs_local.cbegin(), Rs_local.cend()});
-                        // // ---> ADD START: Print Green's Function for debugging <---
-                        // // 仅在主进程或所有进程打印（视需求而定，这里默认所有持有数据的进程打印）
-                        // for (auto const& [time_val, r_map] : gf) {
-                        //     for (auto const& [r_vec, mat] : r_map) {
-                        //         // 打印头部信息：自旋、时间点、R矢量
-                        //         // FIX: mat.nr 和 mat.nc 是成员变量，移除括号
-                        //         printf("DEBUG_GF_DUMP: rank=%d ispin=%d tau=%.6e R=(%d,%d,%d) Shape=(%d,%d)\n", 
-                        //                LIBRPA::envs::mpi_comm_global_h.myid, ispin, time_val, 
-                        //                r_vec.x, r_vec.y, r_vec.z, mat.nr, mat.nc);
-                                
-                        //         // 遍历打印矩阵元素
-                        //         for (int i = 0; i < mat.nr; ++i) {
-                        //             for (int j = 0; j < mat.nc; ++j) {
-                        //                 // 这里的 mat(i, j) 应该是 complex<double>
-                        //                 // 假设矩阵元素是 (row, col) 索引
-                        //                 std::complex<double> val = mat(i, j);
-                        //                 // 筛选打印非零元素以减少输出量，或者全部打印
-                        //                 if (std::abs(val) > 1e-10) { 
-                        //                     printf("  GF_Elem: (%4d, %4d) = %20.20e + %20.20ei\n", 
-                        //                            i, j, val.real(), val.imag());
-                        //                 }
-                        //             }
-                        //         }
-                        //     }
-                        // }
-                        // // ---> ADD END <--- 
-
                         std::map<double, std::map<int, std::map<std::pair<int, std::array<int, 3>>,
-                                                                RI::Tensor<Tdata>>>> tau_gf_libri;
+                                                                RI::Tensor<Tdata>>>>
+                            tau_gf_libri;
                         for (auto t : {tau, -tau})
                         {
                             tau_gf_libri[t] = {};
@@ -788,7 +739,6 @@ void G0W0::build_spacetime(
                                 // row-major used here for libRI communication when building
                                 // sigc_KS
                                 matrix_m<complex<double>> sigc_temp(n_I, n_J, MAJOR::ROW);
-                                matrix_m<complex<double>> sigc_temp_minus(n_I, n_J, MAJOR::ROW);
                                 for (int i = 0; i != n_I; i++)
                                 {
                                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
@@ -797,8 +747,6 @@ void G0W0::build_spacetime(
                                         {
                                             sigc_temp(i, j) = sigc_cos(i, j) * t2f_cos +
                                                               sigc_sin(i, j) * t2f_sin * 1.0i;
-                                            sigc_temp_minus(i, j) = sigc_cos(i, j) * t2f_cos -
-                                                                     sigc_sin(i, j) * t2f_sin * 1.0i;
                                         }
                                     }
                                     else
@@ -807,8 +755,6 @@ void G0W0::build_spacetime(
                                         {
                                             sigc_temp(i, j) = std::complex<double>{
                                                 sigc_cos(i, j) * t2f_cos, sigc_sin(i, j) * t2f_sin};
-                                            sigc_temp_minus(i, j) = std::complex<double>{
-                                                sigc_cos(i, j) * t2f_cos, -sigc_sin(i, j) * t2f_sin};
                                         }
                                     }
                                 }
@@ -817,12 +763,8 @@ void G0W0::build_spacetime(
                                     sigc_is_f_R_IJ.at(ispin).at(isoc1).count(isoc2) == 0 ||
                                     sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).count(omega) ==
                                         0 ||
-                                    sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).count(-omega) ==
-                                        0 ||
                                     sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).at(omega).count(
                                         R) == 0 ||
-                                    sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).at(-omega).count(
-                                        R) == 0 ||
                                     sigc_is_f_R_IJ.at(ispin)
                                             .at(isoc1)
                                             .at(isoc2)
@@ -832,41 +774,59 @@ void G0W0::build_spacetime(
                                     sigc_is_f_R_IJ.at(ispin)
                                             .at(isoc1)
                                             .at(isoc2)
-                                            .at(-omega)
-                                            .at(R)
-                                            .count(I) == 0 ||
-                                    sigc_is_f_R_IJ.at(ispin)
-                                            .at(isoc1)
-                                            .at(isoc2)
                                             .at(omega)
                                             .at(R)
                                             .at(I)
-                                            .count(J) == 0||
-                                    sigc_is_f_R_IJ.at(ispin)
-                                            .at(isoc1)
-                                            .at(isoc2)
-                                            .at(-omega)
-                                            .at(R)
-                                            .at(I)
-                                            .count(J) == 0
-                                        )
+                                            .count(J) == 0)
                                 {
                                     sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega][R][I][J] =
                                         std::move(sigc_temp);
-                                    sigc_is_f_R_IJ[ispin][isoc1][isoc2][-omega][R][I][J] =
-                                        std::move(sigc_temp_minus);
                                 }
                                 else
                                 {
                                     sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega][R][I][J] +=
                                         sigc_temp;
-                                    sigc_is_f_R_IJ[ispin][isoc1][isoc2][-omega][R][I][J] +=
-                                        sigc_temp_minus;
                                 }
                             }
                         }
                     }
-                    
+                    // for (int iomega = 0; iomega != tfg.get_n_grids(); iomega++)
+                    // {
+                    //     const auto omega = tfg.get_freq_nodes()[iomega];
+                    //     const auto t2f_sin = tfg.get_sintrans_t2f()(iomega, itau);
+                    //     const auto t2f_cos = tfg.get_costrans_t2f()(iomega, itau);
+                    //     // row-major used here for libRI communication when building sigc_KS
+                    //     matrix_m<complex<double>> sigc_temp(n_I, n_J, MAJOR::ROW);
+                    //     matrix_m<complex<double>> sigc_temp_minus(n_I, n_J, MAJOR::ROW);
+                    //     for (int i = 0; i != n_I; i++)
+                    //         for (int j = 0; j != n_J; j++)
+                    //         {
+                    //             sigc_temp(i, j) = std::complex<double>{sigc_cos(i, j) * t2f_cos,
+                    //             sigc_sin(i, j) * t2f_sin}; sigc_temp_minus(i, j) =
+                    //             std::complex<double>{sigc_cos(i, j) * t2f_cos, -sigc_sin(i, j) *
+                    //             t2f_sin};
+                    //         }
+                    //     if (sigc_is_f_R_IJ.count(ispin) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).count(omega) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).count(-omega) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).count(R) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).count(R) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).at(R).count(I) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).count(I) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(omega).at(R).at(I).count(J) == 0 ||
+                    //         sigc_is_f_R_IJ.at(ispin).at(-omega).at(R).at(I).count(J) == 0)
+                    //     {
+                    //         sigc_is_f_R_IJ[ispin][omega][R][I][J] = std::move(sigc_temp);
+                    //         sigc_is_f_R_IJ[ispin][-omega][R][I][J] = std::move(sigc_temp_minus);
+                    //     }
+                    //     else
+                    //     {
+                    //         sigc_is_f_R_IJ[ispin][omega][R][I][J] += sigc_temp;
+                    //         sigc_is_f_R_IJ[ispin][-omega][R][I][J] += sigc_temp_minus;
+                    //     }
+                    // }
+                    //     }
+                    // }
 
                     sigc_posi_tau.clear();
                     sigc_nega_tau.clear();
@@ -916,7 +876,7 @@ void G0W0::build_spacetime(
 
                         const auto omega = tfg.get_freq_nodes()[iomega];
                         const auto &sigc_RIJ =
-                            sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega];  
+                            sigc_is_f_R_IJ[ispin][isoc1][isoc2][omega];  // 有点意思
                         for (const auto &R_IJsigc : sigc_RIJ)
                         {
                             const auto &R = R_IJsigc.first;
@@ -1149,148 +1109,6 @@ void G0W0::build_sigc_matrix_KS(
                                 init_local_mat<complex<double>>(desc_nband_nband_fb, MAJOR::COL);
                         }
                         sigc_is_ik_f_KS[ispin][ik][freq] += sigc_nband_nband_fb;
-                    }
-                }
-                
-                for (const auto &freq : this->tfg.get_freq_nodes())
-                {
-                    // Communicate to obtain sub-matrices for necessary I-J pairs at all Rs
-                    std::map<int,
-                             std::map<std::pair<int, std::array<int, 3>>, Tensor<complex<double>>>>
-                        sigc_I_JR_local;
-                    if (this->sigc_is_f_R_IJ.count(ispin) &&
-                        this->sigc_is_f_R_IJ.at(ispin).count(isoc1) &&
-                        this->sigc_is_f_R_IJ.at(ispin).at(isoc1).count(isoc2))
-                    {
-                        const auto &sigc_is_freq =
-                            this->sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).at(-freq);
-                        for (const auto &R_IJ_sigc : sigc_is_freq)
-                        {
-                            const auto R = R_IJ_sigc.first;
-                            for (const auto &I_J_sigc : R_IJ_sigc.second)
-                            {
-                                const auto I = I_J_sigc.first;
-                                const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
-                                for (const auto &J_sigc : I_J_sigc.second)
-                                {
-                                    const auto J = J_sigc.first;
-                                    const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
-                                    const std::array<int, 3> Ra{R.x, R.y, R.z};
-                                    sigc_I_JR_local[I][{J, Ra}] =
-                                        Tensor<complex<double>>({n_I, n_J}, J_sigc.second.sptr());
-                                }
-                            }
-                        }
-                    }
-                    auto sigc_I_JR = comm_map2_first(mpi_comm_global_h.comm, sigc_I_JR_local,
-                                                     s0_s1.first, s0_s1.second);
-                    sigc_I_JR_local.clear();
-
-                    // Convert each <I,<J, R>> pair to the nearest neighbour to speed up later
-                    // Fourier transform while keep the accuracy in further band interpolation.
-                    // Reuse the cleared-up sigc_I_JR_local object
-                    if (coord_frac.size() > 0)
-                    {
-                        for (auto &I_sigcJR : sigc_I_JR)
-                        {
-                            const auto &I = I_sigcJR.first;
-                            for (auto &JR_sigc : I_sigcJR.second)
-                            {
-                                const auto &J = JR_sigc.first.first;
-                                const auto &R = JR_sigc.first.second;
-
-                                auto distsq = std::numeric_limits<double>::max();
-                                Vector3<int> R_IJ;
-                                std::array<int, 3> R_bvk;
-                                for (int i = -1; i < 2; i++)
-                                {
-                                    R_IJ.x = i * this->period_.x + R[0];
-                                    for (int j = -1; j < 2; j++)
-                                    {
-                                        R_IJ.y = j * this->period_.y + R[1];
-                                        for (int k = -1; k < 2; k++)
-                                        {
-                                            R_IJ.z = k * this->period_.z + R[2];
-                                            const auto diff =
-                                                (Vector3<double>(coord_frac[I][0], coord_frac[I][1],
-                                                                 coord_frac[I][2]) -
-                                                 Vector3<double>(coord_frac[J][0], coord_frac[J][1],
-                                                                 coord_frac[J][2]) -
-                                                 Vector3<double>(R_IJ.x, R_IJ.y, R_IJ.z)) *
-                                                latvec;
-                                            const auto norm2 = diff.norm2();
-                                            if (norm2 < distsq)
-                                            {
-                                                distsq = norm2;
-                                                R_bvk[0] = R_IJ.x;
-                                                R_bvk[1] = R_IJ.y;
-                                                R_bvk[2] = R_IJ.z;
-                                            }
-                                        }
-                                    }
-                                }
-                                sigc_I_JR_local[I][{J, R_bvk}] = std::move(JR_sigc.second);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        sigc_I_JR_local = std::move(sigc_I_JR);
-                    }
-
-                    // Perform Fourier transform
-                    for (int ik = 0; ik < kfrac_target.size(); ik++)
-                    {
-                        const auto kfrac = kfrac_target[ik];
-
-                        const std::function<complex<double>(
-                            const int &, const std::pair<int, std::array<int, 3>> &)>
-                            fourier = [kfrac](const int &I,
-                                              const std::pair<int, std::array<int, 3>> &J_Ra)
-                        {
-                            const auto &Ra = J_Ra.second;
-                            Vector3<double> R_IJ(Ra[0], Ra[1], Ra[2]);
-                            const auto ang = (kfrac * R_IJ) * TWO_PI;
-                            return complex<double>{std::cos(ang), std::sin(ang)};
-                        };
-
-                        sigc_nao_nao.zero_out();
-                        collect_block_from_IJ_storage_tensor_transform(
-                            sigc_nao_nao, desc_nao_nao, atomic_basis_wfc, atomic_basis_wfc, fourier,
-                            sigc_I_JR_local);
-                        // prepare wave function BLACS
-                        const auto &wfc_isp1_k = wfc_target[ispin][isoc1][ik];
-                        const auto &wfc_isp2_k = wfc_target[ispin][isoc2][ik];
-                        blacs_ctxt_global_h.barrier();
-                        const auto wfc1_block =
-                            get_local_mat(wfc_isp1_k.c, MAJOR::ROW, desc_nband_nao, MAJOR::COL)
-                                .conj();
-                        const auto wfc2_block =
-                            get_local_mat(wfc_isp2_k.c, MAJOR::ROW, desc_nband_nao, MAJOR::COL)
-                                .conj();
-                        auto temp_nband_nao = multiply_scalapack(
-                            wfc1_block, desc_nband_nao, sigc_nao_nao, desc_nao_nao, desc_nband_nao);
-                        ScalapackConnector::pgemm_f(
-                            'N', 'C', n_bands, n_bands, n_aos, 1.0, temp_nband_nao.ptr(), 1, 1,
-                            desc_nband_nao.desc, wfc2_block.ptr(), 1, 1, desc_nband_nao.desc, 0.0,
-                            sigc_nband_nband.ptr(), 1, 1, desc_nband_nband.desc);
-                        // collect the full matrix to master
-                        // TODO: would need a different strategy for large system
-                        auto sigc_nband_nband_fb =
-                            init_local_mat<complex<double>>(desc_nband_nband_fb, MAJOR::COL);
-                        ScalapackConnector::pgemr2d_f(
-                            n_bands, n_bands, sigc_nband_nband.ptr(), 1, 1, desc_nband_nband.desc,
-                            sigc_nband_nband_fb.ptr(), 1, 1, desc_nband_nband_fb.desc,
-                            desc_nband_nband_fb.ictxt());
-                        // NOTE: only the matrices at master process is meaningful
-                        if (sigc_is_ik_f_KS.count(ispin) == 0 ||
-                            sigc_is_ik_f_KS.at(ispin).count(ik) == 0 ||
-                            sigc_is_ik_f_KS.at(ispin).at(ik).count(-freq) == 0)
-                        {
-                            sigc_is_ik_f_KS[ispin][ik][-freq] =
-                                init_local_mat<complex<double>>(desc_nband_nband_fb, MAJOR::COL);
-                        }
-                        sigc_is_ik_f_KS[ispin][ik][-freq] += sigc_nband_nband_fb;
                     }
                 }
             }

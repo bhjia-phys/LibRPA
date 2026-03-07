@@ -40,7 +40,6 @@ void get_rpa_correlation_energy_(std::complex<double> &rpa_corr,
 
     Chi0 chi0(meanfield, klist, tfg);
     chi0.gf_R_threshold = Params::gf_R_threshold;
-    chi0.set_input_dir(input_dir);
     vector<Vector3_Order<double>> qlist;
     for (auto q_weight : irk_weight)
     {

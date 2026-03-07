@@ -1,4 +1,3 @@
-input_dir = ./input_librpa/
 task = g0w0
 nfreq = 16
 replace_w_head = f

@@ -30,6 +30,13 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     using LIBRPA::envs::ofs_myid;
     using LIBRPA::utils::lib_printf;
 
+
+
+    const auto n_soc = meanfield.get_n_soc();  
+    const auto n_states = meanfield.get_n_bands();
+    const auto n_basis = meanfield.get_n_aos();
+
+    
     Profiler::start("g0w0_band", "G0W0 quasi-particle band structure calculation");
 
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
@@ -41,41 +48,43 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         qlist.push_back(q_weight.first);
     }
 
+    if (mpi_comm_global_h.is_root())
+    {                                         
+        const auto &mf = meanfield;
+        
+        
+        for (int i_kpoint = 0; i_kpoint < mf.get_n_kpoints(); i_kpoint++)
+        {                                       
+            // const auto &k = kfrac_band[i_kpoint];
+            // printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, i_kpoint + 1,
+            //        k.x, k.y, k.z);
+            for (int iao = 0; iao < n_basis; iao++)
+            {
+                // meanfield_band.get_weight0()[i_spin](i_kpoint, ib1) = meanfield_band.get_weight()[i_spin](i_kpoint, ib1);
+                for (int isoc = 0; isoc < n_soc; isoc++)
+                {
+                    for (int ib1 = 0; ib1 < n_states; ++ib1)
+                    {
+                        for (int i_spin = 0; i_spin < mf.get_n_spins(); i_spin++)
+                        {
+                            // int ib2 = iao * n_soc + isoc;
+                            auto wfc0_value = meanfield.get_eigenvectors()[i_spin][isoc][i_kpoint](ib1, iao);
+                            // meanfield.get_eigenvectors()[i_spin+1][isoc][i_kpoint](ib1, iao) = wfc0_value ;
+                            printf("ispin = %2d, ikpoint = %4d, ib1 =%4d, iao =%4d,  wfc_value = (%.10e, %.10e) \n", i_spin, i_kpoint, ib1, iao, wfc0_value.real(), wfc0_value.imag() );
+                            
+                        }
+                    }
+                } 
+            }
+        }
+    }
+
     // Prepare time-frequency grids
     auto tfg =
         LIBRPA::utils::generate_timefreq_grids(Params::nfreq, Params::tfgrids_type, meanfield);
 
     Chi0 chi0(meanfield, klist, tfg);
     chi0.gf_R_threshold = Params::gf_R_threshold;
-
-    Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
-    {
-        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
-    }
-    else
-    {
-        // NOTE: local_atpair already set in the main.cpp.
-        //       It can consists of distributed atom pairs of only upper half.
-        //       Setup of local_atpair may be better to extracted as some util function,
-        //       instead of in the main driver.
-        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
-                    true);
-    }
-    Profiler::cease("read_vq_cut");
-
-    std::vector<double> epsmac_LF_imagfreq_re;
-    if (Params::replace_w_head)
-    {
-        std::vector<double> omegas_dielect;
-        std::vector<double> dielect_func;
-        if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
-            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
-                             dielect_func);
-
-        epsmac_LF_imagfreq_re = interpolate_dielec_func(Params::option_dielect_func, omegas_dielect,
-                                                        dielect_func, chi0.tfg.get_freq_nodes());
-    }
 
     chi0.set_input_dir(driver_params.input_dir);
     Profiler::start("chi0_build", "Build response function chi0");
@@ -111,22 +120,41 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         }
     }
 
+    Profiler::start("read_vq_cut", "Load truncated Coulomb");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    {
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
+                    true);
+    }
+    Profiler::cease("read_vq_cut");
+
+    std::vector<double> epsmac_LF_imagfreq_re;
+    if (Params::replace_w_head)
+    {
+        std::vector<double> omegas_dielect;
+        std::vector<double> dielect_func;
+        if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
+                             dielect_func);
+
+        epsmac_LF_imagfreq_re = interpolate_dielec_func(Params::option_dielect_func, omegas_dielect,
+                                                        dielect_func, chi0.tfg.get_freq_nodes());
+    }
+
     Profiler::start("g0w0_exx", "Build exchange self-energy");
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
-        atpair_R_mat_t VR;
-        if (Params::use_fullcoul_exx)
-        {
-            Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
-            VR = FT_Vq(Vq, meanfield.get_n_kpoints(), Rlist, true);
-            Profiler::stop("ft_vq_full");
-        }
-        else
-        {
-            Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
-            Profiler::stop("ft_vq_cut");
-        }
+        Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
+        const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+        Profiler::stop("ft_vq_cut");
 
         Profiler::start("g0w0_exx_real_work");
         if (Params::use_shrink_abfs)
@@ -335,9 +363,8 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::start("g0w0_band_load_kpath");
     int n_basis_band, n_states_band, n_spin_band;
     int flag;
-    std::vector<Vector3_Order<double>> kfrac_band =
-        read_band_kpath_info(driver_params.input_dir + "band_kpath_info", n_basis_band,
-                             n_states_band, n_spin_band, flag);
+    std::vector<Vector3_Order<double>> kfrac_band = read_band_kpath_info(
+        driver_params.input_dir + "band_kpath_info", n_basis_band, n_states_band, n_spin_band, flag);
     Profiler::stop("g0w0_band_load_kpath");
 
     if (flag == 0)
@@ -359,8 +386,8 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         if (mpi_comm_global_h.is_root())
         {
             const auto fn = driver_params.input_dir + "band_kpath_info";
-            std::cout << "Warning! Failed to read " << fn << " , skip band structure" << std::endl
-                      << std::endl;
+            std::cout << "Warning! Failed to read " << fn
+                      << " , skip band structure" << std::endl << std::endl;
         }
         mpi_comm_global_h.barrier();
         Profiler::stop("g0w0_band");
@@ -370,32 +397,32 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::start("g0w0_band_load_band_mf", "Read eigen solutions at band kpoints");
     auto meanfield_band = read_meanfield_band(driver_params.input_dir, n_basis_band, n_states_band,
                                               n_spin_band, kfrac_band.size());
-    
-    const auto n_soc = meanfield.get_n_soc();       
+
+    // const auto n_soc = meanfield.get_n_soc();     
+
     if (mpi_comm_global_h.is_root())
     {                                         
         const auto &mf = meanfield_band;
-        for (int i_spin = 0; i_spin < mf.get_n_spins(); i_spin++)
-        {
-            for (int i_kpoint = 0; i_kpoint < mf.get_n_kpoints(); i_kpoint++)
-            {                                       
-                const auto &k = kfrac_band[i_kpoint];
-                printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, i_kpoint + 1,
-                       k.x, k.y, k.z);
-                for (int ib1 = 0; ib1 < n_states_band; ++ib1)
+        for (int i_kpoint = 0; i_kpoint < mf.get_n_kpoints(); i_kpoint++)
+        {                                       
+            // const auto &k = kfrac_band[i_kpoint];
+            // printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, i_kpoint + 1,
+            //        k.x, k.y, k.z);
+            for (int iao = 0; iao < n_basis; iao++)
+            {
+                // meanfield_band.get_weight0()[i_spin](i_kpoint, ib1) = meanfield_band.get_weight()[i_spin](i_kpoint, ib1);
+                for (int isoc = 0; isoc < n_soc; isoc++)
                 {
-                    // meanfield_band.get_weight0()[i_spin](i_kpoint, ib1) = meanfield_band.get_weight()[i_spin](i_kpoint, ib1);
-                    for (int isoc = 0; isoc < n_soc; isoc++)
+                    for (int ib1 = 0; ib1 < n_states; ++ib1)
                     {
-                        for (int iao = 0; iao < n_basis_band; iao++)
+                        for (int i_spin = 0; i_spin < n_spin_band; i_spin++)
                         {
                             // int ib2 = iao * n_soc + isoc;
+                            // auto wfc0_value = meanfield_band.get_eigenvectors()[i_spin][isoc][i_kpoint](ib1, iao);
+                            meanfield_band.get_eigenvectors()[i_spin][isoc][i_kpoint](ib1, iao)= meanfield.get_eigenvectors()[i_spin][isoc][0](ib1, iao);
                             auto wfc0_value = meanfield_band.get_eigenvectors()[i_spin][isoc][i_kpoint](ib1, iao);
-                            if(ib1 == 0 && iao == 0){
-                                printf("ispin = %2d, ikpoint = %4d, wfc0_value = (%.5f, %.5f) \n", i_spin, i_kpoint, wfc0_value.real(), wfc0_value.imag() );
-                            }
-                            
 
+                            printf("ispin = %2d, ikpoint = %4d, ib1 =%4d, iao =%4d,  wfc_value0 = (%.10e, %.10e) \n", i_spin, i_kpoint, ib1, iao, wfc0_value.real(), wfc0_value.imag() );
                             
                         }
                     }
@@ -403,12 +430,14 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
     }
+                                            
     /* Set the same Fermi energy as in SCF */
     meanfield_band.get_efermi() = meanfield.get_efermi();
     Profiler::stop("g0w0_band_load_band_mf");
 
     Profiler::start("g0w0_sigx_rotate_KS");
     exx.build_KS_band(meanfield_band.get_eigenvectors(), kfrac_band);
+    // exx.build_KS_band(meanfield.get_eigenvectors(), kfrac_list);
     Profiler::stop("g0w0_sigx_rotate_KS");
     std::flush(ofs_myid);
 
@@ -417,10 +446,10 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::stop("g0w0_sigc_rotate_KS");
     std::flush(ofs_myid);
 
-    Profiler::start("read_vxc", "Load DFT xc potential");
+    Profiler::start("read_vxc_band", "Load DFT xc potential");
     auto vxc_band =
         read_vxc_band(driver_params.input_dir, n_states_band, n_spin_band, kfrac_band.size());
-    Profiler::stop("read_vxc");
+    Profiler::stop("read_vxc_band");
     std::flush(ofs_myid);
 
     Profiler::start("g0w0_solve_band_qpe", "Solve quasi-particle equation");
@@ -474,21 +503,11 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
         // output bandgap
-        double gw_bandgap = 0.0;
-        double gw_valence = -1.e10;
-        double gw_conduct = 1.e10;
-        double exx_bandgap = 0.0;
-        double exx_valence = -1.e10;
-        double exx_conduct = 1.e10;
-        double dft_bandgap = 0.0;
-        double dft_valence = -1.e10;
-        double dft_conduct = 1.e10;
-        int ik_val_gw = 0;
-        int ik_cond_gw = 0;
-        int ik_val_exx = 0;
-        int ik_cond_exx = 0;
-        int ik_val_dft = 0;
-        int ik_cond_dft = 0;
+        double bandgap = 0.0;
+        double valence = -1.e10;
+        double conduct = 1.e10;
+        int ik_val = 0;
+        int ik_cond = 0;
         int nocc = 0;
         auto &wg = meanfield.get_weight()[0];
         for (int i = 0; i != wg.size; i++)
@@ -500,6 +519,37 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
         lib_printf("Bands of occupation: %4d \n", nocc);
+
+        const std::string banner(124, '-');
+        printf("Printing band_data [unit: eV]\n\n");
+        for (int i_spin = 0; i_spin < meanfield_band.get_n_spins(); i_spin++)
+        {
+            for (int i_kpoint = 0; i_kpoint < meanfield_band.get_n_kpoints(); i_kpoint++)
+            {
+                const auto &k = kfrac_band[i_kpoint];
+                printf("spin %2d, k-point_band %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, i_kpoint + 1,
+                       k.x, k.y, k.z);
+                printf("%124s\n", banner.c_str());
+                printf("%5s %16s %16s %16s %16s %16s %16s %16s\n", "State", "occ", "e_mf_band", "v_xc_band",
+                       "v_exx_band", "ReSigc_band", "ImSigc_band", "e_qp_band");
+                printf("%124s\n", banner.c_str());
+                for (int i_state = 0; i_state < meanfield_band.get_n_bands(); i_state++)
+                {
+                    const auto &occ_state = meanfield_band.get_weight()[i_spin](i_kpoint, i_state) *
+                                            meanfield_band.get_n_kpoints();
+                    const auto &eks_state =
+                        meanfield_band.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+                    const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                    const auto &vxc_state = vxc_band[i_spin](i_kpoint, i_state) * HA2EV;
+                    const auto &resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
+                    const auto &imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
+                    const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
+                    printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n", i_state + 1,
+                           occ_state, eks_state, vxc_state, exx_state, resigc, imsigc, eqp);
+                }
+                printf("\n");
+            }
+        }
 
         // display results
         for (int i_spin = 0; i_spin < mf.get_n_spins(); i_spin++)
@@ -554,38 +604,16 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     ofs_hf << std::setw(15) << std::setprecision(5) << occ_state << std::setw(15)
                            << std::setprecision(5) << eks_state - vxc_state + exx_state;
 
-                    // output GW bandgap
-                    if (i_state == nocc - 1 && eqp > gw_conduct)  // HOMO
+                    // output bandgap
+                    if (i_state == nocc - 1 && eqp > valence)  // HOMO
                     {
-                        gw_valence = eqp;
-                        ik_val_gw = i_kpoint;
+                        valence = eqp;
+                        ik_val = i_kpoint;
                     }
-                    else if (i_state == nocc && eqp < gw_conduct)  // LUMO
+                    else if (i_state == nocc && eqp < conduct)  // LUMO
                     {
-                        gw_conduct = eqp;
-                        ik_cond_gw = i_kpoint;
-                    }
-                    // output EXX bandgap
-                    if (i_state == nocc - 1 && exx_state > exx_valence)  // HOMO
-                    {
-                        exx_valence = exx_state;
-                        ik_val_exx = i_kpoint;
-                    }
-                    else if (i_state == nocc && exx_state < exx_conduct)  // LUMO
-                    {
-                        exx_conduct = exx_state;
-                        ik_cond_exx = i_kpoint;
-                    }
-                    // output DFT bandgap
-                    if (i_state == nocc - 1 && eks_state > dft_valence)  // HOMO
-                    {
-                        dft_valence = eks_state;
-                        ik_val_dft = i_kpoint;
-                    }
-                    else if (i_state == nocc && eks_state < dft_conduct)  // LUMO
-                    {
-                        dft_conduct = eks_state;
-                        ik_cond_dft = i_kpoint;
+                        conduct = eqp;
+                        ik_cond = i_kpoint;
                     }
                 }
                 ofs_gw << "\n";
@@ -593,30 +621,13 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 ofs_ks << "\n";
             }
         }
-        gw_bandgap = gw_conduct - gw_valence;
-        exx_bandgap = exx_conduct - exx_valence;
-        dft_bandgap = dft_conduct - dft_valence;
-        const auto &k_val_gw = kfrac_band[ik_val_gw];
-        const auto &k_cond_gw = kfrac_band[ik_cond_gw];
-        printf("GW VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val_gw + 1, k_val_gw.x, k_val_gw.y,
-               k_val_gw.z);
-        printf("GW CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond_gw + 1, k_cond_gw.x,
-               k_cond_gw.y, k_cond_gw.z);
-        lib_printf("GW bandgap(eV): %12.7f \n", gw_bandgap);
-        const auto &k_val_exx = kfrac_band[ik_val_exx];
-        const auto &k_cond_exx = kfrac_band[ik_cond_exx];
-        printf("EXX VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val_exx + 1, k_val_exx.x,
-               k_val_exx.y, k_val_exx.z);
-        printf("EXX CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond_exx + 1, k_cond_exx.x,
-               k_cond_exx.y, k_cond_exx.z);
-        lib_printf("EXX bandgap(eV): %12.7f \n", exx_bandgap);
-        const auto &k_val_dft = kfrac_band[ik_val_dft];
-        const auto &k_cond_dft = kfrac_band[ik_cond_dft];
-        printf("DFT VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val_dft + 1, k_val_dft.x,
-               k_val_dft.y, k_val_dft.z);
-        printf("DFT CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond_dft + 1, k_cond_dft.x,
-               k_cond_dft.y, k_cond_dft.z);
-        lib_printf("DFT bandgap(eV): %12.7f \n", dft_bandgap);
+        bandgap = conduct - valence;
+        const auto &k_val = kfrac_list[ik_val];
+        printf("VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val + 1, k_val.x, k_val.y, k_val.z);
+        const auto &k_cond = kfrac_list[ik_cond];
+        printf("CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond + 1, k_cond.x, k_cond.y,
+               k_cond.z);
+        lib_printf("Bandgap(eV): %12.7f \n", bandgap);
     }
     Profiler::stop("g0w0_solve_band_qpe");
 
