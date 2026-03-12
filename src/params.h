@@ -82,6 +82,9 @@ struct Params
     //! switch of using full Coulomb interaction in EXX
     //! test for abacus 2d system
     static bool use_fullcoul_exx;
+    //! switch of reducing EXX real-space contractions with ABACUS irreducible sectors
+    //! the ABACUS IBZ density-matrix restoration remains active independently
+    static bool use_abacus_exx_symmetry;
     //! switch of using full Coulomb interaction in Wc=eps-1v
     //! test for abacus 2d system
     static bool use_fullcoul_wc;

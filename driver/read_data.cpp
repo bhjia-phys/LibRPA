@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include "atomic_basis.h"
+#include "abacus_symmetry.h"
 #include "atoms.h"
 #include "constants.h"
 #include "envs_io.h"
@@ -1689,7 +1690,11 @@ void read_stru(const int &n_kpoints, const std::string &file_path)
         infile >> x;
         nk[i] = stoi(x);
     }
-    assert(n_kpoints == nk[0] * nk[1] * nk[2]);
+    const int n_kpoints_full = nk[0] * nk[1] * nk[2];
+    if (n_kpoints > n_kpoints_full)
+    {
+        throw std::runtime_error("The number of k-points in band_out is larger than the full Monkhorst-Pack grid");
+    }
     std::vector<double> kvecs(3 * n_kpoints);
     // kvec_c = new Vector3<double>[n_kpoints];
     for (int i = 0; i != 3 * n_kpoints; i++)
@@ -1699,13 +1704,48 @@ void read_stru(const int &n_kpoints, const std::string &file_path)
     }
     set_kgrids_kvec_tot(nk[0], nk[1], nk[2], kvecs.data());
 
-    // TODO: use API for IBZ mapping
-    for (int i = 0; i != n_kpoints; i++)
+    irk_point_id_mapping.clear();
+    map_irk_ks.clear();
+
+    std::vector<int> mapping_lines;
+    while (infile >> x)
     {
-        infile >> x;
-        int id_irk = stoi(x) - 1;
-        irk_point_id_mapping.push_back(id_irk);
-        map_irk_ks[klist[id_irk]].push_back(klist[i]);
+        mapping_lines.push_back(stoi(x) - 1);
+    }
+
+    if (!mapping_lines.empty() && static_cast<int>(mapping_lines.size()) != n_kpoints)
+    {
+        throw std::runtime_error("The number of IBZ mapping entries in stru_out does not match band_out");
+    }
+
+    if (mapping_lines.empty())
+    {
+        for (int i = 0; i != n_kpoints; ++i)
+        {
+            irk_point_id_mapping.push_back(i);
+            map_irk_ks[klist[i]].push_back(klist[i]);
+        }
+    }
+    else
+    {
+        for (int i = 0; i != n_kpoints; i++)
+        {
+            const int id_irk = mapping_lines[i];
+            irk_point_id_mapping.push_back(id_irk);
+            map_irk_ks[klist[id_irk]].push_back(klist[i]);
+        }
+    }
+
+    if (mapping_lines.empty() && LIBRPA::abacus_symmetry_ctx.available
+        && !LIBRPA::abacus_symmetry_ctx.kstars.empty())
+    {
+        if (LIBRPA::abacus_symmetry_ctx.kstars.size() != static_cast<std::size_t>(n_kpoints))
+        {
+            std::ostringstream oss;
+            oss << "ABACUS symmetry sidecar reports " << LIBRPA::abacus_symmetry_ctx.kstars.size()
+                << " IBZ k-stars, but band_out contains " << n_kpoints << " k-points";
+            throw std::runtime_error(oss.str());
+        }
     }
 }
 

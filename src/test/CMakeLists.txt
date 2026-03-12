@@ -31,6 +31,7 @@ endmacro()
 
 # add serial tests
 foreach(target
+    test_abacus_symmetry
     test_analycont
     test_atoms
     test_atomic_basis

@@ -1,5 +1,6 @@
 #include "exx.h"
 
+#include "abacus_symmetry.h"
 #include "constants.h"
 #include "envs_blacs.h"
 #include "envs_io.h"
@@ -14,6 +15,10 @@
 #include "stl_io_helper.h"
 #include "utils_blacs.h"
 #include "vector3_order.h"
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/physics/Exx.h>
 #include <RI/ri/Cell_Nearest.h>
@@ -24,6 +29,103 @@
 
 namespace LIBRPA
 {
+
+namespace
+{
+
+constexpr double kAbacusKpointTol = 1e-5;
+
+std::string format_debug_double(const double value)
+{
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6) << value;
+    std::string text = oss.str();
+    std::replace(text.begin(), text.end(), '-', 'm');
+    std::replace(text.begin(), text.end(), '.', 'p');
+    return text;
+}
+
+bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
+                        const Vector3_Order<double>& rhs,
+                        const double tol = kAbacusKpointTol)
+{
+    const auto is_same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return is_same_component(lhs.x, rhs.x) && is_same_component(lhs.y, rhs.y)
+           && is_same_component(lhs.z, rhs.z);
+}
+
+bool nearly_opposite_kpoint(const Vector3_Order<double>& lhs,
+                            const Vector3_Order<double>& rhs,
+                            const double tol = kAbacusKpointTol)
+{
+    return nearly_same_kpoint(lhs, {-rhs.x, -rhs.y, -rhs.z}, tol);
+}
+
+const AbacusKStar& find_abacus_kstar_for_ibz_kpoint(const AbacusSymmetryContext& ctx,
+                                                    const Vector3_Order<double>& k_ibz)
+{
+    const AbacusKStar* matched_star = nullptr;
+    for (const auto& star : ctx.kstars)
+    {
+        if (!nearly_same_kpoint(star.k_ibz, k_ibz))
+        {
+            continue;
+        }
+        if (matched_star != nullptr)
+        {
+            throw std::runtime_error("ABACUS k-star matching is ambiguous for the current IBZ k-point");
+        }
+        matched_star = &star;
+    }
+
+    if (matched_star == nullptr)
+    {
+        throw std::runtime_error("Failed to match the current LibRPA IBZ k-point with ABACUS k-stars");
+    }
+    return *matched_star;
+}
+
+std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
+convert_abacus_irreducible_sector_to_libri(
+    const abacus_irreducible_sector_t& irreducible_sector)
+{
+    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
+    for (const auto& pair_Rs : irreducible_sector)
+    {
+        const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
+                                            static_cast<int>(pair_Rs.first.second)};
+        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+    }
+    return libri_sector;
+}
+
+template <typename Tdata>
+ComplexMatrix convert_libri_tensor_to_complex_matrix(const RI::Tensor<Tdata>& tensor,
+                                                     const int nrows,
+                                                     const int ncols)
+{
+    ComplexMatrix matrix(nrows, ncols);
+    for (int row = 0; row < nrows; ++row)
+    {
+        for (int col = 0; col < ncols; ++col)
+        {
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                matrix(row, col) = tensor(row, col);
+            }
+            else
+            {
+                matrix(row, col) = std::complex<double>(tensor(row, col), 0.0);
+            }
+        }
+    }
+    return matrix;
+}
+
+} // namespace
 
 Exx::Exx(const MeanField &mf, const vector<Vector3_Order<double>> &kfrac_list,
          const Vector3_Order<int> &period)
@@ -37,11 +139,231 @@ ComplexMatrix Exx::get_dmat_cplx_R_global(const int &ispin, const int &isoc1, co
                                           const Vector3_Order<int> &R)
 {
     const auto nspins = this->mf_.get_n_spins();
-    auto dmat_cplx = this->mf_.get_dmat_cplx_R(ispin, isoc1, isoc2, this->kfrac_list_, R);
+    const bool use_abacus_symmetry = this->can_restore_dmat_from_abacus_symmetry();
+    if (use_abacus_symmetry)
+    {
+        this->maybe_dump_restored_kspace_dmat_debug(ispin, isoc1, isoc2);
+    }
+    else
+    {
+        this->maybe_dump_full_kspace_dmat_debug(ispin, isoc1, isoc2);
+    }
+    auto dmat_cplx = use_abacus_symmetry
+                         ? this->get_dmat_cplx_R_symmetry_restored(ispin, isoc1, isoc2, R)
+                         : this->mf_.get_dmat_cplx_R(ispin, isoc1, isoc2, this->kfrac_list_, R);
     // renormalize to single spin channel
     if (!Params::use_soc) dmat_cplx *= 0.5 * nspins;
+    this->maybe_dump_dmat_R_debug(use_abacus_symmetry ? "symmetry_restored" : "full_kgrid",
+                                  ispin,
+                                  isoc1,
+                                  isoc2,
+                                  R,
+                                  dmat_cplx);
 
     return dmat_cplx;
+}
+
+bool Exx::can_restore_dmat_from_abacus_symmetry() const
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return ctx.available && ctx.has_ao_shell_layout() && !ctx.kstars.empty()
+           && ctx.kstars.size() == this->kfrac_list_.size()
+           && this->mf_.get_n_kpoints() == static_cast<int>(ctx.kstars.size());
+}
+
+ComplexMatrix Exx::get_dmat_cplx_R_symmetry_restored(const int& ispin, const int& isoc1,
+                                                     const int& isoc2,
+                                                     const Vector3_Order<int>& R)
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    ComplexMatrix dmat_cplx(this->mf_.get_n_aos(), this->mf_.get_n_aos());
+    this->maybe_dump_abacus_kstar_debug();
+
+    for (int ik_ibz = 0; ik_ibz < this->mf_.get_n_kpoints(); ++ik_ibz)
+    {
+        const auto& k_ibz = this->kfrac_list_[static_cast<std::size_t>(ik_ibz)];
+        const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+
+        if (star.members.empty())
+        {
+            throw std::runtime_error("ABACUS k-star member list is empty");
+        }
+
+        const double star_factor = 1.0 / static_cast<double>(star.members.size());
+        const ComplexMatrix dmat_ibz = this->mf_.get_dmat_cplx(ispin, isoc1, isoc2, ik_ibz);
+        for (const auto& member : star.members)
+        {
+            ComplexMatrix dmat_member;
+            if (member.isym == 0)
+            {
+                dmat_member = dmat_ibz;
+            }
+            else if (nearly_opposite_kpoint(member.k_bz, k_ibz))
+            {
+                // Match the TRS-first branch in ABACUS restore_dm():
+                // if a star member is equivalent to -k_ibz, ABACUS restores it
+                // with complex conjugation only, before applying any space-group rotation.
+                dmat_member = conj(dmat_ibz);
+            }
+            else
+            {
+                const bool use_time_reversal = member.isym >= nsym_space;
+                dmat_member = rotate_abacus_kspace_matrix(ctx, member, dmat_ibz, atom_nw,
+                                                          k_ibz, coord_frac, use_time_reversal);
+            }
+
+            const auto ang = -(member.k_bz * R) * TWO_PI;
+            const auto kphase = std::complex<double>(std::cos(ang), std::sin(ang));
+            dmat_cplx += (star_factor * kphase) * dmat_member;
+        }
+    }
+
+    return dmat_cplx;
+}
+
+void Exx::maybe_dump_abacus_kstar_debug()
+{
+    if (!Params::debug || this->debug_kstar_dumped_ || !this->can_restore_dmat_from_abacus_symmetry())
+    {
+        return;
+    }
+
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    std::ofstream ofs(Params::output_dir + "abacus_kstars_debug.txt");
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    ofs << "# ABACUS k-star metadata used by LibRPA\n";
+    ofs << "# star_index ik_ibz k_ibz_x k_ibz_y k_ibz_z member_index isym k_bz_x k_bz_y k_bz_z\n";
+    for (std::size_t istar = 0; istar < ctx.kstars.size(); ++istar)
+    {
+        const auto& star = ctx.kstars[istar];
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto& member = star.members[imember];
+            ofs << star.star_index << " " << istar << " " << star.k_ibz.x << " " << star.k_ibz.y
+                << " " << star.k_ibz.z << " " << imember << " " << member.isym << " "
+                << member.k_bz.x << " " << member.k_bz.y << " " << member.k_bz.z << "\n";
+            for (const auto& atom_rotation : member.atom_rotations)
+            {
+                ofs << "  atom " << atom_rotation.atom_from << " -> " << atom_rotation.atom_to
+                    << " type=" << atom_rotation.atom_type << " lmax=" << atom_rotation.lmax
+                    << "\n";
+            }
+        }
+    }
+    this->debug_kstar_dumped_ = true;
+}
+
+void Exx::maybe_dump_dmat_R_debug(const std::string& source_tag,
+                                  const int& ispin,
+                                  const int& isoc1,
+                                  const int& isoc2,
+                                  const Vector3_Order<int>& R,
+                                  const ComplexMatrix& dmat_cplx)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    std::ostringstream tag;
+    tag << source_tag << "_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_R_" << R.x
+        << "_" << R.y << "_" << R.z;
+    if (!this->debug_dmat_dump_tags_.insert(tag.str()).second)
+    {
+        return;
+    }
+
+    const std::string file_path = Params::output_dir + "abacus_dmat_" + tag.str() + ".mtx";
+    print_complex_matrix_mm(dmat_cplx, file_path, 1e-14, false);
+}
+
+void Exx::maybe_dump_full_kspace_dmat_debug(const int& ispin, const int& isoc1, const int& isoc2)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    for (int ik = 0; ik < this->mf_.get_n_kpoints(); ++ik)
+    {
+        const auto& kfrac = this->kfrac_list_[static_cast<std::size_t>(ik)];
+        std::ostringstream tag;
+        tag << "full_kgrid_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ik" << ik
+            << "_kx_" << format_debug_double(kfrac.x) << "_ky_" << format_debug_double(kfrac.y)
+            << "_kz_" << format_debug_double(kfrac.z);
+        if (!this->debug_dmat_dump_tags_.insert(tag.str()).second)
+        {
+            continue;
+        }
+        const auto dmat_k = this->mf_.get_dmat_cplx(ispin, isoc1, isoc2, ik);
+        print_complex_matrix_mm(
+            dmat_k, Params::output_dir + "abacus_dmat_k_" + tag.str() + ".mtx", 1e-14, false);
+    }
+}
+
+void Exx::maybe_dump_restored_kspace_dmat_debug(const int& ispin, const int& isoc1,
+                                                const int& isoc2)
+{
+    if (!Params::debug || !this->can_restore_dmat_from_abacus_symmetry())
+    {
+        return;
+    }
+
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    for (int ik_ibz = 0; ik_ibz < this->mf_.get_n_kpoints(); ++ik_ibz)
+    {
+        const auto& k_ibz = this->kfrac_list_[static_cast<std::size_t>(ik_ibz)];
+        const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+        const ComplexMatrix dmat_ibz = this->mf_.get_dmat_cplx(ispin, isoc1, isoc2, ik_ibz);
+
+        std::ostringstream ibz_tag;
+        ibz_tag << "ibz_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ik" << ik_ibz
+                << "_kx_" << format_debug_double(k_ibz.x) << "_ky_" << format_debug_double(k_ibz.y)
+                << "_kz_" << format_debug_double(k_ibz.z);
+        if (this->debug_dmat_dump_tags_.insert(ibz_tag.str()).second)
+        {
+            print_complex_matrix_mm(
+                dmat_ibz, Params::output_dir + "abacus_dmat_k_" + ibz_tag.str() + ".mtx", 1e-14, false);
+        }
+
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto& member = star.members[imember];
+            ComplexMatrix dmat_member;
+            if (member.isym == 0)
+            {
+                dmat_member = dmat_ibz;
+            }
+            else if (nearly_opposite_kpoint(member.k_bz, k_ibz))
+            {
+                dmat_member = conj(dmat_ibz);
+            }
+            else
+            {
+                const bool use_time_reversal = member.isym >= nsym_space;
+                dmat_member = rotate_abacus_kspace_matrix(
+                    ctx, member, dmat_ibz, atom_nw, k_ibz, coord_frac, use_time_reversal);
+            }
+
+            std::ostringstream tag;
+            tag << "restored_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ikibz"
+                << ik_ibz << "_member" << imember << "_isym" << member.isym << "_kx_"
+                << format_debug_double(member.k_bz.x) << "_ky_" << format_debug_double(member.k_bz.y)
+                << "_kz_" << format_debug_double(member.k_bz.z);
+            if (!this->debug_dmat_dump_tags_.insert(tag.str()).second)
+            {
+                continue;
+            }
+            print_complex_matrix_mm(
+                dmat_member, Params::output_dir + "abacus_dmat_k_" + tag.str() + ".mtx", 1e-14, false);
+        }
+    }
 }
 
 ComplexMatrix Exx::extract_dmat_cplx_R_IJblock(const ComplexMatrix &dmat_cplx, const atom_t &I,
@@ -141,6 +463,10 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     if (mpi_comm_global_h.is_root())
     {
         utils::lib_printf("Computing EXX orbital energy using LibRI\n");
+        if (this->can_restore_dmat_from_abacus_symmetry())
+        {
+            utils::lib_printf("Restoring the EXX density matrix from ABACUS IBZ k-stars\n");
+        }
     }
     mpi_comm_global_h.barrier();
 
@@ -155,6 +481,40 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     std::array<std::array<double, 3>, 3> lat_array{xa, ya, za};
     std::array<int, 3> period_array{period_.x, period_.y, period_.z};
     exx_libri.set_parallel(mpi_comm_global, atoms_pos, lat_array, period_array);
+
+    const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+    const bool use_abacus_exx_symmetry =
+        Params::use_abacus_exx_symmetry && symmetry_ctx.available
+        && symmetry_ctx.has_ao_shell_layout()
+        && !symmetry_ctx.irreducible_sector.empty() && !symmetry_ctx.rspace_operations.empty()
+        && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
+        && coord_frac.size() == static_cast<std::size_t>(natom);
+    abacus_rspace_sector_stars_t abacus_sector_stars;
+    if (use_abacus_exx_symmetry)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            utils::lib_printf("Reducing EXX real-space contractions with ABACUS irreducible sectors\n");
+        }
+        build_abacus_rspace_sector_stars(
+            symmetry_ctx, coord_frac, period_, Rlist, abacus_sector_stars, nullptr);
+        exx_libri.set_symmetry(
+            true, convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector));
+    }
+    else
+    {
+        if (mpi_comm_global_h.is_root() && symmetry_ctx.available && Params::use_abacus_exx_symmetry)
+        {
+            utils::lib_printf(
+                "ABACUS EXX real-space symmetry reduction is unavailable; falling back to the full sector\n");
+        }
+        if (mpi_comm_global_h.is_root() && !Params::use_abacus_exx_symmetry)
+        {
+            utils::lib_printf(
+                "ABACUS EXX real-space symmetry reduction is disabled by input; keeping only the IBZ density-matrix restoration\n");
+        }
+        exx_libri.set_symmetry(false, {});
+    }
 
     // Initialize Cs libRI container on each process
     // Note: we use different treatment in different routings
@@ -325,26 +685,40 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                 // print_keys(envs::ofs_myid, exx_libri.Hs);
                 // ofs_myid << "exx_libri.Hs:\n" << exx_libri.Hs << endl;
 
+                auto store_exx_block_direct = [&](const atom_t full_I,
+                                                  const atom_t full_J,
+                                                  const Vector3_Order<int>& full_R,
+                                                  const RI::Tensor<Tdata>& exx_tensor) {
+                    const auto n_full_I = atomic_basis_wfc.get_atom_nb(full_I);
+                    const auto n_full_J = atomic_basis_wfc.get_atom_nb(full_J);
+                    if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                    {
+                        Matz exx_temp(n_full_I, n_full_J, exx_tensor.ptr(), MAJOR::ROW);
+                        this->exx_cplx[isp][is1][is2][full_R][full_I][full_J] = exx_temp;
+                    }
+                    else
+                    {
+                        Matd exx_temp(n_full_I, n_full_J, exx_tensor.ptr(), MAJOR::ROW);
+                        this->exx[isp][is1][is2][full_R][full_I][full_J] = exx_temp;
+                    }
+                };
+
+                if (use_abacus_exx_symmetry)
+                {
+                    utils::lib_printf(
+                        "LibRI EXX returns full real-space blocks after symmetry filtering; storing H(R) directly\n");
+                }
+
                 for (const auto &I_JR_exx : exx_libri.Hs)
                 {
                     const auto &I = I_JR_exx.first;
-                    const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
                     for (const auto &JR_exx : I_JR_exx.second)
                     {
                         const auto &J = JR_exx.first.first;
-                        const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
                         const auto &Ra = JR_exx.first.second;
                         const auto R = Vector3_Order<int>{Ra[0], Ra[1], Ra[2]};
-                        if constexpr (std::is_same<Tdata, std::complex<double>>::value)
-                        {
-                            Matz exx_temp(n_I, n_J, JR_exx.second.ptr(), MAJOR::ROW);
-                            this->exx_cplx[isp][is1][is2][R][I][J] = exx_temp;
-                        }
-                        else
-                        {
-                            Matd exx_temp(n_I, n_J, JR_exx.second.ptr(), MAJOR::ROW);
-                            this->exx[isp][is1][is2][R][I][J] = exx_temp;
-                        }
+                        store_exx_block_direct(
+                            static_cast<atom_t>(I), static_cast<atom_t>(J), R, JR_exx.second);
                     }
                 }
             }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "abacus_symmetry.h"
 #include "driver_params.h"
 #include "driver_utils.h"
 #include "envs_blacs.h"
@@ -196,6 +197,21 @@ int main(int argc, char **argv)
              << endl;
     }
     Profiler::stop("driver_band_out");
+
+    Profiler::start("driver_abacus_symmetry", "Driver Read ABACUS symmetry sidecars");
+    const bool has_abacus_symmetry =
+        LIBRPA::load_global_abacus_symmetry_context(driver_params.input_dir,
+                                                    mpi_comm_global_h.is_root() ? &std::cout : nullptr);
+    if (has_abacus_symmetry && mpi_comm_global_h.is_root())
+    {
+        std::cout << "ABACUS symmetry sidecars are loaded and ready for later EXX/GW integration"
+                  << std::endl;
+        std::cout << "The current driver still uses identity IBZ->BZ mapping unless the dedicated "
+                     "symmetry restore path is enabled."
+                  << std::endl
+                  << std::endl;
+    }
+    Profiler::stop("driver_abacus_symmetry");
 
     // early exit for print_minimax task
     if (task == task_t::print_minimax)
