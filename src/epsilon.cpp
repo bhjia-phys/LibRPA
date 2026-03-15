@@ -9,11 +9,13 @@
 #include <stdexcept>
 #include <valarray>
 
+#include "abacus_symmetry.h"
 #include "atoms.h"
 #include "constants.h"
 #include "envs_blacs.h"
 #include "envs_io.h"
 #include "envs_mpi.h"
+#include "geometry.h"
 #include "lapack_connector.h"
 #include "libri_utils.h"
 #include "matrix_m_parallel_utils.h"
@@ -40,6 +42,373 @@ using LIBRPA::envs::blacs_ctxt_global_h;
 using LIBRPA::envs::mpi_comm_global_h;
 using LIBRPA::envs::ofs_myid;
 using LIBRPA::utils::lib_printf;
+
+namespace
+{
+
+using abf_qspace_complex_block_map_t =
+    std::map<atom_t,
+             std::map<atom_t, std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>>;
+
+bool are_equivalent_abacus_qpoints(const Vector3_Order<double>& lhs,
+                                   const Vector3_Order<double>& rhs,
+                                   const double tol = 1e-5)
+{
+    const auto same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y)
+           && same_component(lhs.z, rhs.z);
+}
+
+template <typename QMap>
+typename QMap::const_iterator find_matching_abacus_qpoint(const QMap& q_map,
+                                                          const Vector3_Order<double>& q_target)
+{
+    const auto exact_iter = q_map.find(q_target);
+    if (exact_iter != q_map.end())
+    {
+        return exact_iter;
+    }
+
+    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto& entry) {
+        return are_equivalent_abacus_qpoints(entry.first, q_target);
+    });
+}
+
+std::vector<Vector3_Order<double>>::const_iterator find_matching_abacus_qpoint(
+    const std::vector<Vector3_Order<double>>& q_points, const Vector3_Order<double>& q_target)
+{
+    const auto exact_iter = std::find(q_points.begin(), q_points.end(), q_target);
+    if (exact_iter != q_points.end())
+    {
+        return exact_iter;
+    }
+
+    return std::find_if(q_points.begin(), q_points.end(), [&q_target](const auto& q_point) {
+        return are_equivalent_abacus_qpoints(q_point, q_target);
+    });
+}
+
+bool can_restore_abacus_abf_full_qspace_operator(const std::map<atom_t, size_t>& atom_nabf)
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry && ctx.available && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty() && ctx.kstars.size() == kfrac_list.size()
+           && ctx.atom_to_type.size() == atom_nabf.size() && coord_frac.size() == atom_nabf.size();
+}
+
+ComplexMatrix to_complex_matrix(const matrix_m<std::complex<double>>& mat)
+{
+    ComplexMatrix complex_mat(mat.nr(), mat.nc());
+    for (int row = 0; row < mat.nr(); ++row)
+    {
+        for (int col = 0; col < mat.nc(); ++col)
+        {
+            complex_mat(row, col) = mat(row, col);
+        }
+    }
+    return complex_mat;
+}
+
+matrix_m<std::complex<double>> to_row_major_matrix_m(const ComplexMatrix& mat)
+{
+    matrix_m<std::complex<double>> matrix_out(mat.nr, mat.nc, MAJOR::ROW);
+    for (int row = 0; row < mat.nr; ++row)
+    {
+        for (int col = 0; col < mat.nc; ++col)
+        {
+            matrix_out(row, col) = mat(row, col);
+        }
+    }
+    return matrix_out;
+}
+
+void dump_blacs_debug_matrix(const std::string& file_name,
+                             const matrix_m<std::complex<double>>& matrix_local,
+                             const LIBRPA::Array_Desc& matrix_desc,
+                             const double threshold = 1e-15)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    print_matrix_mm_file_parallel(
+        (Params::output_dir + "/" + file_name).c_str(), matrix_local, matrix_desc, threshold);
+}
+
+void dump_abacus_abf_qspace_blocks(
+    const std::string& prefix,
+    const abf_qspace_complex_block_map_t& blocks_by_q,
+    const double threshold = 1e-15)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    for (const auto& atom_i_pair : blocks_by_q)
+    {
+        const auto atom_i = atom_i_pair.first;
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            const auto atom_j = atom_j_pair.first;
+            for (const auto& q_iter : atom_j_pair.second)
+            {
+                std::ostringstream file_name;
+                const auto q_index =
+                    std::distance(klist.cbegin(), find_matching_abacus_qpoint(klist, q_iter.first));
+                if (q_index < static_cast<std::ptrdiff_t>(klist.size()))
+                {
+                    file_name << prefix << "_iq_" << q_index;
+                }
+                else
+                {
+                    // Keep dumping even when the restored q vector differs from the stored grid
+                    // by small floating-point noise. The explicit q-components make the mapping
+                    // back to the symmetry-off reference straightforward during debugging.
+                    file_name.setf(std::ios::fixed);
+                    file_name.precision(10);
+                    file_name << prefix << "_qx_" << q_iter.first.x << "_qy_" << q_iter.first.y
+                              << "_qz_" << q_iter.first.z;
+                }
+                file_name << "_I_" << atom_i << "_J_" << atom_j << "_id_"
+                          << mpi_comm_global_h.myid << ".mtx";
+                print_matrix_mm_file(q_iter.second, Params::output_dir + "/" + file_name.str(),
+                                     threshold);
+            }
+        }
+    }
+}
+
+LIBRPA::abacus_atom_block_matrix_map_t collect_abacus_abf_ibz_blocks_for_q(
+    const atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old&
+        blocks_by_q,
+    const Vector3_Order<double>& q_ibz_key)
+{
+    LIBRPA::abacus_atom_block_matrix_map_t blocks_ibz;
+    for (const auto& atom_i_pair : blocks_by_q)
+    {
+        const auto atom_i = atom_i_pair.first;
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            const auto atom_j = atom_j_pair.first;
+            const auto q_iter = find_matching_abacus_qpoint(atom_j_pair.second, q_ibz_key);
+            if (q_iter != atom_j_pair.second.end())
+            {
+                blocks_ibz[atom_i][atom_j] = to_complex_matrix(q_iter->second);
+            }
+        }
+    }
+    return blocks_ibz;
+}
+
+std::set<std::pair<atom_t, atom_t>> collect_abacus_atom_pairs(
+    const LIBRPA::abacus_atom_block_matrix_map_t& atom_blocks)
+{
+    std::set<std::pair<atom_t, atom_t>> atom_pairs;
+    for (const auto& atom_i_pair : atom_blocks)
+    {
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            atom_pairs.insert({atom_i_pair.first, atom_j_pair.first});
+        }
+    }
+    return atom_pairs;
+}
+
+std::vector<int> build_abacus_target_to_source_atom_map(const LIBRPA::AbacusKStarMember& member,
+                                                        const std::size_t natoms)
+{
+    std::vector<int> target_to_source(natoms, -1);
+    for (const auto& atom_rotation : member.atom_rotations)
+    {
+        if (atom_rotation.atom_from >= 0
+            && atom_rotation.atom_from < static_cast<int>(natoms))
+        {
+            target_to_source[static_cast<std::size_t>(atom_rotation.atom_from)] =
+                atom_rotation.atom_to;
+        }
+    }
+    return target_to_source;
+}
+
+#ifdef LIBRPA_USE_LIBRI
+using abacus_ibz_tensor_map_t =
+    std::map<int, std::map<std::pair<int, std::array<double, 3>>, RI::Tensor<std::complex<double>>>>;
+
+std::pair<std::set<int>, std::set<int>> collect_abacus_required_source_atom_sets(
+    const LIBRPA::AbacusKStar& star,
+    const std::set<std::pair<atom_t, atom_t>>& local_target_pairs,
+    const std::size_t natoms)
+{
+    std::pair<std::set<int>, std::set<int>> source_atom_sets;
+    for (const auto& member : star.members)
+    {
+        const auto target_to_source = build_abacus_target_to_source_atom_map(member, natoms);
+        for (const auto& atom_pair : local_target_pairs)
+        {
+            const int source_i = target_to_source.at(static_cast<std::size_t>(atom_pair.first));
+            const int source_j = target_to_source.at(static_cast<std::size_t>(atom_pair.second));
+            if (source_i < 0 || source_j < 0)
+            {
+                throw std::runtime_error(
+                    "ABACUS GW restore found an incomplete target-to-source atom map");
+            }
+            source_atom_sets.first.insert(source_i);
+            source_atom_sets.second.insert(source_j);
+        }
+    }
+    return source_atom_sets;
+}
+
+abacus_ibz_tensor_map_t convert_abacus_blocks_to_tensor_map(
+    const LIBRPA::abacus_atom_block_matrix_map_t& atom_blocks,
+    const std::array<double, 3>& q_key_array)
+{
+    abacus_ibz_tensor_map_t tensor_map;
+    for (const auto& atom_i_pair : atom_blocks)
+    {
+        const auto atom_i = static_cast<int>(atom_i_pair.first);
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            const auto atom_j = static_cast<int>(atom_j_pair.first);
+            auto tensor_storage =
+                std::make_shared<std::valarray<std::complex<double>>>(
+                    atom_j_pair.second.c, atom_j_pair.second.size);
+            tensor_map[atom_i][{atom_j, q_key_array}] =
+                RI::Tensor<std::complex<double>>(
+                    {static_cast<std::size_t>(atom_j_pair.second.nr),
+                     static_cast<std::size_t>(atom_j_pair.second.nc)},
+                    tensor_storage);
+        }
+    }
+    return tensor_map;
+}
+
+LIBRPA::abacus_atom_block_matrix_map_t convert_tensor_map_to_abacus_blocks(
+    const abacus_ibz_tensor_map_t& tensor_map,
+    const std::array<double, 3>& q_key_array,
+    const std::map<atom_t, size_t>& atom_nabf)
+{
+    LIBRPA::abacus_atom_block_matrix_map_t atom_blocks;
+    for (const auto& atom_i_pair : tensor_map)
+    {
+        const auto atom_i = static_cast<atom_t>(atom_i_pair.first);
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            if (atom_j_pair.first.second != q_key_array)
+            {
+                continue;
+            }
+            const auto atom_j = static_cast<atom_t>(atom_j_pair.first.first);
+            const int nrows = static_cast<int>(atom_nabf.at(atom_i));
+            const int ncols = static_cast<int>(atom_nabf.at(atom_j));
+            ComplexMatrix block(nrows, ncols);
+            for (int row = 0; row < nrows; ++row)
+            {
+                for (int col = 0; col < ncols; ++col)
+                {
+                    block(row, col) = atom_j_pair.second(row, col);
+                }
+            }
+            atom_blocks[atom_i][atom_j] = std::move(block);
+        }
+    }
+    return atom_blocks;
+}
+#endif
+
+abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
+    const atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old&
+        blocks_by_q_ibz,
+    const std::map<atom_t, size_t>& atom_nabf)
+{
+    abf_qspace_complex_block_map_t blocks_by_q_full;
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const auto kstar_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+
+    for (const auto& mapping_entry : kstar_mapping)
+    {
+        const auto& star = ctx.kstars[static_cast<std::size_t>(mapping_entry.star_list_index)];
+        const auto& q_ibz_key = klist[static_cast<std::size_t>(mapping_entry.iq_ibz)];
+        const auto& k_ibz_frac = kfrac_list[static_cast<std::size_t>(mapping_entry.iq_ibz)];
+        const auto blocks_ibz_local =
+            collect_abacus_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_key);
+        if (Params::debug)
+        {
+            LIBRPA::utils::lib_printf_root(
+                "ABACUS GW restore debug: iq_ibz=%d star=%d k_ibz=(%.7f %.7f %.7f) blocks=%zu members=%zu\n",
+                mapping_entry.iq_ibz, star.star_index, k_ibz_frac.x, k_ibz_frac.y, k_ibz_frac.z,
+                blocks_ibz_local.size(), star.members.size());
+        }
+
+        const auto local_target_pairs = collect_abacus_atom_pairs(blocks_ibz_local);
+        auto blocks_ibz = blocks_ibz_local;
+#ifdef LIBRPA_USE_LIBRI
+        if (mpi_comm_global_h.nprocs > 1)
+        {
+            const auto source_atom_sets = collect_abacus_required_source_atom_sets(
+                star, local_target_pairs, atom_nabf.size());
+            const std::array<double, 3> q_ibz_array{q_ibz_key.x, q_ibz_key.y, q_ibz_key.z};
+            const auto gathered_blocks_tensor = comm_map2_first(
+                mpi_comm_global_h.comm, convert_abacus_blocks_to_tensor_map(blocks_ibz_local, q_ibz_array),
+                source_atom_sets.first, source_atom_sets.second);
+            blocks_ibz = convert_tensor_map_to_abacus_blocks(
+                gathered_blocks_tensor, q_ibz_array, atom_nabf);
+        }
+#endif
+        if (local_target_pairs.empty())
+        {
+            continue;
+        }
+
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto& member = star.members[imember];
+            if (Params::debug)
+            {
+                LIBRPA::utils::lib_printf_root(
+                    "ABACUS GW restore debug:   member isym=%d k_bz=(%.7f %.7f %.7f)\n",
+                    member.isym, member.k_bz.x, member.k_bz.y, member.k_bz.z);
+            }
+            const bool use_time_reversal = member.isym >= nsym_space;
+            LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
+            try
+            {
+                rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
+                    ctx, member, blocks_ibz, atom_nabf, k_ibz_frac, coord_frac,
+                    use_time_reversal, &local_target_pairs);
+            }
+            catch (const std::exception& ex)
+            {
+                std::ostringstream oss;
+                oss << "ABACUS Wc q-star restore failed for iq_ibz=" << mapping_entry.iq_ibz
+                    << ", star=" << star.star_index << ", member=" << imember
+                    << ", isym=" << member.isym << ": " << ex.what();
+                throw std::runtime_error(oss.str());
+            }
+            for (const auto& atom_i_pair : rotated_blocks)
+            {
+                for (const auto& atom_j_pair : atom_i_pair.second)
+                {
+                    const auto& q_bz_key =
+                        mapping_entry.member_q_bz_keys[static_cast<std::size_t>(imember)];
+                    blocks_by_q_full[atom_i_pair.first][atom_j_pair.first][q_bz_key] =
+                        to_row_major_matrix_m(atom_j_pair.second);
+                }
+            }
+        }
+    }
+
+    return blocks_by_q_full;
+}
+
+} // namespace
 
 CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx_mat_t &coulmat)
 {
@@ -2009,6 +2378,8 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
             ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
                                           coulwc_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
                                           blacs_ctxt_global_h.ictxt);
+            dump_blacs_debug_matrix(
+                "Vqcut_block_q_" + std::to_string(iq) + ".mtx", coulwc_block, desc_nabf_nabf_opt);
             Profiler::stop("epsilon_prepare_coulwc_sqrt_3");
             Profiler::start("epsilon_prepare_coulwc_sqrt_4", "Perform square root");
             power_hemat_blacs(coulwc_block, desc_nabf_nabf_opt, coul_eigen_block,
@@ -2073,6 +2444,8 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
             ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
                                           coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
                                           blacs_ctxt_global_h.ictxt);
+            dump_blacs_debug_matrix(
+                "Vqeps_block_q_" + std::to_string(iq) + ".mtx", coul_block, desc_nabf_nabf_opt);
             ofs_myid << get_timestamp() << " Done construct couleps 2D block" << endl;
         }
         // char fn[100];
@@ -2170,6 +2543,10 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1,
                                               desc_nabf_nabf.desc, chi0_block.ptr(), 1, 1,
                                               desc_nabf_nabf_opt.desc, blacs_ctxt_global_h.ictxt);
+                dump_blacs_debug_matrix("chi0_block_q_" + std::to_string(iq) + "_freq_"
+                                            + std::to_string(ifreq) + ".mtx",
+                                        chi0_block,
+                                        desc_nabf_nabf_opt);
                 Profiler::stop("epsilon_prepare_chi0_2d_collect_block");
                 // sprintf(fn, "chi_ifreq_%d_iq_%d.mtx", ifreq, iq);
                 // print_matrix_mm_file_parallel(fn, chi0_block, desc_nabf_nabf);
@@ -2303,6 +2680,11 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 }
                 Profiler::stop("epsilon_invert_eps");
             }
+            dump_blacs_debug_matrix("epsinv_minus_identity_q_" + std::to_string(iq) + "_freq_"
+                                        + std::to_string(ifreq) + ".mtx",
+                                    chi0_block,
+                                    desc_nabf_nabf_opt,
+                                    1e-10);
             // debug for Coulomb, epsilon^{-1} - 1 = -0.75
             // for (int i = 0; i != n_abf; i++)
             // {
@@ -2544,11 +2926,24 @@ CT_FT_Wc_freq_q(
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
+    const bool use_abacus_full_q_restore = can_restore_abacus_abf_full_qspace_operator(atom_mu);
 
     map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old>
         Wc_tau_R;
+    std::map<double, abf_qspace_complex_block_map_t> Wc_freq_q_full;
     if (!tfg.has_time_grids()) throw logic_error("TFGrids object does not have time grids");
     const int ngrids = tfg.get_n_grids();
+
+    if (use_abacus_full_q_restore)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS GW symmetry restores the full ABF q-star before `CT_FT_Wc_freq_q`\n");
+        for (const auto& freq_Wc : Wc_freq_q)
+        {
+            Wc_freq_q_full[freq_Wc.first] = restore_abacus_abf_full_qspace_operator(
+                freq_Wc.second, atom_mu);
+        }
+    }
 
     LIBRPA::utils::lib_printf_root("Converting Wc(q,w) -> W(R,t)\n");
     mpi_comm_global_h.barrier();
@@ -2615,26 +3010,41 @@ CT_FT_Wc_freq_q(
             // ofs_myid << "f2t cos eff for freq " << freq << " -> tau " << tau  << ": " << f2t <<
             // "\n";
             if (Wc_freq_q.count(freq) == 0) continue;
-            if (Wc_freq_q.at(freq).count(Mu) == 0) continue;
-            if (Wc_freq_q.at(freq).at(Mu).count(Nu) == 0) continue;
-            // cout << "freq: " << freq << "\n";
-
-            const auto &Wc_q_all = Wc_freq_q.at(freq).at(Mu).at(Nu);
-            for (auto &Wc_q : Wc_q_all)
+            if (use_abacus_full_q_restore)
             {
-                const auto q = Wc_q.first;
-                const auto &Wc = Wc_q.second;
-                for (auto q_bz : map_irk_ks[q])
+                if (Wc_freq_q_full.count(freq) == 0) continue;
+                if (Wc_freq_q_full.at(freq).count(Mu) == 0) continue;
+                if (Wc_freq_q_full.at(freq).at(Mu).count(Nu) == 0) continue;
+                for (const auto& q_Wc : Wc_freq_q_full.at(freq).at(Mu).at(Nu))
                 {
-                    const double ang = -q_bz * (R * latvec) * TWO_PI;
+                    const auto& q = q_Wc.first;
+                    const auto& Wc = q_Wc.second;
+                    const double ang = -q * (R * latvec) * TWO_PI;
                     const complex<double> weight =
                         complex<double>(cos(ang), sin(ang)) * f2t / double(n_k_points);
-                    // ofs_myid << q << " " << q_bz << " weight = " << weight << "\n";
-                    // ofs_myid << q_Wc.second;
-                    if (q == q_bz)
-                        WtR_temp += Wc * weight;
-                    else
-                        WtR_temp += conj(Wc) * weight;
+                    WtR_temp += Wc * weight;
+                }
+            }
+            else
+            {
+                if (Wc_freq_q.at(freq).count(Mu) == 0) continue;
+                if (Wc_freq_q.at(freq).at(Mu).count(Nu) == 0) continue;
+
+                const auto &Wc_q_all = Wc_freq_q.at(freq).at(Mu).at(Nu);
+                for (auto &Wc_q : Wc_q_all)
+                {
+                    const auto q = Wc_q.first;
+                    const auto &Wc = Wc_q.second;
+                    for (auto q_bz : map_irk_ks[q])
+                    {
+                        const double ang = -q_bz * (R * latvec) * TWO_PI;
+                        const complex<double> weight =
+                            complex<double>(cos(ang), sin(ang)) * f2t / double(n_k_points);
+                        if (q == q_bz)
+                            WtR_temp += Wc * weight;
+                        else
+                            WtR_temp += conj(Wc) * weight;
+                    }
                 }
             }
         }
@@ -2689,9 +3099,11 @@ CT_FT_Wc_q2R_freq2time(
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
+    const bool use_abacus_full_q_restore = can_restore_abacus_abf_full_qspace_operator(atom_mu);
 
     map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old>
         Wc_tau_R, Wc_freq_R;
+    std::map<double, abf_qspace_complex_block_map_t> Wc_freq_q_full;
     if (!tfg.has_time_grids()) throw logic_error("TFGrids object does not have time grids");
     const int ngrids = tfg.get_n_grids();
     set<pair<atom_t, atom_t>> atpairs_unique;
@@ -2737,6 +3149,17 @@ CT_FT_Wc_q2R_freq2time(
     mpi_comm_global_h.barrier();
     Profiler::stop("construct_Wc_lower_half");
 
+    if (use_abacus_full_q_restore)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS GW symmetry restores the full ABF q-star before `CT_FT_Wc_q2R_freq2time`\n");
+        for (const auto& freq_Wc : Wc_freq_q)
+        {
+            Wc_freq_q_full[freq_Wc.first] = restore_abacus_abf_full_qspace_operator(
+                freq_Wc.second, atom_mu);
+        }
+    }
+
     Profiler::start("Wc(q,w) -> Wc(R,w)", "Convert Wc(q,w) -> Wc(R,w)");
     vector<pair<pair<int, Vector3_Order<int>>, pair<atom_t, atom_t>>> ifreqtau_R_atpair_all;
     // allocate Wc(R,w) before hand
@@ -2777,22 +3200,41 @@ CT_FT_Wc_q2R_freq2time(
         matrix_m<complex<double>> WfR_temp(n_mu, n_nu, major_Wc);
 
         if (Wc_freq_q.count(freq) == 0) continue;
-        if (Wc_freq_q.at(freq).count(Mu) == 0) continue;
-        if (Wc_freq_q.at(freq).at(Mu).count(Nu) == 0) continue;
-
-        for (auto &Wc_q : Wc_freq_q.at(freq).at(Mu).at(Nu))
+        if (use_abacus_full_q_restore)
         {
-            const auto q = Wc_q.first;
-            const auto &Wc = Wc_q.second;
-            for (auto q_bz : map_irk_ks[q])
+            if (Wc_freq_q_full.count(freq) == 0) continue;
+            if (Wc_freq_q_full.at(freq).count(Mu) == 0) continue;
+            if (Wc_freq_q_full.at(freq).at(Mu).count(Nu) == 0) continue;
+
+            for (const auto& q_Wc : Wc_freq_q_full.at(freq).at(Mu).at(Nu))
             {
-                const double ang = -q_bz * (R * latvec) * TWO_PI;
+                const auto& q = q_Wc.first;
+                const auto& Wc = q_Wc.second;
+                const double ang = -q * (R * latvec) * TWO_PI;
                 const complex<double> weight =
                     complex<double>(cos(ang), sin(ang)) / double(n_k_points);
-                if (q == q_bz)
-                    WfR_temp += Wc * weight;
-                else
-                    WfR_temp += conj(Wc) * weight;
+                WfR_temp += Wc * weight;
+            }
+        }
+        else
+        {
+            if (Wc_freq_q.at(freq).count(Mu) == 0) continue;
+            if (Wc_freq_q.at(freq).at(Mu).count(Nu) == 0) continue;
+
+            for (auto &Wc_q : Wc_freq_q.at(freq).at(Mu).at(Nu))
+            {
+                const auto q = Wc_q.first;
+                const auto &Wc = Wc_q.second;
+                for (auto q_bz : map_irk_ks[q])
+                {
+                    const double ang = -q_bz * (R * latvec) * TWO_PI;
+                    const complex<double> weight =
+                        complex<double>(cos(ang), sin(ang)) / double(n_k_points);
+                    if (q == q_bz)
+                        WfR_temp += Wc * weight;
+                    else
+                        WfR_temp += conj(Wc) * weight;
+                }
             }
         }
         // omp_set_lock(&lock_Wc);
@@ -3024,8 +3466,47 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
+    const bool can_use_abacus_full_q_restore =
+        can_restore_abacus_abf_full_qspace_operator(atom_mu_l);
+    const bool is_rank_local_freq_export =
+        is_freq && Params::output_Wc_Rf_mat == 1 && mpi_comm_global_h.nprocs > 1;
+    const bool use_abacus_full_q_restore =
+        can_use_abacus_full_q_restore && !is_rank_local_freq_export;
+
+    if (can_use_abacus_full_q_restore && is_rank_local_freq_export)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS GW symmetry skips full-q restore for the MPI Wc(R,w=0) export path,\n"
+            "because the temporary Wc(q,w=0) container only holds rank-local atom-pair blocks.\n");
+    }
 
     atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old Wc_R;
+    const auto Wc_q_full =
+        use_abacus_full_q_restore ? restore_abacus_abf_full_qspace_operator(Wc_q, atom_mu_l)
+                                  : abf_qspace_complex_block_map_t{};
+    if (use_abacus_full_q_restore)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS GW symmetry restores the full ABF q-star before `FT_Wc_q2R`\n");
+
+        // Dump the reconstructed full-q blocks once so we can compare them against the
+        // symmetry-off reference and isolate whether the mismatch starts before the q->R FT.
+        static bool dumped_restored_fullq_freq = false;
+        static bool dumped_restored_fullq_tau = false;
+        if (is_freq)
+        {
+            if (!dumped_restored_fullq_freq)
+            {
+                dump_abacus_abf_qspace_blocks("Wc_restored_fullq_ifreq0", Wc_q_full);
+                dumped_restored_fullq_freq = true;
+            }
+        }
+        else if (!dumped_restored_fullq_tau)
+        {
+            dump_abacus_abf_qspace_blocks("Wc_restored_fullq_tau0", Wc_q_full);
+            dumped_restored_fullq_tau = true;
+        }
+    }
 
     LIBRPA::utils::lib_printf_root("Converting Wc(q) -> W(R)\n");
     mpi_comm_global_h.barrier();
@@ -3076,23 +3557,42 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
         // thread local temporary matrix
         matrix_m<complex<double>> WR_temp(n_mu, n_nu, major_Wc);
 
-        if (Wc_q.count(Mu) == 0) continue;
-        if (Wc_q.at(Mu).count(Nu) == 0) continue;
-
-        const auto &Wc_q_all = Wc_q.at(Mu).at(Nu);
-        for (auto &Wc_q : Wc_q_all)
+        if (use_abacus_full_q_restore)
         {
-            const auto q = Wc_q.first;
-            const auto &Wc = Wc_q.second;
-            for (auto q_bz : map_irk_ks[q])
+            if (Wc_q_full.count(Mu) == 0) continue;
+            if (Wc_q_full.at(Mu).count(Nu) == 0) continue;
+
+            const auto& Wc_q_all = Wc_q_full.at(Mu).at(Nu);
+            for (const auto& q_Wc : Wc_q_all)
             {
-                const double ang = -q_bz * (R * latvec) * TWO_PI;
+                const auto& q = q_Wc.first;
+                const auto& Wc = q_Wc.second;
+                const double ang = -q * (R * latvec) * TWO_PI;
                 const complex<double> weight =
                     complex<double>(cos(ang), sin(ang)) / double(n_kpoints);
-                if (q == q_bz)
-                    WR_temp += Wc * weight;
-                else
-                    WR_temp += conj(Wc) * weight;
+                WR_temp += Wc * weight;
+            }
+        }
+        else
+        {
+            if (Wc_q.count(Mu) == 0) continue;
+            if (Wc_q.at(Mu).count(Nu) == 0) continue;
+
+            const auto &Wc_q_all = Wc_q.at(Mu).at(Nu);
+            for (auto &Wc_q : Wc_q_all)
+            {
+                const auto q = Wc_q.first;
+                const auto &Wc = Wc_q.second;
+                for (auto q_bz : map_irk_ks[q])
+                {
+                    const double ang = -q_bz * (R * latvec) * TWO_PI;
+                    const complex<double> weight =
+                        complex<double>(cos(ang), sin(ang)) / double(n_kpoints);
+                    if (q == q_bz)
+                        WR_temp += Wc * weight;
+                    else
+                        WR_temp += conj(Wc) * weight;
+                }
             }
         }
         // omp_set_lock(&lock_Wc);

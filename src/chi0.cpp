@@ -115,15 +115,10 @@ void Chi0::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
 void Chi0::build_gf_Rt(Vector3_Order<int> R, double tau)
 {
     Profiler::start("cal_Green_func", "space-time Green's function");
-    const auto nkpts = mf.get_n_kpoints();
     const auto nspins = mf.get_n_spins();
-    const auto nbands = mf.get_n_bands();
     const auto naos = mf.get_n_aos();
     const auto nsoc = mf.get_n_soc();
     assert(tau != 0);
-
-    // temporary Green's function
-    matrix gf_Rt_is_global(naos, naos);
 
     for (int is = 0; is != nspins; is++)
     {
@@ -131,57 +126,13 @@ void Chi0::build_gf_Rt(Vector3_Order<int> R, double tau)
         {
             for (int isoc2 = 0; isoc2 != nsoc; isoc2++)
             {
-                gf_Rt_is_global.zero_out();
-                auto wg = mf.get_weight()[is];
-                if (tau > 0)
-                    for (int i = 0; i != wg.size; i++)
-                    {
-                        // wg.c[i] = 1.0 / nkpts *nspins - wg.c[i];
-                        if (Params::use_soc)
-                            wg.c[i] = 1.0 / nkpts - wg.c[i];
-                        else
-                            wg.c[i] = 1.0 / nkpts - wg.c[i] / 2 * nspins;  //
-                        if (wg.c[i] < 0) wg.c[i] = 0;
-                    }
-                else
+                matrix gf_Rt_is_global(naos, naos);
+                const auto gf_tau_R =
+                    mf.get_gf_real_imagtimes_Rs(is, isoc1, isoc2, kfrac_list, {tau}, {R});
+                if (gf_tau_R.count(tau) != 0 && gf_tau_R.at(tau).count(R) != 0)
                 {
-                    if (!Params::use_soc) wg *= 0.5 * nspins;
+                    gf_Rt_is_global = gf_tau_R.at(tau).at(R);
                 }
-                matrix scale(nkpts, nbands);
-                // tau-energy phase
-                scale = -tau * (mf.get_eigenvals()[is] - mf.get_efermi());
-                /* print_matrix("-(e-ef)*tau", scale); */
-                for (int ie = 0; ie != scale.size; ie++)
-                {
-                    // NOTE: enforce non-positive phase
-                    if (scale.c[ie] > 0) scale.c[ie] = 0;
-                    scale.c[ie] = std::exp(scale.c[ie]) * wg.c[ie];
-                }
-                /* print_matrix("exp(-dE*tau)", scale); */
-                for (int ik = 0; ik != nkpts; ik++)
-                {
-                    double ang = -klist[ik] * (R * latvec) * TWO_PI;
-                    complex<double> kphase = complex<double>(cos(ang), sin(ang));
-                    /* LIBRPA::utils::lib_printf("kphase %f %fj\n", kphase.real(), kphase.imag());
-                     */
-                    auto scaled_wfc_conj = conj(mf.get_eigenvectors()[is][isoc2][ik]);
-                    for (int ib = 0; ib != nbands; ib++)
-                        LapackConnector::scal(naos, scale(ik, ib), scaled_wfc_conj.c + naos * ib,
-                                              1);
-                    if (Params::nbands_G >= 0)
-                    {
-                        for (int ib = Params::nbands_G; ib != nbands; ib++)
-                        {
-                            for (int inaos = 0; inaos != naos; inaos++)
-                                scaled_wfc_conj(ib, inaos) = 0.0;
-                        }
-                    }
-                    gf_Rt_is_global +=
-                        (kphase * transpose(mf.get_eigenvectors()[is][isoc1][ik], false) *
-                         scaled_wfc_conj)
-                            .real();
-                }
-                if (tau < 0) gf_Rt_is_global *= -1.;
                 omp_lock_t gf_lock;
                 omp_init_lock(&gf_lock);
 #pragma omp parallel for schedule(dynamic)
@@ -264,113 +215,90 @@ void Chi0::build_chi0_q_space_time(const Cs_LRI &Cs, const Vector3_Order<int> &R
 }
 
 #ifdef LIBRPA_USE_LIBRI
+template <typename Tdata, typename Tmatrix>
+static void pack_global_gf_blocks_to_libri(
+    const std::map<Vector3_Order<int>, Tmatrix>& gf_global_by_R,
+    const std::vector<std::pair<atpair_t, Vector3_Order<int>>>& IJRs,
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>& gf_libri)
+{
+    for (const auto& IJR : IJRs)
+    {
+        const auto& I = IJR.first.first;
+        const auto& J = IJR.first.second;
+        const auto& R = IJR.second;
+        if (gf_global_by_R.count(R) == 0)
+        {
+            continue;
+        }
+
+        const auto& gf_global = gf_global_by_R.at(R);
+        const auto nI = atom_nw[I];
+        const auto nJ = atom_nw[J];
+        const std::array<int, 3> Ra{R.x, R.y, R.z};
+        auto ptr = std::make_shared<std::valarray<Tdata>>(nI * nJ);
+        for (size_t i = 0; i != nI; ++i)
+        {
+            const size_t i_glo = atom_iw_loc2glo(I, i);
+            for (size_t j = 0; j != nJ; ++j)
+            {
+                const size_t j_glo = atom_iw_loc2glo(J, j);
+                if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                {
+                    (*ptr)[i * nJ + j] = gf_global(i_glo, j_glo);
+                }
+                else
+                {
+                    (*ptr)[i * nJ + j] = gf_global(i_glo, j_glo);
+                }
+            }
+        }
+        gf_libri[I][{J, Ra}] = RI::Tensor<Tdata>({nI, nJ}, ptr);
+    }
+}
+
 static void build_gf_Rt_libri(
     const MeanField &mf, int ispin, int isoc1, int isoc2,
-    const vector<Vector3_Order<double>> &klist,
+    const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs, const double &tau,
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> &gf_libri)
 {
     Profiler::start("build_gf_Rt_libri");
 
-    const auto nkpts = mf.get_n_kpoints();
-    const auto nspins = mf.get_n_spins();
-    const auto nbands = mf.get_n_bands();
-    const auto naos = mf.get_n_aos();
-
-    assert(klist.size() == nkpts);
-
-    std::map<Vector3_Order<int>, std::vector<atpair_t>> map_R_IJs;
-    for (const auto &IJR : IJRs)
+    std::set<Vector3_Order<int>> unique_Rs;
+    for (const auto& IJR : IJRs)
     {
-        const auto &R = IJR.second;
-        map_R_IJs[R].push_back(IJR.first);
+        unique_Rs.insert(IJR.second);
     }
+    const std::vector<Vector3_Order<int>> Rs_local(unique_Rs.begin(), unique_Rs.end());
 
-    auto wg = mf.get_weight()[ispin];
-    if (tau > 0)
+    if (Params::debug && Params::output_abacus_gw_gf && LIBRPA::envs::mpi_comm_global_h.is_root())
     {
-        for (int i = 0; i != wg.size; i++)
+        static std::set<std::string> dumped_rs_tags;
+        std::ostringstream tag;
+        tag << "real_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_tau_" << tau;
+        if (dumped_rs_tags.insert(tag.str()).second)
         {
-            if (Params::use_soc)
-                wg.c[i] = 1.0 / nkpts - wg.c[i];
-            else
-                wg.c[i] = 1.0 / nkpts - wg.c[i] / 2 * nspins;  //
-            if (wg.c[i] < 0) wg.c[i] = 0;
-        }
-    }
-    else
-    {
-        if (!Params::use_soc) wg *= 0.5 * nspins;
-    }
-    auto scale = -tau * (mf.get_eigenvals()[ispin] - mf.get_efermi());
-    for (int ie = 0; ie != scale.size; ie++)
-    {
-        // NOTE: enforce non-positive phase
-        if (scale.c[ie] > 0) scale.c[ie] = 0;
-        scale.c[ie] = std::exp(scale.c[ie]) * wg.c[ie];
-    }
-
-    for (const auto &R_IJs : map_R_IJs)
-    {
-        matrix gf_global(naos, naos, true);
-
-        const auto R = R_IJs.first;
-        const auto IJs = R_IJs.second;
-        const std::array<int, 3> Ra{R.x, R.y, R.z};
-
-        // Compute the full G(R, tau) matrix
-#pragma omp parallel for schedule(dynamic)
-        for (int ik = 0; ik != nkpts; ik++)
-        {
-            double ang = -klist[ik] * (R * latvec) * TWO_PI;
-            complex<double> kphase = complex<double>(cos(ang), sin(ang));
-            auto scaled_wfc_conj = conj(mf.get_eigenvectors()[ispin][isoc2][ik]);
-            for (int ib = 0; ib != nbands; ib++)
-                LapackConnector::scal(naos, scale(ik, ib), scaled_wfc_conj.c + naos * ib, 1);
-            if (Params::nbands_G >= 0)
+            std::ostringstream rs_stream;
+            rs_stream << "LibRI GF real-path Rs_local (" << Rs_local.size() << "):";
+            for (const auto& R : Rs_local)
             {
-                for (int ib = Params::nbands_G; ib != nbands; ib++)
+                const int manhattan_norm = std::abs(R.x) + std::abs(R.y) + std::abs(R.z);
+                if (R.x == 0 && R.y == 0 && R.z == 0 || manhattan_norm == 1)
                 {
-                    for (int inaos = 0; inaos != naos; inaos++) scaled_wfc_conj(ib, inaos) = 0.0;
+                    rs_stream << " (" << R.x << "," << R.y << "," << R.z << ")";
                 }
             }
-            auto mat = (kphase * transpose(mf.get_eigenvectors()[ispin][isoc1][ik], false) *
-                        scaled_wfc_conj)
-                           .real();
-#pragma omp critical
-            {
-                gf_global += mat;
-            }
+            LIBRPA::utils::lib_printf("%s\n", rs_stream.str().c_str());
         }
-        if (tau < 0) gf_global *= -1.;
+    }
 
-        // Divide the full matrix to atom-pair blocks
-        omp_lock_t gf_lock;
-        omp_init_lock(&gf_lock);
-#pragma omp parallel for schedule(dynamic)
-        for (const auto &IJ : IJs)
-        {
-            const auto &I = IJ.first;
-            const auto &J = IJ.second;
-            const auto nI = atom_nw[I];
-            const auto nJ = atom_nw[J];
-            // 1D representation for row-major 2D array
-            auto ptr = std::make_shared<std::valarray<double>>(nI * nJ);
-            for (size_t i = 0; i != nI; i++)
-            {
-                size_t i_glo = atom_iw_loc2glo(I, i);
-                for (size_t j = 0; j != nJ; j++)
-                {
-                    size_t j_glo = atom_iw_loc2glo(J, j);
-                    (*ptr)[i * nJ + j] = gf_global(i_glo, j_glo);
-                }
-            }
-            omp_set_lock(&gf_lock);
-            gf_libri[I][{J, Ra}] = RI::Tensor<double>({nI, nJ}, ptr);
-            omp_unset_lock(&gf_lock);
-        }
-#pragma omp barrier
-        omp_destroy_lock(&gf_lock);
+    // Reuse the common MeanField Green's-function builder so that Chi0 and G0W0
+    // share the same ABACUS symmetry restoration and band-truncation workflow.
+    const auto gf_tau_R =
+        mf.get_gf_real_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list, {tau}, Rs_local);
+    if (gf_tau_R.count(tau) != 0)
+    {
+        pack_global_gf_blocks_to_libri<double>(gf_tau_R.at(tau), IJRs, gf_libri);
     }
 
     Profiler::stop("build_gf_Rt_libri");
@@ -378,111 +306,48 @@ static void build_gf_Rt_libri(
 
 static void build_gf_Rt_libri_cplx(
     const MeanField &mf, int ispin, int isoc1, int isoc2,
-    const vector<Vector3_Order<double>> &klist,
+    const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs, const double &tau,
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<std::complex<double>>>>
         &gf_libri)
 {
     Profiler::start("build_gf_Rt_libri");
 
-    const auto nkpts = mf.get_n_kpoints();
-    const auto nspins = mf.get_n_spins();
-    const auto nbands = mf.get_n_bands();
-    const auto naos = mf.get_n_aos();
-
-    assert(klist.size() == nkpts);
-
-    std::map<Vector3_Order<int>, std::vector<atpair_t>> map_R_IJs;
-    for (const auto &IJR : IJRs)
+    std::set<Vector3_Order<int>> unique_Rs;
+    for (const auto& IJR : IJRs)
     {
-        const auto &R = IJR.second;
-        map_R_IJs[R].push_back(IJR.first);
+        unique_Rs.insert(IJR.second);
     }
+    const std::vector<Vector3_Order<int>> Rs_local(unique_Rs.begin(), unique_Rs.end());
 
-    auto wg = mf.get_weight()[ispin];
-    if (tau > 0)
+    if (Params::debug && Params::output_abacus_gw_gf && LIBRPA::envs::mpi_comm_global_h.is_root())
     {
-        for (int i = 0; i != wg.size; i++)
+        static std::set<std::string> dumped_rs_tags;
+        std::ostringstream tag;
+        tag << "cplx_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_tau_" << tau;
+        if (dumped_rs_tags.insert(tag.str()).second)
         {
-            if (Params::use_soc)
-                wg.c[i] = 1.0 / nkpts - wg.c[i];
-            else
-                wg.c[i] = 1.0 / nkpts - wg.c[i] / 2 * nspins;  //
-            if (wg.c[i] < 0) wg.c[i] = 0;
-        }
-    }
-    else
-    {
-        if (!Params::use_soc) wg *= 0.5 * nspins;
-    }
-    auto scale = -tau * (mf.get_eigenvals()[ispin] - mf.get_efermi());
-    for (int ie = 0; ie != scale.size; ie++)
-    {
-        // NOTE: enforce non-positive phase
-        if (scale.c[ie] > 0) scale.c[ie] = 0;
-        scale.c[ie] = std::exp(scale.c[ie]) * wg.c[ie];
-    }
-
-    for (const auto &R_IJs : map_R_IJs)
-    {
-        ComplexMatrix gf_global(naos, naos, true);
-
-        const auto R = R_IJs.first;
-        const auto IJs = R_IJs.second;
-        const std::array<int, 3> Ra{R.x, R.y, R.z};
-
-        // Compute the full G(R, tau) matrix
-#pragma omp parallel for schedule(dynamic)
-        for (int ik = 0; ik != nkpts; ik++)
-        {
-            double ang = -klist[ik] * (R * latvec) * TWO_PI;
-            complex<double> kphase = complex<double>(cos(ang), sin(ang));
-            auto scaled_wfc_conj = conj(mf.get_eigenvectors()[ispin][isoc2][ik]);
-            for (int ib = 0; ib != nbands; ib++)
-                LapackConnector::scal(naos, scale(ik, ib), scaled_wfc_conj.c + naos * ib, 1);
-            if (Params::nbands_G >= 0)
+            std::ostringstream rs_stream;
+            rs_stream << "LibRI GF complex-path Rs_local (" << Rs_local.size() << "):";
+            for (const auto& R : Rs_local)
             {
-                for (int ib = Params::nbands_G; ib != nbands; ib++)
+                const int manhattan_norm = std::abs(R.x) + std::abs(R.y) + std::abs(R.z);
+                if (R.x == 0 && R.y == 0 && R.z == 0 || manhattan_norm == 1)
                 {
-                    for (int inaos = 0; inaos != naos; inaos++) scaled_wfc_conj(ib, inaos) = 0.0;
+                    rs_stream << " (" << R.x << "," << R.y << "," << R.z << ")";
                 }
             }
-            auto mat = (kphase * transpose(mf.get_eigenvectors()[ispin][isoc1][ik], false) *
-                        scaled_wfc_conj);
-#pragma omp critical
-            {
-                gf_global += mat;
-            }
+            LIBRPA::utils::lib_printf("%s\n", rs_stream.str().c_str());
         }
-        if (tau < 0) gf_global *= -1.;
+    }
 
-        // Divide the full matrix to atom-pair blocks
-        omp_lock_t gf_lock;
-        omp_init_lock(&gf_lock);
-#pragma omp parallel for schedule(dynamic)
-        for (const auto &IJ : IJs)
-        {
-            const auto &I = IJ.first;
-            const auto &J = IJ.second;
-            const auto nI = atom_nw[I];
-            const auto nJ = atom_nw[J];
-            // 1D representation for row-major 2D array
-            auto ptr = std::make_shared<std::valarray<std::complex<double>>>(nI * nJ);
-            for (size_t i = 0; i != nI; i++)
-            {
-                size_t i_glo = atom_iw_loc2glo(I, i);
-                for (size_t j = 0; j != nJ; j++)
-                {
-                    size_t j_glo = atom_iw_loc2glo(J, j);
-                    (*ptr)[i * nJ + j] = gf_global(i_glo, j_glo);
-                }
-            }
-            omp_set_lock(&gf_lock);
-            gf_libri[I][{J, Ra}] = RI::Tensor<std::complex<double>>({nI, nJ}, ptr);
-            omp_unset_lock(&gf_lock);
-        }
-#pragma omp barrier
-        omp_destroy_lock(&gf_lock);
+    // Keep the complex SOC path on the same symmetry-restored Green's-function
+    // source as the later G0W0 self-energy build.
+    const auto gf_tau_R =
+        mf.get_gf_cplx_imagtimes_Rs(ispin, isoc1, isoc2, kfrac_list, {tau}, Rs_local);
+    if (gf_tau_R.count(tau) != 0)
+    {
+        pack_global_gf_blocks_to_libri<std::complex<double>>(gf_tau_R.at(tau), IJRs, gf_libri);
     }
 
     Profiler::stop("build_gf_Rt_libri");
@@ -1044,17 +909,17 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                             std::cout << "Green's Function sums over all states." << std::endl;
                     }
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
-                        build_gf_Rt_libri_cplx(this->mf, isp, is1, is2, this->klist,
+                        build_gf_Rt_libri_cplx(this->mf, isp, is1, is2, kfrac_list,
                                                this->IJRs_gf_local, tau, gf_po_libri);
                     else
-                        build_gf_Rt_libri(this->mf, isp, is1, is2, this->klist, this->IJRs_gf_local,
+                        build_gf_Rt_libri(this->mf, isp, is1, is2, kfrac_list, this->IJRs_gf_local,
                                           tau, gf_po_libri);
                     rpa.set_Gs_pos(gf_po_libri, Params::libri_chi0_threshold_G);
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
-                        build_gf_Rt_libri_cplx(this->mf, isp, is2, is1, this->klist,
+                        build_gf_Rt_libri_cplx(this->mf, isp, is2, is1, kfrac_list,
                                                this->IJRs_gf_local, -tau, gf_ne_libri);
                     else
-                        build_gf_Rt_libri(this->mf, isp, is2, is1, this->klist, this->IJRs_gf_local,
+                        build_gf_Rt_libri(this->mf, isp, is2, is1, kfrac_list, this->IJRs_gf_local,
                                           -tau, gf_ne_libri);
                     rpa.set_Gs_neg(gf_ne_libri, Params::libri_chi0_threshold_G);
                     // ofs_myid << "gf_po_libri\n" << gf_po_libri << "\n";

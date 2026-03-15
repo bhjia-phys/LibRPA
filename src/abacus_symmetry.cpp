@@ -5,6 +5,7 @@
 #include "abacus_symmetry.h"
 
 #include "constants.h"
+#include "pbc.h"
 
 #include <algorithm>
 #include <cctype>
@@ -22,6 +23,7 @@ namespace
 {
 
 constexpr double kAbacusSymmetryCoordTol = 1e-5;
+const std::complex<double> kImagUnit(0.0, 1.0);
 
 std::string trim(const std::string& text)
 {
@@ -317,6 +319,217 @@ std::array<std::array<double, 3>, 3> multiply_rotation_matrices(
         }
     }
     return product;
+}
+
+bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
+                        const Vector3_Order<double>& rhs,
+                        const double tol = kAbacusSymmetryCoordTol)
+{
+    const auto is_same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return is_same_component(lhs.x, rhs.x) && is_same_component(lhs.y, rhs.y)
+           && is_same_component(lhs.z, rhs.z);
+}
+
+Matrix3 build_matrix3_from_array(const std::array<std::array<double, 3>, 3>& matrix)
+{
+    return Matrix3(matrix[0][0], matrix[0][1], matrix[0][2],
+                   matrix[1][0], matrix[1][1], matrix[1][2],
+                   matrix[2][0], matrix[2][1], matrix[2][2]);
+}
+
+ComplexMatrix build_complex_identity(const int n)
+{
+    ComplexMatrix identity(n, n);
+    for (int i = 0; i < n; ++i)
+    {
+        identity(i, i) = std::complex<double>(1.0, 0.0);
+    }
+    return identity;
+}
+
+double factorial_as_double(const int n)
+{
+    return std::tgamma(static_cast<double>(n) + 1.0);
+}
+
+int abacus_m_to_index(const int m)
+{
+    return (m > 0) ? (2 * m - 1) : (-2 * m);
+}
+
+double abacus_wigner_d(const double beta, const int l, const int m1, const int m2)
+{
+    double value = 0.0;
+    for (int i = std::max(0, m2 - m1); i <= std::min(l - m1, l + m2); ++i)
+    {
+        const double numerator =
+            std::pow(-1.0, i)
+            * std::sqrt(factorial_as_double(l + m1) * factorial_as_double(l - m1)
+                        * factorial_as_double(l + m2) * factorial_as_double(l - m2))
+            * std::pow(std::cos(beta / 2.0), 2 * l + m2 - m1 - 2 * i)
+            * std::pow(-std::sin(beta / 2.0), m1 - m2 + 2 * i);
+        const double denominator =
+            factorial_as_double(i) * factorial_as_double(l - m1 - i)
+            * factorial_as_double(l + m2 - i) * factorial_as_double(i - m2 + m1);
+        value += numerator / denominator;
+    }
+    return value;
+}
+
+std::complex<double> abacus_ovlp_Ylm_Slm(const int l, const int m1, const int m2)
+{
+    (void)l;
+    if (m1 == m2)
+    {
+        if (m1 == 0)
+        {
+            return 1.0;
+        }
+        if (m1 > 0)
+        {
+            return 1.0 / std::sqrt(2.0);
+        }
+        return std::pow(-1.0, m1) * kImagUnit / std::sqrt(2.0);
+    }
+    if (m1 == -m2)
+    {
+        if (m1 > 0)
+        {
+            return -kImagUnit / std::sqrt(2.0);
+        }
+        return std::pow(-1.0, m1) / std::sqrt(2.0);
+    }
+    return 0.0;
+}
+
+Vector3_Order<double> abacus_get_euler_angle(const Matrix3& gmatc)
+{
+    const double threshold = kAbacusSymmetryCoordTol;
+    double alpha = 0.0;
+    double beta = 0.0;
+    double gamma = 0.0;
+
+    if (std::fabs(gmatc.e32) > threshold || std::fabs(gmatc.e31) > threshold)
+    {
+        alpha = std::atan2(gmatc.e32, gmatc.e31);
+        if (alpha < 0.0)
+        {
+            alpha += TWO_PI;
+        }
+        gamma = std::atan2(gmatc.e23, -gmatc.e13);
+        if (gamma < 0.0)
+        {
+            gamma += TWO_PI;
+        }
+        if (std::fabs(gmatc.e32) > std::fabs(gmatc.e31))
+        {
+            beta = std::atan2(gmatc.e32 / std::sin(alpha), gmatc.e33);
+        }
+        else
+        {
+            beta = std::atan2(gmatc.e31 / std::cos(alpha), gmatc.e33);
+        }
+    }
+    else
+    {
+        alpha = std::atan2(gmatc.e12, gmatc.e11);
+        if (alpha < 0.0)
+        {
+            alpha += TWO_PI;
+        }
+        if (gmatc.e33 > 0.0)
+        {
+            beta = 0.0;
+            gamma = 0.0;
+        }
+        else
+        {
+            beta = PI;
+            gamma = PI;
+        }
+    }
+    return {alpha, beta, gamma};
+}
+
+std::complex<double> abacus_wigner_D(const Vector3_Order<double>& euler_angle,
+                                     const int l,
+                                     const int m1,
+                                     const int m2,
+                                     const bool improper_rotation)
+{
+    const std::complex<double> inversion_prefactor(improper_rotation ? std::pow(-1.0, l) : 1.0,
+                                                   0.0);
+    return std::exp(-kImagUnit * static_cast<double>(m1) * euler_angle.x)
+           * std::exp(-kImagUnit * static_cast<double>(m2) * euler_angle.z)
+           * abacus_wigner_d(euler_angle.y, l, m1, m2) * inversion_prefactor;
+}
+
+void clean_nearly_integer_entries(ComplexMatrix& matrix, const double tol = 1e-10)
+{
+    for (int row = 0; row < matrix.nr; ++row)
+    {
+        for (int col = 0; col < matrix.nc; ++col)
+        {
+            auto& value = matrix(row, col);
+            if (std::abs(value.real() - std::round(value.real())) < tol)
+            {
+                value.real(std::round(value.real()));
+            }
+            if (std::abs(value.imag() - std::round(value.imag())) < tol)
+            {
+                value.imag(std::round(value.imag()));
+            }
+            if (std::abs(value.real()) < tol)
+            {
+                value.real(0.0);
+            }
+            if (std::abs(value.imag()) < tol)
+            {
+                value.imag(0.0);
+            }
+        }
+    }
+}
+
+ComplexMatrix build_abacus_shell_rotation_from_direct_rotation(
+    const int l,
+    const std::array<std::array<double, 3>, 3>& direct_rotation)
+{
+    if (l == 0)
+    {
+        return build_complex_identity(1);
+    }
+
+    const Matrix3 direct_matrix = build_matrix3_from_array(direct_rotation);
+    const Matrix3 cartesian_matrix = latvec.Inverse() * direct_matrix * latvec;
+    const bool improper_rotation = cartesian_matrix.Det() < 0.0;
+    const Matrix3 proper_cartesian =
+        improper_rotation ? (cartesian_matrix * Matrix3(-1.0, 0.0, 0.0,
+                                                        0.0, -1.0, 0.0,
+                                                        0.0, 0.0, -1.0))
+                          : cartesian_matrix;
+    const auto euler_angle = abacus_get_euler_angle(proper_cartesian);
+
+    const int nm = 2 * l + 1;
+    ComplexMatrix c_mm(nm, nm);
+    ComplexMatrix D_mm(nm, nm);
+    for (int m1 = -l; m1 <= l; ++m1)
+    {
+        for (int m2 = -l; m2 <= l; ++m2)
+        {
+            c_mm(abacus_m_to_index(m1), abacus_m_to_index(m2)) =
+                abacus_ovlp_Ylm_Slm(l, m1, m2);
+            D_mm(abacus_m_to_index(m1), abacus_m_to_index(m2)) =
+                abacus_wigner_D(euler_angle, l, m1, m2, improper_rotation);
+        }
+    }
+
+    ComplexMatrix rotation = transpose(c_mm, true) * D_mm * c_mm;
+    clean_nearly_integer_entries(rotation);
+    return rotation;
 }
 
 bool is_identity_rotation(const std::array<std::array<double, 3>, 3>& matrix,
@@ -727,7 +940,7 @@ void load_symrot_R_file(const std::string& file_path, AbacusSymmetryContext& ctx
     }
 }
 
-void load_symrot_k_file(const std::string& file_path, AbacusSymmetryContext& ctx)
+void parse_symrot_k_file(const std::string& file_path, std::vector<AbacusKStar>& kstars)
 {
     std::ifstream ifs(file_path);
     if (!ifs.good())
@@ -848,8 +1061,14 @@ void load_symrot_k_file(const std::string& file_path, AbacusSymmetryContext& ctx
             star.members.push_back(std::move(member));
         }
 
-        ctx.kstars.push_back(std::move(star));
+        kstars.push_back(std::move(star));
     }
+}
+
+void load_symrot_k_file(const std::string& file_path, AbacusSymmetryContext& ctx)
+{
+    ctx.kstars.clear();
+    parse_symrot_k_file(file_path, ctx.kstars);
 }
 
 std::string find_first_existing_file(const std::vector<std::string>& candidates)
@@ -1108,6 +1327,215 @@ std::string resolve_abacus_file(const std::string& file_name,
     return file_exists(file_name) ? file_name : "";
 }
 
+std::vector<AbacusAOTypeLayout> parse_abacus_abf_layout_section(
+    const std::vector<std::string>& lines,
+    std::size_t& index)
+{
+    std::vector<AbacusAOTypeLayout> layouts;
+    ++index;
+    while (index < lines.size())
+    {
+        const std::string cleaned = trim(lines[index]);
+        if (cleaned.empty())
+        {
+            ++index;
+            continue;
+        }
+        if (starts_with(cleaned, "Auxiliary basis functions")
+            || starts_with(cleaned, "==>")
+            || starts_with(cleaned, "DONE")
+            || starts_with(cleaned, "The number of")
+            || starts_with(cleaned, "output")
+            || starts_with(cleaned, "Performing")
+            || starts_with(cleaned, "Finish"))
+        {
+            break;
+        }
+
+        const auto fields = split_fields(cleaned);
+        if (fields.size() < 3)
+        {
+            break;
+        }
+        bool parsed_shell = false;
+        AbacusAOTypeLayout layout;
+        layout.label = fields.front();
+        for (std::size_t i = 1; i + 1 < fields.size(); i += 2)
+        {
+            if (!is_integer_line(fields[i]) || fields[i + 1].empty())
+            {
+                parsed_shell = false;
+                break;
+            }
+            const int l = shell_symbol_to_l(fields[i + 1].front());
+            if (l < 0)
+            {
+                parsed_shell = false;
+                break;
+            }
+            if (static_cast<int>(layout.shell_counts.size()) <= l)
+            {
+                layout.shell_counts.resize(static_cast<std::size_t>(l + 1), 0);
+            }
+            layout.shell_counts[static_cast<std::size_t>(l)] = std::stoi(fields[i]);
+            parsed_shell = true;
+        }
+        if (!parsed_shell)
+        {
+            break;
+        }
+
+        layout.nao = compute_nao_from_shell_counts(layout.shell_counts);
+        if (layout.nao > 0)
+        {
+            layouts.push_back(std::move(layout));
+        }
+        ++index;
+    }
+    return layouts;
+}
+
+bool append_unique_abf_layout(std::vector<AbacusAOTypeLayout>& candidates,
+                              const AbacusAOTypeLayout& layout)
+{
+    const auto duplicate = std::find_if(candidates.begin(), candidates.end(),
+                                        [&layout](const AbacusAOTypeLayout& candidate) {
+                                            return candidate.label == layout.label
+                                                   && candidate.shell_counts == layout.shell_counts
+                                                   && candidate.nao == layout.nao;
+                                        });
+    if (duplicate != candidates.end())
+    {
+        return false;
+    }
+    candidates.push_back(layout);
+    return true;
+}
+
+void try_load_abacus_abf_shell_layout(const std::string& dir_path,
+                                      AbacusSymmetryContext& ctx,
+                                      std::ostream* log)
+{
+    if (!ctx.has_ao_shell_layout())
+    {
+        if (log != nullptr)
+        {
+            (*log) << "| ABF shell layout       : unavailable (AO type layout is required first)\n";
+        }
+        return;
+    }
+
+    const auto candidate_dirs = build_abacus_path_candidates(dir_path);
+    std::vector<std::string> running_log_candidates;
+    for (const auto& dir : candidate_dirs)
+    {
+        running_log_candidates.push_back(join_path(dir, "running_scf.log"));
+    }
+    const std::string running_log = find_first_existing_file(running_log_candidates);
+    if (running_log.empty())
+    {
+        if (log != nullptr)
+        {
+            (*log) << "| ABF shell layout       : unavailable (running_scf.log not found)\n";
+        }
+        return;
+    }
+
+    std::ifstream ifs(running_log);
+    if (!ifs.good())
+    {
+        if (log != nullptr)
+        {
+            (*log) << "| ABF shell layout       : unavailable (failed to open running_scf.log)\n";
+        }
+        return;
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(ifs, line))
+    {
+        lines.push_back(line);
+    }
+
+    ctx.abf_type_layout_candidates.clear();
+    ctx.abf_type_layout_candidates.resize(ctx.ao_type_layouts.size());
+    std::map<std::string, int> label_to_type;
+    for (std::size_t itype = 0; itype < ctx.ao_type_layouts.size(); ++itype)
+    {
+        label_to_type[ctx.ao_type_layouts[itype].label] = static_cast<int>(itype);
+    }
+
+    std::size_t n_sections = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        if (!starts_with(trim(lines[index]), "Auxiliary basis functions"))
+        {
+            continue;
+        }
+
+        const auto layouts = parse_abacus_abf_layout_section(lines, index);
+        if (layouts.empty())
+        {
+            continue;
+        }
+        ++n_sections;
+        for (const auto& layout : layouts)
+        {
+            const auto type_iter = label_to_type.find(layout.label);
+            if (type_iter == label_to_type.end())
+            {
+                continue;
+            }
+            append_unique_abf_layout(
+                ctx.abf_type_layout_candidates[static_cast<std::size_t>(type_iter->second)], layout);
+        }
+    }
+
+    ctx.abf_shell_layout_available = !ctx.abf_type_layout_candidates.empty();
+    for (std::size_t itype = 0; itype < ctx.abf_type_layout_candidates.size(); ++itype)
+    {
+        if (ctx.abf_type_layout_candidates[itype].empty())
+        {
+            ctx.abf_shell_layout_available = false;
+            break;
+        }
+    }
+
+    if (log != nullptr)
+    {
+        if (!ctx.abf_shell_layout_available)
+        {
+            (*log) << "| ABF shell layout       : unavailable (failed to map every atom type from "
+                   << running_log << ")\n";
+        }
+        else
+        {
+            (*log) << "| ABF shell layout       : loaded from " << n_sections
+                   << " running_scf.log section(s)\n";
+            for (std::size_t itype = 0; itype < ctx.abf_type_layout_candidates.size(); ++itype)
+            {
+                (*log) << "|   type " << itype << " (" << ctx.ao_type_layouts[itype].label
+                       << ") candidates=" << ctx.abf_type_layout_candidates[itype].size();
+                for (const auto& candidate : ctx.abf_type_layout_candidates[itype])
+                {
+                    (*log) << " [nao=" << candidate.nao << " shell_counts=";
+                    for (std::size_t l = 0; l < candidate.shell_counts.size(); ++l)
+                    {
+                        if (l != 0)
+                        {
+                            (*log) << ",";
+                        }
+                        (*log) << candidate.shell_counts[l];
+                    }
+                    (*log) << "]";
+                }
+                (*log) << "\n";
+            }
+        }
+    }
+}
+
 void try_load_abacus_ao_shell_layout(const std::string& dir_path,
                                      AbacusSymmetryContext& ctx,
                                      std::ostream* log)
@@ -1232,24 +1660,34 @@ void AbacusSymmetryContext::clear()
 {
     available = false;
     ao_shell_layout_available = false;
+    abf_shell_layout_available = false;
     ao_lmax = -1;
     abf_lmax = -1;
     irreducible_sector.clear();
     rspace_operations.clear();
     kstars.clear();
+    abf_kstars.clear();
     ao_type_layouts.clear();
+    abf_type_layout_candidates.clear();
     atom_to_type.clear();
 }
 
 bool AbacusSymmetryContext::empty() const
 {
     return irreducible_sector.empty() && rspace_operations.empty() && kstars.empty()
-           && ao_type_layouts.empty() && atom_to_type.empty();
+           && abf_kstars.empty()
+           && ao_type_layouts.empty() && abf_type_layout_candidates.empty()
+           && atom_to_type.empty();
 }
 
 bool AbacusSymmetryContext::has_ao_shell_layout() const
 {
     return ao_shell_layout_available && !ao_type_layouts.empty();
+}
+
+bool AbacusSymmetryContext::has_abf_shell_layout() const
+{
+    return abf_shell_layout_available && !abf_type_layout_candidates.empty();
 }
 
 std::size_t AbacusSymmetryContext::count_irreducible_pairs() const
@@ -1282,6 +1720,16 @@ std::size_t AbacusSymmetryContext::count_atoms_with_layout() const
     return atom_to_type.size();
 }
 
+std::size_t AbacusSymmetryContext::count_abf_layout_candidates() const
+{
+    std::size_t count = 0;
+    for (const auto& candidates : abf_type_layout_candidates)
+    {
+        count += candidates.size();
+    }
+    return count;
+}
+
 const AbacusAOTypeLayout& AbacusSymmetryContext::get_ao_type_layout(const int atom_type) const
 {
     if (atom_type < 0 || atom_type >= static_cast<int>(ao_type_layouts.size()))
@@ -1289,6 +1737,48 @@ const AbacusAOTypeLayout& AbacusSymmetryContext::get_ao_type_layout(const int at
         throw std::out_of_range("ABACUS atom type is out of range in AO shell layout");
     }
     return ao_type_layouts[static_cast<std::size_t>(atom_type)];
+}
+
+const AbacusAOTypeLayout& AbacusSymmetryContext::find_abf_type_layout(const int atom_type,
+                                                                      const int nao_hint) const
+{
+    if (atom_type < 0 || atom_type >= static_cast<int>(abf_type_layout_candidates.size()))
+    {
+        throw std::out_of_range("ABACUS atom type is out of range in ABF shell layout");
+    }
+
+    const auto& candidates = abf_type_layout_candidates[static_cast<std::size_t>(atom_type)];
+    if (candidates.empty())
+    {
+        throw std::runtime_error("ABACUS ABF shell layout is unavailable for atom type "
+                                 + std::to_string(atom_type));
+    }
+
+    if (nao_hint > 0)
+    {
+        const auto matched = std::find_if(candidates.begin(), candidates.end(),
+                                          [nao_hint](const AbacusAOTypeLayout& candidate) {
+                                              return candidate.nao == nao_hint;
+                                          });
+        if (matched != candidates.end())
+        {
+            return *matched;
+        }
+    }
+
+    if (candidates.size() == 1)
+    {
+        return candidates.front();
+    }
+
+    std::ostringstream oss;
+    oss << "Failed to resolve ABF shell layout for atom type " << atom_type
+        << " with nao_hint=" << nao_hint << ". Candidate dimensions:";
+    for (const auto& candidate : candidates)
+    {
+        oss << " " << candidate.nao;
+    }
+    throw std::runtime_error(oss.str());
 }
 
 bool load_abacus_symmetry_context(const std::string& dir_path,
@@ -1301,7 +1791,8 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     {
         if (file_exists(join_path(dir, "irreducible_sector.txt"))
             || file_exists(join_path(dir, "symrot_R.txt"))
-            || file_exists(join_path(dir, "symrot_k.txt")))
+            || file_exists(join_path(dir, "symrot_k.txt"))
+            || file_exists(join_path(dir, "symrot_abf_k.txt")))
         {
             sidecar_dir = dir;
             break;
@@ -1311,10 +1802,12 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     const std::string irreducible_sector_file = join_path(sidecar_dir, "irreducible_sector.txt");
     const std::string symrot_R_file = join_path(sidecar_dir, "symrot_R.txt");
     const std::string symrot_k_file = join_path(sidecar_dir, "symrot_k.txt");
+    const std::string symrot_abf_k_file = join_path(sidecar_dir, "symrot_abf_k.txt");
 
     const bool has_irreducible_sector = !sidecar_dir.empty() && file_exists(irreducible_sector_file);
     const bool has_symrot_R = !sidecar_dir.empty() && file_exists(symrot_R_file);
     const bool has_symrot_k = !sidecar_dir.empty() && file_exists(symrot_k_file);
+    const bool has_symrot_abf_k = !sidecar_dir.empty() && file_exists(symrot_abf_k_file);
 
     if (!has_irreducible_sector && !has_symrot_R && !has_symrot_k)
     {
@@ -1334,7 +1827,12 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     load_irreducible_sector_file(irreducible_sector_file, ctx.irreducible_sector);
     load_symrot_R_file(symrot_R_file, ctx);
     load_symrot_k_file(symrot_k_file, ctx);
+    if (has_symrot_abf_k)
+    {
+        parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars);
+    }
     try_load_abacus_ao_shell_layout(dir_path, ctx, nullptr);
+    try_load_abacus_abf_shell_layout(dir_path, ctx, nullptr);
     ctx.available = true;
 
     if (log != nullptr)
@@ -1345,6 +1843,10 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
                << "| real-space operations  : " << ctx.rspace_operations.size() << "\n"
                << "| IBZ k-stars            : " << ctx.kstars.size() << "\n"
                << "| total star members     : " << ctx.count_kstar_members() << "\n"
+               << "| ABF k rotations        : "
+               << (ctx.abf_kstars.empty() ? std::string("fallback to symrot_k.txt")
+                                         : std::string("loaded from symrot_abf_k.txt"))
+               << "\n"
                << "| AO / ABF lmax          : " << ctx.ao_lmax << " / " << ctx.abf_lmax << "\n";
         if (ctx.has_ao_shell_layout())
         {
@@ -1369,6 +1871,15 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
         else
         {
             (*log) << "| AO shell layout        : unavailable\n";
+        }
+        if (ctx.has_abf_shell_layout())
+        {
+            (*log) << "| ABF shell layout       : loaded with "
+                   << ctx.count_abf_layout_candidates() << " candidate type layouts\n";
+        }
+        else
+        {
+            (*log) << "| ABF shell layout       : unavailable\n";
         }
     }
     return true;
@@ -1430,6 +1941,531 @@ ComplexMatrix build_abacus_ao_rotation_matrix(const AbacusSymmetryContext& ctx,
     return rotation;
 }
 
+ComplexMatrix build_abacus_abf_rotation_matrix(
+    const AbacusSymmetryContext& ctx,
+    const int atom_type,
+    const int nao_hint,
+    const std::map<int, ComplexMatrix>& shell_rotations,
+    const std::array<std::array<double, 3>, 3>& direct_rotation)
+{
+    const auto& layout = ctx.find_abf_type_layout(atom_type, nao_hint);
+    ComplexMatrix rotation(layout.nao, layout.nao);
+
+    int offset = 0;
+    for (int l = 0; l < static_cast<int>(layout.shell_counts.size()); ++l)
+    {
+        const int shell_count = layout.shell_counts[static_cast<std::size_t>(l)];
+        if (shell_count == 0)
+        {
+            continue;
+        }
+
+        ComplexMatrix shell_rotation;
+        const auto rotation_iter = shell_rotations.find(l);
+        if (rotation_iter != shell_rotations.end())
+        {
+            shell_rotation = rotation_iter->second;
+        }
+        else
+        {
+            shell_rotation = build_abacus_shell_rotation_from_direct_rotation(l, direct_rotation);
+        }
+
+        const int nm = 2 * l + 1;
+        if (shell_rotation.nr != nm || shell_rotation.nc != nm)
+        {
+            throw std::runtime_error("ABF shell rotation block has incompatible shape for l="
+                                     + std::to_string(l));
+        }
+
+        for (int ishell = 0; ishell < shell_count; ++ishell)
+        {
+            for (int row = 0; row < nm; ++row)
+            {
+                for (int col = 0; col < nm; ++col)
+                {
+                    rotation(offset + row, offset + col) = shell_rotation(row, col);
+                }
+            }
+            offset += nm;
+        }
+    }
+
+    if (offset != layout.nao)
+    {
+        throw std::runtime_error("Failed to assemble the full ABF rotation matrix for atom type "
+                                 + std::to_string(atom_type));
+    }
+    return rotation;
+}
+
+const AbacusKStar& find_abacus_kstar_for_ibz_kpoint(const AbacusSymmetryContext& ctx,
+                                                    const Vector3_Order<double>& k_ibz)
+{
+    const AbacusKStar* matched_star = nullptr;
+    for (const auto& star : ctx.kstars)
+    {
+        if (!nearly_same_kpoint(star.k_ibz, k_ibz))
+        {
+            continue;
+        }
+        if (matched_star != nullptr)
+        {
+            throw std::runtime_error("ABACUS k-star matching is ambiguous for the current IBZ point");
+        }
+        matched_star = &star;
+    }
+    if (matched_star == nullptr)
+    {
+        throw std::runtime_error("Failed to match the current IBZ point with ABACUS k-stars");
+    }
+    return *matched_star;
+}
+
+std::vector<AbacusKStarGridMappingEntry> build_abacus_kstar_grid_mapping(
+    const AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& klist_internal,
+    const std::vector<Vector3_Order<double>>& kfrac_list,
+    const std::map<Vector3_Order<double>, std::vector<Vector3_Order<double>>>& irk_to_full_kpoints)
+{
+    if (klist_internal.size() != kfrac_list.size())
+    {
+        throw std::runtime_error(
+            "LibRPA k-point metadata is inconsistent: `klist` and `kfrac_list` have different sizes");
+    }
+    if (ctx.kstars.size() != kfrac_list.size())
+    {
+        throw std::runtime_error(
+            "ABACUS k-star metadata does not match the loaded LibRPA IBZ k-point count");
+    }
+
+    auto convert_fractional_to_internal = [](const Vector3_Order<double>& kfrac) {
+        const auto k_internal = G * Vector3<double>(kfrac.x, kfrac.y, kfrac.z);
+        return Vector3_Order<double>{k_internal.x, k_internal.y, k_internal.z};
+    };
+
+    auto find_matching_ibz_full_list =
+        [&irk_to_full_kpoints](const Vector3_Order<double>& q_ibz_key)
+        -> std::map<Vector3_Order<double>, std::vector<Vector3_Order<double>>>::const_iterator {
+        const auto exact_iter = irk_to_full_kpoints.find(q_ibz_key);
+        if (exact_iter != irk_to_full_kpoints.end())
+        {
+            return exact_iter;
+        }
+
+        return std::find_if(irk_to_full_kpoints.begin(), irk_to_full_kpoints.end(),
+                            [&q_ibz_key](const auto& entry) {
+                                return nearly_same_kpoint(entry.first, q_ibz_key);
+                            });
+    };
+
+    std::vector<AbacusKStarGridMappingEntry> mapping(kfrac_list.size());
+    std::vector<bool> matched_stars(ctx.kstars.size(), false);
+
+    for (std::size_t iq_ibz = 0; iq_ibz < kfrac_list.size(); ++iq_ibz)
+    {
+        int matched_star_index = -1;
+        for (std::size_t istar = 0; istar < ctx.kstars.size(); ++istar)
+        {
+            if (!nearly_same_kpoint(ctx.kstars[istar].k_ibz, kfrac_list[iq_ibz]))
+            {
+                continue;
+            }
+            if (matched_star_index >= 0)
+            {
+                throw std::runtime_error(
+                    "ABACUS k-star to LibRPA IBZ index matching is ambiguous");
+            }
+            matched_star_index = static_cast<int>(istar);
+        }
+
+        if (matched_star_index < 0)
+        {
+            std::ostringstream oss;
+            oss << "Failed to match LibRPA IBZ k-point iq=" << iq_ibz << " ("
+                << kfrac_list[iq_ibz].x << ", " << kfrac_list[iq_ibz].y << ", "
+                << kfrac_list[iq_ibz].z << ") with ABACUS k-stars";
+            throw std::runtime_error(oss.str());
+        }
+
+        matched_stars[static_cast<std::size_t>(matched_star_index)] = true;
+        auto& entry = mapping[iq_ibz];
+        entry.iq_ibz = static_cast<int>(iq_ibz);
+        entry.star_list_index = matched_star_index;
+
+        const auto& star = ctx.kstars[static_cast<std::size_t>(matched_star_index)];
+        const auto q_ibz_key = klist_internal[iq_ibz];
+        const auto full_list_iter = find_matching_ibz_full_list(q_ibz_key);
+
+        if (full_list_iter == irk_to_full_kpoints.end())
+        {
+            // Fall back to the converted sidecar coordinates if the full star list is not
+            // available yet. The IBZ source key still comes from the exact LibRPA `klist`
+            // index above, which is the critical part for the restore path.
+            entry.member_q_bz_keys.reserve(star.members.size());
+            for (const auto& member : star.members)
+            {
+                entry.member_q_bz_keys.push_back(convert_fractional_to_internal(member.k_bz));
+            }
+            continue;
+        }
+
+        const auto& full_q_keys = full_list_iter->second;
+        entry.member_q_bz_keys.resize(star.members.size());
+        std::vector<bool> matched_full_q(full_q_keys.size(), false);
+
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto member_q_internal =
+                convert_fractional_to_internal(star.members[imember].k_bz);
+            int matched_full_index = -1;
+            for (std::size_t ifull = 0; ifull < full_q_keys.size(); ++ifull)
+            {
+                if (matched_full_q[ifull]
+                    || !nearly_same_kpoint(full_q_keys[ifull], member_q_internal))
+                {
+                    continue;
+                }
+                if (matched_full_index >= 0)
+                {
+                    throw std::runtime_error(
+                        "ABACUS star member to LibRPA full-q matching is ambiguous");
+                }
+                matched_full_index = static_cast<int>(ifull);
+            }
+
+            if (matched_full_index < 0)
+            {
+                std::ostringstream oss;
+                oss << "Failed to match ABACUS star member " << imember << " of star "
+                    << star.star_index << " with the LibRPA full-q star reconstructed from "
+                    << "map_irk_ks";
+                throw std::runtime_error(oss.str());
+            }
+
+            matched_full_q[static_cast<std::size_t>(matched_full_index)] = true;
+            entry.member_q_bz_keys[imember] =
+                full_q_keys[static_cast<std::size_t>(matched_full_index)];
+        }
+    }
+
+    for (std::size_t istar = 0; istar < matched_stars.size(); ++istar)
+    {
+        if (!matched_stars[istar])
+        {
+            throw std::runtime_error(
+                "Not every ABACUS k-star could be matched to the loaded LibRPA IBZ grid");
+        }
+    }
+
+    return mapping;
+}
+
+std::vector<AbacusFullKpointMemberEntry> build_abacus_full_kpoint_member_list(
+    const AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& kfrac_list)
+{
+    std::vector<AbacusFullKpointMemberEntry> members;
+    if (!ctx.available || ctx.kstars.empty())
+    {
+        return members;
+    }
+
+    members.reserve(ctx.count_kstar_members());
+    for (int ik_ibz = 0; ik_ibz != static_cast<int>(kfrac_list.size()); ++ik_ibz)
+    {
+        int matched_star_index = -1;
+        for (int istar = 0; istar != static_cast<int>(ctx.kstars.size()); ++istar)
+        {
+            if (!nearly_same_kpoint(ctx.kstars[static_cast<std::size_t>(istar)].k_ibz,
+                                    kfrac_list[static_cast<std::size_t>(ik_ibz)]))
+            {
+                continue;
+            }
+            if (matched_star_index >= 0)
+            {
+                throw std::runtime_error(
+                    "ABACUS full-k expansion is ambiguous because one IBZ k-point matches multiple stars");
+            }
+            matched_star_index = istar;
+        }
+
+        if (matched_star_index < 0)
+        {
+            throw std::runtime_error(
+                "ABACUS full-k expansion failed because one IBZ k-point could not be matched to any star");
+        }
+
+        const auto& star = ctx.kstars[static_cast<std::size_t>(matched_star_index)];
+        for (int imember = 0; imember != static_cast<int>(star.members.size()); ++imember)
+        {
+            const auto& member = star.members[static_cast<std::size_t>(imember)];
+            members.push_back({ik_ibz, matched_star_index, imember, member.isym, member.k_bz});
+        }
+    }
+
+    return members;
+}
+
+Vector3_Order<int> build_abacus_kspace_return_lattice(
+    const AbacusSymmetryContext& ctx,
+    const AbacusKAtomRotation& atom_rotation,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
+    const int spatial_isym)
+{
+    const auto coord_from_iter = coord_frac_map.find(static_cast<atom_t>(atom_rotation.atom_from));
+    const auto coord_to_iter = coord_frac_map.find(static_cast<atom_t>(atom_rotation.atom_to));
+    if (coord_from_iter == coord_frac_map.end() || coord_to_iter == coord_frac_map.end())
+    {
+        throw std::runtime_error("Missing fractional coordinate for ABACUS k-space phase correction");
+    }
+
+    if (spatial_isym < 0 || spatial_isym >= static_cast<int>(ctx.rspace_operations.size()))
+    {
+        throw std::runtime_error("ABACUS k-space phase correction uses an invalid symmetry index");
+    }
+
+    const auto& op = ctx.rspace_operations[static_cast<std::size_t>(spatial_isym)];
+    const Vector3_Order<double> coord_from =
+        restrict_fractional_coordinate({coord_from_iter->second[0],
+                                        coord_from_iter->second[1],
+                                        coord_from_iter->second[2]});
+    const Vector3_Order<double> coord_to =
+        restrict_fractional_coordinate({coord_to_iter->second[0],
+                                        coord_to_iter->second[1],
+                                        coord_to_iter->second[2]});
+    const Vector3_Order<double> transformed =
+        multiply_row_vector(coord_from, op.rotation) + restrict_fractional_coordinate(op.translation);
+    const Vector3_Order<double> return_lattice = transformed - coord_to;
+    if (!is_nearly_integer_vec3(return_lattice))
+    {
+        throw std::runtime_error("ABACUS k-space phase correction produced a non-integer return lattice");
+    }
+    return round_vec3_to_int(return_lattice);
+}
+
+abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
+    const AbacusSymmetryContext& ctx,
+    const AbacusKStarMember& member,
+    const abacus_atom_block_matrix_map_t& blocks_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const Vector3_Order<double>& k_ibz,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
+    const bool use_time_reversal,
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs)
+{
+    if (!ctx.has_abf_shell_layout())
+    {
+        throw std::runtime_error("ABF shell layout is required before rotating ABACUS k-space operators");
+    }
+
+    auto get_block_or_hermitian = [&blocks_ibz](const atom_t atom_i, const atom_t atom_j) {
+        const auto atom_i_iter = blocks_ibz.find(atom_i);
+        if (atom_i_iter != blocks_ibz.end())
+        {
+            const auto atom_j_iter = atom_i_iter->second.find(atom_j);
+            if (atom_j_iter != atom_i_iter->second.end())
+            {
+                return atom_j_iter->second;
+            }
+        }
+
+        const auto atom_j_iter = blocks_ibz.find(atom_j);
+        if (atom_j_iter != blocks_ibz.end())
+        {
+            const auto atom_i_iter_fallback = atom_j_iter->second.find(atom_i);
+            if (atom_i_iter_fallback != atom_j_iter->second.end())
+            {
+                return transpose(atom_i_iter_fallback->second, true);
+            }
+        }
+
+        throw std::runtime_error("Missing ABF atom block while rotating the ABACUS q-space operator");
+    };
+
+    std::vector<const AbacusKAtomRotation*> rotations_by_from(atom_nabf.size(), nullptr);
+    std::vector<bool> visited_to(atom_nabf.size(), false);
+    for (const auto& atom_rotation : member.atom_rotations)
+    {
+        if (atom_rotation.atom_from < 0 || atom_rotation.atom_from >= static_cast<int>(atom_nabf.size())
+            || atom_rotation.atom_to < 0 || atom_rotation.atom_to >= static_cast<int>(atom_nabf.size()))
+        {
+            throw std::runtime_error("ABACUS k-space atom mapping is out of range for ABF rotation");
+        }
+        rotations_by_from[static_cast<std::size_t>(atom_rotation.atom_from)] = &atom_rotation;
+        visited_to[static_cast<std::size_t>(atom_rotation.atom_to)] = true;
+    }
+    for (std::size_t atom = 0; atom < atom_nabf.size(); ++atom)
+    {
+        if (rotations_by_from[atom] == nullptr)
+        {
+            throw std::runtime_error("ABACUS k-space ABF rotations do not cover every atom");
+        }
+        if (!visited_to[atom])
+        {
+            throw std::runtime_error("ABACUS k-space ABF atom mapping is not a full permutation");
+        }
+    }
+
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const int spatial_isym = use_time_reversal ? member.isym - nsym_space : member.isym;
+    if (spatial_isym < 0 || spatial_isym >= nsym_space)
+    {
+        throw std::runtime_error("ABACUS q-space operator rotation uses an invalid symmetry index");
+    }
+    const auto& direct_rotation =
+        ctx.rspace_operations.at(static_cast<std::size_t>(spatial_isym)).rotation;
+    const Vector3_Order<double> delta_k{k_ibz.x - member.k_bz.x,
+                                        k_ibz.y - member.k_bz.y,
+                                        k_ibz.z - member.k_bz.z};
+
+    std::vector<ComplexMatrix> atom_M_blocks(atom_nabf.size());
+    for (std::size_t atom = 0; atom < atom_nabf.size(); ++atom)
+    {
+        const auto* atom_rotation = rotations_by_from[atom];
+        atom_M_blocks[atom] = build_abacus_abf_rotation_matrix(
+            ctx, atom_rotation->atom_type, static_cast<int>(atom_nabf.at(atom)),
+            atom_rotation->shell_rotations, direct_rotation);
+        const auto return_lattice =
+            build_abacus_kspace_return_lattice(ctx, *atom_rotation, coord_frac_map, spatial_isym);
+        const double phase_arg =
+            TWO_PI * (delta_k.x * static_cast<double>(return_lattice.x)
+                      + delta_k.y * static_cast<double>(return_lattice.y)
+                      + delta_k.z * static_cast<double>(return_lattice.z));
+        atom_M_blocks[atom] *= std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
+    }
+
+    abacus_atom_block_matrix_map_t rotated_blocks;
+    for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
+    {
+        const auto* rot_i = rotations_by_from[atom_i];
+        const auto& M_i = atom_M_blocks[atom_i];
+        for (std::size_t atom_j = 0; atom_j < atom_nabf.size(); ++atom_j)
+        {
+            if (target_atom_pairs != nullptr
+                && target_atom_pairs->count({static_cast<atom_t>(atom_i),
+                                             static_cast<atom_t>(atom_j)}) == 0)
+            {
+                continue;
+            }
+            const auto* rot_j = rotations_by_from[atom_j];
+            const auto& M_j = atom_M_blocks[atom_j];
+            const ComplexMatrix block_ibz = get_block_or_hermitian(
+                static_cast<atom_t>(rot_i->atom_to), static_cast<atom_t>(rot_j->atom_to));
+
+            if (block_ibz.nr != static_cast<int>(atom_nabf.at(static_cast<atom_t>(rot_i->atom_to)))
+                || block_ibz.nc != static_cast<int>(atom_nabf.at(static_cast<atom_t>(rot_j->atom_to))))
+            {
+                throw std::runtime_error(
+                    "The ABF atom block dimension is incompatible with the rotated source atom pair");
+            }
+
+            ComplexMatrix block_rotated;
+            if (use_time_reversal)
+            {
+                // Use the same row-major convention as the AO-side k-space rotation:
+                //   TRS: O_bz[I,J] = M_I^dagger · conj(O_ibz[S(I),S(J)]) · M_J
+                block_rotated = transpose(M_i, true) * conj(block_ibz) * M_j;
+            }
+            else
+            {
+                // Row-major equivalent of the ABACUS col-major rotation:
+                //   non-TRS: O_bz[I,J] = M_I^T · O_ibz[S(I),S(J)] · conj(M_J)
+                block_rotated = transpose(M_i, false) * block_ibz * conj(M_j);
+            }
+            rotated_blocks[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
+                std::move(block_rotated);
+        }
+    }
+
+    return rotated_blocks;
+}
+
+ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
+    const AbacusSymmetryContext& ctx,
+    const AbacusKStarMember& member,
+    const ComplexMatrix& matrix_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const Vector3_Order<double>& k_ibz,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
+    const bool use_time_reversal)
+{
+    if (!ctx.has_abf_shell_layout())
+    {
+        throw std::runtime_error("ABF shell layout is required before rotating ABACUS k-space operators");
+    }
+
+    const auto offsets = build_atom_offsets(atom_nabf);
+    const int nabf_total = offsets.back();
+    if (matrix_ibz.nr != nabf_total || matrix_ibz.nc != nabf_total)
+    {
+        throw std::runtime_error("The input matrix dimension is incompatible with the ABF basis layout");
+    }
+
+    abacus_atom_block_matrix_map_t blocks_ibz;
+    for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
+    {
+        for (std::size_t atom_j = 0; atom_j < atom_nabf.size(); ++atom_j)
+        {
+            blocks_ibz[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
+                extract_atom_block(matrix_ibz, static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j),
+                                   atom_nabf, offsets);
+        }
+    }
+
+    const auto rotated_blocks = rotate_abacus_abf_kspace_operator_blocks(
+        ctx, member, blocks_ibz, atom_nabf, k_ibz, coord_frac_map, use_time_reversal);
+
+    ComplexMatrix rotated_matrix(nabf_total, nabf_total);
+    for (const auto& atom_i_pair : rotated_blocks)
+    {
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            set_atom_block(rotated_matrix, atom_i_pair.first, atom_j_pair.first, atom_j_pair.second,
+                           offsets);
+        }
+    }
+    return rotated_matrix;
+}
+
+ComplexMatrix symmetrize_abacus_abf_ibz_kspace_operator_matrix(
+    const AbacusSymmetryContext& ctx,
+    const Vector3_Order<double>& k_ibz,
+    const ComplexMatrix& matrix_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac)
+{
+    if (!ctx.has_abf_shell_layout())
+    {
+        throw std::runtime_error("ABF shell layout is required before symmetrizing ABACUS q-space operators");
+    }
+
+    const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+    ComplexMatrix accumulated(matrix_ibz.nr, matrix_ibz.nc);
+    int n_members_used = 0;
+    for (const auto& member : star.members)
+    {
+        if (member.isym < 0 || member.isym >= static_cast<int>(ctx.rspace_operations.size()))
+        {
+            continue;
+        }
+        if (!nearly_same_kpoint(member.k_bz, k_ibz))
+        {
+            continue;
+        }
+        accumulated += rotate_abacus_abf_kspace_operator_matrix(
+            ctx, member, matrix_ibz, atom_nabf, k_ibz, coord_frac, false);
+        ++n_members_used;
+    }
+
+    if (n_members_used == 0)
+    {
+        return matrix_ibz;
+    }
+    accumulated *= std::complex<double>(1.0 / static_cast<double>(n_members_used), 0.0);
+    return accumulated;
+}
+
 ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
                                           const AbacusKStarMember& member,
                                           const ComplexMatrix& matrix_ibz,
@@ -1440,8 +2476,14 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
 {
     // -------------------------------------------------------------------------
     // Rotate D(k_ibz) to D(k_bz) using the Bloch rotation matrix M from
-    // symrot_k.txt.  M already includes the exp(2*pi*i * k_ibz . O_I) phase
-    // (see ABACUS symmetry_rotation.cpp line 387-388).
+    // symrot_k.txt.
+    //
+    // Important: ABACUS prints the sidecar Bloch phase with k_bz, while the
+    // internal restore_dm() path uses k_ibz when constructing M(R, k). We must
+    // therefore rebuild the internal matrix by multiplying the exported block
+    // with exp[i (k_ibz - k_bz) · O], where O is the atom-resolved return
+    // lattice. This is the AO counterpart of the already validated ABF-side
+    // phase correction.
     //
     // ABACUS col-major:  D^T(k_bz) = M† · D^T(k_ibz) · M
     // Row-major:         D(k_bz)   = M^T · D(k_ibz) · M*
@@ -1450,8 +2492,6 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
     //   non-TRS:  D_bz[I, J] = M_I^T  · D_ibz[S(I), S(J)]  · conj(M_J)
     //   TRS:      D_bz[I, J] = M_I†   · conj(D_ibz[S(I), S(J)]) · M_J
     // -------------------------------------------------------------------------
-    (void)k_ibz;         // phase already embedded in M from symrot_k.txt
-    (void)coord_frac_map;
     if (!ctx.has_ao_shell_layout())
     {
         throw std::runtime_error("AO shell layout is required before rotating ABACUS k-space matrices");
@@ -1491,10 +2531,17 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
     }
 
     // Build the AO rotation blocks M_I for each atom.
-    // symrot_k.txt exports the full Bloch orbital rotation matrix M which already
-    // includes the exp(2*pi*i * k_ibz . O_I) phase factor (see ABACUS
-    // symmetry_rotation.cpp line 387-388).  No phase correction is needed.
     ComplexMatrix rotated_matrix(nao_total, nao_total);
+
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const int spatial_isym = use_time_reversal ? member.isym - nsym_space : member.isym;
+    if (spatial_isym < 0 || spatial_isym >= nsym_space)
+    {
+        throw std::runtime_error("ABACUS AO k-space rotation uses an invalid symmetry index");
+    }
+    const Vector3_Order<double> delta_k{k_ibz.x - member.k_bz.x,
+                                        k_ibz.y - member.k_bz.y,
+                                        k_ibz.z - member.k_bz.z};
 
     std::vector<ComplexMatrix> atom_M_blocks(atom_nw.size());
     for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
@@ -1503,6 +2550,13 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
         atom_M_blocks[atom] = build_abacus_ao_rotation_matrix(ctx,
                                                                atom_rotation->atom_type,
                                                                atom_rotation->shell_rotations);
+        const auto return_lattice =
+            build_abacus_kspace_return_lattice(ctx, *atom_rotation, coord_frac_map, spatial_isym);
+        const double phase_arg =
+            TWO_PI * (delta_k.x * static_cast<double>(return_lattice.x)
+                      + delta_k.y * static_cast<double>(return_lattice.y)
+                      + delta_k.z * static_cast<double>(return_lattice.z));
+        atom_M_blocks[atom] *= std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
     }
 
     // Apply the block-level rotation formula.
@@ -1510,8 +2564,8 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
     // ABACUS col-major formula:  D^T(k_bz) = M† · D^T(k_ibz) · M
     // Row-major equivalent:      D(k_bz)   = M^T · D(k_ibz) · M*
     //
-    // M[S(I), I] = (phase · T_l) is the per-atom block stored in symrot_k.txt
-    // and returned by build_abacus_ao_rotation_matrix.
+    // M[S(I), I] is the internal ABACUS Bloch rotation block reconstructed from
+    // the sidecar shell rotation times the return-lattice phase correction.
     //
     // Block formulas (M_I denotes M[S(I), I]):
     //   non-TRS:  D_bz[I, J] = M_I^T  · D_ibz[S(I), S(J)]  · conj(M_J)

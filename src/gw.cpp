@@ -32,6 +32,38 @@ using RI::Communicate_Tensors_Map_Judge::comm_map2_first;
 namespace LIBRPA
 {
 
+namespace
+{
+
+bool nearly_same_qpoint(const Vector3_Order<double>& lhs,
+                        const Vector3_Order<double>& rhs,
+                        const double tol = 1e-5)
+{
+    const auto same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y)
+           && same_component(lhs.z, rhs.z);
+}
+
+template <typename QMap>
+typename QMap::const_iterator find_matching_qpoint(const QMap& q_map,
+                                                   const Vector3_Order<double>& q_target)
+{
+    const auto exact_iter = q_map.find(q_target);
+    if (exact_iter != q_map.end())
+    {
+        return exact_iter;
+    }
+
+    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto& entry) {
+        return nearly_same_qpoint(entry.first, q_target);
+    });
+}
+
+} // namespace
+
 G0W0::G0W0(const MeanField &mf, const vector<Vector3_Order<double>> &kfrac_list,
            const TFGrids &tfg_in, const Vector3_Order<int> &period)
     : mf(mf), kfrac_list(kfrac_list), tfg(tfg_in), period_(period)
@@ -136,7 +168,15 @@ void static unfold_abfs_Wc(
     {
         const auto &q = qlist[iq];
         std::array<double, 3> qa = {q.x, q.y, q.z};
-        const auto &U = sinvS.at(q);
+        const auto sinv_iter = find_matching_qpoint(sinvS, q);
+        if (sinv_iter == sinvS.end())
+        {
+            std::ostringstream oss;
+            oss << "Failed to match shrink_sinvS with q = (" << q.x << ", " << q.y << ", "
+                << q.z << ")";
+            throw std::runtime_error(oss.str());
+        }
+        const auto &U = sinv_iter->second;
         // Profiler::start("unfold_prepare_Wc_2d", "Prepare Wc 2D block for unfold");
         Wc_block.zero_out();
         Wcll_block.zero_out();
@@ -161,7 +201,7 @@ void static unfold_abfs_Wc(
                     for (const auto &qc : Jqc.second)
                     {
                         const auto &qq = qc.first;
-                        if (qq == q)
+                        if (nearly_same_qpoint(qq, q))
                         {
                             const auto &c = qc.second;
                             for (int ir = 0; ir < c.nr(); ir++)
@@ -255,13 +295,29 @@ void static unfold_abfs_Wc(
                 for (auto &qc : Jqc.second)
                 {
                     auto qq = qc.first;
-                    if (qq != q) continue;
+                    if (!nearly_same_qpoint(qq, q)) continue;
                     Matz matz_Wc(atom_mu_large[I], atom_mu_large[J]);
+                    const auto I_iter = IJq_chi.find(I);
+                    if (I_iter == IJq_chi.end())
+                    {
+                        std::ostringstream oss;
+                        oss << "Unfolded Wc is missing atom block I=" << I << " for q = (" << q.x
+                            << ", " << q.y << ", " << q.z << ")";
+                        throw std::runtime_error(oss.str());
+                    }
+                    const auto block_iter = I_iter->second.find({J, qa});
+                    if (block_iter == I_iter->second.end())
+                    {
+                        std::ostringstream oss;
+                        oss << "Unfolded Wc is missing atom-pair block I=" << I << ", J=" << J
+                            << " for q = (" << q.x << ", " << q.y << ", " << q.z << ")";
+                        throw std::runtime_error(oss.str());
+                    }
                     for (int ir = 0; ir < atom_mu_large[I]; ir++)
                     {
                         for (int ic = 0; ic < atom_mu_large[J]; ic++)
                         {
-                            matz_Wc(ir, ic) = IJq_chi.at(I).at({J, qa})(ir, ic);
+                            matz_Wc(ir, ic) = block_iter->second(ir, ic);
                         }
                     }
                     qc.second = matz_Wc;
@@ -276,6 +332,47 @@ void static unfold_abfs_Wc(
     for (int I = 1; I != atom_mu_large.size(); I++)
         atom_mu_part_range[I] = atom_mu_large.at(I - 1) + atom_mu_part_range[I - 1];
     N_all_mu = atom_mu_part_range[natom - 1] + atom_mu_large[natom - 1];
+}
+
+void static complete_hermitian_Wc_q_blocks(
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old& Wc_q)
+{
+    // The shrink->unfold path only builds the upper atom-pair blocks explicitly.
+    // Restore the lower half before any symmetry rotation / q->R transform so the
+    // rotated q-space operator sees the same Hermitian data layout as the symmetry-off path.
+    vector<atom_t> atoms_row;
+    for (const auto& atom_i_pair : Wc_q)
+    {
+        atoms_row.push_back(atom_i_pair.first);
+    }
+
+    for (const auto atom_i : atoms_row)
+    {
+        vector<atom_t> atoms_col;
+        for (const auto& atom_j_pair : Wc_q.at(atom_i))
+        {
+            atoms_col.push_back(atom_j_pair.first);
+        }
+
+        for (const auto atom_j : atoms_col)
+        {
+            for (const auto& q_block : Wc_q.at(atom_i).at(atom_j))
+            {
+                assert(q_block.second.major() == MAJOR::ROW);
+                if (atom_i != atom_j)
+                {
+                    Wc_q[atom_j][atom_i][q_block.first] = q_block.second.get_transpose(true);
+                }
+                else
+                {
+                    auto hermitian_block = q_block.second;
+                    hermitian_block =
+                        (hermitian_block + hermitian_block.get_transpose(true)) * 0.5;
+                    Wc_q[atom_i][atom_i][q_block.first] = hermitian_block;
+                }
+            }
+        }
+    }
 }
 
 template <typename Tdata>
@@ -321,88 +418,100 @@ void G0W0::build_spacetime(
     map<double,
         atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
         Wc_tau_q;
-    // Transform
-    if (Params::use_shrink_abfs)
+    std::string stage_tag = "initialize Wc transforms";
+    const auto format_stage_tag =
+        [](const std::string& stage,
+           const int itau = -1,
+           const int ispin = -1,
+           const int isoc1 = -1,
+           const int isoc2 = -1,
+           const std::string& extra = std::string()) {
+            std::ostringstream oss;
+            oss << stage;
+            if (itau >= 0) oss << ", itau=" << itau;
+            if (ispin >= 0) oss << ", ispin=" << ispin;
+            if (isoc1 >= 0) oss << ", isoc1=" << isoc1;
+            if (isoc2 >= 0) oss << ", isoc2=" << isoc2;
+            if (!extra.empty()) oss << ", " << extra;
+            return oss.str();
+        };
+    try
     {
-        if (Params::output_Wc_Rf_mat == 1)
+        // Transform
+        if (Params::use_shrink_abfs)
         {
-            Profiler::start("unfold_Wc_q", "Unfold Wc (q,w=0)");
-            const double freq = tfg.get_freq_nodes()[0];
-            auto Wc_q_f0 = Wc_freq_q.at(freq);
-            unfold_abfs_Wc(sinvS, Wc_q_f0, qlist, atom_mu_l, atom_mu_s);
-            Profiler::stop("unfold_Wc_q");
-            Profiler::start("construct_Wc_lower_half", "Construct Lower Half of Wc(q,w)");
-            // NOTE: only upper half of Wc is built now
-            //       here we recover the other half before transform to R space using the Hermitian property
-            //       and Hermitize the diagonal blocks (due to numerical noise)
-            vector<atom_t> iatoms_row;
-            for (const auto &Mu_NuqWc : Wc_q_f0) iatoms_row.push_back(Mu_NuqWc.first);
-            for (auto iatom_row: iatoms_row)
+            if (Params::output_Wc_Rf_mat == 1)
             {
-                vector<atom_t> iatoms_col;
-                for (const auto &Nu_qWc : Wc_q_f0.at(iatom_row))
+                stage_tag = "unfold Wc(q,w=0)";
+                Profiler::start("unfold_Wc_q", "Unfold Wc (q,w=0)");
+                const double freq = tfg.get_freq_nodes()[0];
+                // In MPI runs some ranks may not own any local Wc block for the first
+                // frequency node. The unfold path must still participate with an empty
+                // container so the later collective communication can gather blocks from
+                // the ranks that do own them.
+                atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old
+                    Wc_q_f0;
+                const auto freq_iter = Wc_freq_q.find(freq);
+                if (freq_iter != Wc_freq_q.end())
                 {
-                    iatoms_col.push_back(Nu_qWc.first);
+                    Wc_q_f0 = freq_iter->second;
                 }
-                for (auto iatom_col : iatoms_col)
-                {
-                    for (const auto &q_Wc : Wc_q_f0.at(iatom_row).at(iatom_col))
-                    {
-                        assert(q_Wc.second.major() == MAJOR::ROW);
-                        if(iatom_row != iatom_col)
-                            Wc_q_f0[iatom_col][iatom_row][q_Wc.first] = q_Wc.second.get_transpose(true);
-                        else // Hermitize the diagonal blocks
-                        {
-                            auto Wc_mat = q_Wc.second;
-                            Wc_mat = (Wc_mat + Wc_mat.get_transpose(true)) * 0.5;
-                            Wc_q_f0[iatom_row][iatom_row][q_Wc.first] = Wc_mat;
-                        }
-                    }
-                }
+                unfold_abfs_Wc(sinvS, Wc_q_f0, qlist, atom_mu_l, atom_mu_s);
+                Profiler::stop("unfold_Wc_q");
+                stage_tag = "complete Wc(q,w=0) lower half";
+                Profiler::start("construct_Wc_lower_half", "Construct Lower Half of Wc(q,w)");
+                complete_hermitian_Wc_q_blocks(Wc_q_f0);
+                mpi_comm_global_h.barrier();
+                Profiler::stop("construct_Wc_lower_half");
+                stage_tag = "export Wc(R,w=0)";
+                FT_Wc_q2R(Wc_q_f0, tfg, get_full_bz_kpoint_count(), Rlist, true);
+                Wc_q_f0.clear();
             }
+            else if (Params::output_Wc_Rf_mat > 1)
+            {
+                throw std::logic_error("use_shrink_abfs doesn't support output_Wc_Rf_mat > 1");
+            }
+            stage_tag = "transform Wc(q,w) -> Wc(q,t)";
+            Profiler::start("g0w0_build_spacetime_wt_ft_wc", "Tranform Wc (q,w) -> (q,t)");
+            Wc_tau_q = CT_Wc_freq2time_q(Wc_freq_q, tfg, get_full_bz_kpoint_count(), Rlist, qlist);
 
-            mpi_comm_global_h.barrier();
-            Profiler::stop("construct_Wc_lower_half");
-            FT_Wc_q2R(Wc_q_f0, tfg, meanfield.get_n_kpoints(), Rlist, true);
-            Wc_q_f0.clear();
-        }
-        else if (Params::output_Wc_Rf_mat > 1)
-        {
-            throw std::logic_error("use_shrink_abfs doesn't support output_Wc_Rf_mat > 1");
-        }
-        Profiler::start("g0w0_build_spacetime_wt_ft_wc", "Tranform Wc (q,w) -> (q,t)");
-        Wc_tau_q = CT_Wc_freq2time_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist, qlist);
-
-        // HACK: Free up Wc_freq_q to save memory, especially for large Coulomb matrix case and many
-        // minimax grids
-        Wc_freq_q.clear();
-        utils::release_free_mem();
-        Profiler::stop("g0w0_build_spacetime_wt_ft_wc");
-        LIBRPA::utils::lib_printf_root(
-            "Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
-            Profiler::get_wall_time_last("g0w0_build_spacetime_wt_ft_wc"),
-            Profiler::get_cpu_time_last("g0w0_build_spacetime_wt_ft_wc"));
-    }
-    else
-    {
-        Profiler::start("g0w0_build_spacetime_ct_ft_wc", "Tranform Wc (q,w) -> (R,t)");
-        if (Params::output_Wc_Rf_mat > 0)
-        {
-            Wc_tau_R = CT_FT_Wc_q2R_freq2time(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
-        }
-        else
-        {
-            Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, meanfield.get_n_kpoints(), Rlist);
             // HACK: Free up Wc_freq_q to save memory, especially for large Coulomb matrix case and many
             // minimax grids
             Wc_freq_q.clear();
             utils::release_free_mem();
+            Profiler::stop("g0w0_build_spacetime_wt_ft_wc");
+            LIBRPA::utils::lib_printf_root(
+                "Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
+                Profiler::get_wall_time_last("g0w0_build_spacetime_wt_ft_wc"),
+                Profiler::get_cpu_time_last("g0w0_build_spacetime_wt_ft_wc"));
         }
-        Profiler::stop("g0w0_build_spacetime_ct_ft_wc");
-        LIBRPA::utils::lib_printf_root(
-            "Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
-            Profiler::get_wall_time_last("g0w0_build_spacetime_ct_ft_wc"),
-            Profiler::get_cpu_time_last("g0w0_build_spacetime_ct_ft_wc"));
+        else
+        {
+            stage_tag = "transform Wc(q,w) -> Wc(R,t)";
+            Profiler::start("g0w0_build_spacetime_ct_ft_wc", "Tranform Wc (q,w) -> (R,t)");
+            if (Params::output_Wc_Rf_mat > 0)
+            {
+                Wc_tau_R = CT_FT_Wc_q2R_freq2time(Wc_freq_q, tfg, get_full_bz_kpoint_count(), Rlist);
+            }
+            else
+            {
+                Wc_tau_R = CT_FT_Wc_freq_q(Wc_freq_q, tfg, get_full_bz_kpoint_count(), Rlist);
+                // HACK: Free up Wc_freq_q to save memory, especially for large Coulomb matrix case and many
+                // minimax grids
+                Wc_freq_q.clear();
+                utils::release_free_mem();
+            }
+            Profiler::stop("g0w0_build_spacetime_ct_ft_wc");
+            LIBRPA::utils::lib_printf_root(
+                "Time for Fourier transform of Wc in GW (seconds, Wall/CPU): %f %f\n",
+                Profiler::get_wall_time_last("g0w0_build_spacetime_ct_ft_wc"),
+                Profiler::get_cpu_time_last("g0w0_build_spacetime_ct_ft_wc"));
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        throw std::runtime_error("G0W0::build_spacetime failed at stage '" + stage_tag + "': "
+                                 + ex.what());
     }
 
     RI::GW<int, int, 3, Tdata> gw_libri;
@@ -411,34 +520,46 @@ void G0W0::build_spacetime(
         atoms_pos.insert(pair<int, std::array<double, 3>>{i, {0, 0, 0}});
     std::array<int, 3> period_array{this->period_.x, this->period_.y, this->period_.z};
 
-    Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
-    gw_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
-    // TODO: template Cs_LRI
-    if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+    try
     {
-        std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<Tdata>>> data_libri;
-        for (const auto &I_JR_C : LRI_Cs.data_libri)
+        stage_tag = "setup LibRI G0W0 object";
+        Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
+        gw_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
+        // TODO: template Cs_LRI
+        if constexpr (std::is_same<Tdata, std::complex<double>>::value)
         {
-            const auto I = I_JR_C.first;
-            for (const auto &JR_C : I_JR_C.second)
+            std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<Tdata>>> data_libri;
+            for (const auto &I_JR_C : LRI_Cs.data_libri)
             {
-                const auto J = JR_C.first.first;
-                const auto R = JR_C.first.second;
-                const auto &C = JR_C.second;
-                auto JR = std::pair<int, std::array<int, 3>>(J, R);
-                data_libri[I][JR] = RI::Global_Func::convert<Tdata>(C);
+                const auto I = I_JR_C.first;
+                for (const auto &JR_C : I_JR_C.second)
+                {
+                    const auto J = JR_C.first.first;
+                    const auto R = JR_C.first.second;
+                    const auto &C = JR_C.second;
+                    auto JR = std::pair<int, std::array<int, 3>>(J, R);
+                    data_libri[I][JR] = RI::Global_Func::convert<Tdata>(C);
+                }
             }
+            gw_libri.set_Cs(data_libri, Params::libri_g0w0_threshold_C);
         }
-        gw_libri.set_Cs(data_libri, Params::libri_g0w0_threshold_C);
+        else
+        {
+            gw_libri.set_Cs(LRI_Cs.data_libri, Params::libri_g0w0_threshold_C);
+        }
+
+        Profiler::stop("g0w0_build_spacetime_2");
+        LIBRPA::utils::lib_printf_root("Time for LibRI G0W0 setup (seconds, Wall/CPU): %f %f\n",
+                                       Profiler::get_wall_time_last("g0w0_build_spacetime_2"),
+                                       Profiler::get_cpu_time_last("g0w0_build_spacetime_2"));
     }
-    else
-        gw_libri.set_Cs(LRI_Cs.data_libri, Params::libri_g0w0_threshold_C);
+    catch (const std::exception& ex)
+    {
+        throw std::runtime_error("G0W0::build_spacetime failed at stage '" + stage_tag + "': "
+                                 + ex.what());
+    }
 
-    Profiler::stop("g0w0_build_spacetime_2");
-    LIBRPA::utils::lib_printf_root("Time for LibRI G0W0 setup (seconds, Wall/CPU): %f %f\n",
-                                   Profiler::get_wall_time_last("g0w0_build_spacetime_2"),
-                                   Profiler::get_cpu_time_last("g0w0_build_spacetime_2"));
-
+    stage_tag = "dispatch local Green-function work";
     auto IJR_local_gf = dispatch_vector_prod(tot_atpair_ordered, Rlist, mpi_comm_global_h.myid,
                                              mpi_comm_global_h.nprocs, true, false);
     envs::ofs_myid << "IJR_local_gf: " << IJR_local_gf << endl;
@@ -451,14 +572,43 @@ void G0W0::build_spacetime(
     for (auto itau = 0; itau != tfg.get_n_grids(); itau++)
     {
         const auto tau = tfg.get_time_nodes()[itau];
+        try
+        {
         if (Params::use_shrink_abfs)
         {
+            stage_tag = format_stage_tag("unfold shrinked Wc(q,t)", itau);
             Profiler::start("unfold_Wc_abfs", "Do shrink transformation");
             unfold_abfs_Wc(sinvS, Wc_tau_q[tau], qlist, atom_mu_l, atom_mu_s);
             Profiler::stop("unfold_Wc_abfs");
+            stage_tag = format_stage_tag("complete Hermitian Wc(q,t) blocks", itau);
+            Profiler::start("construct_Wc_tau_lower_half",
+                            "Construct Lower Half of Wc(q,t)");
+            complete_hermitian_Wc_q_blocks(Wc_tau_q[tau]);
+            Profiler::stop("construct_Wc_tau_lower_half");
+            if (Params::debug && Params::output_Wc_Rf_mat == 1 && itau == 0)
+            {
+                char fn[128];
+                for (const auto& I_JqWc : Wc_tau_q[tau])
+                {
+                    const auto& I = I_JqWc.first;
+                    for (const auto& J_qWc : I_JqWc.second)
+                    {
+                        const auto& J = J_qWc.first;
+                        for (const auto& q_Wc : J_qWc.second)
+                        {
+                            const int iq = std::distance(
+                                klist.begin(), std::find(klist.begin(), klist.end(), q_Wc.first));
+                            sprintf(fn, "Wc_unfold_tau0_iq_%d_I_%zu_J_%zu_id_%d.mtx", iq, I, J,
+                                    mpi_comm_global_h.myid);
+                            print_matrix_mm_file(q_Wc.second, Params::output_dir + "/" + fn, 1e-15);
+                        }
+                    }
+                }
+            }
+            stage_tag = format_stage_tag("transform Wc(q,t) -> Wc(R,t)", itau);
             Profiler::start("g0w0_build_spacetime_Rq_ft_wc", "Tranform Wc (q,t) -> (R,t)");
             Wc_tau_R[tau] =
-                FT_Wc_q2R(Wc_tau_q[tau], tfg, meanfield.get_n_kpoints(), Rlist, false);
+                FT_Wc_q2R(Wc_tau_q[tau], tfg, get_full_bz_kpoint_count(), Rlist, false);
             Profiler::stop("g0w0_build_spacetime_Rq_ft_wc");
             Wc_tau_q[tau].clear();
             atom_mu = atom_mu_l;
@@ -470,6 +620,7 @@ void G0W0::build_spacetime(
 
             N_all_mu = atom_mu_part_range[natom - 1] + atom_mu[natom - 1];
         }
+        stage_tag = format_stage_tag("prepare LibRI W object", itau);
         Profiler::start("g0w0_build_spacetime_3", "Prepare LibRI Wc object");
         // LIBRPA::utils::lib_printf("task %d itau %d start\n", mpi_comm_global_h.myid, itau);
         // build the Wc LibRI object. Note <JI> has to be converted from <IJ>
@@ -531,6 +682,7 @@ void G0W0::build_spacetime(
         {
             n_obj_wc_libri += w.second.size();
         }
+        stage_tag = format_stage_tag("set LibRI W object", itau);
         gw_libri.set_Ws(Wc_libri, Params::libri_g0w0_threshold_Wc);
         Wc_libri.clear();
 
@@ -551,6 +703,8 @@ void G0W0::build_spacetime(
                     std::map<int, std::map<std::pair<int, std::array<int, 3>>, Tensor<Tdata>>>
                         sigc_nega_tau;
 
+                    stage_tag = format_stage_tag("compute Green's functions", itau, ispin, isoc1,
+                                                 isoc2);
                     Profiler::start("g0w0_build_spacetime_4", "Compute G(R,t) and G(R,-t)");
                     // NOTE: ``if constexpr`` needs C++-17
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
@@ -605,15 +759,27 @@ void G0W0::build_spacetime(
 
                         for (auto t : {tau, -tau})
                         {
+                            stage_tag = format_stage_tag(
+                                "prepare LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             const auto &gf_libri = tau_gf_libri.at(t);
                             size_t n_obj_gf_libri = 0;
                             for (const auto &gf : gf_libri) n_obj_gf_libri += gf.second.size();
 
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
+                            stage_tag = format_stage_tag(
+                                "set LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
+                            stage_tag = format_stage_tag(
+                                "call LibRI cal_Sigmas", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
+                            stage_tag = format_stage_tag(
+                                "free LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             Profiler::start("g0w0_build_spacetime_5_clean");
                             gw_libri.free_Gs();
                             Profiler::stop("g0w0_build_spacetime_5_clean");
@@ -694,15 +860,27 @@ void G0W0::build_spacetime(
 
                         for (auto t : {tau, -tau})
                         {
+                            stage_tag = format_stage_tag(
+                                "prepare LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             const auto &gf_libri = tau_gf_libri.at(t);
                             size_t n_obj_gf_libri = 0;
                             for (const auto &gf : gf_libri) n_obj_gf_libri += gf.second.size();
 
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
+                            stage_tag = format_stage_tag(
+                                "set LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
+                            stage_tag = format_stage_tag(
+                                "call LibRI cal_Sigmas", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
+                            stage_tag = format_stage_tag(
+                                "free LibRI G object", itau, ispin, isoc1, isoc2,
+                                "tau_node=" + std::to_string(t));
                             Profiler::start("g0w0_build_spacetime_5_clean");
                             gw_libri.free_Gs();
                             Profiler::stop("g0w0_build_spacetime_5_clean");
@@ -744,6 +922,8 @@ void G0W0::build_spacetime(
                     }
 
                     // symmetrize and perform transformation
+                    stage_tag = format_stage_tag("transform Sigma(R,t) -> Sigma(R,w)", itau, ispin,
+                                                 isoc1, isoc2);
                     Profiler::start("g0w0_build_spacetime_6", "Transform Sigc (R,t) -> (R,w)");
                     for (const auto &I_JR_sigc_posi : sigc_posi_tau)
                     {
@@ -899,9 +1079,16 @@ void G0W0::build_spacetime(
                 }  // isoc2
             }  // isoc1
         }  // ispin
+        stage_tag = format_stage_tag("free LibRI W object", itau);
         Profiler::start("g0w0_build_spacetime_free_Ws");
         gw_libri.free_Ws();
         Profiler::stop("g0w0_build_spacetime_free_Ws");
+        }
+        catch (const std::exception& ex)
+        {
+            throw std::runtime_error("G0W0::build_spacetime failed at stage '" + stage_tag
+                                     + "': " + ex.what());
+        }
     }
     is_rspace_built_ = true;
     if (Params::use_shrink_abfs)

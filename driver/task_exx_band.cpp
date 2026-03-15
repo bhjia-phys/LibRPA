@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "abacus_symmetry.h"
 #include "constants.h"
 #include "coulmat.h"
 #include "driver_params.h"
@@ -15,6 +16,30 @@
 #include "profiler.h"
 #include "read_data.h"
 #include "ri.h"
+
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+bool can_expand_exx_output_to_full_bz()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(meanfield.get_n_kpoints())
+           && static_cast<int>(ctx.count_kstar_members()) > meanfield.get_n_kpoints();
+}
+
+} // namespace
 
 void task_exx_band()
 {
@@ -34,8 +59,14 @@ void task_exx_band()
     }
 
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+        || need_full_cut_coulomb_for_abacus_symmetry())
     {
+        if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+        {
+            lib_printf("ABACUS EXX symmetry restores `coulomb_cut_` from the full IBZ operator;"
+                       " switching to `read_Vq_full`\n");
+        }
         read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
     }
     else
@@ -58,13 +89,13 @@ void task_exx_band()
         if (Params::use_fullcoul_exx)
         {
             Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
-            VR = FT_Vq(Vq, meanfield.get_n_kpoints(), Rlist, true);
+            VR = FT_Vq(Vq, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_full");
         }
         else
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
         }
 
@@ -101,9 +132,46 @@ void task_exx_band()
     {
         // display results
         const std::string banner(90, '-');
+        const auto full_k_members =
+            can_expand_exx_output_to_full_bz()
+                ? LIBRPA::build_abacus_full_kpoint_member_list(LIBRPA::abacus_symmetry_ctx,
+                                                               kfrac_list)
+                : std::vector<LIBRPA::AbacusFullKpointMemberEntry>{};
+        const int occupation_scale =
+            full_k_members.empty() ? meanfield.get_n_kpoints() : get_full_bz_kpoint_count();
         printf("Printing EXX@DFT energy [unit: eV]\n\n");
         for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
         {
+            if (!full_k_members.empty())
+            {
+                for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                {
+                    const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                    const int i_kpoint = member.ik_ibz;
+                    const auto& k = member.k_bz;
+                    printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, ifull + 1,
+                           k.x, k.y, k.z);
+                    printf("%90s\n", banner.c_str());
+                    printf("%5s %16s %16s %16s %16s %16s\n", "State", "occ", "e_mf", "v_xc",
+                           "v_exx", "e_exx");
+                    printf("%90s\n", banner.c_str());
+                    for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                    {
+                        const auto& occ_state =
+                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
+                        const auto& eks_state =
+                            meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+                        const auto& exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                        const auto& vxc_state = vxc[i_spin](i_kpoint, i_state) * HA2EV;
+                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f\n", i_state + 1,
+                               occ_state, eks_state, vxc_state, exx_state,
+                               eks_state - vxc_state + exx_state);
+                    }
+                    printf("\n");
+                }
+                continue;
+            }
+
             for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
             {
                 const auto &k = kfrac_list[i_kpoint];
@@ -116,7 +184,7 @@ void task_exx_band()
                 for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                 {
                     const auto &occ_state = meanfield.get_weight()[i_spin](i_kpoint, i_state) *
-                                            meanfield.get_n_kpoints();
+                                            occupation_scale;
                     const auto &eks_state =
                         meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
                     const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;

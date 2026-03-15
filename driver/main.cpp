@@ -340,8 +340,19 @@ int main(int argc, char **argv)
         //     printf("   |process %d , local_atom_pair:  %d,  %d\n",
         //     mpi_comm_global_h.myid,ap.first,ap.second);
         Profiler::start("driver_read_Vq");
-        read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
-                    false);
+        if (Params::use_abacus_gw_symmetry && LIBRPA::abacus_symmetry_ctx.has_abf_shell_layout())
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW symmetry canonicalizes bare Coulomb from the full q-space matrix; switching `coulomb_mat` loading to read_Vq_full\n");
+            }
+            read_Vq_full(driver_params.input_dir, "coulomb_mat", false);
+        }
+        else
+        {
+            read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
+                        false);
+        }
         Profiler::cease("driver_read_Vq");
         // test_libcomm_for_system(Vq);
     }
@@ -403,8 +414,19 @@ int main(int argc, char **argv)
             blacs_ctxt_global_h.myprow, blacs_ctxt_global_h.mypcol);
         for (auto &iap : trangular_loc_atpair) local_atpair.push_back(iap);
 
-        read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
-                    false);
+        if (Params::use_abacus_gw_symmetry && LIBRPA::abacus_symmetry_ctx.has_abf_shell_layout())
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW symmetry canonicalizes bare Coulomb from the full q-space matrix; switching `coulomb_mat` loading to read_Vq_full\n");
+            }
+            read_Vq_full(driver_params.input_dir, "coulomb_mat", false);
+        }
+        else
+        {
+            read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
+                        false);
+        }
         mpi_comm_global_h.barrier();
         Profiler::cease("driver_read_Vq");
         lib_printf_coll("| Process %5d: coulomb_mat read. Wall/CPU time [min]: %12.4f %12.4f\n",

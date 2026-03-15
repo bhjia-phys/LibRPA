@@ -4,6 +4,7 @@
 #include "read_data.h"
 
 // src headers
+#include "abacus_symmetry.h"
 #include "app_exx.h"
 #include "constants.h"
 #include "meanfield.h"
@@ -15,6 +16,19 @@
 
 // debug headers
 // #include "stl_io_helper.h"
+
+namespace
+{
+
+bool can_expand_exx_output_to_full_bz()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(meanfield.get_n_kpoints())
+           && static_cast<int>(ctx.count_kstar_members()) > meanfield.get_n_kpoints();
+}
+
+} // namespace
 
 void task_exx()
 {
@@ -36,9 +50,35 @@ void task_exx()
 
     if (exx_ks.size() > 0 && mpi_comm_global_h.is_root())
     {
+        const auto full_k_members =
+            can_expand_exx_output_to_full_bz()
+                ? LIBRPA::build_abacus_full_kpoint_member_list(LIBRPA::abacus_symmetry_ctx,
+                                                               kfrac_list)
+                : std::vector<LIBRPA::AbacusFullKpointMemberEntry>{};
         for (int isp = 0; isp != meanfield.get_n_spins(); isp++)
         {
             lib_printf("Spin channel %1d\n", isp+1);
+            if (!full_k_members.empty())
+            {
+                for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                {
+                    const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                    const int ik_ibz = member.ik_ibz;
+                    cout << "k-point " << ifull + 1 << ": " << member.k_bz << endl;
+                    lib_printf("%-4s  %-10s  %-10s\n", "Band", "e_exx (Ha)", "e_exx (eV)");
+                    for (int ib = i_state_low; ib != i_state_high; ib++)
+                    {
+                        const int index =
+                            isp * n_kpoints * n_states_calc + ik_ibz * n_states_calc
+                            + ib - i_state_low;
+                        const auto e = exx_ks[index];
+                        lib_printf("%4d  %10.5f  %10.5f\n", ib + 1, e, HA2EV * e);
+                    }
+                    lib_printf("\n");
+                }
+                continue;
+            }
+
             for (int ik = 0; ik != meanfield.get_n_kpoints(); ik++)
             {
                 cout << "k-point " << ik + 1 << ": " << kfrac_list[ik] << endl;

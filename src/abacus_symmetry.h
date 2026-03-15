@@ -68,6 +68,32 @@ struct AbacusKStar
 };
 
 /*!
+ * @brief Explicit mapping between one loaded LibRPA IBZ q-index and one ABACUS k-star.
+ *
+ * The mapping also stores the exact full-BZ q keys that LibRPA should use for every
+ * star member. This avoids rebuilding q keys from floating-point coordinates during
+ * GW restore and keeps the sidecar traversal aligned with LibRPA's own q ordering.
+ */
+struct AbacusKStarGridMappingEntry
+{
+    int iq_ibz = -1;
+    int star_list_index = -1;
+    std::vector<Vector3_Order<double>> member_q_bz_keys;
+};
+
+/*!
+ * @brief One full-BZ k-point member expanded from an ABACUS IBZ k-star.
+ */
+struct AbacusFullKpointMemberEntry
+{
+    int ik_ibz = -1;
+    int star_list_index = -1;
+    int member_index = -1;
+    int isym = -1;
+    Vector3_Order<double> k_bz{0.0, 0.0, 0.0};
+};
+
+/*!
  * @brief AO shell layout of one ABACUS atom type.
  *
  * The shell multiplicities follow the ABACUS orbital ordering:
@@ -93,6 +119,7 @@ struct AbacusRSpaceRestoreMember
 
 using abacus_rspace_sector_stars_t =
     std::map<atpair_t, std::map<Vector3_Order<int>, std::vector<AbacusRSpaceRestoreMember>>>;
+using abacus_atom_block_matrix_map_t = std::map<atom_t, std::map<atom_t, ComplexMatrix>>;
 
 /*!
  * @brief In-memory representation of ABACUS symmetry sidecar files.
@@ -104,22 +131,28 @@ struct AbacusSymmetryContext
 {
     bool available = false;
     bool ao_shell_layout_available = false;
+    bool abf_shell_layout_available = false;
     int ao_lmax = -1;
     int abf_lmax = -1;
     abacus_irreducible_sector_t irreducible_sector;
     std::vector<AbacusSymmetryOperation> rspace_operations;
     std::vector<AbacusKStar> kstars;
+    std::vector<AbacusKStar> abf_kstars;
     std::vector<AbacusAOTypeLayout> ao_type_layouts;
+    std::vector<std::vector<AbacusAOTypeLayout>> abf_type_layout_candidates;
     std::map<atom_t, int> atom_to_type;
 
     void clear();
     bool empty() const;
     bool has_ao_shell_layout() const;
+    bool has_abf_shell_layout() const;
     std::size_t count_irreducible_pairs() const;
     std::size_t count_irreducible_blocks() const;
     std::size_t count_kstar_members() const;
     std::size_t count_atoms_with_layout() const;
+    std::size_t count_abf_layout_candidates() const;
     const AbacusAOTypeLayout& get_ao_type_layout(int atom_type) const;
+    const AbacusAOTypeLayout& find_abf_type_layout(int atom_type, int nao_hint) const;
 };
 
 extern AbacusSymmetryContext abacus_symmetry_ctx;
@@ -134,6 +167,52 @@ bool load_global_abacus_symmetry_context(const std::string& dir_path,
 ComplexMatrix build_abacus_ao_rotation_matrix(const AbacusSymmetryContext& ctx,
                                               int atom_type,
                                               const std::map<int, ComplexMatrix>& shell_rotations);
+
+ComplexMatrix build_abacus_abf_rotation_matrix(
+    const AbacusSymmetryContext& ctx,
+    int atom_type,
+    int nao_hint,
+    const std::map<int, ComplexMatrix>& shell_rotations,
+    const std::array<std::array<double, 3>, 3>& direct_rotation);
+
+const AbacusKStar& find_abacus_kstar_for_ibz_kpoint(const AbacusSymmetryContext& ctx,
+                                                    const Vector3_Order<double>& k_ibz);
+
+std::vector<AbacusKStarGridMappingEntry> build_abacus_kstar_grid_mapping(
+    const AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& klist_internal,
+    const std::vector<Vector3_Order<double>>& kfrac_list,
+    const std::map<Vector3_Order<double>, std::vector<Vector3_Order<double>>>& irk_to_full_kpoints);
+
+std::vector<AbacusFullKpointMemberEntry> build_abacus_full_kpoint_member_list(
+    const AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& kfrac_list);
+
+abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
+    const AbacusSymmetryContext& ctx,
+    const AbacusKStarMember& member,
+    const abacus_atom_block_matrix_map_t& blocks_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const Vector3_Order<double>& k_ibz,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac,
+    bool use_time_reversal = false,
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
+
+ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
+    const AbacusSymmetryContext& ctx,
+    const AbacusKStarMember& member,
+    const ComplexMatrix& matrix_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const Vector3_Order<double>& k_ibz,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac,
+    bool use_time_reversal = false);
+
+ComplexMatrix symmetrize_abacus_abf_ibz_kspace_operator_matrix(
+    const AbacusSymmetryContext& ctx,
+    const Vector3_Order<double>& k_ibz,
+    const ComplexMatrix& matrix_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac);
 
 ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
                                           const AbacusKStarMember& member,

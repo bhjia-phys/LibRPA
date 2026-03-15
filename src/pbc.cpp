@@ -61,3 +61,18 @@ map<Vector3_Order<double>, vector<Vector3_Order<double>>> map_irk_ks;
 Matrix3 latvec;
 std::array<std::array<double, 3>, 3> lat_array;
 Matrix3 G;
+
+int get_full_bz_kpoint_count()
+{
+    int full_count = 0;
+    for (const auto &irk_full : map_irk_ks)
+    {
+        full_count += static_cast<int>(irk_full.second.size());
+    }
+
+    if (full_count > 0)
+    {
+        return full_count;
+    }
+    return static_cast<int>(klist.size());
+}

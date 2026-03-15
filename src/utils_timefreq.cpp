@@ -35,6 +35,12 @@ TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_st
             {
                 emax = Params::minimax_max_transition;
             }
+            if (envs::mpi_comm_global_h.is_root())
+            {
+                LIBRPA::utils::lib_printf(
+                    "Minimax energy window: emin = %20.12f, emax = %20.12f, erange = %20.12f\n",
+                    emin, emax, emax / emin);
+            }
             break;
         }
         case (TFGrids::GRID_TYPES::EvenSpaced):

@@ -1,18 +1,396 @@
 #include <algorithm>
+#include <iomanip>
+#include <set>
+#include <sstream>
+
+#include "abacus_symmetry.h"
 #include "constants.h"
 #include "coulmat.h"
+#include "envs_mpi.h"
+#include "geometry.h"
+#include "params.h"
 #include "pbc.h"
+#include "utils_mpi_io.h"
+
+namespace
+{
+
+bool are_equivalent_abacus_qpoints(const Vector3_Order<double>& lhs,
+                                   const Vector3_Order<double>& rhs,
+                                   const double tol = 1e-5);
+
+std::string format_debug_double(const double value)
+{
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6) << value;
+    std::string text = oss.str();
+    std::replace(text.begin(), text.end(), '-', 'm');
+    std::replace(text.begin(), text.end(), '.', 'p');
+    return text;
+}
+
+double canonicalize_mp_fractional_component(const double value,
+                                            const int nk,
+                                            const double tol = 1e-5)
+{
+    if (nk <= 0)
+    {
+        return value;
+    }
+
+    const double snapped = std::round(value * static_cast<double>(nk))
+                           / static_cast<double>(nk);
+    if (std::abs(value - snapped) < tol)
+    {
+        return snapped;
+    }
+    return value;
+}
+
+Vector3_Order<double> canonicalize_mp_fractional_qpoint(const Vector3_Order<double>& q_frac)
+{
+    return {canonicalize_mp_fractional_component(q_frac.x, kv_nmp[0]),
+            canonicalize_mp_fractional_component(q_frac.y, kv_nmp[1]),
+            canonicalize_mp_fractional_component(q_frac.z, kv_nmp[2])};
+}
+
+Vector3_Order<double> resolve_ft_q_fractional(
+    const Vector3_Order<double>& q_internal,
+    const std::map<Vector3_Order<double>, Vector3_Order<double>>* qfrac_lookup = nullptr)
+{
+    if (qfrac_lookup != nullptr)
+    {
+        const auto exact_iter = qfrac_lookup->find(q_internal);
+        if (exact_iter != qfrac_lookup->end())
+        {
+            return canonicalize_mp_fractional_qpoint(exact_iter->second);
+        }
+        const auto matched_iter =
+            std::find_if(qfrac_lookup->begin(), qfrac_lookup->end(),
+                         [&q_internal](const auto& entry) {
+                             return are_equivalent_abacus_qpoints(entry.first, q_internal);
+                         });
+        if (matched_iter != qfrac_lookup->end())
+        {
+            return canonicalize_mp_fractional_qpoint(matched_iter->second);
+        }
+    }
+
+    for (std::size_t ik = 0; ik < klist.size(); ++ik)
+    {
+        if (are_equivalent_abacus_qpoints(klist[ik], q_internal))
+        {
+            return canonicalize_mp_fractional_qpoint(kfrac_list[ik]);
+        }
+    }
+
+    return canonicalize_mp_fractional_qpoint(latvec * q_internal);
+}
+
+std::complex<double> build_ft_vq_phase(const Vector3_Order<double>& q_internal,
+                                       const Vector3_Order<int>& R,
+                                       const int n_k_points,
+                                       const std::map<Vector3_Order<double>, Vector3_Order<double>>*
+                                           qfrac_lookup = nullptr)
+{
+    const auto q_frac = resolve_ft_q_fractional(q_internal, qfrac_lookup);
+    const double ang = -(q_frac * R) * TWO_PI;
+    return std::complex<double>(std::cos(ang), std::sin(ang)) / double(n_k_points);
+}
+
+std::map<Vector3_Order<double>, Vector3_Order<double>> build_abacus_restored_qfrac_lookup(
+    const LIBRPA::AbacusSymmetryContext& ctx)
+{
+    std::map<Vector3_Order<double>, Vector3_Order<double>> qfrac_lookup;
+    const auto kstar_grid_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+    for (const auto& mapping_entry : kstar_grid_mapping)
+    {
+        const auto& star = ctx.kstars.at(static_cast<std::size_t>(mapping_entry.star_list_index));
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            qfrac_lookup[mapping_entry.member_q_bz_keys[imember]] =
+                canonicalize_mp_fractional_qpoint(star.members[imember].k_bz);
+        }
+    }
+    return qfrac_lookup;
+}
+
+bool are_equivalent_abacus_qpoints(const Vector3_Order<double>& lhs,
+                                   const Vector3_Order<double>& rhs,
+                                   const double tol)
+{
+    const auto same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y)
+           && same_component(lhs.z, rhs.z);
+}
+
+template <typename QMap>
+typename QMap::const_iterator find_matching_abacus_qpoint(const QMap& q_map,
+                                                          const Vector3_Order<double>& q_target)
+{
+    const auto exact_iter = q_map.find(q_target);
+    if (exact_iter != q_map.end())
+    {
+        return exact_iter;
+    }
+
+    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto& entry) {
+        return are_equivalent_abacus_qpoints(entry.first, q_target);
+    });
+}
+
+std::string classify_ft_vq_debug_tag(const bool use_abacus_full_q_restore)
+{
+    if (use_abacus_full_q_restore)
+    {
+        return "abacus_full_q_restore";
+    }
+    if (static_cast<int>(klist.size()) < get_full_bz_kpoint_count())
+    {
+        return "ibz_star_expand";
+    }
+    return "full_kgrid";
+}
+
+// Dump the Fourier-transformed Coulomb block so the symmetry-expanded `V(R)`
+// can be compared directly against the no-symmetry full-k-grid reference.
+void maybe_dump_ft_vq_debug_matrix(const ComplexMatrix& vr_cplx,
+                                   const atom_t Mu,
+                                   const atom_t Nu,
+                                   const Vector3_Order<int>& R,
+                                   const bool use_abacus_full_q_restore)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    std::ostringstream file_name;
+    file_name << Params::output_dir << "abacus_vr_" << classify_ft_vq_debug_tag(use_abacus_full_q_restore)
+              << "_Mu_" << Mu << "_Nu_" << Nu
+              << "_R_" << R.x << "_" << R.y << "_" << R.z
+              << "_id_" << LIBRPA::envs::mpi_comm_global_h.myid << ".mtx";
+    print_complex_matrix_mm(vr_cplx, file_name.str(), 1e-14, false);
+}
+
+// Dump the q-space Coulomb block that is fed into `FT_Vq` so the restored
+// full-q operator can be compared directly against the symmetry-off reference.
+void maybe_dump_qspace_vq_debug_matrix(const ComplexMatrix& vq_cplx,
+                                       const atom_t Mu,
+                                       const atom_t Nu,
+                                       const Vector3_Order<double>& q_internal,
+                                       const bool use_abacus_full_q_restore)
+{
+    if (!Params::debug)
+    {
+        return;
+    }
+
+    const auto q_frac = latvec * q_internal;
+    std::ostringstream tag;
+    tag << classify_ft_vq_debug_tag(use_abacus_full_q_restore)
+        << "_Mu_" << Mu << "_Nu_" << Nu
+        << "_qx_" << format_debug_double(q_frac.x)
+        << "_qy_" << format_debug_double(q_frac.y)
+        << "_qz_" << format_debug_double(q_frac.z)
+        << "_id_" << LIBRPA::envs::mpi_comm_global_h.myid;
+    static std::set<std::string> dumped_tags;
+    if (!dumped_tags.insert(tag.str()).second)
+    {
+        return;
+    }
+
+    std::ostringstream file_name;
+    file_name << Params::output_dir << "abacus_vq_" << tag.str() << ".mtx";
+    print_complex_matrix_mm(vq_cplx, file_name.str(), 1e-14, false);
+}
+
+bool has_complete_abacus_abf_ibz_coverage(const atpair_k_cplx_mat_t& blocks_by_q_ibz,
+                                          const std::map<atom_t, size_t>& atom_nabf)
+{
+    for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
+    {
+        for (std::size_t atom_j = atom_i; atom_j < atom_nabf.size(); ++atom_j)
+        {
+            const auto upper_iter = blocks_by_q_ibz.find(static_cast<atom_t>(atom_i));
+            const bool has_upper =
+                upper_iter != blocks_by_q_ibz.end()
+                && upper_iter->second.count(static_cast<atom_t>(atom_j)) != 0;
+
+            const auto lower_iter = blocks_by_q_ibz.find(static_cast<atom_t>(atom_j));
+            const bool has_lower =
+                lower_iter != blocks_by_q_ibz.end()
+                && lower_iter->second.count(static_cast<atom_t>(atom_i)) != 0;
+
+            if (!has_upper && !has_lower)
+            {
+                return false;
+            }
+
+            const auto& q_blocks =
+                has_upper ? upper_iter->second.at(static_cast<atom_t>(atom_j))
+                          : lower_iter->second.at(static_cast<atom_t>(atom_i));
+            for (const auto& q_ibz : klist)
+            {
+                if (find_matching_abacus_qpoint(q_blocks, q_ibz) == q_blocks.end())
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+LIBRPA::abacus_atom_block_matrix_map_t collect_abacus_abf_ibz_blocks_for_q(
+    const atpair_k_cplx_mat_t& blocks_by_q,
+    const Vector3_Order<double>& q_ibz_internal)
+{
+    LIBRPA::abacus_atom_block_matrix_map_t blocks_ibz;
+    for (const auto& atom_i_pair : blocks_by_q)
+    {
+        const auto atom_i = atom_i_pair.first;
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            const auto atom_j = atom_j_pair.first;
+            const auto q_iter = find_matching_abacus_qpoint(atom_j_pair.second, q_ibz_internal);
+            if (q_iter != atom_j_pair.second.end())
+            {
+                blocks_ibz[atom_i][atom_j] = *q_iter->second;
+            }
+        }
+    }
+    return blocks_ibz;
+}
+
+const LIBRPA::AbacusKStarMember& find_matching_abf_kstar_member(
+    const LIBRPA::AbacusKStar& abf_star,
+    const LIBRPA::AbacusKStarMember& ao_member)
+{
+    const auto matched = std::find_if(abf_star.members.begin(), abf_star.members.end(),
+                                      [&ao_member](const LIBRPA::AbacusKStarMember& candidate) {
+                                          return candidate.isym == ao_member.isym
+                                                 && are_equivalent_abacus_qpoints(candidate.k_bz,
+                                                                                  ao_member.k_bz);
+                                      });
+    if (matched == abf_star.members.end())
+    {
+        throw std::runtime_error(
+            "Failed to match an ABF k-star member with the AO-side symmetry member");
+    }
+    return *matched;
+}
+
+atpair_k_cplx_mat_t restore_abacus_abf_full_qspace_operator(
+    const atpair_k_cplx_mat_t& blocks_by_q_ibz,
+    const std::map<atom_t, size_t>& atom_nabf)
+{
+    atpair_k_cplx_mat_t blocks_by_q_full;
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const auto kstar_grid_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+
+    for (const auto& star_mapping : kstar_grid_mapping)
+    {
+        const auto& star = ctx.kstars.at(static_cast<std::size_t>(star_mapping.star_list_index));
+        const LIBRPA::AbacusKStar* abf_star = nullptr;
+        if (!ctx.abf_kstars.empty())
+        {
+            if (ctx.abf_kstars.size() != ctx.kstars.size())
+            {
+                throw std::runtime_error(
+                    "ABF k-space symmetry sidecar count is inconsistent with symrot_k.txt");
+            }
+            abf_star = &ctx.abf_kstars.at(static_cast<std::size_t>(star_mapping.star_list_index));
+        }
+        const auto q_ibz_internal = klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
+        const auto blocks_ibz =
+            collect_abacus_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_internal);
+        if (blocks_ibz.empty())
+        {
+            continue;
+        }
+        if (star.members.size() != star_mapping.member_q_bz_keys.size())
+        {
+            throw std::runtime_error(
+                "ABACUS q-star mapping is inconsistent with the loaded full-q keys");
+        }
+
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto& member = star.members[imember];
+            const auto& abf_member =
+                (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
+            const bool use_time_reversal = member.isym >= nsym_space;
+            LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
+            try
+            {
+                rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
+                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal);
+            }
+            catch (const std::exception& ex)
+            {
+                std::ostringstream oss;
+                oss << "ABACUS bare-Coulomb q-star restore failed for star=" << star.star_index
+                    << ", member=" << imember << ", isym=" << member.isym << ": "
+                    << ex.what();
+                throw std::runtime_error(oss.str());
+            }
+            for (const auto& atom_i_pair : rotated_blocks)
+            {
+                for (const auto& atom_j_pair : atom_i_pair.second)
+                {
+                    const auto& q_internal = star_mapping.member_q_bz_keys[imember];
+                    blocks_by_q_full[atom_i_pair.first][atom_j_pair.first][q_internal] =
+                        std::make_shared<ComplexMatrix>(atom_j_pair.second);
+                }
+            }
+        }
+    }
+
+    return blocks_by_q_full;
+}
+
+} // namespace
 
 atpair_R_mat_t
 FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<Vector3_Order<int>> &Rlist, bool return_ordered_atom_pair)
 {
     atpair_R_mat_t coulmat_R;
+    const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+    const bool use_abacus_full_q_restore =
+        Params::use_abacus_gw_symmetry
+        && symmetry_ctx.available
+        && symmetry_ctx.has_abf_shell_layout()
+        && !symmetry_ctx.kstars.empty()
+        && symmetry_ctx.kstars.size() == kfrac_list.size()
+        && !map_irk_ks.empty()
+        && atom_mu.size() == symmetry_ctx.atom_to_type.size()
+        && coord_frac.size() == atom_mu.size()
+        && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
+        && has_complete_abacus_abf_ibz_coverage(coulmat_k, atom_mu);
+    const auto coulmat_k_effective =
+        use_abacus_full_q_restore ? restore_abacus_abf_full_qspace_operator(coulmat_k, atom_mu)
+                                  : coulmat_k;
+    const auto restored_qfrac_lookup =
+        use_abacus_full_q_restore ? build_abacus_restored_qfrac_lookup(symmetry_ctx)
+                                  : std::map<Vector3_Order<double>, Vector3_Order<double>>{};
+    if (use_abacus_full_q_restore)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS GW symmetry restores the full ABF q-star before `FT_Vq`\n");
+    }
 
     for (auto R: Rlist)
     {
         auto iteR = std::find(Rlist.cbegin(), Rlist.cend(), R);
         auto iR = std::distance(Rlist.cbegin(), iteR);
-        for (const auto &Mu_NuqV: coulmat_k)
+        for (const auto &Mu_NuqV: coulmat_k_effective)
         {
             const auto Mu = Mu_NuqV.first;
             const int n_mu = atom_mu[Mu];
@@ -20,26 +398,40 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
             {
                 const auto Nu = Nu_qV.first;
                 const int n_nu = atom_mu[Nu];
+                for (const auto& q_V : Nu_qV.second)
+                {
+                    maybe_dump_qspace_vq_debug_matrix(
+                        *q_V.second, Mu, Nu, q_V.first, use_abacus_full_q_restore);
+                }
                 coulmat_R[Mu][Nu][R] = make_shared<matrix>();
                 // a temporary complex matrix to save the transformed matrix
                 ComplexMatrix VR_cplx(n_mu, n_nu);
                 for (const auto &q_V: Nu_qV.second)
                 {
                     auto q = q_V.first;
-                    for (auto q_bz: map_irk_ks[q])
+                    if (use_abacus_full_q_restore)
                     {
-                        double ang = - q_bz * (R * latvec) * TWO_PI;
-                        complex<double> kphase = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
-                        // FIXME: currently support inverse symmetry only
-                        if (q_bz == q)
+                        const complex<double> kphase =
+                            build_ft_vq_phase(q, R, n_k_points, &restored_qfrac_lookup);
+                        VR_cplx += (*q_V.second) * kphase;
+                    }
+                    else
+                    {
+                        for (auto q_bz: map_irk_ks[q])
                         {
-                            // cout << "Direct:  " << q_bz << " => " << q << ", phase = " << kphase << endl;
-                            VR_cplx += (*q_V.second) * kphase;
-                        }
-                        else
-                        {
-                            // cout << "Inverse: " << q_bz << " => " << q << ", phase = " << kphase << endl;
-                            VR_cplx += conj(*q_V.second) * kphase;
+                            const complex<double> kphase =
+                                build_ft_vq_phase(q_bz, R, n_k_points);
+                            // Legacy fallback: this branch is only formally correct when the
+                            // full-q star reduces to {q, -q}. The general ABACUS restore path
+                            // above should be used whenever the complete IBZ q-mesh is available.
+                            if (q_bz == q)
+                            {
+                                VR_cplx += (*q_V.second) * kphase;
+                            }
+                            else
+                            {
+                                VR_cplx += conj(*q_V.second) * kphase;
+                            }
                         }
                     }
                     // minyez debug: check hermicity of Vq
@@ -52,6 +444,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                     // end minyez debug
                 }
                 *coulmat_R[Mu][Nu][R] = VR_cplx.real();
+                maybe_dump_ft_vq_debug_matrix(VR_cplx, Mu, Nu, R, use_abacus_full_q_restore);
                 // debug print
                 // sprintf(fn, "VR_cplx_Mu_%zu_Nu_%zu_iR_%zu.mtx", Mu, Nu, iR);
                 // print_complex_matrix_mm(VR_cplx, fn);
@@ -59,7 +452,8 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                 // print_matrix_mm(*coulmat_R[Mu][Nu][R], fn);
 
                 // when ordered atom pair is requested, check whether it is available in the original map
-                if (return_ordered_atom_pair && Mu != Nu && (coulmat_k.count(Nu) == 0 || coulmat_k.at(Nu).count(Mu) == 0))
+                if (!use_abacus_full_q_restore && return_ordered_atom_pair && Mu != Nu
+                    && (coulmat_k.count(Nu) == 0 || coulmat_k.at(Nu).count(Mu) == 0))
                 {
                     coulmat_R[Nu][Mu][R] = make_shared<matrix>();
                     ComplexMatrix VR_cplx(n_nu, n_mu);
@@ -68,8 +462,8 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                         auto q = q_V.first;
                         for (auto q_bz: map_irk_ks[q])
                         {
-                            double ang = - q_bz * (R * latvec) * TWO_PI;
-                            complex<double> kphase = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
+                            const complex<double> kphase =
+                                build_ft_vq_phase(q_bz, R, n_k_points);
                             if (q_bz == q)
                             {
                                 VR_cplx += transpose(*q_V.second, true) * kphase;
@@ -81,6 +475,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                         }
                     }
                     *coulmat_R[Nu][Mu][R] = VR_cplx.real();
+                    maybe_dump_ft_vq_debug_matrix(VR_cplx, Nu, Mu, R, use_abacus_full_q_restore);
                 }
             }
         }
@@ -108,4 +503,3 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
     /* } */
     return coulmat_R;
 }
-

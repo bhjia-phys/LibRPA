@@ -64,30 +64,6 @@ bool nearly_opposite_kpoint(const Vector3_Order<double>& lhs,
     return nearly_same_kpoint(lhs, {-rhs.x, -rhs.y, -rhs.z}, tol);
 }
 
-const AbacusKStar& find_abacus_kstar_for_ibz_kpoint(const AbacusSymmetryContext& ctx,
-                                                    const Vector3_Order<double>& k_ibz)
-{
-    const AbacusKStar* matched_star = nullptr;
-    for (const auto& star : ctx.kstars)
-    {
-        if (!nearly_same_kpoint(star.k_ibz, k_ibz))
-        {
-            continue;
-        }
-        if (matched_star != nullptr)
-        {
-            throw std::runtime_error("ABACUS k-star matching is ambiguous for the current IBZ k-point");
-        }
-        matched_star = &star;
-    }
-
-    if (matched_star == nullptr)
-    {
-        throw std::runtime_error("Failed to match the current LibRPA IBZ k-point with ABACUS k-stars");
-    }
-    return *matched_star;
-}
-
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
     const abacus_irreducible_sector_t& irreducible_sector)

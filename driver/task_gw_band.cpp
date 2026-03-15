@@ -35,11 +35,8 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    vector<Vector3_Order<double>> qlist;
-    for (auto q_weight : irk_weight)
-    {
-        qlist.push_back(q_weight.first);
-    }
+    // Preserve the loaded IBZ q-index order instead of iterating the sorted `irk_weight` map.
+    vector<Vector3_Order<double>> qlist = klist;
 
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
@@ -79,13 +76,13 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         if (Params::use_fullcoul_exx)
         {
             Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
-            VR = FT_Vq(Vq, meanfield.get_n_kpoints(), Rlist, true);
+            VR = FT_Vq(Vq, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_full");
         }
         else
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
         }
 
@@ -257,6 +254,29 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::start("g0w0_exx_ks_kgrid");
     exx.build_KS_kgrid();
     Profiler::stop("g0w0_exx_ks_kgrid");
+    if (Params::debug && mpi_comm_global_h.is_root())
+    {
+        // Dump the EXX diagonal on the SCF k-grid so we can check whether the
+        // symmetry discrepancy starts before the later band-path rotation.
+        for (int i_spin = 0; i_spin < meanfield.get_n_spins(); ++i_spin)
+        {
+            std::ofstream ofs_exx_kgrid("EXX_kgrid_spin_" + std::to_string(i_spin + 1) + ".dat");
+            ofs_exx_kgrid << std::fixed;
+            for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); ++i_kpoint)
+            {
+                const auto& k = kfrac_list[i_kpoint];
+                for (int i_state = 0; i_state < meanfield.get_n_bands(); ++i_state)
+                {
+                    ofs_exx_kgrid << std::setw(5) << i_kpoint + 1 << std::setw(15)
+                                  << std::setprecision(7) << k.x << std::setw(15)
+                                  << std::setprecision(7) << k.y << std::setw(15)
+                                  << std::setprecision(7) << k.z << std::setw(8) << i_state + 1
+                                  << std::setw(20) << std::setprecision(10)
+                                  << exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV << '\n';
+                }
+            }
+        }
+    }
     Profiler::start("g0w0_sigc_ks_kgrid");
     s_g0w0.build_sigc_matrix_KS_kgrid();
     Profiler::stop("g0w0_sigc_ks_kgrid");

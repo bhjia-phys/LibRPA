@@ -31,3 +31,7 @@ extern std::vector<Vector3_Order<double>> kfrac_list;
 extern std::vector<int> irk_point_id_mapping;
 extern map<Vector3_Order<double>, vector<Vector3_Order<double>>> map_irk_ks;
 extern Vector3<double> *kvec_c;
+
+//! Return the effective full-BZ k/q-point count represented by `map_irk_ks`.
+//! When no irreducible-to-full mapping is available, fall back to `klist.size()`.
+int get_full_bz_kpoint_count();

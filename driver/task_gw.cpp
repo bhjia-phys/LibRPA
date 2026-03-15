@@ -35,11 +35,8 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    vector<Vector3_Order<double>> qlist;
-    for (auto q_weight : irk_weight)
-    {
-        qlist.push_back(q_weight.first);
-    }
+    // Preserve the loaded IBZ q-index order instead of iterating the sorted `irk_weight` map.
+    vector<Vector3_Order<double>> qlist = klist;
 
     // Prepare time-frequency grids
     auto tfg =
@@ -145,7 +142,7 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
         Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-        const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+        const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
         Profiler::stop("ft_vq_cut");
 
         Profiler::start("g0w0_exx_real_work");
