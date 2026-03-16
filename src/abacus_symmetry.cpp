@@ -940,7 +940,113 @@ void load_symrot_R_file(const std::string& file_path, AbacusSymmetryContext& ctx
     }
 }
 
-void parse_symrot_k_file(const std::string& file_path, std::vector<AbacusKStar>& kstars)
+bool append_unique_abf_layout(std::vector<AbacusAOTypeLayout>& candidates,
+                              const AbacusAOTypeLayout& layout);
+
+AbacusAOTypeLayout parse_symrot_abf_layout_line(const std::string& line,
+                                                int& atom_type,
+                                                const std::string& file_path)
+{
+    const auto fields = split_fields(strip_comment(line));
+    if (fields.size() < 10 || fields[0] != "type" || fields[2] != "label" || fields[4] != "nao"
+        || fields[6] != "lmax" || fields[8] != "shell_counts")
+    {
+        throw std::runtime_error("Failed to parse ABF shell-layout header line in "
+                                 + file_path + ": " + line);
+    }
+
+    atom_type = std::stoi(fields[1]) - 1;
+    if (atom_type < 0)
+    {
+        throw std::runtime_error("ABF shell-layout header uses an invalid atom type in "
+                                 + file_path + ": " + line);
+    }
+
+    AbacusAOTypeLayout layout;
+    layout.label = fields[3];
+    layout.nao = std::stoi(fields[5]);
+    const int lmax = std::stoi(fields[7]);
+    if (lmax < 0)
+    {
+        throw std::runtime_error("ABF shell-layout header uses a negative lmax in "
+                                 + file_path + ": " + line);
+    }
+
+    layout.shell_counts.reserve(static_cast<std::size_t>(lmax + 1));
+    for (std::size_t index = 9; index < fields.size(); ++index)
+    {
+        layout.shell_counts.push_back(std::stoi(fields[index]));
+    }
+    if (static_cast<int>(layout.shell_counts.size()) != lmax + 1)
+    {
+        throw std::runtime_error("ABF shell-layout header has inconsistent shell_counts in "
+                                 + file_path + ": " + line);
+    }
+    if (compute_nao_from_shell_counts(layout.shell_counts) != layout.nao)
+    {
+        throw std::runtime_error("ABF shell-layout header has inconsistent nao in "
+                                 + file_path + ": " + line);
+    }
+
+    return layout;
+}
+
+void parse_symrot_abf_layout_header(
+    const std::vector<std::string>& lines,
+    const std::string& file_path,
+    std::vector<std::vector<AbacusAOTypeLayout>>& candidates_by_type)
+{
+    candidates_by_type.clear();
+
+    std::size_t index = 0;
+    while (index < lines.size() && !starts_with(trim(lines[index]), "Star "))
+    {
+        const std::string cleaned = strip_comment(lines[index]);
+        if (cleaned.empty())
+        {
+            ++index;
+            continue;
+        }
+
+        if (!starts_with(cleaned, "ABF shell layouts:"))
+        {
+            ++index;
+            continue;
+        }
+
+        ++index;
+        while (index < lines.size())
+        {
+            const std::string layout_line = strip_comment(lines[index]);
+            if (layout_line.empty())
+            {
+                ++index;
+                continue;
+            }
+            if (starts_with(layout_line, "End ABF shell layouts"))
+            {
+                return;
+            }
+
+            int atom_type = -1;
+            const auto layout = parse_symrot_abf_layout_line(layout_line, atom_type, file_path);
+            if (static_cast<int>(candidates_by_type.size()) <= atom_type)
+            {
+                candidates_by_type.resize(static_cast<std::size_t>(atom_type + 1));
+            }
+            append_unique_abf_layout(candidates_by_type[static_cast<std::size_t>(atom_type)],
+                                     layout);
+            ++index;
+        }
+
+        throw std::runtime_error("ABF shell-layout header in " + file_path
+                                 + " is missing `End ABF shell layouts`");
+    }
+}
+
+void parse_symrot_k_file(const std::string& file_path,
+                         std::vector<AbacusKStar>& kstars,
+                         std::vector<std::vector<AbacusAOTypeLayout>>* abf_layout_candidates = nullptr)
 {
     std::ifstream ifs(file_path);
     if (!ifs.good())
@@ -953,6 +1059,11 @@ void parse_symrot_k_file(const std::string& file_path, std::vector<AbacusKStar>&
     while (std::getline(ifs, line))
     {
         lines.push_back(line);
+    }
+
+    if (abf_layout_candidates != nullptr)
+    {
+        parse_symrot_abf_layout_header(lines, file_path, *abf_layout_candidates);
     }
 
     std::size_t index = 0;
@@ -1068,7 +1179,7 @@ void parse_symrot_k_file(const std::string& file_path, std::vector<AbacusKStar>&
 void load_symrot_k_file(const std::string& file_path, AbacusSymmetryContext& ctx)
 {
     ctx.kstars.clear();
-    parse_symrot_k_file(file_path, ctx.kstars);
+    parse_symrot_k_file(file_path, ctx.kstars, nullptr);
 }
 
 std::string find_first_existing_file(const std::vector<std::string>& candidates)
@@ -1327,74 +1438,6 @@ std::string resolve_abacus_file(const std::string& file_name,
     return file_exists(file_name) ? file_name : "";
 }
 
-std::vector<AbacusAOTypeLayout> parse_abacus_abf_layout_section(
-    const std::vector<std::string>& lines,
-    std::size_t& index)
-{
-    std::vector<AbacusAOTypeLayout> layouts;
-    ++index;
-    while (index < lines.size())
-    {
-        const std::string cleaned = trim(lines[index]);
-        if (cleaned.empty())
-        {
-            ++index;
-            continue;
-        }
-        if (starts_with(cleaned, "Auxiliary basis functions")
-            || starts_with(cleaned, "==>")
-            || starts_with(cleaned, "DONE")
-            || starts_with(cleaned, "The number of")
-            || starts_with(cleaned, "output")
-            || starts_with(cleaned, "Performing")
-            || starts_with(cleaned, "Finish"))
-        {
-            break;
-        }
-
-        const auto fields = split_fields(cleaned);
-        if (fields.size() < 3)
-        {
-            break;
-        }
-        bool parsed_shell = false;
-        AbacusAOTypeLayout layout;
-        layout.label = fields.front();
-        for (std::size_t i = 1; i + 1 < fields.size(); i += 2)
-        {
-            if (!is_integer_line(fields[i]) || fields[i + 1].empty())
-            {
-                parsed_shell = false;
-                break;
-            }
-            const int l = shell_symbol_to_l(fields[i + 1].front());
-            if (l < 0)
-            {
-                parsed_shell = false;
-                break;
-            }
-            if (static_cast<int>(layout.shell_counts.size()) <= l)
-            {
-                layout.shell_counts.resize(static_cast<std::size_t>(l + 1), 0);
-            }
-            layout.shell_counts[static_cast<std::size_t>(l)] = std::stoi(fields[i]);
-            parsed_shell = true;
-        }
-        if (!parsed_shell)
-        {
-            break;
-        }
-
-        layout.nao = compute_nao_from_shell_counts(layout.shell_counts);
-        if (layout.nao > 0)
-        {
-            layouts.push_back(std::move(layout));
-        }
-        ++index;
-    }
-    return layouts;
-}
-
 bool append_unique_abf_layout(std::vector<AbacusAOTypeLayout>& candidates,
                               const AbacusAOTypeLayout& layout)
 {
@@ -1410,130 +1453,6 @@ bool append_unique_abf_layout(std::vector<AbacusAOTypeLayout>& candidates,
     }
     candidates.push_back(layout);
     return true;
-}
-
-void try_load_abacus_abf_shell_layout(const std::string& dir_path,
-                                      AbacusSymmetryContext& ctx,
-                                      std::ostream* log)
-{
-    if (!ctx.has_ao_shell_layout())
-    {
-        if (log != nullptr)
-        {
-            (*log) << "| ABF shell layout       : unavailable (AO type layout is required first)\n";
-        }
-        return;
-    }
-
-    const auto candidate_dirs = build_abacus_path_candidates(dir_path);
-    std::vector<std::string> running_log_candidates;
-    for (const auto& dir : candidate_dirs)
-    {
-        running_log_candidates.push_back(join_path(dir, "running_scf.log"));
-    }
-    const std::string running_log = find_first_existing_file(running_log_candidates);
-    if (running_log.empty())
-    {
-        if (log != nullptr)
-        {
-            (*log) << "| ABF shell layout       : unavailable (running_scf.log not found)\n";
-        }
-        return;
-    }
-
-    std::ifstream ifs(running_log);
-    if (!ifs.good())
-    {
-        if (log != nullptr)
-        {
-            (*log) << "| ABF shell layout       : unavailable (failed to open running_scf.log)\n";
-        }
-        return;
-    }
-
-    std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(ifs, line))
-    {
-        lines.push_back(line);
-    }
-
-    ctx.abf_type_layout_candidates.clear();
-    ctx.abf_type_layout_candidates.resize(ctx.ao_type_layouts.size());
-    std::map<std::string, int> label_to_type;
-    for (std::size_t itype = 0; itype < ctx.ao_type_layouts.size(); ++itype)
-    {
-        label_to_type[ctx.ao_type_layouts[itype].label] = static_cast<int>(itype);
-    }
-
-    std::size_t n_sections = 0;
-    for (std::size_t index = 0; index < lines.size(); ++index)
-    {
-        if (!starts_with(trim(lines[index]), "Auxiliary basis functions"))
-        {
-            continue;
-        }
-
-        const auto layouts = parse_abacus_abf_layout_section(lines, index);
-        if (layouts.empty())
-        {
-            continue;
-        }
-        ++n_sections;
-        for (const auto& layout : layouts)
-        {
-            const auto type_iter = label_to_type.find(layout.label);
-            if (type_iter == label_to_type.end())
-            {
-                continue;
-            }
-            append_unique_abf_layout(
-                ctx.abf_type_layout_candidates[static_cast<std::size_t>(type_iter->second)], layout);
-        }
-    }
-
-    ctx.abf_shell_layout_available = !ctx.abf_type_layout_candidates.empty();
-    for (std::size_t itype = 0; itype < ctx.abf_type_layout_candidates.size(); ++itype)
-    {
-        if (ctx.abf_type_layout_candidates[itype].empty())
-        {
-            ctx.abf_shell_layout_available = false;
-            break;
-        }
-    }
-
-    if (log != nullptr)
-    {
-        if (!ctx.abf_shell_layout_available)
-        {
-            (*log) << "| ABF shell layout       : unavailable (failed to map every atom type from "
-                   << running_log << ")\n";
-        }
-        else
-        {
-            (*log) << "| ABF shell layout       : loaded from " << n_sections
-                   << " running_scf.log section(s)\n";
-            for (std::size_t itype = 0; itype < ctx.abf_type_layout_candidates.size(); ++itype)
-            {
-                (*log) << "|   type " << itype << " (" << ctx.ao_type_layouts[itype].label
-                       << ") candidates=" << ctx.abf_type_layout_candidates[itype].size();
-                for (const auto& candidate : ctx.abf_type_layout_candidates[itype])
-                {
-                    (*log) << " [nao=" << candidate.nao << " shell_counts=";
-                    for (std::size_t l = 0; l < candidate.shell_counts.size(); ++l)
-                    {
-                        if (l != 0)
-                        {
-                            (*log) << ",";
-                        }
-                        (*log) << candidate.shell_counts[l];
-                    }
-                    (*log) << "]";
-                }
-                (*log) << "\n";
-            }
-        }
-    }
 }
 
 void try_load_abacus_ao_shell_layout(const std::string& dir_path,
@@ -1829,10 +1748,28 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     load_symrot_k_file(symrot_k_file, ctx);
     if (has_symrot_abf_k)
     {
-        parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars);
+        parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars, &ctx.abf_type_layout_candidates);
     }
     try_load_abacus_ao_shell_layout(dir_path, ctx, nullptr);
-    try_load_abacus_abf_shell_layout(dir_path, ctx, nullptr);
+    ctx.abf_shell_layout_available = !ctx.abf_type_layout_candidates.empty();
+    if (ctx.has_ao_shell_layout())
+    {
+        if (ctx.abf_type_layout_candidates.size() != ctx.ao_type_layouts.size())
+        {
+            ctx.abf_shell_layout_available = false;
+        }
+        else
+        {
+            for (const auto& candidates : ctx.abf_type_layout_candidates)
+            {
+                if (candidates.empty())
+                {
+                    ctx.abf_shell_layout_available = false;
+                    break;
+                }
+            }
+        }
+    }
     ctx.available = true;
 
     if (log != nullptr)
@@ -1874,7 +1811,7 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
         }
         if (ctx.has_abf_shell_layout())
         {
-            (*log) << "| ABF shell layout       : loaded with "
+            (*log) << "| ABF shell layout       : loaded from symrot_abf_k.txt with "
                    << ctx.count_abf_layout_candidates() << " candidate type layouts\n";
         }
         else
@@ -2381,6 +2318,109 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     return rotated_blocks;
 }
 
+const AbacusKStarMember& find_matching_abf_kstar_member(const AbacusKStar& abf_star,
+                                                        const AbacusKStarMember& ao_member)
+{
+    const auto matched = std::find_if(
+        abf_star.members.begin(), abf_star.members.end(),
+        [&ao_member](const AbacusKStarMember& candidate) {
+            return candidate.isym == ao_member.isym
+                   && nearly_same_kpoint(candidate.k_bz, ao_member.k_bz);
+        });
+    if (matched == abf_star.members.end())
+    {
+        throw std::runtime_error(
+            "Failed to match an ABF k-star member with the AO-side symmetry member");
+    }
+    return *matched;
+}
+
+abacus_atom_block_matrix_map_t symmetrize_abacus_abf_ibz_kspace_operator_blocks(
+    const AbacusSymmetryContext& ctx,
+    const Vector3_Order<double>& k_ibz,
+    const abacus_atom_block_matrix_map_t& blocks_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac,
+    const AbacusKStar* abf_star,
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs)
+{
+    if (!ctx.has_abf_shell_layout())
+    {
+        throw std::runtime_error("ABF shell layout is required before symmetrizing ABACUS q-space operators");
+    }
+
+    std::set<std::pair<atom_t, atom_t>> inferred_target_pairs;
+    if (target_atom_pairs == nullptr)
+    {
+        for (const auto& atom_i_pair : blocks_ibz)
+        {
+            for (const auto& atom_j_pair : atom_i_pair.second)
+            {
+                inferred_target_pairs.insert({atom_i_pair.first, atom_j_pair.first});
+            }
+        }
+        target_atom_pairs = &inferred_target_pairs;
+    }
+
+    if (target_atom_pairs->empty())
+    {
+        return blocks_ibz;
+    }
+
+    const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+    abacus_atom_block_matrix_map_t accumulated_blocks;
+    int n_members_used = 0;
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    for (const auto& member : star.members)
+    {
+        if (member.isym < 0 || member.isym >= nsym_space)
+        {
+            continue;
+        }
+        if (!nearly_same_kpoint(member.k_bz, k_ibz))
+        {
+            continue;
+        }
+
+        const auto& abf_member =
+            (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
+        const auto rotated_blocks = rotate_abacus_abf_kspace_operator_blocks(
+            ctx, abf_member, blocks_ibz, atom_nabf, k_ibz, coord_frac, false, target_atom_pairs);
+
+        for (const auto& atom_i_pair : rotated_blocks)
+        {
+            for (const auto& atom_j_pair : atom_i_pair.second)
+            {
+                auto& block = accumulated_blocks[atom_i_pair.first][atom_j_pair.first];
+                if (block.nr == 0 && block.nc == 0)
+                {
+                    block = atom_j_pair.second;
+                }
+                else
+                {
+                    block += atom_j_pair.second;
+                }
+            }
+        }
+        ++n_members_used;
+    }
+
+    if (n_members_used == 0)
+    {
+        return blocks_ibz;
+    }
+
+    const std::complex<double> inv_count(1.0 / static_cast<double>(n_members_used), 0.0);
+    for (auto& atom_i_pair : accumulated_blocks)
+    {
+        for (auto& atom_j_pair : atom_i_pair.second)
+        {
+            atom_j_pair.second *= inv_count;
+        }
+    }
+    return accumulated_blocks;
+}
+
 ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
     const AbacusSymmetryContext& ctx,
     const AbacusKStarMember& member,
@@ -2440,29 +2480,30 @@ ComplexMatrix symmetrize_abacus_abf_ibz_kspace_operator_matrix(
         throw std::runtime_error("ABF shell layout is required before symmetrizing ABACUS q-space operators");
     }
 
-    const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
-    ComplexMatrix accumulated(matrix_ibz.nr, matrix_ibz.nc);
-    int n_members_used = 0;
-    for (const auto& member : star.members)
+    const auto offsets = build_atom_offsets(atom_nabf);
+    abacus_atom_block_matrix_map_t blocks_ibz;
+    for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
     {
-        if (member.isym < 0 || member.isym >= static_cast<int>(ctx.rspace_operations.size()))
+        for (std::size_t atom_j = 0; atom_j < atom_nabf.size(); ++atom_j)
         {
-            continue;
+            blocks_ibz[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
+                extract_atom_block(matrix_ibz, static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j),
+                                   atom_nabf, offsets);
         }
-        if (!nearly_same_kpoint(member.k_bz, k_ibz))
-        {
-            continue;
-        }
-        accumulated += rotate_abacus_abf_kspace_operator_matrix(
-            ctx, member, matrix_ibz, atom_nabf, k_ibz, coord_frac, false);
-        ++n_members_used;
     }
 
-    if (n_members_used == 0)
+    const auto rotated_blocks = symmetrize_abacus_abf_ibz_kspace_operator_blocks(
+        ctx, k_ibz, blocks_ibz, atom_nabf, coord_frac);
+
+    ComplexMatrix accumulated(matrix_ibz.nr, matrix_ibz.nc);
+    for (const auto& atom_i_pair : rotated_blocks)
     {
-        return matrix_ibz;
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            set_atom_block(accumulated, atom_i_pair.first, atom_j_pair.first, atom_j_pair.second,
+                           offsets);
+        }
     }
-    accumulated *= std::complex<double>(1.0 / static_cast<double>(n_members_used), 0.0);
     return accumulated;
 }
 

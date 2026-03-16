@@ -1313,6 +1313,8 @@ void G0W0::build_sigc_matrix_KS(
                             for (auto &JR_sigc : I_sigcJR.second)
                             {
                                 const auto &J = JR_sigc.first.first;
+                                const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
+                                const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
                                 const auto &R = JR_sigc.first.second;
 
                                 auto distsq = std::numeric_limits<double>::max();
@@ -1345,7 +1347,23 @@ void G0W0::build_sigc_matrix_KS(
                                         }
                                     }
                                 }
-                                sigc_I_JR_local[I][{J, R_bvk}] = std::move(JR_sigc.second);
+                                auto& target_map = sigc_I_JR_local[I];
+                                const auto key = std::make_pair(J, R_bvk);
+                                auto target_iter = target_map.find(key);
+                                if (target_iter == target_map.end())
+                                {
+                                    target_map[key] = std::move(JR_sigc.second);
+                                }
+                                else
+                                {
+                                    // Multiple symmetry-related real-space blocks can fold back
+                                    // to the same nearest-neighbour BvK representative. They all
+                                    // contribute to the later Fourier transform, so we must
+                                    // accumulate them instead of overwriting the previous block.
+                                    Matz target_block(n_I, n_J, target_iter->second.ptr(), MAJOR::ROW);
+                                    Matz source_block(n_I, n_J, JR_sigc.second.ptr(), MAJOR::ROW);
+                                    target_block += source_block;
+                                }
                             }
                         }
                     }

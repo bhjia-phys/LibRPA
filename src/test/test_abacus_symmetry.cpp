@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 namespace
@@ -14,6 +15,44 @@ void write_file(const std::string& path, const std::string& content)
     std::ofstream ofs(path);
     assert(ofs.good());
     ofs << content;
+}
+
+std::string build_identity_shell_block(const int l)
+{
+    const int nm = 2 * l + 1;
+    std::ostringstream oss;
+    for (int row = 0; row < nm; ++row)
+    {
+        for (int col = 0; col < nm; ++col)
+        {
+            oss << (row == col ? "(1,0)" : "(0,0)");
+        }
+        oss << "\n";
+    }
+    return oss.str();
+}
+
+std::string build_symrot_abf_k_file()
+{
+    std::ostringstream oss;
+    oss << "ABF shell layouts:\n"
+        << "# Each line stores one auxiliary-basis candidate for one atom type.\n"
+        << "# shell_counts[l] is the number of auxiliary radial shells at angular momentum l.\n"
+        << "type 1 label B nao 4 lmax 1 shell_counts 1 1\n"
+        << "type 1 label B nao 9 lmax 2 shell_counts 1 1 1\n"
+        << "End ABF shell layouts\n"
+        << "Number of IBZ k-points (k stars): 1\n"
+        << "Format:\n"
+        << "dummy\n"
+        << "Star 1 of IBZ k-point (0.000000 0.000000 0.000000):\n"
+        << "0\n"
+        << "(0.000000 0.000000 0.000000)\n"
+        << "atom 1 -> 1 of type 1 with Lmax= 2\n";
+    for (int l = 0; l <= 2; ++l)
+    {
+        oss << build_identity_shell_block(l);
+    }
+    return oss.str();
 }
 
 } // namespace
@@ -57,27 +96,11 @@ int main()
                "(0,0)(1,0)(0,0)\n"
                "(0,0)(0,0)(1,0)\n");
 
-    write_file(test_dir + "/symrot_abf_k.txt",
-               "Number of IBZ k-points (k stars): 1\n"
-               "Format:\n"
-               "dummy\n"
-               "Star 1 of IBZ k-point (0.000000 0.000000 0.000000):\n"
-               "0\n"
-               "(0.000000 0.000000 0.000000)\n"
-               "atom 1 -> 1 of type 1 with Lmax= 0\n"
-               "(1,0)\n");
+    write_file(test_dir + "/symrot_abf_k.txt", build_symrot_abf_k_file());
 
     write_file(test_dir + "/INPUT",
                "INPUT_PARAMETERS\n"
                "orbital_dir ./\n");
-
-    write_file(test_dir + "/running_scf.log",
-               "Auxiliary basis functions\n"
-               "\t\tB\t\t1 s\t\t1 p\t\t\n"
-               "==> Exx_LRI::init_spencer\n"
-               "Auxiliary basis functions\n"
-               "\t\tB\t\t1 s\t\t1 p\t\t1 d\t\t1 f\t\t1 g\t\t\n"
-               "DONE : output_ewald_coulomb\n");
 
     write_file(test_dir + "/STRU",
                "ATOMIC_SPECIES\n"
@@ -122,8 +145,8 @@ int main()
     assert(ctx.abf_lmax == 1);
     assert(ctx.rspace_operations.front().shell_rotations.at(1).nr == 3);
     assert(ctx.kstars.front().members.front().atom_rotations.front().shell_rotations.at(1).nc == 3);
-    assert(ctx.abf_kstars.front().members.front().atom_rotations.front().lmax == 0);
-    assert(ctx.abf_kstars.front().members.front().atom_rotations.front().shell_rotations.at(0).nr == 1);
+    assert(ctx.abf_kstars.front().members.front().atom_rotations.front().lmax == 2);
+    assert(ctx.abf_kstars.front().members.front().atom_rotations.front().shell_rotations.at(2).nr == 5);
     assert(ctx.has_ao_shell_layout());
     assert(ctx.ao_type_layouts.size() == 1);
     assert(ctx.count_atoms_with_layout() == 1);
@@ -135,9 +158,9 @@ int main()
     assert(ctx.has_abf_shell_layout());
     assert(ctx.count_abf_layout_candidates() == 2);
     assert(ctx.find_abf_type_layout(0, 4).nao == 4);
-    assert(ctx.find_abf_type_layout(0, 25).nao == 25);
-    assert(ctx.find_abf_type_layout(0, 25).shell_counts.size() == 5);
-    assert(ctx.find_abf_type_layout(0, 25).shell_counts[4] == 1);
+    assert(ctx.find_abf_type_layout(0, 9).nao == 9);
+    assert(ctx.find_abf_type_layout(0, 9).shell_counts.size() == 3);
+    assert(ctx.find_abf_type_layout(0, 9).shell_counts[2] == 1);
 
     const auto full_rotation = LIBRPA::build_abacus_ao_rotation_matrix(
         ctx, 0, ctx.rspace_operations.front().shell_rotations);
@@ -153,11 +176,11 @@ int main()
     const std::array<std::array<double, 3>, 3> identity_rotation{
         {{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}, {{0.0, 0.0, 1.0}}}};
     const auto abf_identity_rotation = LIBRPA::build_abacus_abf_rotation_matrix(
-        ctx, 0, 25, ctx.rspace_operations.front().shell_rotations, identity_rotation);
-    assert(abf_identity_rotation.nr == 25);
-    assert(abf_identity_rotation.nc == 25);
+        ctx, 0, 9, ctx.rspace_operations.front().shell_rotations, identity_rotation);
+    assert(abf_identity_rotation.nr == 9);
+    assert(abf_identity_rotation.nc == 9);
     assert(abf_identity_rotation(0, 0) == std::complex<double>(1.0, 0.0));
-    assert(abf_identity_rotation(24, 24) == std::complex<double>(1.0, 0.0));
+    assert(abf_identity_rotation(8, 8) == std::complex<double>(1.0, 0.0));
     assert(abf_identity_rotation(5, 7) == std::complex<double>(0.0, 0.0));
 
     std::map<int, ComplexMatrix> s_only_rotation;
@@ -407,6 +430,127 @@ int main()
     assert(kstar_grid_mapping[1].star_list_index == 0);
     assert(kstar_grid_mapping[1].member_q_bz_keys[0] == q_gamma_member0);
     assert(kstar_grid_mapping[1].member_q_bz_keys[1] == q_gamma_member1);
+
+    LIBRPA::AbacusSymmetryContext block_symm_ctx;
+    block_symm_ctx.available = true;
+    block_symm_ctx.abf_shell_layout_available = true;
+    block_symm_ctx.abf_lmax = 0;
+    block_symm_ctx.abf_type_layout_candidates = {
+        {LIBRPA::AbacusAOTypeLayout{"X", "X.abf", {1}, 1}}
+    };
+    block_symm_ctx.atom_to_type = {{0, 0}};
+
+    LIBRPA::AbacusSymmetryOperation block_identity;
+    block_identity.isym = 0;
+    block_identity.rotation = {{{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}, {{0.0, 0.0, 1.0}}}};
+    block_identity.translation = {0.0, 0.0, 0.0};
+    block_identity.shell_rotations[0] = ComplexMatrix(1, 1);
+    block_identity.shell_rotations[0](0, 0) = std::complex<double>(1.0, 0.0);
+    block_symm_ctx.rspace_operations = {block_identity};
+
+    LIBRPA::AbacusKAtomRotation block_atom_rotation;
+    block_atom_rotation.atom_from = 0;
+    block_atom_rotation.atom_to = 0;
+    block_atom_rotation.atom_type = 0;
+    block_atom_rotation.lmax = 0;
+    block_atom_rotation.shell_rotations[0] = ComplexMatrix(1, 1);
+    block_atom_rotation.shell_rotations[0](0, 0) = std::complex<double>(1.0, 0.0);
+
+    LIBRPA::AbacusKStarMember block_spatial_member;
+    block_spatial_member.isym = 0;
+    block_spatial_member.k_bz = {0.0, 0.0, 0.0};
+    block_spatial_member.atom_rotations = {block_atom_rotation};
+
+    LIBRPA::AbacusKStarMember block_time_reversal_member = block_spatial_member;
+    block_time_reversal_member.isym = 1;
+
+    LIBRPA::AbacusKStar block_star;
+    block_star.star_index = 0;
+    block_star.k_ibz = {0.0, 0.0, 0.0};
+    block_star.members = {block_spatial_member, block_time_reversal_member};
+    block_symm_ctx.kstars = {block_star};
+
+    LIBRPA::abacus_atom_block_matrix_map_t block_input;
+    block_input[0][0] = ComplexMatrix(1, 1);
+    block_input[0][0](0, 0) = std::complex<double>(1.25, 0.75);
+
+    const std::map<atom_t, size_t> atom_nabf{{0, 1}};
+    const std::map<atom_t, std::array<double, 3>> block_coord_frac{{0, {0.0, 0.0, 0.0}}};
+    const auto block_symmetrized = LIBRPA::symmetrize_abacus_abf_ibz_kspace_operator_blocks(
+        block_symm_ctx, {0.0, 0.0, 0.0}, block_input, atom_nabf, block_coord_frac);
+
+    ComplexMatrix block_matrix_input(1, 1);
+    block_matrix_input(0, 0) = block_input.at(0).at(0)(0, 0);
+    const auto matrix_symmetrized = LIBRPA::symmetrize_abacus_abf_ibz_kspace_operator_matrix(
+        block_symm_ctx, {0.0, 0.0, 0.0}, block_matrix_input, atom_nabf, block_coord_frac);
+
+    assert(std::abs(block_symmetrized.at(0).at(0)(0, 0) - block_input.at(0).at(0)(0, 0)) < 1e-12);
+    assert(std::abs(matrix_symmetrized(0, 0) - block_matrix_input(0, 0)) < 1e-12);
+    assert(std::abs(block_symmetrized.at(0).at(0)(0, 0) - matrix_symmetrized(0, 0)) < 1e-12);
+
+    LIBRPA::AbacusSymmetryContext opposite_k_ctx;
+    opposite_k_ctx.available = true;
+    opposite_k_ctx.ao_shell_layout_available = true;
+    opposite_k_ctx.ao_lmax = 1;
+    opposite_k_ctx.ao_type_layouts = {
+        LIBRPA::AbacusAOTypeLayout{"X", "X.orb", {0, 1}, 3}
+    };
+    opposite_k_ctx.atom_to_type = {{0, 0}};
+
+    LIBRPA::AbacusSymmetryOperation opposite_identity;
+    opposite_identity.isym = 0;
+    opposite_identity.rotation = {{{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}, {{0.0, 0.0, 1.0}}}};
+    opposite_identity.translation = {0.0, 0.0, 0.0};
+    opposite_k_ctx.rspace_operations.push_back(opposite_identity);
+
+    LIBRPA::AbacusSymmetryOperation opposite_inversion;
+    opposite_inversion.isym = 1;
+    opposite_inversion.rotation = {{{{-1.0, 0.0, 0.0}}, {{0.0, -1.0, 0.0}}, {{0.0, 0.0, -1.0}}}};
+    opposite_inversion.translation = {0.0, 0.0, 0.0};
+    opposite_k_ctx.rspace_operations.push_back(opposite_inversion);
+
+    LIBRPA::AbacusKAtomRotation opposite_atom_rotation;
+    opposite_atom_rotation.atom_from = 0;
+    opposite_atom_rotation.atom_to = 0;
+    opposite_atom_rotation.atom_type = 0;
+    opposite_atom_rotation.lmax = 1;
+    opposite_atom_rotation.shell_rotations[1] = ComplexMatrix(3, 3);
+    for (int index = 0; index < 3; ++index)
+    {
+        opposite_atom_rotation.shell_rotations[1](index, index) = std::complex<double>(-1.0, 0.0);
+    }
+
+    LIBRPA::AbacusKStarMember opposite_member;
+    opposite_member.isym = 1;
+    opposite_member.k_bz = {-0.25, -0.25, 0.0};
+    opposite_member.atom_rotations = {opposite_atom_rotation};
+
+    const std::map<atom_t, size_t> opposite_atom_nw{{0, 3}};
+    const std::map<atom_t, std::array<double, 3>> opposite_coord_frac{{0, {0.0, 0.0, 0.0}}};
+    ComplexMatrix opposite_matrix_ibz(3, 3);
+    opposite_matrix_ibz(0, 0) = std::complex<double>(1.0, 2.0);
+    opposite_matrix_ibz(0, 1) = std::complex<double>(0.2, -0.4);
+    opposite_matrix_ibz(0, 2) = std::complex<double>(-0.1, 0.3);
+    opposite_matrix_ibz(1, 0) = std::complex<double>(-0.7, 0.5);
+    opposite_matrix_ibz(1, 1) = std::complex<double>(0.9, -0.6);
+    opposite_matrix_ibz(1, 2) = std::complex<double>(0.8, 0.1);
+    opposite_matrix_ibz(2, 0) = std::complex<double>(-0.4, -0.2);
+    opposite_matrix_ibz(2, 1) = std::complex<double>(0.6, 0.7);
+    opposite_matrix_ibz(2, 2) = std::complex<double>(-0.3, 0.9);
+
+    const auto rotated_opposite_matrix = LIBRPA::rotate_abacus_kspace_matrix(
+        opposite_k_ctx, opposite_member, opposite_matrix_ibz, opposite_atom_nw, {0.25, 0.25, 0.0},
+        opposite_coord_frac, false);
+    const auto conjugated_opposite_matrix = conj(opposite_matrix_ibz);
+
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 3; ++col)
+        {
+            assert(std::abs(rotated_opposite_matrix(row, col) - opposite_matrix_ibz(row, col)) < 1e-12);
+        }
+    }
+    assert(std::abs(rotated_opposite_matrix(0, 0) - conjugated_opposite_matrix(0, 0)) > 1e-6);
 
     std::system(("rm -rf " + test_dir).c_str());
     return 0;

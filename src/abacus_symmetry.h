@@ -198,6 +198,15 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     bool use_time_reversal = false,
     const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
 
+abacus_atom_block_matrix_map_t symmetrize_abacus_abf_ibz_kspace_operator_blocks(
+    const AbacusSymmetryContext& ctx,
+    const Vector3_Order<double>& k_ibz,
+    const abacus_atom_block_matrix_map_t& blocks_ibz,
+    const std::map<atom_t, size_t>& atom_nabf,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac,
+    const AbacusKStar* abf_star = nullptr,
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
+
 ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
     const AbacusSymmetryContext& ctx,
     const AbacusKStarMember& member,

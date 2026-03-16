@@ -57,13 +57,6 @@ bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
            && is_same_component(lhs.z, rhs.z);
 }
 
-bool nearly_opposite_kpoint(const Vector3_Order<double>& lhs,
-                            const Vector3_Order<double>& rhs,
-                            const double tol = kAbacusKpointTol)
-{
-    return nearly_same_kpoint(lhs, {-rhs.x, -rhs.y, -rhs.z}, tol);
-}
-
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
     const abacus_irreducible_sector_t& irreducible_sector)
@@ -175,15 +168,11 @@ ComplexMatrix Exx::get_dmat_cplx_R_symmetry_restored(const int& ispin, const int
             {
                 dmat_member = dmat_ibz;
             }
-            else if (nearly_opposite_kpoint(member.k_bz, k_ibz))
-            {
-                // Match the TRS-first branch in ABACUS restore_dm():
-                // if a star member is equivalent to -k_ibz, ABACUS restores it
-                // with complex conjugation only, before applying any space-group rotation.
-                dmat_member = conj(dmat_ibz);
-            }
             else
             {
+                // `k_bz = -k_ibz` can come from a spatial operation as well as from
+                // time reversal. Rebuild every non-identity member through the sidecar AO
+                // rotation so EXX follows the exact ABACUS atom/orbital mapping.
                 const bool use_time_reversal = member.isym >= nsym_space;
                 dmat_member = rotate_abacus_kspace_matrix(ctx, member, dmat_ibz, atom_nw,
                                                           k_ibz, coord_frac, use_time_reversal);
@@ -316,12 +305,9 @@ void Exx::maybe_dump_restored_kspace_dmat_debug(const int& ispin, const int& iso
             {
                 dmat_member = dmat_ibz;
             }
-            else if (nearly_opposite_kpoint(member.k_bz, k_ibz))
-            {
-                dmat_member = conj(dmat_ibz);
-            }
             else
             {
+                // Keep the debug dump on the same restore path as the production EXX flow.
                 const bool use_time_reversal = member.isym >= nsym_space;
                 dmat_member = rotate_abacus_kspace_matrix(
                     ctx, member, dmat_ibz, atom_nw, k_ibz, coord_frac, use_time_reversal);

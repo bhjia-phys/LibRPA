@@ -34,13 +34,6 @@ bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
            && is_same_component(lhs.z, rhs.z);
 }
 
-bool nearly_opposite_kpoint(const Vector3_Order<double>& lhs,
-                            const Vector3_Order<double>& rhs,
-                            const double tol = kAbacusKpointTol)
-{
-    return nearly_same_kpoint(lhs, {-rhs.x, -rhs.y, -rhs.z}, tol);
-}
-
 bool can_restore_gf_from_abacus_symmetry(const LIBRPA::AbacusSymmetryContext& ctx,
                                          const std::vector<Vector3_Order<double>>& kfrac_list,
                                          const MeanField& meanfield)
@@ -69,25 +62,6 @@ std::vector<double> build_gf_kpoint_weights(
         return kpoint_weights;
     }
 
-    bool found_positive_weight = false;
-    for (std::size_t ik = 0; ik != kfrac_list.size(); ++ik)
-    {
-        double max_band_weight = 0.0;
-        for (int ib = 0; ib != n_bands; ++ib)
-        {
-            const double weight_single_spin =
-                use_soc ? occupations(static_cast<int>(ik), ib)
-                        : occupations(static_cast<int>(ik), ib) * (0.5 * n_spins);
-            max_band_weight = std::max(max_band_weight, weight_single_spin);
-        }
-        kpoint_weights[ik] = max_band_weight;
-        found_positive_weight = found_positive_weight || max_band_weight > 0.0;
-    }
-    if (found_positive_weight)
-    {
-        return kpoint_weights;
-    }
-
     const double nk_full = static_cast<double>(ctx.count_kstar_members());
     if (nk_full <= 0.0)
     {
@@ -97,7 +71,27 @@ std::vector<double> build_gf_kpoint_weights(
     for (std::size_t ik_ibz = 0; ik_ibz != kfrac_list.size(); ++ik_ibz)
     {
         const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, kfrac_list[ik_ibz]);
-        kpoint_weights[ik_ibz] = static_cast<double>(star.members.size()) / nk_full;
+        const double geometric_weight = static_cast<double>(star.members.size()) / nk_full;
+        kpoint_weights[ik_ibz] = geometric_weight;
+
+        if (Params::debug && LIBRPA::envs::mpi_comm_global_h.is_root())
+        {
+            double inferred_weight = 0.0;
+            for (int ib = 0; ib != n_bands; ++ib)
+            {
+                const double weight_single_spin =
+                    use_soc ? occupations(static_cast<int>(ik_ibz), ib)
+                            : occupations(static_cast<int>(ik_ibz), ib) * (0.5 * n_spins);
+                inferred_weight = std::max(inferred_weight, weight_single_spin);
+            }
+            if (inferred_weight > 0.0 && std::abs(inferred_weight - geometric_weight) > 1e-12)
+            {
+                LIBRPA::utils::lib_printf(
+                    "ABACUS GW symmetry weight check: ik_ibz %3zu inferred = %20.12f geometric = "
+                    "%20.12f\n",
+                    ik_ibz, inferred_weight, geometric_weight);
+            }
+        }
     }
     return kpoint_weights;
 }
@@ -516,12 +510,13 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
                     {
                         gf_k_bz = gf_k_ibz;
                     }
-                    else if (nearly_opposite_kpoint(member.k_bz, k_ibz))
-                    {
-                        gf_k_bz = conj(gf_k_ibz);
-                    }
                     else
                     {
+                        // `k_bz = -k_ibz` does not uniquely identify a pure time-reversal branch.
+                        // A spatial operation can also map an IBZ representative to the opposite
+                        // k-point, and a time-reversal member may still carry a non-trivial spatial
+                        // rotation block. Therefore every non-identity member must be rebuilt with
+                        // the sidecar AO rotation instead of a bare complex conjugation.
                         const bool use_time_reversal = member.isym >= nsym_space;
                         gf_k_bz = LIBRPA::rotate_abacus_kspace_matrix(
                             symmetry_ctx, member, gf_k_ibz, atom_nw, k_ibz, coord_frac,
