@@ -13,6 +13,7 @@
 // 自定义头文件
 
 #include "Hamiltonian.h"  // 哈密顿量相关
+#include "abacus_symmetry.h"
 #include "analycont.h"    // 分析延拓相关
 #include "chi0.h"         // 响应函数相关
 #include "constants.h"    // 常量定义
@@ -36,6 +37,22 @@
 #include "ri.h"
 #include "utils_timefreq.h"
 #include "write_aims.h"
+
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+} // namespace
 
 void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
@@ -419,8 +436,14 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
         Profiler::start("read_vq_cut", "Load truncated Coulomb");
-        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+            || need_full_cut_coulomb_for_abacus_symmetry())
         {
+            if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                           " switching to `read_Vq_full`\n");
+            }
             read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
         }
         else
@@ -458,10 +481,11 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
             if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
             else
-                exx.build<double>(Cs_data, Rlist, VR);
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();  // rotate
             Profiler::stop("g0w0_exx_real_work");
         }

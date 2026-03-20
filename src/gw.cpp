@@ -4,7 +4,9 @@
 #include <functional>
 #include <map>
 #include <sstream>
+#include <type_traits>
 
+#include "abacus_symmetry.h"
 #include "atomic_basis.h"
 #include "constants.h"
 #include "envs_blacs.h"
@@ -34,6 +36,194 @@ namespace LIBRPA
 
 namespace
 {
+
+std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
+convert_abacus_irreducible_sector_to_libri(
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector)
+{
+    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
+    for (const auto& pair_Rs : irreducible_sector)
+    {
+        const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
+                                            static_cast<int>(pair_Rs.first.second)};
+        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+    }
+    return libri_sector;
+}
+
+template <typename TA, typename TC, typename Tdata>
+class OutputOnlyFilter_GW_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC>>
+{
+  public:
+    using TAC = std::pair<TA, TC>;
+
+    OutputOnlyFilter_GW_Symmetry(
+        const TC& period,
+        const std::map<std::pair<TA, TA>, std::set<TC>>& irreducible_sector)
+        : symmetry(period, irreducible_sector)
+    {
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TAC& A1,
+                      const TAC& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a0b0_a1b1:
+                return !this->symmetry.in_irreducible_sector(A1, A3);
+            default:
+                return false;
+        }
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TAC& A1,
+                      const TA& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a0b0_a1b2:
+                return !this->symmetry.in_irreducible_sector(A3, A1);
+            default:
+                return false;
+        }
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TA& A1,
+                      const TAC& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a0b0_a2b1:
+            case RI::Label::ab_ab::a0b0_a2b2:
+                return !this->symmetry.in_irreducible_sector(A1, A3);
+            default:
+                return false;
+        }
+    }
+
+  private:
+    RI::Symmetry_Filter<TA, TC, Tdata> symmetry;
+};
+
+template <typename Tdata>
+ComplexMatrix convert_libri_tensor_to_complex_matrix_gw(const RI::Tensor<Tdata>& tensor,
+                                                        const int nrows,
+                                                        const int ncols)
+{
+    ComplexMatrix matrix(nrows, ncols);
+    for (int row = 0; row < nrows; ++row)
+    {
+        for (int col = 0; col < ncols; ++col)
+        {
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                matrix(row, col) = tensor(row, col);
+            }
+            else
+            {
+                matrix(row, col) = std::complex<double>(tensor(row, col), 0.0);
+            }
+        }
+    }
+    return matrix;
+}
+
+template <typename Tdata>
+RI::Tensor<Tdata> convert_complex_matrix_to_libri_tensor_gw(const ComplexMatrix& matrix)
+{
+    RI::Tensor<Tdata> tensor({static_cast<std::size_t>(matrix.nr), static_cast<std::size_t>(matrix.nc)});
+    for (int row = 0; row < matrix.nr; ++row)
+    {
+        for (int col = 0; col < matrix.nc; ++col)
+        {
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                tensor(row, col) = matrix(row, col);
+            }
+            else
+            {
+                tensor(row, col) = matrix(row, col).real();
+            }
+        }
+    }
+    return tensor;
+}
+
+template <typename Tdata>
+std::size_t tensor_map_key_count_gw(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>& tensors)
+{
+    std::size_t count = 0;
+    for (const auto& i_entry : tensors)
+    {
+        count += i_entry.second.size();
+    }
+    return count;
+}
+
+template <typename Tdata>
+std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>
+restore_abacus_ao_rspace_tensor_map_gw(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>& tensors_ir,
+    const LIBRPA::AbacusSymmetryContext& symmetry_ctx,
+    const LIBRPA::abacus_rspace_sector_stars_t& sector_stars)
+{
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> tensors_full;
+    for (const auto& i_entry : tensors_ir)
+    {
+        const auto ir_I = static_cast<atom_t>(i_entry.first);
+        for (const auto& jr_entry : i_entry.second)
+        {
+            const auto ir_J = static_cast<atom_t>(jr_entry.first.first);
+            const Vector3_Order<int> ir_R{
+                jr_entry.first.second[0], jr_entry.first.second[1], jr_entry.first.second[2]};
+            const auto pair_iter = sector_stars.find({ir_I, ir_J});
+            if (pair_iter == sector_stars.end() || pair_iter->second.count(ir_R) == 0)
+            {
+                std::ostringstream oss;
+                oss << "Failed to match a symmetry-filtered GW self-energy block with the"
+                    << " ABACUS irreducible-sector restore map for I=" << ir_I << " J=" << ir_J
+                    << " R=(" << ir_R.x << "," << ir_R.y << "," << ir_R.z << ")";
+                throw std::runtime_error(oss.str());
+            }
+
+            const auto nao_I = atomic_basis_wfc.get_atom_nb(ir_I);
+            const auto nao_J = atomic_basis_wfc.get_atom_nb(ir_J);
+            const ComplexMatrix sigma_ir =
+                convert_libri_tensor_to_complex_matrix_gw(jr_entry.second, nao_I, nao_J);
+            for (const auto& restore_member : pair_iter->second.at(ir_R))
+            {
+                const ComplexMatrix sigma_full = LIBRPA::rotate_abacus_rspace_matrix(
+                    symmetry_ctx, restore_member.isym, ir_I, ir_J, sigma_ir);
+                auto& target = tensors_full[restore_member.full_atom_pair.first][{
+                    static_cast<int>(restore_member.full_atom_pair.second),
+                    {restore_member.full_R.x, restore_member.full_R.y, restore_member.full_R.z}}];
+                if (!target.empty())
+                {
+                    throw std::runtime_error(
+                        "Duplicate full-sector GW self-energy block appears during ABACUS symmetry restore");
+                }
+                target = convert_complex_matrix_to_libri_tensor_gw<Tdata>(sigma_full);
+            }
+        }
+    }
+    return tensors_full;
+}
+
+bool use_abacus_ibz_root_projection(const int n_target_kpoints,
+                                    const int n_meanfield_kpoints)
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(n_meanfield_kpoints)
+           && n_target_kpoints == n_meanfield_kpoints;
+}
 
 bool nearly_same_qpoint(const Vector3_Order<double>& lhs,
                         const Vector3_Order<double>& rhs,
@@ -519,12 +709,37 @@ void G0W0::build_spacetime(
     for (int i = 0; i != natom; i++)
         atoms_pos.insert(pair<int, std::array<double, 3>>{i, {0, 0, 0}});
     std::array<int, 3> period_array{this->period_.x, this->period_.y, this->period_.z};
+    const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+    const bool use_abacus_sigc_symmetry =
+        Params::use_abacus_gw_symmetry && symmetry_ctx.available
+        && symmetry_ctx.has_ao_shell_layout() && !symmetry_ctx.irreducible_sector.empty()
+        && !symmetry_ctx.rspace_operations.empty()
+        && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
+        && coord_frac.size() == static_cast<std::size_t>(natom);
+    LIBRPA::abacus_rspace_sector_stars_t abacus_sector_stars;
+    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_irreducible_sector;
+    if (use_abacus_sigc_symmetry)
+    {
+        libri_irreducible_sector =
+            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector);
+        LIBRPA::build_abacus_rspace_sector_stars(
+            symmetry_ctx, coord_frac, this->period_, Rlist, abacus_sector_stars, nullptr);
+    }
 
     try
     {
         stage_tag = "setup LibRI G0W0 object";
         Profiler::start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
         gw_libri.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
+        gw_libri.set_symmetry(false, {});
+        if (use_abacus_sigc_symmetry)
+        {
+            LIBRPA::utils::lib_printf_root(
+                "Reducing GW real-space self-energy outputs with ABACUS irreducible sectors\n");
+            gw_libri.lri.filter_atom =
+                std::make_shared<OutputOnlyFilter_GW_Symmetry<int, std::array<int, 3>, Tdata>>(
+                    gw_libri.lri.period, libri_irreducible_sector);
+        }
         // TODO: template Cs_LRI
         if constexpr (std::is_same<Tdata, std::complex<double>>::value)
         {
@@ -777,6 +992,11 @@ void G0W0::build_spacetime(
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
+                            if (use_abacus_sigc_symmetry)
+                            {
+                                gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
+                                    gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
+                            }
                             stage_tag = format_stage_tag(
                                 "free LibRI G object", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
@@ -878,6 +1098,11 @@ void G0W0::build_spacetime(
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
+                            if (use_abacus_sigc_symmetry)
+                            {
+                                gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
+                                    gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
+                            }
                             stage_tag = format_stage_tag(
                                 "free LibRI G object", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
@@ -1229,6 +1454,15 @@ void G0W0::build_sigc_matrix_KS(
 
     const int n_aos = mf.get_n_aos();
     const int n_bands = mf.get_n_bands();
+    const int n_target_kpoints = (!wfc_target.empty() && !wfc_target.front().empty())
+                                     ? static_cast<int>(wfc_target.front().front().size())
+                                     : 0;
+    if (static_cast<int>(kfrac_target.size()) != n_target_kpoints && mpi_comm_global_h.is_root())
+    {
+        utils::lib_printf("Warning: GW build_sigc_matrix_KS sees inconsistent k-point metadata: "
+                          "kfrac_target=%zu, wfc_target=%d. Using the wavefunction count.\n",
+                          kfrac_target.size(), n_target_kpoints);
+    }
 
     Profiler::start("g0w0_build_sigc_KS");
 
@@ -1251,6 +1485,13 @@ void G0W0::build_sigc_matrix_KS(
     desc_nband_nband.init_1b1p(n_bands, n_bands, 0, 0);
     Array_Desc desc_nband_nband_fb(blacs_ctxt_global_h);
     desc_nband_nband_fb.init(n_bands, n_bands, n_bands, n_bands, 0, 0);
+    const bool use_root_dense_projection =
+        use_abacus_ibz_root_projection(n_target_kpoints, this->mf.get_n_kpoints());
+    Array_Desc desc_nao_nao_fb(blacs_ctxt_global_h);
+    if (use_root_dense_projection)
+    {
+        desc_nao_nao_fb.init(n_aos, n_aos, n_aos, n_aos, 0, 0);
+    }
 
     // local 2D-block submatrices
     auto sigc_nao_nao = init_local_mat<complex<double>>(desc_nao_nao, MAJOR::COL);
@@ -1373,7 +1614,7 @@ void G0W0::build_sigc_matrix_KS(
                     }
 
                     // Perform Fourier transform
-                    for (int ik = 0; ik < kfrac_target.size(); ik++)
+                    for (int ik = 0; ik < n_target_kpoints; ik++)
                     {
                         const auto kfrac = kfrac_target[ik];
 
@@ -1392,6 +1633,55 @@ void G0W0::build_sigc_matrix_KS(
                         collect_block_from_IJ_storage_tensor_transform(
                             sigc_nao_nao, desc_nao_nao, atomic_basis_wfc, atomic_basis_wfc, fourier,
                             sigc_I_JR_local);
+                        if (use_root_dense_projection)
+                        {
+                            auto sigc_nao_nao_fb =
+                                init_local_mat<complex<double>>(desc_nao_nao_fb, MAJOR::COL);
+                            ScalapackConnector::pgemr2d_f(
+                                n_aos, n_aos, sigc_nao_nao.ptr(), 1, 1, desc_nao_nao.desc,
+                                sigc_nao_nao_fb.ptr(), 1, 1, desc_nao_nao_fb.desc,
+                                desc_nao_nao_fb.ictxt());
+
+                            ComplexMatrix sigc_nband_nband_dense;
+                            if (mpi_comm_global_h.is_root())
+                            {
+                                ComplexMatrix sigc_nao_nao_dense(n_aos, n_aos);
+                                for (int iao = 0; iao != n_aos; ++iao)
+                                {
+                                    for (int jao = 0; jao != n_aos; ++jao)
+                                    {
+                                        sigc_nao_nao_dense(iao, jao) = sigc_nao_nao_fb(iao, jao);
+                                    }
+                                }
+
+                                const auto& wfc_isp1_k = wfc_target[ispin][isoc1][ik];
+                                const auto& wfc_isp2_k = wfc_target[ispin][isoc2][ik];
+                                // The symmetry-on regular-grid path only needs the IBZ KS
+                                // eigenvectors. Reproject the dense AO self-energy on the root
+                                // rank and broadcast the resulting KS matrix, instead of assuming
+                                // that every MPI rank owns a valid dense full-BZ wavefunction copy.
+                                sigc_nband_nband_dense =
+                                    conj(wfc_isp1_k) * sigc_nao_nao_dense
+                                    * transpose(wfc_isp2_k, false);
+                            }
+                            mpi_comm_global_h.broadcast_ComplexMatrix(sigc_nband_nband_dense, 0);
+                            if (sigc_is_ik_f_KS.count(ispin) == 0 ||
+                                sigc_is_ik_f_KS.at(ispin).count(ik) == 0 ||
+                                sigc_is_ik_f_KS.at(ispin).at(ik).count(freq) == 0)
+                            {
+                                sigc_is_ik_f_KS[ispin][ik][freq] = Matz(
+                                    n_bands, n_bands, sigc_nband_nband_dense.c, MAJOR::ROW,
+                                    MAJOR::COL);
+                            }
+                            else
+                            {
+                                sigc_is_ik_f_KS[ispin][ik][freq] += Matz(
+                                    n_bands, n_bands, sigc_nband_nband_dense.c, MAJOR::ROW,
+                                    MAJOR::COL);
+                            }
+                            continue;
+                        }
+
                         // prepare wave function BLACS
                         const auto &wfc_isp1_k = wfc_target[ispin][isoc1][ik];
                         const auto &wfc_isp2_k = wfc_target[ispin][isoc2][ik];

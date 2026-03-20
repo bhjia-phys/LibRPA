@@ -63,20 +63,11 @@ std::vector<double> compute_exx_orbital_energy_(int i_state_low, int i_state_hig
     const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
     // TODO: kfrac_list should depend on i_kpoints_compute
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
-    if (Params::use_shrink_abfs)
-    {
-        if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
-        else
-            exx.build<double>(Cs_shrinked_data, Rlist, VR);
-    }
+    const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+    if (Params::use_soc)
+        exx.build<std::complex<double>>(exx_cs, Rlist, VR);
     else
-    {
-        if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
-        else
-            exx.build<double>(Cs_data, Rlist, VR);
-    }
+        exx.build<double>(exx_cs, Rlist, VR);
     exx.build_KS_kgrid();
 
     for (int isp = 0; isp != meanfield.get_n_spins(); isp++)

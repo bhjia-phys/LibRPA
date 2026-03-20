@@ -8,6 +8,7 @@
 #include "coulmat.h"
 #include "envs_mpi.h"
 #include "geometry.h"
+#include "parallel_mpi.h"
 #include "params.h"
 #include "pbc.h"
 #include "utils_mpi_io.h"
@@ -18,6 +19,14 @@ namespace
 bool are_equivalent_abacus_qpoints(const Vector3_Order<double>& lhs,
                                    const Vector3_Order<double>& rhs,
                                    const double tol = 1e-5);
+
+enum class AbacusFtVqMode
+{
+    FullKGrid,
+    LegacyIbzStarExpand,
+    AbacusFullQRestore,
+    AbacusIrreducibleSector,
+};
 
 std::string format_debug_double(const double value)
 {
@@ -143,9 +152,13 @@ typename QMap::const_iterator find_matching_abacus_qpoint(const QMap& q_map,
     });
 }
 
-std::string classify_ft_vq_debug_tag(const bool use_abacus_full_q_restore)
+std::string classify_ft_vq_debug_tag(const AbacusFtVqMode mode)
 {
-    if (use_abacus_full_q_restore)
+    if (mode == AbacusFtVqMode::AbacusIrreducibleSector)
+    {
+        return "abacus_irreducible_sector";
+    }
+    if (mode == AbacusFtVqMode::AbacusFullQRestore)
     {
         return "abacus_full_q_restore";
     }
@@ -162,7 +175,7 @@ void maybe_dump_ft_vq_debug_matrix(const ComplexMatrix& vr_cplx,
                                    const atom_t Mu,
                                    const atom_t Nu,
                                    const Vector3_Order<int>& R,
-                                   const bool use_abacus_full_q_restore)
+                                   const AbacusFtVqMode mode)
 {
     if (!Params::debug)
     {
@@ -170,7 +183,7 @@ void maybe_dump_ft_vq_debug_matrix(const ComplexMatrix& vr_cplx,
     }
 
     std::ostringstream file_name;
-    file_name << Params::output_dir << "abacus_vr_" << classify_ft_vq_debug_tag(use_abacus_full_q_restore)
+    file_name << Params::output_dir << "abacus_vr_" << classify_ft_vq_debug_tag(mode)
               << "_Mu_" << Mu << "_Nu_" << Nu
               << "_R_" << R.x << "_" << R.y << "_" << R.z
               << "_id_" << LIBRPA::envs::mpi_comm_global_h.myid << ".mtx";
@@ -183,7 +196,7 @@ void maybe_dump_qspace_vq_debug_matrix(const ComplexMatrix& vq_cplx,
                                        const atom_t Mu,
                                        const atom_t Nu,
                                        const Vector3_Order<double>& q_internal,
-                                       const bool use_abacus_full_q_restore)
+                                       const AbacusFtVqMode mode)
 {
     if (!Params::debug)
     {
@@ -192,7 +205,7 @@ void maybe_dump_qspace_vq_debug_matrix(const ComplexMatrix& vq_cplx,
 
     const auto q_frac = latvec * q_internal;
     std::ostringstream tag;
-    tag << classify_ft_vq_debug_tag(use_abacus_full_q_restore)
+    tag << classify_ft_vq_debug_tag(mode)
         << "_Mu_" << Mu << "_Nu_" << Nu
         << "_qx_" << format_debug_double(q_frac.x)
         << "_qy_" << format_debug_double(q_frac.y)
@@ -356,6 +369,168 @@ atpair_k_cplx_mat_t restore_abacus_abf_full_qspace_operator(
     return blocks_by_q_full;
 }
 
+LIBRPA::abacus_irreducible_sector_t filter_abacus_irreducible_sector_by_rlist(
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector,
+    const std::vector<Vector3_Order<int>>& Rlist)
+{
+    LIBRPA::abacus_irreducible_sector_t filtered_sector;
+    const std::set<Vector3_Order<int>> requested_rset(Rlist.begin(), Rlist.end());
+    for (const auto& pair_Rs : irreducible_sector)
+    {
+        for (const auto& R_array : pair_Rs.second)
+        {
+            const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
+            if (requested_rset.count(R) == 0)
+            {
+                continue;
+            }
+            filtered_sector[pair_Rs.first].insert(R_array);
+        }
+    }
+    return filtered_sector;
+}
+
+std::set<std::pair<atom_t, atom_t>> build_abacus_irreducible_target_atom_pairs(
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector)
+{
+    std::set<std::pair<atom_t, atom_t>> target_atom_pairs;
+    for (const auto& pair_Rs : irreducible_sector)
+    {
+        if (!pair_Rs.second.empty())
+        {
+            target_atom_pairs.insert(pair_Rs.first);
+        }
+    }
+    return target_atom_pairs;
+}
+
+atpair_R_mat_t accumulate_abacus_abf_irreducible_sector_vr(
+    const atpair_k_cplx_mat_t& blocks_by_q_ibz,
+    const int n_k_points,
+    const std::vector<Vector3_Order<int>>& Rlist,
+    const std::map<atom_t, size_t>& atom_nabf)
+{
+    atpair_R_mat_t blocks_by_R_real;
+    atpair_R_cplx_mat_t blocks_by_R_complex;
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    const auto filtered_sector = filter_abacus_irreducible_sector_by_rlist(ctx.irreducible_sector, Rlist);
+    if (filtered_sector.empty())
+    {
+        return blocks_by_R_real;
+    }
+
+    const auto target_atom_pairs = build_abacus_irreducible_target_atom_pairs(filtered_sector);
+    const auto kstar_grid_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+    const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+
+    for (const auto& pair_Rs : filtered_sector)
+    {
+        const auto atom_i = pair_Rs.first.first;
+        const auto atom_j = pair_Rs.first.second;
+        const int n_i = static_cast<int>(atom_nabf.at(atom_i));
+        const int n_j = static_cast<int>(atom_nabf.at(atom_j));
+        for (const auto& R_array : pair_Rs.second)
+        {
+            const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
+            blocks_by_R_complex[atom_i][atom_j][R] = std::make_shared<ComplexMatrix>(n_i, n_j);
+        }
+    }
+
+    for (const auto& star_mapping : kstar_grid_mapping)
+    {
+        const auto& star = ctx.kstars.at(static_cast<std::size_t>(star_mapping.star_list_index));
+        const LIBRPA::AbacusKStar* abf_star = nullptr;
+        if (!ctx.abf_kstars.empty())
+        {
+            if (ctx.abf_kstars.size() != ctx.kstars.size())
+            {
+                throw std::runtime_error(
+                    "ABF k-space symmetry sidecar count is inconsistent with symrot_k.txt");
+            }
+            abf_star = &ctx.abf_kstars.at(static_cast<std::size_t>(star_mapping.star_list_index));
+        }
+
+        const auto q_ibz_internal = klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
+        const auto blocks_ibz =
+            collect_abacus_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_internal);
+        if (blocks_ibz.empty())
+        {
+            continue;
+        }
+        if (star.members.size() != star_mapping.member_q_bz_keys.size())
+        {
+            throw std::runtime_error(
+                "ABACUS q-star mapping is inconsistent with the loaded full-q keys");
+        }
+
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+        {
+            const auto& member = star.members[imember];
+            const auto& abf_member =
+                (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
+            const bool use_time_reversal = member.isym >= nsym_space;
+            LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
+            try
+            {
+                rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
+                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal,
+                    &target_atom_pairs);
+            }
+            catch (const std::exception& ex)
+            {
+                std::ostringstream oss;
+                oss << "ABACUS irreducible-sector FT failed for star=" << star.star_index
+                    << ", member=" << imember << ", isym=" << member.isym << ": "
+                    << ex.what();
+                throw std::runtime_error(oss.str());
+            }
+
+            const auto& q_internal = star_mapping.member_q_bz_keys[imember];
+            for (const auto& atom_i_pair : rotated_blocks)
+            {
+                for (const auto& atom_j_pair : atom_i_pair.second)
+                {
+                    const auto sector_iter =
+                        filtered_sector.find({atom_i_pair.first, atom_j_pair.first});
+                    if (sector_iter == filtered_sector.end())
+                    {
+                        continue;
+                    }
+
+                    maybe_dump_qspace_vq_debug_matrix(
+                        atom_j_pair.second, atom_i_pair.first, atom_j_pair.first, q_internal,
+                        AbacusFtVqMode::AbacusIrreducibleSector);
+                    for (const auto& R_array : sector_iter->second)
+                    {
+                        const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
+                        const auto phase = build_ft_vq_phase(q_internal, R, n_k_points);
+                        *blocks_by_R_complex.at(atom_i_pair.first).at(atom_j_pair.first).at(R) +=
+                            atom_j_pair.second * phase;
+                    }
+                }
+            }
+        }
+    }
+
+    for (const auto& atom_i_pair : blocks_by_R_complex)
+    {
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            for (const auto& R_block : atom_j_pair.second)
+            {
+                blocks_by_R_real[atom_i_pair.first][atom_j_pair.first][R_block.first] =
+                    std::make_shared<matrix>(R_block.second->real());
+                maybe_dump_ft_vq_debug_matrix(
+                    *R_block.second, atom_i_pair.first, atom_j_pair.first, R_block.first,
+                    AbacusFtVqMode::AbacusIrreducibleSector);
+            }
+        }
+    }
+
+    return blocks_by_R_real;
+}
+
 } // namespace
 
 atpair_R_mat_t
@@ -363,7 +538,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
 {
     atpair_R_mat_t coulmat_R;
     const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
-    const bool use_abacus_full_q_restore =
+    const bool can_use_abacus_full_q_restore =
         Params::use_abacus_gw_symmetry
         && symmetry_ctx.available
         && symmetry_ctx.has_abf_shell_layout()
@@ -374,6 +549,28 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
         && coord_frac.size() == atom_mu.size()
         && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
         && has_complete_abacus_abf_ibz_coverage(coulmat_k, atom_mu);
+    const bool use_abacus_irreducible_sector_ft =
+        can_use_abacus_full_q_restore
+        // The irreducible-sector q -> R accumulation is the common ABACUS symmetry path for
+        // both EXX and GW. Do not gate the GW Coulomb transform on the EXX-only switch.
+        && (Params::use_abacus_exx_symmetry || Params::use_abacus_gw_symmetry)
+        && symmetry_ctx.has_ao_shell_layout()
+        && !symmetry_ctx.irreducible_sector.empty()
+        && !symmetry_ctx.rspace_operations.empty()
+        && LIBRPA::parallel_routing == LIBRPA::ParallelRouting::LIBRI;
+    const bool use_abacus_full_q_restore =
+        can_use_abacus_full_q_restore && !use_abacus_irreducible_sector_ft;
+    if (use_abacus_irreducible_sector_ft)
+    {
+        LIBRPA::utils::lib_printf_root(
+            "ABACUS EXX symmetry accumulates irreducible-sector `V(R)` directly from IBZ q-stars\n");
+        return accumulate_abacus_abf_irreducible_sector_vr(coulmat_k, n_k_points, Rlist, atom_mu);
+    }
+
+    const auto debug_mode = use_abacus_full_q_restore ? AbacusFtVqMode::AbacusFullQRestore
+                            : (static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
+                                   ? AbacusFtVqMode::LegacyIbzStarExpand
+                                   : AbacusFtVqMode::FullKGrid);
     const auto coulmat_k_effective =
         use_abacus_full_q_restore ? restore_abacus_abf_full_qspace_operator(coulmat_k, atom_mu)
                                   : coulmat_k;
@@ -401,7 +598,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                 for (const auto& q_V : Nu_qV.second)
                 {
                     maybe_dump_qspace_vq_debug_matrix(
-                        *q_V.second, Mu, Nu, q_V.first, use_abacus_full_q_restore);
+                        *q_V.second, Mu, Nu, q_V.first, debug_mode);
                 }
                 coulmat_R[Mu][Nu][R] = make_shared<matrix>();
                 // a temporary complex matrix to save the transformed matrix
@@ -444,7 +641,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                     // end minyez debug
                 }
                 *coulmat_R[Mu][Nu][R] = VR_cplx.real();
-                maybe_dump_ft_vq_debug_matrix(VR_cplx, Mu, Nu, R, use_abacus_full_q_restore);
+                maybe_dump_ft_vq_debug_matrix(VR_cplx, Mu, Nu, R, debug_mode);
                 // debug print
                 // sprintf(fn, "VR_cplx_Mu_%zu_Nu_%zu_iR_%zu.mtx", Mu, Nu, iR);
                 // print_complex_matrix_mm(VR_cplx, fn);
@@ -475,7 +672,7 @@ FT_Vq(const atpair_k_cplx_mat_t &coulmat_k, const int &n_k_points, const vector<
                         }
                     }
                     *coulmat_R[Nu][Mu][R] = VR_cplx.real();
-                    maybe_dump_ft_vq_debug_matrix(VR_cplx, Nu, Mu, R, use_abacus_full_q_restore);
+                    maybe_dump_ft_vq_debug_matrix(VR_cplx, Nu, Mu, R, debug_mode);
                 }
             }
         }

@@ -55,6 +55,28 @@ std::string build_symrot_abf_k_file()
     return oss.str();
 }
 
+std::string build_symrot_k_file()
+{
+    std::ostringstream oss;
+    oss << "AO shell layouts:\n"
+        << "# Each line stores one AO-basis layout for one atom type.\n"
+        << "# shell_counts[l] is the number of AO radial shells at angular momentum l.\n"
+        << "type 1 label B nao 4 lmax 1 shell_counts 1 1\n"
+        << "End AO shell layouts\n"
+        << "Number of IBZ k-points (k stars): 1\n"
+        << "Format:\n"
+        << "dummy\n"
+        << "Star 1 of IBZ k-point (0.000000 0.000000 0.000000):\n"
+        << "0\n"
+        << "(0.000000 0.000000 0.000000)\n"
+        << "atom 1 -> 1 of type 1 with Lmax= 1\n";
+    for (int l = 0; l <= 1; ++l)
+    {
+        oss << build_identity_shell_block(l);
+    }
+    return oss.str();
+}
+
 } // namespace
 
 int main()
@@ -83,53 +105,9 @@ int main()
                "(0,0)(1,0)(0,0)\n"
                "(0,0)(0,0)(1,0)\n");
 
-    write_file(test_dir + "/symrot_k.txt",
-               "Number of IBZ k-points (k stars): 1\n"
-               "Format:\n"
-               "dummy\n"
-               "Star 1 of IBZ k-point (0.000000 0.000000 0.000000):\n"
-               "0\n"
-               "(0.000000 0.000000 0.000000)\n"
-               "atom 1 -> 1 of type 1 with Lmax= 1\n"
-               "(1,0)\n"
-               "(1,0)(0,0)(0,0)\n"
-               "(0,0)(1,0)(0,0)\n"
-               "(0,0)(0,0)(1,0)\n");
+    write_file(test_dir + "/symrot_k.txt", build_symrot_k_file());
 
     write_file(test_dir + "/symrot_abf_k.txt", build_symrot_abf_k_file());
-
-    write_file(test_dir + "/INPUT",
-               "INPUT_PARAMETERS\n"
-               "orbital_dir ./\n");
-
-    write_file(test_dir + "/STRU",
-               "ATOMIC_SPECIES\n"
-               "B 1.0 B.upf\n"
-               "\n"
-               "NUMERICAL_ORBITAL\n"
-               "B.orb\n"
-               "\n"
-               "LATTICE_CONSTANT\n"
-               "1.0\n"
-               "\n"
-               "LATTICE_VECTORS\n"
-               "1 0 0\n"
-               "0 1 0\n"
-               "0 0 1\n"
-               "\n"
-               "ATOMIC_POSITIONS\n"
-               "Direct\n"
-               "B\n"
-               "0.0\n"
-               "1\n"
-               "0.0 0.0 0.0 0 0 0\n");
-
-    write_file(test_dir + "/B.orb",
-               "Element                     B\n"
-               "Lmax                        1\n"
-               "Number of Sorbital-->       1\n"
-               "Number of Porbital-->       1\n"
-               "SUMMARY  END\n");
 
     LIBRPA::AbacusSymmetryContext ctx;
     const bool loaded = LIBRPA::load_abacus_symmetry_context(test_dir, ctx, nullptr);
@@ -430,6 +408,21 @@ int main()
     assert(kstar_grid_mapping[1].star_list_index == 0);
     assert(kstar_grid_mapping[1].member_q_bz_keys[0] == q_gamma_member0);
     assert(kstar_grid_mapping[1].member_q_bz_keys[1] == q_gamma_member1);
+
+    // LibRPA can label an IBZ q-point by any symmetry-equivalent full-star member. The ABACUS
+    // sidecar stores only one representative per star, so the matcher must also recognize member
+    // coordinates and not only the canonical `k_ibz` entry.
+    const auto& matched_edge_star_from_member =
+        LIBRPA::find_abacus_kstar_for_kpoint(kmap_ctx.kstars, {0.0, 0.5, 0.0}, "test k-stars");
+    assert(matched_edge_star_from_member.star_index == 1);
+
+    const auto edge_members =
+        LIBRPA::build_abacus_full_kpoint_member_list(kmap_ctx, {{0.0, 0.5, 0.0}, {0.0, 0.0, 0.0}});
+    assert(edge_members.size() == 4);
+    assert(edge_members[0].star_list_index == 1);
+    assert(edge_members[1].star_list_index == 1);
+    assert(edge_members[2].star_list_index == 0);
+    assert(edge_members[3].star_list_index == 0);
 
     LIBRPA::AbacusSymmetryContext block_symm_ctx;
     block_symm_ctx.available = true;

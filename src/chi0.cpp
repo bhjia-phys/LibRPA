@@ -2,10 +2,15 @@
 
 #include <omp.h>
 
+#include <array>
+#include <map>
+#include <sstream>
+#include <type_traits>
 #include <cstring>
 #include <ctime>
 #include <iostream>
 
+#include "abacus_symmetry.h"
 #include "atomic_basis.h"
 #include "base_blacs.h"
 #include "complexmatrix.h"
@@ -14,6 +19,7 @@
 #include "envs_io.h"
 #include "envs_mpi.h"
 #include "epsilon.h"
+#include "geometry.h"
 #include "lapack_connector.h"
 #include "libri_utils.h"
 #include "matrix.h"
@@ -30,14 +36,176 @@
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/physics/RPA.h>
 #endif
-#include <array>
-#include <map>
 
 using LIBRPA::parallel_routing;
 using LIBRPA::ParallelRouting;
 using LIBRPA::envs::mpi_comm_global_h;
 using LIBRPA::envs::ofs_myid;
 using LIBRPA::utils::lib_printf;
+
+namespace
+{
+
+std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
+convert_abacus_irreducible_sector_to_libri(
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector)
+{
+    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
+    for (const auto& pair_Rs : irreducible_sector)
+    {
+        const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
+                                            static_cast<int>(pair_Rs.first.second)};
+        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+    }
+    return libri_sector;
+}
+
+template <typename TA, typename TC, typename Tdata>
+class OutputOnlyFilter_RPA_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC>>
+{
+  public:
+    using TAC = std::pair<TA, TC>;
+
+    OutputOnlyFilter_RPA_Symmetry(
+        const TC& period,
+        const std::map<std::pair<TA, TA>, std::set<TC>>& irreducible_sector)
+        : symmetry(period, irreducible_sector)
+    {
+    }
+
+    bool filter_for2(const RI::Label::ab_ab& label, const TA& A1, const TAC& A2) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a1b2_a2b1:
+                return !this->symmetry.in_irreducible_sector(A1, A2);
+            default:
+                return false;
+        }
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TA& A1,
+                      const TAC& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a1b1_a2b2:
+                return !this->symmetry.in_irreducible_sector(A1, A3);
+            default:
+                return false;
+        }
+    }
+
+  private:
+    RI::Symmetry_Filter<TA, TC, Tdata> symmetry;
+};
+
+template <typename Tdata>
+ComplexMatrix convert_libri_tensor_to_complex_matrix_chi0(const RI::Tensor<Tdata>& tensor)
+{
+    const auto shape = tensor.shape;
+    const int nrows = static_cast<int>(shape.empty() ? 0 : shape[0]);
+    const int ncols = static_cast<int>(shape.size() < 2 ? 0 : shape[1]);
+    ComplexMatrix matrix(nrows, ncols);
+    for (int row = 0; row < nrows; ++row)
+    {
+        for (int col = 0; col < ncols; ++col)
+        {
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                matrix(row, col) = tensor(row, col);
+            }
+            else
+            {
+                matrix(row, col) = std::complex<double>(tensor(row, col), 0.0);
+            }
+        }
+    }
+    return matrix;
+}
+
+template <typename Tdata>
+RI::Tensor<Tdata> convert_complex_matrix_to_libri_tensor_chi0(const ComplexMatrix& matrix)
+{
+    RI::Tensor<Tdata> tensor({static_cast<std::size_t>(matrix.nr), static_cast<std::size_t>(matrix.nc)});
+    for (int row = 0; row < matrix.nr; ++row)
+    {
+        for (int col = 0; col < matrix.nc; ++col)
+        {
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                tensor(row, col) = matrix(row, col);
+            }
+            else
+            {
+                tensor(row, col) = matrix(row, col).real();
+            }
+        }
+    }
+    return tensor;
+}
+
+template <typename Tdata>
+std::size_t tensor_map_key_count_chi0(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>& tensors)
+{
+    std::size_t count = 0;
+    for (const auto& i_entry : tensors)
+    {
+        count += i_entry.second.size();
+    }
+    return count;
+}
+
+template <typename Tdata>
+std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>
+restore_abacus_abf_rspace_tensor_map(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>>& tensors_ir,
+    const LIBRPA::AbacusSymmetryContext& symmetry_ctx,
+    const LIBRPA::abacus_rspace_sector_stars_t& sector_stars)
+{
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> tensors_full;
+    for (const auto& i_entry : tensors_ir)
+    {
+        const auto ir_I = static_cast<atom_t>(i_entry.first);
+        for (const auto& jr_entry : i_entry.second)
+        {
+            const auto ir_J = static_cast<atom_t>(jr_entry.first.first);
+            const Vector3_Order<int> ir_R{
+                jr_entry.first.second[0], jr_entry.first.second[1], jr_entry.first.second[2]};
+            const auto pair_iter = sector_stars.find({ir_I, ir_J});
+            if (pair_iter == sector_stars.end() || pair_iter->second.count(ir_R) == 0)
+            {
+                std::ostringstream oss;
+                oss << "Failed to match a symmetry-filtered chi0 real-space block with the"
+                    << " ABACUS irreducible-sector restore map for I=" << ir_I << " J=" << ir_J
+                    << " R=(" << ir_R.x << "," << ir_R.y << "," << ir_R.z << ")";
+                throw std::runtime_error(oss.str());
+            }
+
+            const ComplexMatrix chi_ir = convert_libri_tensor_to_complex_matrix_chi0(jr_entry.second);
+            for (const auto& restore_member : pair_iter->second.at(ir_R))
+            {
+                const ComplexMatrix chi_full = LIBRPA::rotate_abacus_abf_rspace_matrix(
+                    symmetry_ctx, restore_member.isym, ir_I, ir_J, chi_ir);
+                auto& target = tensors_full[restore_member.full_atom_pair.first][{
+                    static_cast<int>(restore_member.full_atom_pair.second),
+                    {restore_member.full_R.x, restore_member.full_R.y, restore_member.full_R.z}}];
+                if (!target.empty())
+                {
+                    throw std::runtime_error(
+                        "Duplicate full-sector chi0 block appears during ABACUS symmetry restore");
+                }
+                target = convert_complex_matrix_to_libri_tensor_chi0<Tdata>(chi_full);
+            }
+        }
+    }
+    return tensors_full;
+}
+
+} // namespace
 
 Chi0::Chi0(const MeanField &mf_in, const vector<Vector3_Order<double>> &klist_in,
            const TFGrids &tfg_in)
@@ -820,9 +988,38 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
     std::array<int, 3> period_array{R_period.x, R_period.y, R_period.z};
 
     RI::RPA<int, int, 3, Tdata> rpa;
+    const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+    const bool use_abacus_chi0_symmetry =
+        Params::use_abacus_gw_symmetry && symmetry_ctx.available
+        && symmetry_ctx.has_abf_shell_layout() && !symmetry_ctx.irreducible_sector.empty()
+        && !symmetry_ctx.rspace_operations.empty()
+        && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
+        && coord_frac.size() == static_cast<std::size_t>(natom);
+    LIBRPA::abacus_rspace_sector_stars_t abacus_sector_stars;
+    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_irreducible_sector;
     Profiler::start("chi0_libri_routing_set_parallel");
     rpa.set_parallel(mpi_comm_global_h.comm, atoms_pos, lat_array, period_array);
     Profiler::stop("chi0_libri_routing_set_parallel");
+    if (use_abacus_chi0_symmetry)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            lib_printf("Reducing chi0 real-space outputs with ABACUS irreducible sectors\n");
+        }
+        libri_irreducible_sector =
+            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector);
+        const auto chi0_Rlist = construct_R_grid(R_period);
+        LIBRPA::build_abacus_rspace_sector_stars(
+            symmetry_ctx, coord_frac, R_period, chi0_Rlist, abacus_sector_stars, nullptr);
+        rpa.set_symmetry(false, {});
+        rpa.lri.filter_atom =
+            std::make_shared<OutputOnlyFilter_RPA_Symmetry<int, std::array<int, 3>, Tdata>>(
+                rpa.lri.period, libri_irreducible_sector);
+    }
+    else
+    {
+        rpa.set_symmetry(false, {});
+    }
 
     // local Rlist to collect after chi0s on each process
     auto s0_s1 = get_s0_s1_for_comm_map2_first<atom_t, int>(atpairs_ABF);
@@ -931,6 +1128,12 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                     rpa.cal_chi0s();
                     Profiler::stop("chi0_libri_routing_cal_chi0s");
                     ofs_myid << "rpa.cal_chi0s finished, tau = " << tau << "\n";
+
+                    if (use_abacus_chi0_symmetry)
+                    {
+                        rpa.chi0s = restore_abacus_abf_rspace_tensor_map(
+                            rpa.chi0s, symmetry_ctx, abacus_sector_stars);
+                    }
 
                     Profiler::start("chi0_libri_routing_free_gf");
                     rpa.free_Gs_neg();

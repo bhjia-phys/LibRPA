@@ -64,7 +64,7 @@ void task_exx_band()
     {
         if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
         {
-            lib_printf("ABACUS EXX symmetry restores `coulomb_cut_` from the full IBZ operator;"
+            lib_printf("ABACUS EXX symmetry builds `V(R)` directly from the full IBZ operator;"
                        " switching to `read_Vq_full`\n");
         }
         read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
@@ -100,10 +100,11 @@ void task_exx_band()
         }
 
         Profiler::start("exx_real_work");
+        const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
         if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+            exx.build<std::complex<double>>(exx_cs, Rlist, VR);
         else
-            exx.build<double>(Cs_data, Rlist, VR);
+            exx.build<double>(exx_cs, Rlist, VR);
         Profiler::stop("exx_real_work");
     }
     Profiler::stop("exx_real_space");

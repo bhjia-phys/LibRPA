@@ -12,6 +12,7 @@
 #include <cmath>
 // 自定义头文件
      
+#include "abacus_symmetry.h"
 #include "meanfield.h"              // MeanField类相关
 #include "params.h"                 // 参数设置相关
 #include "pbc.h"                    // 周期性边界条件相关
@@ -40,6 +41,22 @@
 #include "fermi_energy_occupation.h"// 费米能和占据数计算相关
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
+
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+} // namespace
 
 
 
@@ -384,8 +401,14 @@ void task_scRPA_band()
             }
         }
         Profiler::start("read_vq_cut", "Load truncated Coulomb");
-        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+            || need_full_cut_coulomb_for_abacus_symmetry())
         {
+            if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                           " switching to `read_Vq_full`\n");
+            }
             read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
         }
         else
@@ -421,7 +444,7 @@ void task_scRPA_band()
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            exx.build(Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
         
@@ -831,4 +854,3 @@ void task_scRPA_band()
     }
         Profiler::stop("scRPA_band");
 }
-

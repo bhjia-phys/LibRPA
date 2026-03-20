@@ -1,8 +1,14 @@
 #include "task_gw_band.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <fstream>
+#include <iomanip>
+#include <limits>
 #include <sstream>
 
+#include "abacus_symmetry.h"
 #include "analycont.h"
 #include "chi0.h"
 #include "constants.h"
@@ -24,6 +30,343 @@
 #include "utils_timefreq.h"
 #include "write_aims.h"
 
+namespace
+{
+
+using ExxDiagMap = std::map<int, std::map<int, std::map<int, double>>>;
+
+struct GwBandStateDebugSpec
+{
+    bool enabled = false;
+    int spin = -1;
+    int kpoint = -1;
+    int state = -1;
+};
+
+struct QpeIterationTracePoint
+{
+    int iter = 0;
+    double e_qp = 0.0;
+    double diff = 0.0;
+    cplxdb sigc{0.0, 0.0};
+};
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+bool can_expand_gw_output_to_full_bz()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(meanfield.get_n_kpoints())
+           && static_cast<int>(ctx.count_kstar_members()) > meanfield.get_n_kpoints();
+}
+
+bool enable_exx_kgrid_sigc_probe()
+{
+    const char* env_value = std::getenv("LIBRPA_DEBUG_EXX_KGRID_SIGC");
+    if (env_value == nullptr)
+    {
+        return false;
+    }
+    const std::string value(env_value);
+    return !(value.empty() || value == "0" || value == "f" || value == "F" || value == "false"
+             || value == "FALSE");
+}
+
+void write_exx_kgrid_debug_files(const ExxDiagMap& exx_diag, const std::string& file_tag)
+{
+    using LIBRPA::envs::mpi_comm_global_h;
+    if (!enable_exx_kgrid_sigc_probe() || !mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    const auto full_k_members =
+        can_expand_gw_output_to_full_bz()
+            ? LIBRPA::build_abacus_full_kpoint_member_list(LIBRPA::abacus_symmetry_ctx,
+                                                           kfrac_list)
+            : std::vector<LIBRPA::AbacusFullKpointMemberEntry>{};
+
+    for (int i_spin = 0; i_spin < meanfield.get_n_spins(); ++i_spin)
+    {
+        std::ofstream ofs(file_tag + std::to_string(i_spin + 1) + ".dat");
+        ofs << std::fixed;
+        if (!full_k_members.empty())
+        {
+            for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+            {
+                const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                const int i_kpoint = member.ik_ibz;
+                const auto& k = member.k_bz;
+                for (int i_state = 0; i_state < meanfield.get_n_bands(); ++i_state)
+                {
+                    ofs << std::setw(5) << ifull + 1 << std::setw(15) << std::setprecision(7)
+                        << k.x << std::setw(15) << std::setprecision(7) << k.y << std::setw(15)
+                        << std::setprecision(7) << k.z << std::setw(8) << i_state + 1
+                        << std::setw(20) << std::setprecision(10)
+                        << exx_diag.at(i_spin).at(i_kpoint).at(i_state) * HA2EV << '\n';
+                }
+            }
+            continue;
+        }
+
+        for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); ++i_kpoint)
+        {
+            const auto& k = kfrac_list[i_kpoint];
+            for (int i_state = 0; i_state < meanfield.get_n_bands(); ++i_state)
+            {
+                ofs << std::setw(5) << i_kpoint + 1 << std::setw(15) << std::setprecision(7)
+                    << k.x << std::setw(15) << std::setprecision(7) << k.y << std::setw(15)
+                    << std::setprecision(7) << k.z << std::setw(8) << i_state + 1
+                    << std::setw(20) << std::setprecision(10)
+                    << exx_diag.at(i_spin).at(i_kpoint).at(i_state) * HA2EV << '\n';
+            }
+        }
+    }
+}
+
+void report_exx_diag_debug_difference(const ExxDiagMap& exx_before_sigc,
+                                      const ExxDiagMap& exx_after_sigc)
+{
+    using LIBRPA::envs::mpi_comm_global_h;
+    if (!enable_exx_kgrid_sigc_probe() || !mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    double max_abs_diff = 0.0;
+    int max_spin = -1;
+    int max_kpoint = -1;
+    int max_state = -1;
+    for (const auto& spin_entry : exx_before_sigc)
+    {
+        const int i_spin = spin_entry.first;
+        const auto after_spin_iter = exx_after_sigc.find(i_spin);
+        if (after_spin_iter == exx_after_sigc.end())
+        {
+            continue;
+        }
+        for (const auto& k_entry : spin_entry.second)
+        {
+            const int i_kpoint = k_entry.first;
+            const auto after_k_iter = after_spin_iter->second.find(i_kpoint);
+            if (after_k_iter == after_spin_iter->second.end())
+            {
+                continue;
+            }
+            for (const auto& state_entry : k_entry.second)
+            {
+                const int i_state = state_entry.first;
+                const auto after_state_iter = after_k_iter->second.find(i_state);
+                if (after_state_iter == after_k_iter->second.end())
+                {
+                    continue;
+                }
+                const double abs_diff = std::abs(state_entry.second - after_state_iter->second);
+                if (abs_diff > max_abs_diff)
+                {
+                    max_abs_diff = abs_diff;
+                    max_spin = i_spin;
+                    max_kpoint = i_kpoint;
+                    max_state = i_state;
+                }
+            }
+        }
+    }
+
+    LIBRPA::utils::lib_printf(
+        "Debug EXX k-grid check across Sigc KS build: max |delta v_exx| = %.12e Ha"
+        " at spin %d, ik %d, state %d\n",
+        max_abs_diff, max_spin + 1, max_kpoint + 1, max_state + 1);
+}
+
+const GwBandStateDebugSpec& get_gw_band_state_debug_spec()
+{
+    static const GwBandStateDebugSpec spec = []() {
+        GwBandStateDebugSpec parsed;
+        const char* env_value = std::getenv("LIBRPA_DEBUG_GW_BAND_STATE");
+        if (env_value == nullptr)
+        {
+            return parsed;
+        }
+
+        std::string value(env_value);
+        for (char& ch : value)
+        {
+            if (ch == ',' || ch == ':' || ch == ';')
+            {
+                ch = ' ';
+            }
+        }
+
+        std::istringstream iss(value);
+        int spin = 0;
+        int kpoint = 0;
+        int state = 0;
+        if (!(iss >> spin >> kpoint >> state))
+        {
+            return parsed;
+        }
+        if (spin <= 0 || kpoint <= 0 || state <= 0)
+        {
+            return parsed;
+        }
+
+        parsed.enabled = true;
+        parsed.spin = spin - 1;
+        parsed.kpoint = kpoint - 1;
+        parsed.state = state - 1;
+        return parsed;
+    }();
+    return spec;
+}
+
+bool need_gw_band_state_debug_dump(const int spin, const int kpoint, const int state)
+{
+    const auto& spec = get_gw_band_state_debug_spec();
+    return spec.enabled && spec.spin == spin && spec.kpoint == kpoint && spec.state == state;
+}
+
+std::vector<QpeIterationTracePoint> trace_qpe_solver_iterations(const LIBRPA::AnalyContPade& pade,
+                                                                const double e_mf,
+                                                                const double e_fermi,
+                                                                const double vxc,
+                                                                const double sigma_x,
+                                                                const double thres = 1.0e-5)
+{
+    constexpr double escale = 0.1;
+    constexpr int n_iter_max = 10000;
+
+    std::vector<QpeIterationTracePoint> trace;
+    trace.reserve(256);
+
+    int n_iter = 0;
+    double e_qp = e_mf;
+    double diff = 1.0;
+    cplxdb sigc{0.0, 0.0};
+
+    while (n_iter++ < n_iter_max)
+    {
+        if (std::abs(diff) > 10.0 * thres)
+        {
+            e_qp += escale * diff;
+            sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
+            diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
+            trace.push_back({n_iter, e_qp, diff, sigc});
+            if (n_iter == n_iter_max - 1)
+            {
+                break;
+            }
+        }
+        else
+        {
+            e_qp += escale * diff * 0.1;
+            sigc = pade.get(static_cast<cplxdb>(e_qp - e_fermi));
+            diff = e_mf - vxc + sigma_x + sigc.real() - e_qp;
+            trace.push_back({n_iter, e_qp, diff, sigc});
+            if (std::abs(diff) < thres || n_iter == n_iter_max - 1)
+            {
+                break;
+            }
+        }
+    }
+
+    return trace;
+}
+
+void dump_gw_band_state_debug(const int spin,
+                              const int kpoint,
+                              const int state,
+                              const Vector3_Order<double>& kfrac,
+                              const std::vector<cplxdb>& imagfreqs,
+                              const std::vector<cplxdb>& sigc_state,
+                              const LIBRPA::AnalyContPade& pade,
+                              const double e_mf,
+                              const double e_fermi,
+                              const double vxc,
+                              const double sigma_x,
+                              const double e_qp,
+                              const cplxdb& sigc_qp,
+                              const int qpe_flag)
+{
+    using LIBRPA::envs::mpi_comm_global_h;
+    if (!need_gw_band_state_debug_dump(spin, kpoint, state) || !mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ostringstream prefix;
+    prefix << "GW_band_state_debug_spin_" << spin + 1 << "_k_" << kpoint + 1 << "_state_"
+           << state + 1;
+
+    {
+        std::ofstream ofs(prefix.str() + "_iw.dat");
+        ofs << std::scientific << std::setprecision(15);
+        ofs << "# spin=" << spin + 1 << " kpoint=" << kpoint + 1 << " state=" << state + 1
+            << '\n';
+        ofs << "# kfrac " << kfrac.x << ' ' << kfrac.y << ' ' << kfrac.z << '\n';
+        ofs << "# e_mf_Ha " << e_mf << '\n';
+        ofs << "# e_fermi_Ha " << e_fermi << '\n';
+        ofs << "# vxc_Ha " << vxc << '\n';
+        ofs << "# sigma_x_Ha " << sigma_x << '\n';
+        ofs << "# e_qp_Ha " << e_qp << '\n';
+        ofs << "# e_qp_eV " << e_qp * HA2EV << '\n';
+        ofs << "# sigc_qp_real_Ha " << sigc_qp.real() << '\n';
+        ofs << "# sigc_qp_imag_Ha " << sigc_qp.imag() << '\n';
+        ofs << "# qpe_flag " << qpe_flag << '\n';
+        ofs << "# omega_imag_Ha ReSigc_Ha ImSigc_Ha\n";
+        for (std::size_t i = 0; i != imagfreqs.size() && i != sigc_state.size(); ++i)
+        {
+            ofs << imagfreqs[i].imag() << ' ' << sigc_state[i].real() << ' ' << sigc_state[i].imag()
+                << '\n';
+        }
+    }
+
+    const auto trace = trace_qpe_solver_iterations(pade, e_mf, e_fermi, vxc, sigma_x);
+    {
+        std::ofstream ofs(prefix.str() + "_iter.dat");
+        ofs << std::scientific << std::setprecision(15);
+        ofs << "# iter e_qp_Ha e_qp_eV ReSigc_Ha ImSigc_Ha residual_Ha\n";
+        for (const auto& point : trace)
+        {
+            ofs << point.iter << ' ' << point.e_qp << ' ' << point.e_qp * HA2EV << ' '
+                << point.sigc.real() << ' ' << point.sigc.imag() << ' ' << point.diff << '\n';
+        }
+    }
+
+    const double half_width =
+        std::max(15.0, 0.5 * std::abs(e_qp - e_mf) + 5.0);
+    const double energy_min = std::min(e_mf, e_qp) - half_width;
+    const double energy_max = std::max(e_mf, e_qp) + half_width;
+    constexpr int n_samples = 801;
+    {
+        std::ofstream ofs(prefix.str() + "_scan.dat");
+        ofs << std::scientific << std::setprecision(15);
+        ofs << "# energy_Ha energy_eV omega_minus_ef_Ha ReSigc_Ha ImSigc_Ha residual_Ha\n";
+        for (int isample = 0; isample != n_samples; ++isample)
+        {
+            const double alpha = (n_samples == 1) ? 0.0 : static_cast<double>(isample) / (n_samples - 1);
+            const double energy = energy_min + (energy_max - energy_min) * alpha;
+            const double omega = energy - e_fermi;
+            const cplxdb sigc = pade.get(cplxdb{omega, 0.0});
+            const double residual = e_mf - vxc + sigma_x + sigc.real() - energy;
+            ofs << energy << ' ' << energy * HA2EV << ' ' << omega << ' ' << sigc.real() << ' '
+                << sigc.imag() << ' ' << residual << '\n';
+        }
+    }
+}
+
+} // namespace
+
 void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
     using LIBRPA::envs::mpi_comm_global_h;
@@ -32,6 +375,16 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     Profiler::start("g0w0_band", "G0W0 quasi-particle band structure calculation");
 
+    if (mpi_comm_global_h.is_root())
+    {
+        const auto& debug_spec = get_gw_band_state_debug_spec();
+        if (debug_spec.enabled)
+        {
+            lib_printf("Debug GW band-state dump enabled for spin %d, k-point %d, state %d\n",
+                       debug_spec.spin + 1, debug_spec.kpoint + 1, debug_spec.state + 1);
+        }
+    }
+
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
@@ -39,8 +392,17 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     vector<Vector3_Order<double>> qlist = klist;
 
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+        || need_full_cut_coulomb_for_abacus_symmetry())
     {
+        if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+        {
+            lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                       " switching to `read_Vq_full`\n");
+        }
+        // The ABACUS symmetry-aware `FT_Vq()` path needs the complete IBZ q-space operator on the
+        // local rank before it can apply the q-star rotations and accumulate irreducible-sector
+        // `V(R)`. The row-distributed cut-Coulomb reader does not provide that view.
         read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
     }
     else
@@ -87,20 +449,11 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         }
 
         Profiler::start("g0w0_exx_real_work");
-        if (Params::use_shrink_abfs)
-        {
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
-            else
-                exx.build<double>(Cs_shrinked_data, Rlist, VR);
-        }
+        const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+        if (Params::use_soc)
+            exx.build<std::complex<double>>(exx_cs, Rlist, VR);
         else
-        {
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_data, Rlist, VR);
-            else
-                exx.build<double>(Cs_data, Rlist, VR);
-        }
+            exx.build<double>(exx_cs, Rlist, VR);
         Profiler::stop("g0w0_exx_real_work");
     }
     Profiler::stop("g0w0_exx");
@@ -254,32 +607,22 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Profiler::start("g0w0_exx_ks_kgrid");
     exx.build_KS_kgrid();
     Profiler::stop("g0w0_exx_ks_kgrid");
-    if (Params::debug && mpi_comm_global_h.is_root())
+    ExxDiagMap exx_diag_before_sigc;
+    if (enable_exx_kgrid_sigc_probe() && mpi_comm_global_h.is_root())
     {
-        // Dump the EXX diagonal on the SCF k-grid so we can check whether the
-        // symmetry discrepancy starts before the later band-path rotation.
-        for (int i_spin = 0; i_spin < meanfield.get_n_spins(); ++i_spin)
-        {
-            std::ofstream ofs_exx_kgrid("EXX_kgrid_spin_" + std::to_string(i_spin + 1) + ".dat");
-            ofs_exx_kgrid << std::fixed;
-            for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); ++i_kpoint)
-            {
-                const auto& k = kfrac_list[i_kpoint];
-                for (int i_state = 0; i_state < meanfield.get_n_bands(); ++i_state)
-                {
-                    ofs_exx_kgrid << std::setw(5) << i_kpoint + 1 << std::setw(15)
-                                  << std::setprecision(7) << k.x << std::setw(15)
-                                  << std::setprecision(7) << k.y << std::setw(15)
-                                  << std::setprecision(7) << k.z << std::setw(8) << i_state + 1
-                                  << std::setw(20) << std::setprecision(10)
-                                  << exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV << '\n';
-                }
-            }
-        }
+        // Preserve the freshly projected EXX diagonal before the later Sigc KS build so that
+        // any accidental in-memory corruption can be detected in a single debug rerun.
+        exx_diag_before_sigc = exx.Eexx;
+        write_exx_kgrid_debug_files(exx_diag_before_sigc, "EXX_kgrid_pre_sigc_spin_");
     }
     Profiler::start("g0w0_sigc_ks_kgrid");
     s_g0w0.build_sigc_matrix_KS_kgrid();
     Profiler::stop("g0w0_sigc_ks_kgrid");
+    if (enable_exx_kgrid_sigc_probe() && mpi_comm_global_h.is_root())
+    {
+        write_exx_kgrid_debug_files(exx.Eexx, "EXX_kgrid_post_sigc_spin_");
+        report_exx_diag_debug_difference(exx_diag_before_sigc, exx.Eexx);
+    }
 
     // imaginary freqencies for analytic continuation
     std::vector<cplxdb> imagfreqs;
@@ -299,6 +642,13 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     {
         map<int, map<int, map<int, double>>> e_qp_all;
         map<int, map<int, map<int, cplxdb>>> sigc_all;
+        const auto full_k_members =
+            can_expand_gw_output_to_full_bz()
+                ? LIBRPA::build_abacus_full_kpoint_member_list(LIBRPA::abacus_symmetry_ctx,
+                                                               kfrac_list)
+                : std::vector<LIBRPA::AbacusFullKpointMemberEntry>{};
+        const int occupation_scale =
+            full_k_members.empty() ? meanfield.get_n_kpoints() : get_full_bz_kpoint_count();
         const auto efermi = meanfield.get_efermi();
         for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
         {
@@ -320,6 +670,9 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     cplxdb sigc;
                     int flag_qpe_solver = LIBRPA::qpe_solver_pade_self_consistent(
                         pade, eks_state, efermi, vxc_state, exx_state, e_qp, sigc);
+                    dump_gw_band_state_debug(i_spin, i_kpoint, i_state, kfrac_list[i_kpoint],
+                                             imagfreqs, sigc_state, pade, eks_state, efermi,
+                                             vxc_state, exx_state, e_qp, sigc, flag_qpe_solver);
                     if (flag_qpe_solver == 0)
                     {
                         e_qp_all[i_spin][i_kpoint][i_state] = e_qp;
@@ -343,6 +696,39 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         printf("Printing quasi-particle energy [unit: eV]\n\n");
         for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
         {
+            if (!full_k_members.empty())
+            {
+                for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                {
+                    const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                    const int i_kpoint = member.ik_ibz;
+                    const auto& k = member.k_bz;
+                    printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, ifull + 1,
+                           k.x, k.y, k.z);
+                    printf("%124s\n", banner.c_str());
+                    printf("%5s %16s %16s %16s %16s %16s %16s %16s\n", "State", "occ", "e_mf",
+                           "v_xc", "v_exx", "ReSigc", "ImSigc", "e_qp");
+                    printf("%124s\n", banner.c_str());
+                    for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                    {
+                        const auto& occ_state =
+                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
+                        const auto& eks_state =
+                            meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+                        const auto& exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                        const auto& vxc_state = vxc[i_spin](i_kpoint, i_state) * HA2EV;
+                        const auto& resigc = sigc_all[i_spin][i_kpoint][i_state].real() * HA2EV;
+                        const auto& imsigc = sigc_all[i_spin][i_kpoint][i_state].imag() * HA2EV;
+                        const auto& eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
+                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f %16.5f\n",
+                               i_state + 1, occ_state, eks_state, vxc_state, exx_state, resigc,
+                               imsigc, eqp);
+                    }
+                    printf("\n");
+                }
+                continue;
+            }
+
             for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
             {
                 const auto &k = kfrac_list[i_kpoint];
@@ -354,8 +740,8 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 printf("%124s\n", banner.c_str());
                 for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                 {
-                    const auto &occ_state = meanfield.get_weight()[i_spin](i_kpoint, i_state) *
-                                            meanfield.get_n_kpoints();
+                    const auto &occ_state =
+                        meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
                     const auto &eks_state =
                         meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
                     const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
@@ -375,17 +761,46 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             ofs << banner << std::endl;
             for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
             {
+                if (!full_k_members.empty())
+                {
+                    for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                    {
+                        const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                        const int i_kpoint = member.ik_ibz;
+                        const auto& k = member.k_bz;
+                        ofs << " K_point " << ifull + 1 << " :" << std::setw(10)
+                            << std::setprecision(7) << k.x << std::setw(10) << k.y
+                            << std::setw(10) << k.z << std::setw(10) << " Spin " << i_spin + 1
+                            << std::endl;
+                        ofs << banner << std::endl;
+                        for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                        {
+                            const auto& occ_state =
+                                meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
+                            const auto& eks_state = meanfield.get_eigenvals()[i_spin](i_kpoint, i_state);
+                            const auto& eqp = e_qp_all[i_spin][i_kpoint][i_state];
+                            ofs << std::setw(7) << i_state + 1 << std::setw(10)
+                                << std::setprecision(5) << occ_state << std::setw(18)
+                                << std::setprecision(10) << eks_state << std::setw(18)
+                                << std::setprecision(10) << eqp << std::endl;
+                        }
+                        ofs << banner << std::endl;
+                        ofs << std::endl;
+                    }
+                    continue;
+                }
+
                 for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
                 {
                     const auto &k = kfrac_list[i_kpoint];
-                    ofs << " K_point " << i_kpoint + 1 << " :" << std::setw(10) << std::setprecision(7)
-                        << k.x << std::setw(10) << k.y << std::setw(10) << k.z << std::setw(10)
-                        <<" Spin " << i_spin + 1 << std::endl;
+                    ofs << " K_point " << i_kpoint + 1 << " :" << std::setw(10)
+                        << std::setprecision(7) << k.x << std::setw(10) << k.y << std::setw(10)
+                        << k.z << std::setw(10) <<" Spin " << i_spin + 1 << std::endl;
                     ofs << banner << std::endl;
                     for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                     {
                         const auto &occ_state =
-                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * meanfield.get_n_kpoints();
+                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
                         const auto &eks_state =
                             meanfield.get_eigenvals()[i_spin](i_kpoint, i_state);
                         const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state];
@@ -410,6 +825,34 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
             for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
             {
+                if (!full_k_members.empty())
+                {
+                    for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                    {
+                        const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                        const int i_kpoint = member.ik_ibz;
+                        const auto& k = member.k_bz;
+                        ofs_hamgnn << "spin " << i_spin << ", k-point " << ifull + 1 << ": ("
+                                   << std::setw(10) << std::setprecision(7) << k.x << ", "
+                                   << std::setw(10) << std::setprecision(7) << k.y << ", "
+                                   << std::setw(10) << std::setprecision(7) << k.z << ")" << std::endl;
+                        ofs_hamgnn << std::setw(5) << "State"
+                                   << " " << std::setw(16) << "occ"
+                                   << " " << std::setw(25) << "e_qp(eV)" << std::endl;
+                        for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                        {
+                            const auto& occ_state =
+                                meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
+                            const auto& eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
+                            ofs_hamgnn << std::setw(5) << i_state + 1 << " " << std::setw(16)
+                                       << std::setprecision(5) << occ_state << " " << std::setw(25)
+                                       << std::setprecision(8) << eqp << std::endl;
+                        }
+                        printf("\n");
+                    }
+                    continue;
+                }
+
                 for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
                 {
                     const auto &k = kfrac_list[i_kpoint];
@@ -422,8 +865,8 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                << " " << std::setw(25) << "e_qp(eV)" << std::endl;
                     for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                     {
-                        const auto &occ_state = meanfield.get_weight()[i_spin](i_kpoint, i_state) *
-                                                meanfield.get_n_kpoints();
+                        const auto &occ_state =
+                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
                         const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state] * HA2EV;
                         ofs_hamgnn << std::setw(5) << i_state + 1 << " " << std::setw(16)
                                    << std::setprecision(5) << occ_state << " " << std::setw(25)
@@ -535,6 +978,9 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     cplxdb sigc;
                     int flag_qpe_solver = LIBRPA::qpe_solver_pade_self_consistent(
                         pade, eks_state, efermi, vxc_state, exx_state, e_qp, sigc);
+                    dump_gw_band_state_debug(i_spin, i_kpoint, i_state, kfrac_band[i_kpoint],
+                                             imagfreqs, sigc_state, pade, eks_state, efermi,
+                                             vxc_state, exx_state, e_qp, sigc, flag_qpe_solver);
                     if (flag_qpe_solver == 0)
                     {
                         e_qp_all[i_spin][i_kpoint][i_state] = e_qp;

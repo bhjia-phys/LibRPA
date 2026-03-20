@@ -175,6 +175,10 @@ ComplexMatrix build_abacus_abf_rotation_matrix(
     const std::map<int, ComplexMatrix>& shell_rotations,
     const std::array<std::array<double, 3>, 3>& direct_rotation);
 
+const AbacusKStar& find_abacus_kstar_for_kpoint(const std::vector<AbacusKStar>& kstars,
+                                                const Vector3_Order<double>& k_point,
+                                                const std::string& label = "ABACUS k-stars");
+
 const AbacusKStar& find_abacus_kstar_for_ibz_kpoint(const AbacusSymmetryContext& ctx,
                                                     const Vector3_Order<double>& k_ibz);
 
@@ -244,5 +248,11 @@ ComplexMatrix rotate_abacus_rspace_matrix(const AbacusSymmetryContext& ctx,
                                           atom_t atom_from_i,
                                           atom_t atom_from_j,
                                           const ComplexMatrix& matrix_source);
+
+ComplexMatrix rotate_abacus_abf_rspace_matrix(const AbacusSymmetryContext& ctx,
+                                              int isym,
+                                              atom_t atom_from_i,
+                                              atom_t atom_from_j,
+                                              const ComplexMatrix& matrix_source);
 
 } // namespace LIBRPA

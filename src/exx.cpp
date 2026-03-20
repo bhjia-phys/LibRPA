@@ -16,6 +16,8 @@
 #include "utils_blacs.h"
 #include "vector3_order.h"
 #include <fstream>
+#include <cstdio>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -35,6 +37,15 @@ namespace
 
 constexpr double kAbacusKpointTol = 1e-5;
 
+bool use_abacus_ibz_root_projection(const int n_target_kpoints,
+                                    const int n_meanfield_kpoints)
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(n_meanfield_kpoints)
+           && n_target_kpoints == n_meanfield_kpoints;
+}
+
 std::string format_debug_double(const double value)
 {
     std::ostringstream oss;
@@ -43,6 +54,182 @@ std::string format_debug_double(const double value)
     std::replace(text.begin(), text.end(), '-', 'm');
     std::replace(text.begin(), text.end(), '.', 'p');
     return text;
+}
+
+bool complex_array_has_nonfinite(const std::complex<double>* data, const int size)
+{
+    for (int i = 0; i < size; ++i)
+    {
+        const auto& value = data[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool complex_matrix_has_nonfinite(const ComplexMatrix& mat)
+{
+    return complex_array_has_nonfinite(mat.c, mat.size);
+}
+
+template <typename T>
+bool tensor_has_nonfinite(const RI::Tensor<T>& tensor)
+{
+    const auto size = static_cast<int>(tensor.get_shape_all());
+    const auto* data = tensor.ptr();
+    for (int i = 0; i < size; ++i)
+    {
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            if (!std::isfinite(data[i].real()) || !std::isfinite(data[i].imag()))
+            {
+                return true;
+            }
+        }
+        else
+        {
+            if (!std::isfinite(static_cast<double>(data[i])))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+template <typename T>
+double tensor_max_abs(const RI::Tensor<T>& tensor)
+{
+    const auto size = static_cast<int>(tensor.get_shape_all());
+    const auto* data = tensor.ptr();
+    double max_abs = 0.0;
+    for (int i = 0; i < size; ++i)
+    {
+        max_abs = std::max(max_abs, static_cast<double>(std::abs(data[i])));
+    }
+    return max_abs;
+}
+
+template <typename T>
+std::complex<double> tensor_sum(const RI::Tensor<T>& tensor)
+{
+    const auto size = static_cast<int>(tensor.get_shape_all());
+    const auto* data = tensor.ptr();
+    std::complex<double> sum(0.0, 0.0);
+    for (int i = 0; i < size; ++i)
+    {
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            sum += data[i];
+        }
+        else
+        {
+            sum += std::complex<double>(static_cast<double>(data[i]), 0.0);
+        }
+    }
+    return sum;
+}
+
+template <typename T>
+double tensor_frobenius_norm(const RI::Tensor<T>& tensor)
+{
+    const auto size = static_cast<int>(tensor.get_shape_all());
+    const auto* data = tensor.ptr();
+    double norm_sq = 0.0;
+    for (int i = 0; i < size; ++i)
+    {
+        const double abs_value = static_cast<double>(std::abs(data[i]));
+        norm_sq += abs_value * abs_value;
+    }
+    return std::sqrt(norm_sq);
+}
+
+template <typename T>
+std::complex<double> tensor_trace(const RI::Tensor<T>& tensor)
+{
+    const auto shape = tensor.shape;
+    const int nrows = static_cast<int>(shape.empty() ? 0 : shape[0]);
+    const int ncols = static_cast<int>(shape.size() < 2 ? 0 : shape[1]);
+    const int ndiag = std::min(nrows, ncols);
+    const auto* data = tensor.ptr();
+    std::complex<double> trace(0.0, 0.0);
+    for (int i = 0; i < ndiag; ++i)
+    {
+        const int index = i * ncols + i;
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            trace += data[index];
+        }
+        else
+        {
+            trace += std::complex<double>(static_cast<double>(data[index]), 0.0);
+        }
+    }
+    return trace;
+}
+
+template <typename T>
+void dump_tensor_map_summary(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<T>>>& tensors,
+    const std::string& file_path)
+{
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ofstream ofs(file_path);
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    ofs << std::scientific << std::setprecision(15);
+    ofs << "# I J Rx Ry Rz rows cols nonfinite maxabs frob sum_re sum_im trace_re trace_im\n";
+    for (const auto& i_entry : tensors)
+    {
+        const int iatom = i_entry.first;
+        for (const auto& jr_entry : i_entry.second)
+        {
+            const int jatom = jr_entry.first.first;
+            const auto& R = jr_entry.first.second;
+            const auto& tensor = jr_entry.second;
+            const auto shape = tensor.shape;
+            const int nrows = static_cast<int>(shape.empty() ? 0 : shape[0]);
+            const int ncols = static_cast<int>(shape.size() < 2 ? 0 : shape[1]);
+            const auto sum = tensor_sum(tensor);
+            const auto trace = tensor_trace(tensor);
+            ofs << iatom << " " << jatom << " " << R[0] << " " << R[1] << " " << R[2] << " "
+                << nrows << " " << ncols << " " << (tensor_has_nonfinite(tensor) ? 1 : 0) << " "
+                << tensor_max_abs(tensor) << " " << tensor_frobenius_norm(tensor) << " "
+                << sum.real() << " " << sum.imag() << " " << trace.real() << " "
+                << trace.imag() << "\n";
+        }
+    }
+}
+
+void maybe_dump_hexx_ks_debug(const ComplexMatrix& hexx_ks,
+                              const int ispin,
+                              const int isoc1,
+                              const int isoc2,
+                              const int ik,
+                              const Vector3_Order<double>& kfrac)
+{
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ostringstream tag;
+    tag << "spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ik" << ik << "_kx_"
+        << format_debug_double(kfrac.x) << "_ky_" << format_debug_double(kfrac.y) << "_kz_"
+        << format_debug_double(kfrac.z);
+    print_complex_matrix_mm(hexx_ks,
+                            Params::output_dir + "abacus_hexx_ks_" + tag.str() + ".mtx",
+                            1e-14,
+                            false);
 }
 
 bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
@@ -70,6 +257,76 @@ convert_abacus_irreducible_sector_to_libri(
     }
     return libri_sector;
 }
+
+template <typename TA, typename TC, typename Tdata>
+class OutputOnlyFilter_Atom_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC>>
+{
+  public:
+    using TAC = std::pair<TA, TC>;
+
+    OutputOnlyFilter_Atom_Symmetry(
+        const TC& period,
+        const std::map<std::pair<TA, TA>, std::set<TC>>& irreducible_sector)
+        : symmetry(period, irreducible_sector)
+    {
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TA& A1,
+                      const TAC& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a1b0_a2b1:
+            case RI::Label::ab_ab::a1b1_a2b0:
+            case RI::Label::ab_ab::a0b0_a2b1:
+            case RI::Label::ab_ab::a0b1_a2b0:
+            case RI::Label::ab_ab::a1b1_a2b2:
+            case RI::Label::ab_ab::a0b1_a2b2:
+            case RI::Label::ab_ab::a1b0_a2b2:
+            case RI::Label::ab_ab::a0b0_a2b2:
+                return !this->symmetry.in_irreducible_sector(A1, A3);
+            default:
+                return false;
+        }
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TAC& A1,
+                      const TA& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a0b0_a1b2:
+            case RI::Label::ab_ab::a0b1_a1b2:
+            case RI::Label::ab_ab::a0b2_a1b0:
+            case RI::Label::ab_ab::a0b2_a1b1:
+                return !this->symmetry.in_irreducible_sector(A3, A1);
+            default:
+                return false;
+        }
+    }
+
+    bool filter_for32(const RI::Label::ab_ab& label,
+                      const TAC& A1,
+                      const TAC& A2,
+                      const TAC& A3) const override
+    {
+        switch (label)
+        {
+            case RI::Label::ab_ab::a0b0_a1b1:
+            case RI::Label::ab_ab::a0b1_a1b0:
+                return !this->symmetry.in_irreducible_sector(A1, A3);
+            default:
+                return false;
+        }
+    }
+
+  private:
+    RI::Symmetry_Filter<TA, TC, Tdata> symmetry;
+};
 
 template <typename Tdata>
 ComplexMatrix convert_libri_tensor_to_complex_matrix(const RI::Tensor<Tdata>& tensor,
@@ -451,6 +708,14 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         && !symmetry_ctx.irreducible_sector.empty() && !symmetry_ctx.rspace_operations.empty()
         && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
         && coord_frac.size() == static_cast<std::size_t>(natom);
+    const auto libri_irreducible_sector =
+        use_abacus_exx_symmetry
+            ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector)
+            : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
+    // Enable an output-only LibRI irreducible-sector filter once the ABACUS real-space restore
+    // map is available. The internal EXX contractions stay unchanged, while the returned `Hs`
+    // blocks are restricted to the irreducible output sector and restored below.
+    const bool use_libri_exx_symmetry_filter = use_abacus_exx_symmetry;
     abacus_rspace_sector_stars_t abacus_sector_stars;
     if (use_abacus_exx_symmetry)
     {
@@ -460,8 +725,13 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         }
         build_abacus_rspace_sector_stars(
             symmetry_ctx, coord_frac, period_, Rlist, abacus_sector_stars, nullptr);
-        exx_libri.set_symmetry(
-            true, convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector));
+        exx_libri.set_symmetry(false, {});
+        if (use_libri_exx_symmetry_filter)
+        {
+            exx_libri.lri.filter_atom =
+                std::make_shared<OutputOnlyFilter_Atom_Symmetry<int, std::array<int, 3>, Tdata>>(
+                    exx_libri.lri.period, libri_irreducible_sector);
+        }
     }
     else
     {
@@ -508,9 +778,15 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
             }
         }
         exx_libri.set_Cs(data_libri, Params::libri_exx_threshold_C);
+        dump_tensor_map_summary(data_libri, Params::output_dir + "debug_exx_C_input_summary.txt");
     }
     else
+    {
         exx_libri.set_Cs(Cs.data_libri, Params::libri_exx_threshold_C);
+        dump_tensor_map_summary(Cs.data_libri, Params::output_dir + "debug_exx_C_input_summary.txt");
+    }
+    dump_tensor_map_summary(exx_libri.lri.data_pool.at("Cs_").Ds_ab,
+                            Params::output_dir + "debug_exx_C_after_set_summary.txt");
     Profiler::stop("build_real_space_exx_1");
     envs::ofs_myid << "Finished setup Cs for EXX\n";
     std::flush(envs::ofs_myid);
@@ -519,16 +795,82 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     Profiler::start("build_real_space_exx_2", "Prepare V libRI object");
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> V_libri;
     Profiler::start("build_real_space_exx_2_1");
+    atpair_R_mat_t exx_coul_mat_restored;
+    const atpair_R_mat_t* exx_coul_mat_ptr = &coul_mat;
+    if (use_abacus_exx_symmetry)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            utils::lib_printf(
+                "Restoring the ABACUS EXX auxiliary Coulomb blocks from the irreducible sector to the full real-space sector before LibRI contraction\n");
+        }
+
+        for (const auto& I_JRV : coul_mat)
+        {
+            const auto ir_I = I_JRV.first;
+            for (const auto& J_RV : I_JRV.second)
+            {
+                const auto ir_J = J_RV.first;
+                const auto sector_pair =
+                    std::make_pair(static_cast<atom_t>(ir_I), static_cast<atom_t>(ir_J));
+                const auto pair_iter = abacus_sector_stars.find(sector_pair);
+                if (pair_iter == abacus_sector_stars.end())
+                {
+                    throw std::runtime_error(
+                        "Failed to match an irreducible EXX Coulomb atom pair with the ABACUS restore map");
+                }
+
+                for (const auto& R_V : J_RV.second)
+                {
+                    const auto& ir_R = R_V.first;
+                    const auto star_iter = pair_iter->second.find(ir_R);
+                    if (star_iter == pair_iter->second.end())
+                    {
+                        throw std::runtime_error(
+                            "Failed to match an irreducible EXX Coulomb real-space block with the ABACUS restore map");
+                    }
+
+                    const ComplexMatrix v_ir(*R_V.second);
+                    for (const auto& restore_member : star_iter->second)
+                    {
+                        const ComplexMatrix v_full = rotate_abacus_abf_rspace_matrix(
+                            symmetry_ctx,
+                            restore_member.isym,
+                            static_cast<atom_t>(ir_I),
+                            static_cast<atom_t>(ir_J),
+                            v_ir);
+                        const matrix v_full_real = v_full.real();
+                        auto& target_pair_map =
+                            exx_coul_mat_restored[restore_member.full_atom_pair.first]
+                                                 [restore_member.full_atom_pair.second];
+                        if (target_pair_map.count(restore_member.full_R) != 0)
+                        {
+                            throw std::runtime_error(
+                                "Duplicate full-sector EXX Coulomb block appears during ABACUS symmetry restore");
+                        }
+                        target_pair_map[restore_member.full_R] =
+                            std::make_shared<matrix>(v_full_real);
+                    }
+                }
+            }
+        }
+        exx_coul_mat_ptr = &exx_coul_mat_restored;
+    }
+    const auto& exx_coul_mat = *exx_coul_mat_ptr;
+    const bool use_symmetry_direct_vr_local_cache =
+        use_abacus_exx_symmetry && exx_coul_mat_ptr == &coul_mat
+        && LIBRPA::parallel_routing != LIBRPA::ParallelRouting::R_TAU
+        && mpi_comm_global_h.nprocs > 1;
     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
     {
         // Full Coulomb case, have to re-distribute
-        for (auto IJR : dispatch_vector_prod(get_atom_pair(coul_mat), Rlist, mpi_comm_global_h.myid,
+        for (auto IJR : dispatch_vector_prod(get_atom_pair(exx_coul_mat), Rlist, mpi_comm_global_h.myid,
                                              mpi_comm_global_h.nprocs, true, true))
         {
             const auto I = IJR.first.first;
             const auto J = IJR.first.second;
             const auto R = IJR.second;
-            const auto &VIJR = coul_mat.at(I).at(J).at(R);
+            const auto &VIJR = exx_coul_mat.at(I).at(J).at(R);
             // debug
             // printf("I J R %zu %zu %d %d %d, max(V) %f\n", I, J, R.x, R.y, R.z, VIJR->max());
             std::array<int, 3> Ra{R.x, R.y, R.z};
@@ -550,39 +892,123 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     }
     else
     {
-        for (const auto &I_JRV : coul_mat)
+        if (use_symmetry_direct_vr_local_cache)
         {
-            const auto I = I_JRV.first;
-            for (const auto &J_RV : I_JRV.second)
+            // Keep a full local replica on each MPI rank and skip the additional LibRI
+            // redistribution step below.
+            for (const auto &I_JRV : exx_coul_mat)
             {
-                const auto J = J_RV.first;
-                for (const auto &R_V : J_RV.second)
+                const auto I = I_JRV.first;
+                for (const auto &J_RV : I_JRV.second)
                 {
-                    const auto &R = R_V.first;
-                    const auto &V = R_V.second;
-                    std::array<int, 3> Ra{R.x, R.y, R.z};
-                    std::valarray<Tdata> VIJR_va;
-                    if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                    const auto J = J_RV.first;
+                    for (const auto &R_V : J_RV.second)
                     {
-                        VIJR_va = std::valarray<std::complex<double>>(V->size);
-                        for (size_t i = 0; i < V->size; ++i)
+                        const auto &R = R_V.first;
+                        const auto &V = R_V.second;
+                        std::array<int, 3> Ra{R.x, R.y, R.z};
+                        std::valarray<Tdata> VIJR_va;
+                        if constexpr (std::is_same<Tdata, std::complex<double>>::value)
                         {
-                            VIJR_va[i] = std::complex<double>(V->c[i], 0.0);
+                            VIJR_va = std::valarray<std::complex<double>>(V->size);
+                            for (size_t i = 0; i < V->size; ++i)
+                            {
+                                VIJR_va[i] = std::complex<double>(V->c[i], 0.0);
+                            }
                         }
+                        else
+                            VIJR_va = std::valarray<Tdata>(V->c, V->size);
+                        auto pv = std::make_shared<std::valarray<Tdata>>();
+                        *pv = VIJR_va;
+                        V_libri[I][{J, Ra}] = RI::Tensor<Tdata>({size_t(V->nr), size_t(V->nc)}, pv);
                     }
-                    else
-                        VIJR_va = std::valarray<Tdata>(V->c, V->size);
-                    auto pv = std::make_shared<std::valarray<Tdata>>();
-                    *pv = VIJR_va;
-                    V_libri[I][{J, Ra}] = RI::Tensor<Tdata>({size_t(V->nr), size_t(V->nc)}, pv);
+                }
+            }
+        }
+        else if (mpi_comm_global_h.nprocs > 1)
+        {
+            // `FT_Vq()` currently leaves the restored real-space Coulomb map replicated on each
+            // MPI rank. Feed only a deterministic local subset into LibRI so `set_Vs()` does not
+            // receive the full V(I,J,R) set from every rank at once.
+            for (const auto &IJR :
+                 dispatch_vector_prod(get_atom_pair(exx_coul_mat), Rlist, mpi_comm_global_h.myid,
+                                      mpi_comm_global_h.nprocs, true, true))
+            {
+                const auto I = IJR.first.first;
+                const auto J = IJR.first.second;
+                const auto &R = IJR.second;
+                if (exx_coul_mat.count(I) == 0 || exx_coul_mat.at(I).count(J) == 0
+                    || exx_coul_mat.at(I).at(J).count(R) == 0)
+                {
+                    continue;
+                }
+                const auto &V = exx_coul_mat.at(I).at(J).at(R);
+                std::array<int, 3> Ra{R.x, R.y, R.z};
+                std::valarray<Tdata> VIJR_va;
+                if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                {
+                    VIJR_va = std::valarray<std::complex<double>>(V->size);
+                    for (size_t i = 0; i < V->size; ++i)
+                    {
+                        VIJR_va[i] = std::complex<double>(V->c[i], 0.0);
+                    }
+                }
+                else
+                    VIJR_va = std::valarray<Tdata>(V->c, V->size);
+                auto pv = std::make_shared<std::valarray<Tdata>>();
+                *pv = VIJR_va;
+                V_libri[I][{J, Ra}] = RI::Tensor<Tdata>({size_t(V->nr), size_t(V->nc)}, pv);
+            }
+        }
+        else
+        {
+            for (const auto &I_JRV : exx_coul_mat)
+            {
+                const auto I = I_JRV.first;
+                for (const auto &J_RV : I_JRV.second)
+                {
+                    const auto J = J_RV.first;
+                    for (const auto &R_V : J_RV.second)
+                    {
+                        const auto &R = R_V.first;
+                        const auto &V = R_V.second;
+                        std::array<int, 3> Ra{R.x, R.y, R.z};
+                        std::valarray<Tdata> VIJR_va;
+                        if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                        {
+                            VIJR_va = std::valarray<std::complex<double>>(V->size);
+                            for (size_t i = 0; i < V->size; ++i)
+                            {
+                                VIJR_va[i] = std::complex<double>(V->c[i], 0.0);
+                            }
+                        }
+                        else
+                            VIJR_va = std::valarray<Tdata>(V->c, V->size);
+                        auto pv = std::make_shared<std::valarray<Tdata>>();
+                        *pv = VIJR_va;
+                        V_libri[I][{J, Ra}] = RI::Tensor<Tdata>({size_t(V->nr), size_t(V->nc)}, pv);
+                    }
                 }
             }
         }
     }
     Profiler::cease("build_real_space_exx_2_1");
     envs::ofs_myid << "Number of V keys: " << get_num_keys(V_libri) << "\n";
+    dump_tensor_map_summary(V_libri, Params::output_dir + "debug_exx_V_summary.txt");
     Profiler::start("build_real_space_exx_2_2");
-    exx_libri.set_Vs(V_libri, Params::libri_exx_threshold_V);
+    if (use_symmetry_direct_vr_local_cache)
+    {
+        exx_libri.lri.set_tensors_map2(
+            V_libri,
+            {RI::Label::ab::a0b0},
+            {{"flag_comm", false}, {"threshold_filter", Params::libri_exx_threshold_V}},
+            "Vs_");
+        exx_libri.flag_finish.Vs = true;
+    }
+    else
+        exx_libri.set_Vs(V_libri, Params::libri_exx_threshold_V);
+    dump_tensor_map_summary(exx_libri.lri.data_pool.at("Vs_").Ds_ab,
+                            Params::output_dir + "debug_exx_V_after_set_summary.txt");
     V_libri.clear();
     Profiler::cease("build_real_space_exx_2_2");
     Profiler::cease("build_real_space_exx_2");
@@ -631,8 +1057,20 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                     }
                 }
                 envs::ofs_myid << "Number of Dmat keys: " << get_num_keys(dmat_libri) << "\n";
+                {
+                    std::ostringstream oss;
+                    oss << Params::output_dir << "debug_exx_D_summary_spin" << isp << "_soc"
+                        << is1 << "_" << is2 << ".txt";
+                    dump_tensor_map_summary(dmat_libri, oss.str());
+                }
                 // print_keys(envs::ofs_myid, dmat_libri);
                 exx_libri.set_Ds(dmat_libri, Params::libri_exx_threshold_D);
+                dump_tensor_map_summary(exx_libri.lri.data_pool.at("Ds_").Ds_ab,
+                                        Params::output_dir
+                                            + "debug_exx_D_after_set_summary_spin"
+                                            + std::to_string(isp) + "_soc"
+                                            + std::to_string(is1) + "_"
+                                            + std::to_string(is2) + ".txt");
                 Profiler::stop("build_real_space_exx_3");
                 utils::lib_printf("Task %4d: DM setup for EXX\n", mpi_comm_global_h.myid);
 
@@ -644,33 +1082,44 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                                   Profiler::get_wall_time_last("build_real_space_exx_4"));
                 envs::ofs_myid << "Number of exx_libri.Hs keys: " << get_num_keys(exx_libri.Hs)
                                << "\n";
+                {
+                    std::ostringstream oss;
+                    oss << Params::output_dir << "debug_exx_Hs_summary_spin" << isp << "_soc"
+                        << is1 << "_" << is2 << ".txt";
+                    dump_tensor_map_summary(exx_libri.Hs, oss.str());
+                }
                 // print_keys(envs::ofs_myid, exx_libri.Hs);
                 // ofs_myid << "exx_libri.Hs:\n" << exx_libri.Hs << endl;
 
-                auto store_exx_block_direct = [&](const atom_t full_I,
+                auto store_exx_block_matrix = [&](const atom_t full_I,
                                                   const atom_t full_J,
                                                   const Vector3_Order<int>& full_R,
-                                                  const RI::Tensor<Tdata>& exx_tensor) {
+                                                  const ComplexMatrix& exx_block) {
                     const auto n_full_I = atomic_basis_wfc.get_atom_nb(full_I);
                     const auto n_full_J = atomic_basis_wfc.get_atom_nb(full_J);
+                    if (exx_block.nr != n_full_I || exx_block.nc != n_full_J)
+                    {
+                        throw std::runtime_error(
+                            "ABACUS EXX real-space restore produced an AO block with an inconsistent dimension");
+                    }
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
                     {
-                        Matz exx_temp(n_full_I, n_full_J, exx_tensor.ptr(), MAJOR::ROW);
+                        Matz exx_temp(n_full_I, n_full_J, exx_block.c, MAJOR::ROW);
                         this->exx_cplx[isp][is1][is2][full_R][full_I][full_J] = exx_temp;
                     }
                     else
                     {
-                        Matd exx_temp(n_full_I, n_full_J, exx_tensor.ptr(), MAJOR::ROW);
+                        const auto exx_block_real = exx_block.real();
+                        Matd exx_temp(n_full_I, n_full_J, exx_block_real.c, MAJOR::ROW);
                         this->exx[isp][is1][is2][full_R][full_I][full_J] = exx_temp;
                     }
                 };
 
-                if (use_abacus_exx_symmetry)
+                if (use_libri_exx_symmetry_filter)
                 {
                     utils::lib_printf(
-                        "LibRI EXX returns full real-space blocks after symmetry filtering; storing H(R) directly\n");
+                        "Restoring the symmetry-filtered LibRI EXX blocks to the full AO real-space sector\n");
                 }
-
                 for (const auto &I_JR_exx : exx_libri.Hs)
                 {
                     const auto &I = I_JR_exx.first;
@@ -679,8 +1128,64 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                         const auto &J = JR_exx.first.first;
                         const auto &Ra = JR_exx.first.second;
                         const auto R = Vector3_Order<int>{Ra[0], Ra[1], Ra[2]};
-                        store_exx_block_direct(
-                            static_cast<atom_t>(I), static_cast<atom_t>(J), R, JR_exx.second);
+                        const auto exx_block_ir =
+                            convert_libri_tensor_to_complex_matrix(JR_exx.second,
+                                                                   atomic_basis_wfc.get_atom_nb(I),
+                                                                   atomic_basis_wfc.get_atom_nb(J));
+                        if (complex_matrix_has_nonfinite(exx_block_ir))
+                        {
+                            std::ostringstream oss;
+                            oss << "Non-finite EXX block appears directly in LibRI Hs at I=" << I
+                                << " J=" << J << " R=(" << R.x << "," << R.y << "," << R.z
+                                << ")";
+                            throw std::runtime_error(oss.str());
+                        }
+                        if (use_libri_exx_symmetry_filter)
+                        {
+                            const auto sector_pair = std::make_pair(static_cast<atom_t>(I),
+                                                                    static_cast<atom_t>(J));
+                            const auto pair_iter = abacus_sector_stars.find(sector_pair);
+                            if (pair_iter == abacus_sector_stars.end()
+                                || pair_iter->second.count(R) == 0)
+                            {
+                                std::ostringstream oss;
+                                oss << "Failed to match a symmetry-filtered EXX real-space block"
+                                    << " with the ABACUS irreducible-sector restore map"
+                                    << " for I=" << I << " J=" << J << " R=(" << R.x << ","
+                                    << R.y << "," << R.z << ")";
+                                throw std::runtime_error(oss.str());
+                            }
+
+                            for (const auto& restore_member : pair_iter->second.at(R))
+                            {
+                                const auto exx_block_full =
+                                    rotate_abacus_rspace_matrix(symmetry_ctx,
+                                                                restore_member.isym,
+                                                                static_cast<atom_t>(I),
+                                                                static_cast<atom_t>(J),
+                                                                exx_block_ir);
+                                if (complex_matrix_has_nonfinite(exx_block_full))
+                                {
+                                    std::ostringstream oss;
+                                    oss << "Non-finite EXX real-space block appears after"
+                                        << " restoring a symmetry-filtered LibRI Hs block"
+                                        << " I=" << I << " J=" << J << " R=(" << R.x << ","
+                                        << R.y << "," << R.z << "), isym="
+                                        << restore_member.isym;
+                                    throw std::runtime_error(oss.str());
+                                }
+                                store_exx_block_matrix(restore_member.full_atom_pair.first,
+                                                       restore_member.full_atom_pair.second,
+                                                       restore_member.full_R,
+                                                       exx_block_full);
+                            }
+                            continue;
+                        }
+
+                        store_exx_block_matrix(static_cast<atom_t>(I),
+                                               static_cast<atom_t>(J),
+                                               R,
+                                               exx_block_ir);
                     }
                 }
             }
@@ -796,22 +1301,51 @@ mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true, true))
     }
     else
     {
-        for (const auto &I_JRV : coul_mat)
+        if (mpi_comm_global_h.nprocs > 1)
         {
-            const auto I = I_JRV.first;
-            for (const auto &J_RV : I_JRV.second)
+            // `FT_Vq()` currently leaves the restored real-space Coulomb map replicated on each
+            // MPI rank. Feed only a deterministic local subset into LibRI so `set_Vs()` does not
+            // receive the full V(I,J,R) set from every rank at once.
+            for (const auto &IJR :
+                 dispatch_vector_prod(get_atom_pair(coul_mat), Rlist, mpi_comm_global_h.myid,
+                                      mpi_comm_global_h.nprocs, true, true))
             {
-                const auto J = J_RV.first;
-                for (const auto &R_V : J_RV.second)
+                const auto I = IJR.first.first;
+                const auto J = IJR.first.second;
+                const auto &R = IJR.second;
+                if (coul_mat.count(I) == 0 || coul_mat.at(I).count(J) == 0
+                    || coul_mat.at(I).at(J).count(R) == 0)
                 {
-                    const auto &R = R_V.first;
-                    const auto &V = R_V.second;
-                    std::array<int, 3> Ra{R.x, R.y, R.z};
-                    std::valarray<double> VIJR_va(V->c, V->size);
-                    auto pv = std::make_shared<std::valarray<double>>();
-                    *pv = VIJR_va;
-                    V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)},
-pv);
+                    continue;
+                }
+                const auto &V = coul_mat.at(I).at(J).at(R);
+                std::array<int, 3> Ra{R.x, R.y, R.z};
+                std::valarray<double> VIJR_va(V->c, V->size);
+                auto pv = std::make_shared<std::valarray<double>>();
+                *pv = VIJR_va;
+                V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)},
+                                                         pv);
+            }
+        }
+        else
+        {
+            for (const auto &I_JRV : coul_mat)
+            {
+                const auto I = I_JRV.first;
+                for (const auto &J_RV : I_JRV.second)
+                {
+                    const auto J = J_RV.first;
+                    for (const auto &R_V : J_RV.second)
+                    {
+                        const auto &R = R_V.first;
+                        const auto &V = R_V.second;
+                        std::array<int, 3> Ra{R.x, R.y, R.z};
+                        std::valarray<double> VIJR_va(V->c, V->size);
+                        auto pv = std::make_shared<std::valarray<double>>();
+                        *pv = VIJR_va;
+                        V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)},
+                                                                 pv);
+                    }
                 }
             }
         }
@@ -950,6 +1484,15 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
     const auto &n_spins = this->mf_.get_n_spins();
     const auto &n_bands = this->mf_.get_n_bands();
     const auto &n_soc = this->mf_.get_n_soc();
+    const int n_target_kpoints = (!wfc_target.empty() && !wfc_target.front().empty())
+                                     ? static_cast<int>(wfc_target.front().front().size())
+                                     : 0;
+    if (static_cast<int>(kfrac_target.size()) != n_target_kpoints && mpi_comm_global_h.is_root())
+    {
+        utils::lib_printf("Warning: EXX build_KS sees inconsistent k-point metadata: "
+                          "kfrac_target=%zu, wfc_target=%d. Using the wavefunction count.\n",
+                          kfrac_target.size(), n_target_kpoints);
+    }
 
     // prepare scalapack array descriptors
     Array_Desc desc_nao_nao(blacs_ctxt_global_h);
@@ -961,6 +1504,13 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
     desc_nband_nao.init_1b1p(n_bands, n_aos, 0, 0);
     desc_nband_nband.init_1b1p(n_bands, n_bands, 0, 0);
     desc_nband_nband_fb.init(n_bands, n_bands, n_bands, n_bands, 0, 0);
+    const bool use_root_dense_projection =
+        use_abacus_ibz_root_projection(n_target_kpoints, this->mf_.get_n_kpoints());
+    Array_Desc desc_nao_nao_fb(blacs_ctxt_global_h);
+    if (use_root_dense_projection)
+    {
+        desc_nao_nao_fb.init(n_aos, n_aos, n_aos, n_aos, 0, 0);
+    }
 
     // local 2D-block submatrices
     auto Hexx_nao_nao = init_local_mat<complex<double>>(desc_nao_nao, MAJOR::COL);
@@ -1024,6 +1574,14 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                         {
                             const auto J = J_exx.first;
                             const auto &n_J = atomic_basis_wfc.get_atom_nb(J);
+                            if (complex_array_has_nonfinite(J_exx.second.ptr(), J_exx.second.size()))
+                            {
+                                std::ostringstream oss;
+                                oss << "Non-finite EXX real-space block appears before Fourier"
+                                    << " at I=" << I << " J=" << J << " R=(" << R.x << ","
+                                    << R.y << "," << R.z << ")";
+                                throw std::runtime_error(oss.str());
+                            }
                             const std::array<int, 3> Ra{R.x, R.y, R.z};
                             exx_I_JR_local[I][{J, Ra}] =
                                 RI::Tensor<std::complex<double>>({n_I, n_J}, J_exx.second.sptr());
@@ -1095,7 +1653,7 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                   Profiler::get_wall_time_last("build_real_space_exx_5"));
                 // cout << I_JallR_Hs << endl;
 
-                for (int ik = 0; ik < kfrac_target.size(); ik++)
+                for (int ik = 0; ik < n_target_kpoints; ik++)
                 {
                     Hexx_nao_nao.zero_out();
                     Profiler::start("build_real_space_exx_6", "Hexx IJ -> 2D block");
@@ -1113,7 +1671,88 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                     collect_block_from_IJ_storage_tensor_transform(
                         Hexx_nao_nao, desc_nao_nao, atomic_basis_wfc, atomic_basis_wfc, fourier,
                         exx_I_JR_local);
+                    if (complex_array_has_nonfinite(Hexx_nao_nao.ptr(), Hexx_nao_nao.size()))
+                    {
+                        std::ostringstream oss;
+                        oss << "Non-finite EXX k-space AO matrix appears after Fourier transform"
+                            << " at ik=" << ik << " k=(" << kfrac.x << "," << kfrac.y << ","
+                            << kfrac.z << ")";
+                        throw std::runtime_error(oss.str());
+                    }
                     Profiler::stop("build_real_space_exx_6");
+                    if (use_root_dense_projection)
+                    {
+                        Profiler::start("build_real_space_exx_7",
+                                        "Rotate Hexx ij -> KS with root dense IBZ projection");
+                        auto Hexx_nao_nao_fb =
+                            init_local_mat<complex<double>>(desc_nao_nao_fb, MAJOR::COL);
+                        ScalapackConnector::pgemr2d_f(
+                            n_aos, n_aos, Hexx_nao_nao.ptr(), 1, 1, desc_nao_nao.desc,
+                            Hexx_nao_nao_fb.ptr(), 1, 1, desc_nao_nao_fb.desc,
+                            desc_nao_nao_fb.ictxt());
+
+                        ComplexMatrix Hexx_nband_nband_dense;
+                        if (mpi_comm_global_h.is_root())
+                        {
+                            ComplexMatrix Hexx_nao_nao_dense(n_aos, n_aos);
+                            for (int iao = 0; iao != n_aos; ++iao)
+                            {
+                                for (int jao = 0; jao != n_aos; ++jao)
+                                {
+                                    Hexx_nao_nao_dense(iao, jao) = Hexx_nao_nao_fb(iao, jao);
+                                }
+                            }
+
+                            const auto& wfc_isp1_k = wfc_target[isp][isoc1][ik];
+                            const auto& wfc_isp2_k = wfc_target[isp][isoc2][ik];
+                            // The symmetry-on ABACUS starting point only stores IBZ KS states.
+                            // Reproject the fully assembled AO matrix on the root rank using the
+                            // dense IBZ eigenvectors instead of rebuilding fake ScaLAPACK blocks
+                            // from possibly absent full-BZ wavefunction storage.
+                            Hexx_nband_nband_dense =
+                                (-1.0) * (conj(wfc_isp1_k) * Hexx_nao_nao_dense
+                                          * transpose(wfc_isp2_k, false));
+                            if (complex_matrix_has_nonfinite(Hexx_nband_nband_dense))
+                            {
+                                std::ostringstream oss;
+                                oss << "Non-finite EXX KS matrix appears on the root projection path"
+                                    << " before broadcast at ik=" << ik << " k=(" << kfrac.x << ","
+                                    << kfrac.y << "," << kfrac.z << ")";
+                                throw std::runtime_error(oss.str());
+                            }
+                        }
+                        mpi_comm_global_h.broadcast_ComplexMatrix(Hexx_nband_nband_dense, 0);
+                        if (complex_matrix_has_nonfinite(Hexx_nband_nband_dense))
+                        {
+                            std::ostringstream oss;
+                            oss << "Non-finite EXX KS matrix appears on the root projection path"
+                                << " after broadcast at ik=" << ik << " k=(" << kfrac.x << ","
+                                << kfrac.y << "," << kfrac.z << ")";
+                            throw std::runtime_error(oss.str());
+                        }
+                        Profiler::stop("build_real_space_exx_7");
+
+                        Profiler::start("build_real_space_exx_8", "Collect Eexx to root process");
+                        if (this->exx_is_ik_KS.count(isp) == 0 || this->exx_is_ik_KS[isp].count(ik) == 0)
+                        {
+                            this->exx_is_ik_KS[isp][ik] = Matz(
+                                n_bands, n_bands, Hexx_nband_nband_dense.c, MAJOR::ROW, MAJOR::COL);
+                        }
+                        else
+                        {
+                            this->exx_is_ik_KS[isp][ik] += Matz(
+                                n_bands, n_bands, Hexx_nband_nband_dense.c, MAJOR::ROW, MAJOR::COL);
+                        }
+                        for (int ib = 0; ib != n_bands; ib++)
+                        {
+                            this->Eexx[isp][ik][ib] += Hexx_nband_nband_dense(ib, ib).real();
+                        }
+                        maybe_dump_hexx_ks_debug(
+                            Hexx_nband_nband_dense, isp, isoc1, isoc2, ik, kfrac);
+                        Profiler::stop("build_real_space_exx_8");
+                        continue;
+                    }
+
                     // utils::lib_printf("%s\n", str(Hexx_nao_nao).c_str());
                     const auto &wfc_isp1_k = wfc_target[isp][isoc1][ik];
                     const auto &wfc_isp2_k = wfc_target[isp][isoc2][ik];
@@ -1155,6 +1794,15 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                     {
                         for (int ib = 0; ib != n_bands; ib++)
                             this->Eexx[isp][ik][ib] += Hexx_nband_nband_fb(ib, ib).real();
+                        ComplexMatrix hexx_ks_dense(n_bands, n_bands);
+                        for (int ib = 0; ib != n_bands; ++ib)
+                        {
+                            for (int jb = 0; jb != n_bands; ++jb)
+                            {
+                                hexx_ks_dense(ib, jb) = Hexx_nband_nband_fb(ib, jb);
+                            }
+                        }
+                        maybe_dump_hexx_ks_debug(hexx_ks_dense, isp, isoc1, isoc2, ik, kfrac);
                     }
                     Profiler::stop("build_real_space_exx_8");
                 }

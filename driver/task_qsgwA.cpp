@@ -567,7 +567,7 @@ void task_qsgwA()
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            exx.build(Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
             // for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {

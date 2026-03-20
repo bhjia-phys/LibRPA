@@ -41,6 +41,77 @@
 #include "utils_mem.h"
 #include "utils_mpi_io.h"
 
+static bool file_exists(const std::string& path)
+{
+    std::ifstream ifs(path);
+    return ifs.good();
+}
+
+static bool task_requires_pyatb_headwing(const LIBRPA::task_t task)
+{
+    switch (task)
+    {
+        case LIBRPA::task_t::G0W0:
+        case LIBRPA::task_t::G0W0_band:
+        case LIBRPA::task_t::QSGW:
+        case LIBRPA::task_t::QSGW_band:
+        case LIBRPA::task_t::Wc_Rf:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool validate_pyatb_headwing_inputs(const LIBRPA::task_t task)
+{
+    using LIBRPA::envs::mpi_comm_global_h;
+    using LIBRPA::utils::lib_printf;
+
+    if (!Params::replace_w_head || !Params::use_pyatb)
+    {
+        return true;
+    }
+    if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+    {
+        return true;
+    }
+    if (!task_requires_pyatb_headwing(task))
+    {
+        return true;
+    }
+
+    const std::vector<std::string> required_files{
+        driver_params.input_dir + "pyatb_librpa_df/velocity_matrix",
+        driver_params.input_dir + "pyatb_librpa_df/band_out",
+        driver_params.input_dir + "pyatb_librpa_df/k_path_info",
+    };
+
+    bool local_ok = true;
+    for (const auto& file : required_files)
+    {
+        local_ok = local_ok && file_exists(file);
+    }
+
+    int local_ok_int = local_ok ? 1 : 0;
+    int global_ok_int = 0;
+    MPI_Allreduce(&local_ok_int, &global_ok_int, 1, MPI_INT, MPI_MIN, mpi_comm_global_h.comm);
+    const bool global_ok = (global_ok_int == 1);
+
+    if (!global_ok && mpi_comm_global_h.is_root())
+    {
+        lib_printf("Error: `use_pyatb = T` with `option_dielect_func = %d` requires "
+                   "`pyatb_librpa_df/{velocity_matrix,band_out,k_path_info}`.\n",
+                   Params::option_dielect_func);
+        lib_printf("       The current input directory `%s` is missing at least one of these "
+                   "files.\n",
+                   driver_params.input_dir.c_str());
+        lib_printf("       Check whether the PyATB preprocessing step (for example `get_diel.py`) "
+                   "finished successfully before launching LibRPA.\n");
+    }
+
+    return global_ok;
+}
+
 static void initialize(int argc, char **argv)
 {
     using namespace LIBRPA::envs;
@@ -178,6 +249,12 @@ int main(int argc, char **argv)
     }
     mpi_comm_global_h.barrier();
     Profiler::stop("driver_read_params");
+
+    if (!validate_pyatb_headwing_inputs(task))
+    {
+        finalize(false);
+        return EXIT_FAILURE;
+    }
 
     Profiler::start("driver_band_out", "Driver Read Meanfield band");
     read_scf_occ_eigenvalues(driver_params.input_dir + "band_out", meanfield);

@@ -70,7 +70,7 @@ class diele_func
 
     MeanField &meanfield_df;
     std::vector<double> omega;
-    std::vector<Vector3_Order<double>> &kfrac_band;
+    std::vector<Vector3_Order<double>> kfrac_band;
     int n_basis, n_states, n_spin, n_abf, nk;
     size_t n_nonsingular;
     // lebedev-quadrature, qw has absorbed 4Pi.

@@ -212,6 +212,13 @@ void set_kgrids_kvec_tot(int nk1, int nk2, int nk3, double* kvecs)
     kv_nmp[1] = nk2;
     kv_nmp[2] = nk3;
 
+    // Reset the loaded k-point metadata before parsing a new mean-field input.
+    // The driver may rebuild the global state when switching between symmetry-on
+    // and symmetry-off test cases, and the k-point containers must not silently
+    // accumulate entries from an earlier load.
+    klist.clear();
+    kfrac_list.clear();
+
     kvec_c = new Vector3<double>[nk1 * nk2 * nk3];
 
     for (int ik = 0; ik != meanfield.get_n_kpoints(); ik++)

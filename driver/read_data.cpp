@@ -130,6 +130,38 @@ Vector3_Order<double> convert_fractional_kpoint_to_klist_units(
             kfrac.x * G.e13 + kfrac.y * G.e23 + kfrac.z * G.e33};
 }
 
+Vector3_Order<double> resolve_abacus_file_qvec(const int iq,
+                                               const int n_file_qpoints,
+                                               const std::string& file_path)
+{
+    if (iq < 0)
+    {
+        throw std::runtime_error("Negative q-point index encountered while reading " + file_path);
+    }
+
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+        && n_file_qpoints == static_cast<int>(ctx.kstars.size()))
+    {
+        if (iq >= static_cast<int>(ctx.kstars.size()))
+        {
+            throw std::runtime_error("The q-point index in " + file_path
+                                     + " exceeds the number of ABACUS symmetry IBZ q-points");
+        }
+        return convert_fractional_kpoint_to_klist_units(
+            ctx.kstars[static_cast<std::size_t>(iq)].k_ibz);
+    }
+
+    const int n_full_kpoints = kv_nmp[0] * kv_nmp[1] * kv_nmp[2];
+    if (iq >= n_full_kpoints)
+    {
+        throw std::runtime_error("The q-point index in " + file_path
+                                 + " exceeds the loaded LibRPA k-point list");
+    }
+
+    return Vector3_Order<double>(kvec_c[iq]);
+}
+
 void append_unique_kpoint(std::vector<Vector3_Order<double>>& kpoints,
                           const Vector3_Order<double>& candidate)
 {
@@ -1259,7 +1291,7 @@ static int handle_Vq_full_file(const string &file_path,
             bcol--;
             ecol--;
             iq--;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
 
             if (irk_weight.count(qvec) == 0)
             {
@@ -1310,7 +1342,7 @@ static int handle_Vq_full_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -1538,7 +1570,7 @@ static int handle_Vq_row_file(
             ecol--;
             iq--;
 
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             if (irk_weight.count(qvec) == 0)
             {
                 irk_points.push_back(qvec);
@@ -1618,7 +1650,7 @@ static int handle_Vq_row_file(
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
 
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -2323,7 +2355,7 @@ static int handle_sinvS_file(const string &file_path,
             bcol--;
             ecol--;
             iq--;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
 
             if (!sinvS.count(qvec))
             {
@@ -2369,7 +2401,7 @@ static int handle_sinvS_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             if (!sinvS.count(qvec))
             {
                 sinvS[qvec].create(mu, nu);
