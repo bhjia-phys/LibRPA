@@ -23,6 +23,7 @@
 #include <sstream>
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/physics/Exx.h>
+#include <RI/ri/Filter_Atom.h>
 #include <RI/ri/Cell_Nearest.h>
 #else
 #include "libri_stub.h"

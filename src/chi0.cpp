@@ -35,6 +35,7 @@
 #include "utils_mem.h"
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/physics/RPA.h>
+#include <RI/ri/Filter_Atom.h>
 #endif
 
 using LIBRPA::parallel_routing;
