@@ -1055,9 +1055,19 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
             }
         }
         rpa.set_Cs(data_libri, Params::libri_chi0_threshold_C);
+        if (Params::debug)
+        {
+            ofs_myid << "Number of chi0 Cs input keys: " << get_num_keys(data_libri) << "\n";
+        }
     }
     else
+    {
         rpa.set_Cs(Cs.data_libri, Params::libri_chi0_threshold_C);
+        if (Params::debug)
+        {
+            ofs_myid << "Number of chi0 Cs input keys: " << get_num_keys(Cs.data_libri) << "\n";
+        }
+    }
 
     // Cs_libri.clear();
     // LIBRPA::utils::release_free_mem();
@@ -1112,6 +1122,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                     else
                         build_gf_Rt_libri(this->mf, isp, is1, is2, kfrac_list, this->IJRs_gf_local,
                                           tau, gf_po_libri);
+                    if (Params::debug)
+                    {
+                        ofs_myid << "Number of chi0 G_pos input keys at tau " << tau << ": "
+                                 << get_num_keys(gf_po_libri) << "\n";
+                    }
                     rpa.set_Gs_pos(gf_po_libri, Params::libri_chi0_threshold_G);
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
                         build_gf_Rt_libri_cplx(this->mf, isp, is2, is1, kfrac_list,
@@ -1119,6 +1134,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                     else
                         build_gf_Rt_libri(this->mf, isp, is2, is1, kfrac_list, this->IJRs_gf_local,
                                           -tau, gf_ne_libri);
+                    if (Params::debug)
+                    {
+                        ofs_myid << "Number of chi0 G_neg input keys at tau " << tau << ": "
+                                 << get_num_keys(gf_ne_libri) << "\n";
+                    }
                     rpa.set_Gs_neg(gf_ne_libri, Params::libri_chi0_threshold_G);
                     // ofs_myid << "gf_po_libri\n" << gf_po_libri << "\n";
                     // ofs_myid << "gf_ne_libri\n" << gf_ne_libri << "\n";
@@ -1129,6 +1149,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                     rpa.cal_chi0s();
                     Profiler::stop("chi0_libri_routing_cal_chi0s");
                     ofs_myid << "rpa.cal_chi0s finished, tau = " << tau << "\n";
+                    if (Params::debug)
+                    {
+                        ofs_myid << "Number of chi0 raw output keys at tau " << tau << ": "
+                                 << get_num_keys(rpa.chi0s) << "\n";
+                    }
 
                     if (use_abacus_chi0_symmetry)
                     {
@@ -1155,6 +1180,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
                     else
                     {
                         tmp_chi0 = std::move(rpa.chi0s);
+                    }
+                    if (Params::debug)
+                    {
+                        ofs_myid << "Number of chi0 collected output keys at tau " << tau << ": "
+                                 << get_num_keys(tmp_chi0) << "\n";
                     }
                     Profiler::stop("chi0_libri_routing_collect_Rs");
                     for (const auto &IJRc : tmp_chi0)

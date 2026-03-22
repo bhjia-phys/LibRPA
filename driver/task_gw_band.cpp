@@ -490,14 +490,12 @@ void task_g0w0_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
         chi0.set_input_dir(driver_params.input_dir);
         Profiler::start("chi0_build", "Build response function chi0");
-        if (Params::use_shrink_chi)
-        {
-            chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
-        }
-        else
-        {
-            chi0.build(Cs_shrinked_data, Rlist, period, local_atpair, qlist, sinvS);
-        }
+        // `Cs_shrinked_data` only exists when ABFs were explicitly shrinked during input.
+        // For the common no-shrink workflow (`use_shrink_abfs = false`), chi0 must always
+        // consume the full-basis coefficients from `Cs_data` regardless of `use_shrink_chi`.
+        const auto& chi0_cs =
+            (Params::use_shrink_abfs && !Params::use_shrink_chi) ? Cs_shrinked_data : Cs_data;
+        chi0.build(chi0_cs, Rlist, period, local_atpair, qlist, sinvS);
 
         Profiler::stop("chi0_build");
 

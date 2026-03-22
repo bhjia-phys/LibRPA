@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <set>
 #include <stdexcept>
 #include <valarray>
@@ -114,6 +115,51 @@ ComplexMatrix to_complex_matrix(const matrix_m<std::complex<double>>& mat)
         }
     }
     return complex_mat;
+}
+
+ComplexMatrix allreduce_dense_complex_matrix_via_real_imag(const ComplexMatrix& local_matrix)
+{
+    constexpr int dense_sum_tag = 90123;
+    const int packed_size = local_matrix.size * 2;
+    std::vector<double> packed_local(static_cast<std::size_t>(packed_size), 0.0);
+    for (int idx = 0; idx < local_matrix.size; ++idx)
+    {
+        packed_local[static_cast<std::size_t>(2 * idx)] = local_matrix.c[idx].real();
+        packed_local[static_cast<std::size_t>(2 * idx + 1)] = local_matrix.c[idx].imag();
+    }
+
+    std::vector<double> packed_global(static_cast<std::size_t>(packed_size), 0.0);
+    if (mpi_comm_global_h.myid == 0)
+    {
+        packed_global = packed_local;
+        std::vector<double> packed_recv(static_cast<std::size_t>(packed_size), 0.0);
+        for (int src = 1; src < mpi_comm_global_h.nprocs; ++src)
+        {
+            MPI_Status status;
+            MPI_Recv(packed_recv.data(), packed_size, MPI_DOUBLE, src, dense_sum_tag,
+                     mpi_comm_global_h.comm, &status);
+            for (int idx = 0; idx < packed_size; ++idx)
+            {
+                packed_global[static_cast<std::size_t>(idx)] +=
+                    packed_recv[static_cast<std::size_t>(idx)];
+            }
+        }
+    }
+    else
+    {
+        MPI_Send(
+            packed_local.data(), packed_size, MPI_DOUBLE, 0, dense_sum_tag, mpi_comm_global_h.comm);
+    }
+    MPI_Bcast(packed_global.data(), packed_size, MPI_DOUBLE, 0, mpi_comm_global_h.comm);
+
+    ComplexMatrix global_matrix(local_matrix.nr, local_matrix.nc);
+    for (int idx = 0; idx < global_matrix.size; ++idx)
+    {
+        global_matrix.c[idx] =
+            std::complex<double>(packed_global[static_cast<std::size_t>(2 * idx)],
+                                 packed_global[static_cast<std::size_t>(2 * idx + 1)]);
+    }
+    return global_matrix;
 }
 
 matrix_m<std::complex<double>> to_row_major_matrix_m(const ComplexMatrix& mat)
@@ -299,6 +345,21 @@ const LIBRPA::AbacusKStarMember& find_matching_abf_kstar_member(
 std::set<std::pair<atom_t, atom_t>> collect_abacus_atom_pairs(
     const LIBRPA::abacus_atom_block_matrix_map_t& atom_blocks);
 
+std::set<std::pair<atom_t, atom_t>> collect_all_upper_atom_pairs(
+    const std::map<atom_t, size_t>& atom_nabf)
+{
+    std::set<std::pair<atom_t, atom_t>> atom_pairs;
+    for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
+    {
+        for (std::size_t atom_j = atom_i; atom_j < atom_nabf.size(); ++atom_j)
+        {
+            atom_pairs.insert(
+                {static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j)});
+        }
+    }
+    return atom_pairs;
+}
+
 std::vector<int> build_abacus_atom_offsets(const std::map<atom_t, size_t>& atom_nabf)
 {
     std::vector<int> offsets(atom_nabf.size() + 1, 0);
@@ -318,10 +379,30 @@ ComplexMatrix build_dense_abacus_hermitian_matrix_from_local_blocks(
     for (const auto& atom_i_pair : local_blocks)
     {
         const int row_offset = offsets[static_cast<std::size_t>(atom_i_pair.first)];
+        const int expected_nrows =
+            static_cast<int>(atom_nabf.at(atom_i_pair.first));
         for (const auto& atom_j_pair : atom_i_pair.second)
         {
             const int col_offset = offsets[static_cast<std::size_t>(atom_j_pair.first)];
+            const int expected_ncols =
+                static_cast<int>(atom_nabf.at(atom_j_pair.first));
             const auto& block = atom_j_pair.second;
+            if (block.nr != expected_nrows || block.nc != expected_ncols)
+            {
+                std::ostringstream oss;
+                oss << "ABACUS dense chi0 restore block dimension mismatch for atom pair ("
+                    << atom_i_pair.first << ", " << atom_j_pair.first << "): block="
+                    << block.nr << "x" << block.nc << ", expected=" << expected_nrows
+                    << "x" << expected_ncols;
+                throw std::runtime_error(oss.str());
+            }
+            if (row_offset + block.nr > dense.nr || col_offset + block.nc > dense.nc)
+            {
+                std::ostringstream oss;
+                oss << "ABACUS dense chi0 restore block exceeds dense matrix bounds for atom pair ("
+                    << atom_i_pair.first << ", " << atom_j_pair.first << ")";
+                throw std::runtime_error(oss.str());
+            }
             for (int row = 0; row < block.nr; ++row)
             {
                 for (int col = 0; col < block.nc; ++col)
@@ -405,28 +486,61 @@ atom_mapping<ComplexMatrix>::pair_t_old symmetrize_abacus_chi0_ibz_blocks_if_nee
     const Vector3_Order<double>& q_ibz_internal)
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (Params::debug)
+    {
+        ofs_myid << get_timestamp()
+                 << " chi0 ibz restore helper entry for q=(" << q_ibz_internal.x << ", "
+                 << q_ibz_internal.y << ", " << q_ibz_internal.z << ")"
+                 << ", use_abacus_gw_symmetry=" << Params::use_abacus_gw_symmetry
+                 << ", ctx_available=" << ctx.available
+                 << ", has_abf_shell_layout=" << ctx.has_abf_shell_layout()
+                 << ", atom_to_type_size=" << ctx.atom_to_type.size()
+                 << ", klist_size=" << klist.size()
+                 << ", kfrac_list_size=" << kfrac_list.size()
+                 << ", local_input_block_count=" << collect_abacus_atom_pairs(blocks_ibz).size()
+                 << endl;
+    }
     if (!Params::use_abacus_gw_symmetry || !ctx.available || !ctx.has_abf_shell_layout()
         || ctx.atom_to_type.empty())
     {
+        if (Params::debug)
+        {
+            ofs_myid << get_timestamp()
+                     << " chi0 ibz restore helper bypass: symmetry context unavailable for q=("
+                     << q_ibz_internal.x << ", " << q_ibz_internal.y << ", " << q_ibz_internal.z
+                     << ")" << endl;
+        }
         return blocks_ibz;
     }
 
     const auto q_iter = find_matching_abacus_qpoint(klist, q_ibz_internal);
     if (q_iter == klist.end())
     {
+        if (Params::debug)
+        {
+            ofs_myid << get_timestamp()
+                     << " chi0 ibz restore helper bypass: q not found in klist for q=("
+                     << q_ibz_internal.x << ", " << q_ibz_internal.y << ", " << q_ibz_internal.z
+                     << ")" << endl;
+        }
         return blocks_ibz;
     }
     const auto iq_ibz = static_cast<std::size_t>(std::distance(klist.cbegin(), q_iter));
     if (iq_ibz >= kfrac_list.size())
     {
+        if (Params::debug)
+        {
+            ofs_myid << get_timestamp()
+                     << " chi0 ibz restore helper bypass: iq_ibz out of range for q=("
+                     << q_ibz_internal.x << ", " << q_ibz_internal.y << ", " << q_ibz_internal.z
+                     << "), iq_ibz=" << iq_ibz << ", kfrac_list_size=" << kfrac_list.size()
+                     << endl;
+        }
         return blocks_ibz;
     }
 
     const auto target_atom_pairs = collect_abacus_atom_pairs(blocks_ibz);
-    if (target_atom_pairs.empty())
-    {
-        return blocks_ibz;
-    }
+    auto output_atom_pairs = target_atom_pairs;
 
     std::map<atom_t, size_t> atom_nabf;
     const auto atom_nabf_vec = LIBRPA::atomic_basis_abf.get_atom_nbs();
@@ -451,30 +565,53 @@ atom_mapping<ComplexMatrix>::pair_t_old symmetrize_abacus_chi0_ibz_blocks_if_nee
 
     auto blocks_for_symmetrization = blocks_ibz;
 #ifdef LIBRPA_USE_LIBRI
-    if (mpi_comm_global_h.nprocs > 1)
+    const bool need_dense_restore_collective = mpi_comm_global_h.nprocs > 1;
+    if (need_dense_restore_collective)
     {
         // For chi0, the sparse IBZ source blocks are naturally distributed by atom pair.
         // Reusing LibRI's sparse gather inside the symmetry restore path can deadlock on
-        // this distribution. Instead, assemble the local Hermitian IBZ matrix densely,
-        // collect it on the root rank and broadcast the complete matrix back before
-        // rebuilding the upper-triangular atom blocks for the ABACUS-side little-group
-        // and star rotations. This symmetry-only fallback keeps the original no-symmetry
-        // sparse communication path untouched.
+        // this distribution. Instead, assemble the local Hermitian IBZ matrix densely and
+        // sum it directly across all ranks. Every rank receives the same restored dense
+        // matrix, which avoids the extra reduce+broadcast pair that proved fragile on the
+        // multi-node AlAs symmetry benchmark.
         ComplexMatrix dense_ibz_global;
         {
             auto dense_ibz_local = build_dense_abacus_hermitian_matrix_from_local_blocks(
                 blocks_ibz, atom_nabf);
-            dense_ibz_global.create(dense_ibz_local.nr, dense_ibz_local.nc, true);
-            mpi_comm_global_h.reduce_ComplexMatrix(dense_ibz_local, dense_ibz_global, 0);
-            mpi_comm_global_h.broadcast_ComplexMatrix(dense_ibz_global, 0);
+            if (Params::debug)
+            {
+                ofs_myid << get_timestamp()
+                         << " chi0 ibz dense restore start for q=(" << q_ibz_internal.x << ", "
+                         << q_ibz_internal.y << ", " << q_ibz_internal.z << ")"
+                         << ", local_block_count=" << target_atom_pairs.size()
+                         << ", local_dims=" << dense_ibz_local.nr << "x" << dense_ibz_local.nc
+                         << ", local_size=" << dense_ibz_local.size
+                         << ", local_max_abs=" << dense_ibz_local.get_max_abs() << endl;
+            }
+            dense_ibz_global = allreduce_dense_complex_matrix_via_real_imag(dense_ibz_local);
+            if (Params::debug)
+            {
+                ofs_myid << get_timestamp()
+                         << " chi0 ibz dense restore finished for q=(" << q_ibz_internal.x
+                         << ", " << q_ibz_internal.y << ", " << q_ibz_internal.z << ")" << endl;
+            }
         }
         blocks_for_symmetrization =
             build_abacus_blocks_from_dense_matrix(dense_ibz_global, atom_nabf);
+        // After the IBZ dense matrix is reconstructed on every rank, return the complete
+        // upper-triangular atom-pair set so the subsequent Wc dense path can consume the same
+        // symmetrized chi0(q, iω) locally without an additional MPI reduction.
+        output_atom_pairs = collect_all_upper_atom_pairs(atom_nabf);
     }
 #endif
 
+    if (output_atom_pairs.empty())
+    {
+        return blocks_ibz;
+    }
+
     return symmetrize_abacus_abf_ibz_blocks(
-        ctx, star, abf_star, q_ibz_frac, blocks_for_symmetrization, atom_nabf, target_atom_pairs);
+        ctx, star, abf_star, q_ibz_frac, blocks_for_symmetrization, atom_nabf, output_atom_pairs);
 }
 
 std::set<std::pair<atom_t, atom_t>> collect_abacus_atom_pairs(
@@ -645,6 +782,15 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
             collect_abacus_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_key);
         if (Params::debug)
         {
+            std::fprintf(stderr,
+                         "[rank %d] restore_abf_full_qspace start iq_ibz=%d star=%d q=(%.10f, %.10f, %.10f) local_blocks=%zu members=%zu\n",
+                         mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index,
+                         q_ibz_key.x, q_ibz_key.y, q_ibz_key.z, blocks_ibz_local.size(),
+                         star.members.size());
+            std::fflush(stderr);
+        }
+        if (Params::debug)
+        {
             LIBRPA::utils::lib_printf_root(
                 "ABACUS GW restore debug: iq_ibz=%d star=%d k_ibz=(%.7f %.7f %.7f) blocks=%zu members=%zu\n",
                 mapping_entry.iq_ibz, star.star_index, k_ibz_frac.x, k_ibz_frac.y, k_ibz_frac.z,
@@ -652,22 +798,43 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
         }
 
         const auto local_target_pairs = collect_abacus_atom_pairs(blocks_ibz_local);
+        auto target_atom_pairs = local_target_pairs;
         auto blocks_ibz = blocks_ibz_local;
 #ifdef LIBRPA_USE_LIBRI
         if (mpi_comm_global_h.nprocs > 1)
         {
-            const auto source_atom_sets = collect_abacus_required_source_atom_sets(
-                star, local_target_pairs, atom_nabf.size());
-            const std::array<double, 3> q_ibz_array{q_ibz_key.x, q_ibz_key.y, q_ibz_key.z};
-            const auto gathered_blocks_tensor = comm_map2_first(
-                mpi_comm_global_h.comm, convert_abacus_blocks_to_tensor_map(blocks_ibz_local, q_ibz_array),
-                source_atom_sets.first, source_atom_sets.second);
-            blocks_ibz = convert_tensor_map_to_abacus_blocks(
-                gathered_blocks_tensor, q_ibz_array, atom_nabf);
+            // `Wc(q_ibz, iω)` is distributed by atom pair. Reusing LibRI's sparse
+            // `comm_map2_first()` here can stall when some ranks hold no local target pairs for a
+            // given `(q_ibz, iω)` block. Restore the Hermitian IBZ matrix densely on every rank
+            // instead, exactly as in the stabilized chi0 symmetry path.
+            const auto dense_ibz_local =
+                build_dense_abacus_hermitian_matrix_from_local_blocks(blocks_ibz_local, atom_nabf);
+            const auto dense_ibz_global =
+                allreduce_dense_complex_matrix_via_real_imag(dense_ibz_local);
+            blocks_ibz = build_abacus_blocks_from_dense_matrix(dense_ibz_global, atom_nabf);
+            // After the dense IBZ operator is reconstructed on every rank, drive the
+            // q-star restore with the complete upper-triangular atom-pair list so that
+            // all ranks participate in the same collective rotation path.
+            target_atom_pairs = collect_all_upper_atom_pairs(atom_nabf);
+            if (Params::debug)
+            {
+                std::fprintf(stderr,
+                             "[rank %d] restore_abf_full_qspace after dense allreduce iq_ibz=%d star=%d local_target_pairs=%zu target_pairs=%zu\n",
+                             mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index,
+                             local_target_pairs.size(), target_atom_pairs.size());
+                std::fflush(stderr);
+            }
         }
 #endif
-        if (local_target_pairs.empty())
+        if (target_atom_pairs.empty())
         {
+            if (Params::debug)
+            {
+                std::fprintf(stderr,
+                             "[rank %d] restore_abf_full_qspace skip iq_ibz=%d star=%d because target_atom_pairs is empty\n",
+                             mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index);
+                std::fflush(stderr);
+            }
             continue;
         }
 
@@ -676,7 +843,15 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
         // expanding it to the full star, so the result does not depend on the specific member
         // chosen as the representative.
         blocks_ibz = symmetrize_abacus_abf_ibz_blocks(
-            ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf, local_target_pairs);
+            ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf, target_atom_pairs);
+        if (Params::debug)
+        {
+            std::fprintf(stderr,
+                         "[rank %d] restore_abf_full_qspace after ibz symmetrize iq_ibz=%d star=%d target_pairs=%zu\n",
+                         mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index,
+                         target_atom_pairs.size());
+            std::fflush(stderr);
+        }
 
         for (std::size_t imember = 0; imember < star.members.size(); ++imember)
         {
@@ -688,6 +863,11 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
                 LIBRPA::utils::lib_printf_root(
                     "ABACUS GW restore debug:   member isym=%d k_bz=(%.7f %.7f %.7f)\n",
                     member.isym, member.k_bz.x, member.k_bz.y, member.k_bz.z);
+                std::fprintf(stderr,
+                             "[rank %d] restore_abf_full_qspace before member rotate iq_ibz=%d star=%d imember=%zu isym=%d\n",
+                             mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index, imember,
+                             member.isym);
+                std::fflush(stderr);
             }
             const bool use_time_reversal = member.isym >= nsym_space;
             LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
@@ -695,7 +875,7 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
                     ctx, abf_member, blocks_ibz, atom_nabf, k_ibz_frac, coord_frac,
-                    use_time_reversal, &local_target_pairs);
+                    use_time_reversal, &target_atom_pairs);
             }
             catch (const std::exception& ex)
             {
@@ -704,6 +884,14 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
                     << ", star=" << star.star_index << ", member=" << imember
                     << ", isym=" << member.isym << ": " << ex.what();
                 throw std::runtime_error(oss.str());
+            }
+            if (Params::debug)
+            {
+                std::fprintf(stderr,
+                             "[rank %d] restore_abf_full_qspace after member rotate iq_ibz=%d star=%d imember=%zu rotated_blocks=%zu\n",
+                             mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index, imember,
+                             rotated_blocks.size());
+                std::fflush(stderr);
             }
             for (const auto& atom_i_pair : rotated_blocks)
             {
@@ -715,6 +903,13 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
                         to_row_major_matrix_m(atom_j_pair.second);
                 }
             }
+        }
+        if (Params::debug)
+        {
+            std::fprintf(stderr,
+                         "[rank %d] restore_abf_full_qspace finish iq_ibz=%d star=%d\n",
+                         mpi_comm_global_h.myid, mapping_entry.iq_ibz, star.star_index);
+            std::fflush(stderr);
         }
     }
 
@@ -3176,10 +3371,48 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 {
                     chi0_dense_local.create(n_abf, n_abf, true);
                 }
-                if (chi0.get_chi0_q().count(freq) > 0 && chi0.get_chi0_q().at(freq).count(q) > 0)
+                atom_mapping<ComplexMatrix>::pair_t_old chi0_wq;
+                const bool has_local_chi0_q =
+                    chi0.get_chi0_q().count(freq) > 0 && chi0.get_chi0_q().at(freq).count(q) > 0;
+                if (use_abacus_symmetry_dense_chi0_collect)
                 {
-                    const auto chi0_wq =
-                        symmetrize_abacus_chi0_ibz_blocks_if_needed(chi0.get_chi0_q().at(freq).at(q), q);
+                    const atom_mapping<ComplexMatrix>::pair_t_old empty_blocks;
+                    const auto& chi0_blocks_ibz =
+                        has_local_chi0_q ? chi0.get_chi0_q().at(freq).at(q) : empty_blocks;
+                    if (Params::debug)
+                    {
+                        ofs_myid << get_timestamp()
+                                 << " chi0 dense restore call site for q=(" << q.x << ", "
+                                 << q.y << ", " << q.z << "), ifreq=" << ifreq
+                                 << ", has_local_chi0_q=" << has_local_chi0_q
+                                 << ", local_input_block_count="
+                                 << collect_abacus_atom_pairs(chi0_blocks_ibz).size() << endl;
+                    }
+                    chi0_wq =
+                        symmetrize_abacus_chi0_ibz_blocks_if_needed(chi0_blocks_ibz, q);
+                    if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                    {
+                        std::fprintf(stderr,
+                                     "[rank %d] after sym_restore q=(%.10f, %.10f, %.10f) ifreq=%d empty=%d\n",
+                                     mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq,
+                                     chi0_wq.empty() ? 1 : 0);
+                        std::fflush(stderr);
+                    }
+                }
+                else if (has_local_chi0_q)
+                {
+                    chi0_wq = symmetrize_abacus_chi0_ibz_blocks_if_needed(
+                        chi0.get_chi0_q().at(freq).at(q), q);
+                }
+                if (!chi0_wq.empty())
+                {
+                    if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                    {
+                        std::fprintf(stderr,
+                                     "[rank %d] enter chi0_wq loop q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                     mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                        std::fflush(stderr);
+                    }
                     for (const auto &M_Nchi : chi0_wq)
                     {
                         const auto &M = M_Nchi.first;
@@ -3189,6 +3422,13 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                             const auto &N = N_chi.first;
                             const auto n_nu = LIBRPA::atomic_basis_abf.get_atom_nb(N);
                             const auto &chi = N_chi.second;
+                            if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                            {
+                                std::fprintf(stderr,
+                                             "[rank %d] chi0_wq block M=%d N=%d dims=%d x %d ifreq=%d\n",
+                                             mpi_comm_global_h.myid, M, N, chi.nr, chi.nc, ifreq);
+                                std::fflush(stderr);
+                            }
                             // The symmetry-restored chi0 blocks must match the active ABF layout
                             // exactly. Otherwise RI::Tensor would be constructed with a shape
                             // that disagrees with the payload, which can corrupt the subsequent
@@ -3237,9 +3477,36 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                             }
                         }
                     }
-                    // Release the chi0 block for this frequency and q to reduce memory load,
-                    // as they will not be used again
-                    chi0.free_chi0_q(freq, q);
+                    if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                    {
+                        std::fprintf(stderr,
+                                     "[rank %d] finished chi0_wq loop q=(%.10f, %.10f, %.10f) ifreq=%d has_local=%d\n",
+                                     mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq,
+                                     has_local_chi0_q ? 1 : 0);
+                        std::fflush(stderr);
+                    }
+                    // Release only the original local chi0(q, iω) block. Under the ABACUS
+                    // symmetry restore path, ranks without a local source block still receive a
+                    // non-empty restored chi0_wq; attempting to free the absent original entry on
+                    // those ranks throws std::out_of_range inside chi0's map storage.
+                    if (has_local_chi0_q)
+                    {
+                        if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                        {
+                            std::fprintf(stderr,
+                                         "[rank %d] before chi0.free_chi0_q q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                         mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                            std::fflush(stderr);
+                        }
+                        chi0.free_chi0_q(freq, q);
+                        if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                        {
+                            std::fprintf(stderr,
+                                         "[rank %d] after chi0.free_chi0_q q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                         mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                            std::fflush(stderr);
+                        }
+                    }
                 }
                 if (Params::use_abacus_gw_symmetry && Params::debug)
                 {
@@ -3256,33 +3523,35 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                 if (use_abacus_symmetry_dense_chi0_collect)
                 {
                     Profiler::start("epsilon_prepare_chi0_2d_collect_block");
-                    // The symmetry-restored chi0 blocks stay distributed by atom pair after the
-                    // ABACUS-side reconstruction. Reusing the sparse LibRI redistribution here
-                    // deadlocks on the 3-block AlAs pattern. Therefore the symmetry-on path
-                    // collects the already symmetrized dense chi0(q, iω) on the root rank and
-                    // broadcasts the complete matrix back before filling the BLACS source block.
-                    ComplexMatrix chi0_dense_global(n_abf, n_abf, true);
+                    // The symmetry restore path already replicated the full upper-triangular
+                    // symmetrized chi0(q, iω) onto every rank. Reusing another world reduction
+                    // here is unnecessary and can deadlock when some ranks own no original
+                    // atom-pair blocks. Consume the identical dense matrix locally instead.
                     if (Params::debug)
                     {
                         ofs_myid << get_timestamp()
-                                 << " chi0 dense reduce start for q=(" << q.x << ", " << q.y
-                                 << ", " << q.z << "), ifreq=" << ifreq << endl;
+                                 << " chi0 dense local fill start for q=(" << q.x << ", " << q.y
+                                 << ", " << q.z << "), ifreq=" << ifreq
+                                 << ", n_abf=" << n_abf
+                                 << ", local_dims=" << chi0_dense_local.nr << "x"
+                                 << chi0_dense_local.nc
+                                 << ", local_size=" << chi0_dense_local.size
+                                 << ", local_max_abs=" << chi0_dense_local.get_max_abs()
+                                 << endl;
                     }
-                    mpi_comm_global_h.reduce_ComplexMatrix(chi0_dense_local, chi0_dense_global, 0);
-                    mpi_comm_global_h.broadcast_ComplexMatrix(chi0_dense_global, 0);
                     for (int ilo = 0; ilo != desc_nabf_nabf.m_loc(); ++ilo)
                     {
                         const int i_gl = desc_nabf_nabf.indx_l2g_r(ilo);
                         for (int jlo = 0; jlo != desc_nabf_nabf.n_loc(); ++jlo)
                         {
                             const int j_gl = desc_nabf_nabf.indx_l2g_c(jlo);
-                            temp_block(ilo, jlo) = chi0_dense_global(i_gl, j_gl);
+                            temp_block(ilo, jlo) = chi0_dense_local(i_gl, j_gl);
                         }
                     }
                     if (Params::debug)
                     {
                         ofs_myid << get_timestamp()
-                                 << " chi0 dense reduce+broadcast finished for q=(" << q.x << ", "
+                                 << " chi0 dense local fill finished for q=(" << q.x << ", "
                                  << q.y << ", " << q.z << "), ifreq=" << ifreq << endl;
                     }
                 }
@@ -3312,20 +3581,77 @@ compute_Wc_freq_q_blacs(Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat_eps,
                                                      LIBRPA::atomic_basis_abf, qa, true, CONE,
                                                      IJq_chi0, MAJOR::ROW);
                 }
+                if (Params::debug)
+                {
+                    ofs_myid << get_timestamp() << " chi0 block redistribution before pgemr2d for q=("
+                             << q.x << ", " << q.y << ", " << q.z << "), ifreq=" << ifreq
+                             << endl;
+                }
+                if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                {
+                    std::fprintf(stderr,
+                                 "[rank %d] before chi0 pgemr2d q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                 mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                    std::fflush(stderr);
+                }
                 ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1,
                                               desc_nabf_nabf.desc, chi0_block.ptr(), 1, 1,
                                               desc_nabf_nabf_opt.desc, blacs_ctxt_global_h.ictxt);
+                if (Params::debug)
+                {
+                    ofs_myid << get_timestamp() << " chi0 block redistribution after pgemr2d for q=("
+                             << q.x << ", " << q.y << ", " << q.z << "), ifreq=" << ifreq
+                             << endl;
+                }
+                if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                {
+                    std::fprintf(stderr,
+                                 "[rank %d] after chi0 pgemr2d q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                 mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                    std::fflush(stderr);
+                }
                 std::ostringstream chi0_debug_name;
                 chi0_debug_name << std::fixed << std::setprecision(10)
                                 << "chi0_block_qx_" << q.x << "_qy_" << q.y << "_qz_" << q.z
                                 << "_freq_" << ifreq << ".mtx";
+                if (Params::debug)
+                {
+                    ofs_myid << get_timestamp() << " chi0 block dump start for q=(" << q.x << ", "
+                             << q.y << ", " << q.z << "), ifreq=" << ifreq << endl;
+                }
+                if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                {
+                    std::fprintf(stderr,
+                                 "[rank %d] before chi0 dump q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                 mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                    std::fflush(stderr);
+                }
                 dump_blacs_debug_matrix(
                     chi0_debug_name.str(), chi0_block, desc_nabf_nabf_opt);
+                if (Params::debug)
+                {
+                    ofs_myid << get_timestamp() << " chi0 block dump finished for q=(" << q.x
+                             << ", " << q.y << ", " << q.z << "), ifreq=" << ifreq << endl;
+                }
+                if (Params::debug && is_gamma_point(q) && ifreq == 0)
+                {
+                    std::fprintf(stderr,
+                                 "[rank %d] after chi0 dump q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                                 mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                    std::fflush(stderr);
+                }
                 Profiler::stop("epsilon_prepare_chi0_2d_collect_block");
                 // sprintf(fn, "chi_ifreq_%d_iq_%d.mtx", ifreq, iq);
                 // print_matrix_mm_file_parallel(fn, chi0_block, desc_nabf_nabf);
             }
             Profiler::stop("epsilon_prepare_chi0_2d");
+            if (Params::debug && is_gamma_point(q) && ifreq == 0)
+            {
+                std::fprintf(stderr,
+                             "[rank %d] before epsilon_compute_eps q=(%.10f, %.10f, %.10f) ifreq=%d\n",
+                             mpi_comm_global_h.myid, q.x, q.y, q.z, ifreq);
+                std::fflush(stderr);
+            }
 
             Profiler::start("epsilon_compute_eps", "Compute dielectric matrix");
 
@@ -3719,20 +4045,28 @@ CT_FT_Wc_freq_q(
     {
         LIBRPA::utils::lib_printf_root(
             "ABACUS GW symmetry accumulates irreducible-sector `W(R,w)` directly from IBZ q-stars\n");
-        for (const auto& freq_Wc : Wc_freq_q)
+        const abf_qspace_complex_block_map_t empty_blocks;
+        for (int ifreq = 0; ifreq < ngrids; ++ifreq)
         {
-            Wc_freq_R[freq_Wc.first] =
-                accumulate_abacus_full_wr_from_ibz_q(freq_Wc.second, n_k_points, Rlist, atom_mu);
+            const auto freq = tfg.get_freq_nodes()[ifreq];
+            const auto& freq_blocks =
+                (Wc_freq_q.count(freq) > 0) ? Wc_freq_q.at(freq) : empty_blocks;
+            Wc_freq_R[freq] =
+                accumulate_abacus_full_wr_from_ibz_q(freq_blocks, n_k_points, Rlist, atom_mu);
         }
     }
     else if (use_abacus_full_q_restore)
     {
         LIBRPA::utils::lib_printf_root(
             "ABACUS GW symmetry restores the full ABF q-star before `CT_FT_Wc_freq_q`\n");
-        for (const auto& freq_Wc : Wc_freq_q)
+        const abf_qspace_complex_block_map_t empty_blocks;
+        for (int ifreq = 0; ifreq < ngrids; ++ifreq)
         {
-            Wc_freq_q_full[freq_Wc.first] = restore_abacus_abf_full_qspace_operator(
-                freq_Wc.second, atom_mu);
+            const auto freq = tfg.get_freq_nodes()[ifreq];
+            const auto& freq_blocks =
+                (Wc_freq_q.count(freq) > 0) ? Wc_freq_q.at(freq) : empty_blocks;
+            Wc_freq_q_full[freq] =
+                restore_abacus_abf_full_qspace_operator(freq_blocks, atom_mu);
         }
     }
 
@@ -3968,20 +4302,28 @@ CT_FT_Wc_q2R_freq2time(
     {
         LIBRPA::utils::lib_printf_root(
             "ABACUS GW symmetry accumulates irreducible-sector `W(R,w)` directly from IBZ q-stars\n");
-        for (const auto& freq_Wc : Wc_freq_q)
+        const abf_qspace_complex_block_map_t empty_blocks;
+        for (int ifreq = 0; ifreq < ngrids; ++ifreq)
         {
-            Wc_freq_R[freq_Wc.first] =
-                accumulate_abacus_full_wr_from_ibz_q(freq_Wc.second, n_k_points, Rlist, atom_mu);
+            const auto freq = tfg.get_freq_nodes()[ifreq];
+            const auto& freq_blocks =
+                (Wc_freq_q.count(freq) > 0) ? Wc_freq_q.at(freq) : empty_blocks;
+            Wc_freq_R[freq] =
+                accumulate_abacus_full_wr_from_ibz_q(freq_blocks, n_k_points, Rlist, atom_mu);
         }
     }
     else if (use_abacus_full_q_restore)
     {
         LIBRPA::utils::lib_printf_root(
             "ABACUS GW symmetry restores the full ABF q-star before `CT_FT_Wc_q2R_freq2time`\n");
-        for (const auto& freq_Wc : Wc_freq_q)
+        const abf_qspace_complex_block_map_t empty_blocks;
+        for (int ifreq = 0; ifreq < ngrids; ++ifreq)
         {
-            Wc_freq_q_full[freq_Wc.first] = restore_abacus_abf_full_qspace_operator(
-                freq_Wc.second, atom_mu);
+            const auto freq = tfg.get_freq_nodes()[ifreq];
+            const auto& freq_blocks =
+                (Wc_freq_q.count(freq) > 0) ? Wc_freq_q.at(freq) : empty_blocks;
+            Wc_freq_q_full[freq] =
+                restore_abacus_abf_full_qspace_operator(freq_blocks, atom_mu);
         }
 
         static bool dumped_restored_fullq_freq = false;

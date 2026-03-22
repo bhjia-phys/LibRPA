@@ -1113,6 +1113,22 @@ Array_Desc diele_func::get_body_inv(matrix_m<std::complex<double>> &chi0_block,
 void diele_func::construct_L(const int ifreq, Array_Desc &desc_body)
 {
     Profiler::start("cal_L");
+    if (Params::debug)
+    {
+        ofs_myid << get_timestamp() << " df_headwing construct_L entry: ifreq=" << ifreq
+                 << ", head_size=" << head.size()
+                 << ", wing_size=" << wing.size()
+                 << ", n_nonsingular=" << n_nonsingular << endl;
+    }
+    if (ifreq < 0 || static_cast<std::size_t>(ifreq) >= head.size()
+        || static_cast<std::size_t>(ifreq) >= wing.size())
+    {
+        std::ostringstream oss;
+        oss << "Head/wing dielectric data unavailable on rank " << mpi_comm_global_h.myid
+            << " for ifreq=" << ifreq << " (head_size=" << head.size()
+            << ", wing_size=" << wing.size() << ")";
+        throw std::runtime_error(oss.str());
+    }
     this->Lind.resize(3, 3, MAJOR::COL);
     this->bw.resize(n_nonsingular - 1, 3, MAJOR::COL);
     this->wb.resize(3, n_nonsingular - 1, MAJOR::COL);
@@ -1671,6 +1687,13 @@ void diele_func::assign_chi0(matrix_m<std::complex<double>> &chi0_block,
 void diele_func::rewrite_eps(matrix_m<std::complex<double>> &chi0_block, const int ifreq,
                              Array_Desc &desc_nabf_nabf_opt)
 {
+    if (Params::debug)
+    {
+        ofs_myid << get_timestamp() << " df_headwing rewrite_eps entry: ifreq=" << ifreq
+                 << ", head_size=" << head.size()
+                 << ", wing_size=" << wing.size()
+                 << ", wing_mu_size=" << wing_mu.size() << endl;
+    }
     auto desc_body = get_body_inv(chi0_block, desc_nabf_nabf_opt);
     cal_eps(ifreq, desc_nabf_nabf_opt, desc_body);
     assign_chi0(chi0_block, desc_nabf_nabf_opt);

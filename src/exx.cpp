@@ -47,6 +47,18 @@ bool use_abacus_ibz_root_projection(const int n_target_kpoints,
            && n_target_kpoints == n_meanfield_kpoints;
 }
 
+bool force_root_dense_ks_projection()
+{
+    const char* env_value = std::getenv("LIBRPA_FORCE_ROOT_KS_PROJECTION");
+    if (env_value == nullptr)
+    {
+        return false;
+    }
+    const std::string value(env_value);
+    return !(value.empty() || value == "0" || value == "f" || value == "F"
+             || value == "false" || value == "FALSE");
+}
+
 std::string format_debug_double(const double value)
 {
     std::ostringstream oss;
@@ -713,10 +725,11 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         use_abacus_exx_symmetry
             ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector)
             : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
-    // Enable an output-only LibRI irreducible-sector filter once the ABACUS real-space restore
-    // map is available. The internal EXX contractions stay unchanged, while the returned `Hs`
-    // blocks are restricted to the irreducible output sector and restored below.
-    const bool use_libri_exx_symmetry_filter = use_abacus_exx_symmetry;
+    // The current `filter_atom` path changes the contracted `Hs` blocks even when `D(R)` and
+    // `V(R)` already match the symmetry-off reference. Keep the EXX contraction on the full
+    // real-space sector until a native LibRI symmetry path is available; otherwise the restored
+    // KS EXX matrix disagrees with the symmetry-off reference.
+    const bool use_libri_exx_symmetry_filter = false;
     abacus_rspace_sector_stars_t abacus_sector_stars;
     if (use_abacus_exx_symmetry)
     {
@@ -862,6 +875,9 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         use_abacus_exx_symmetry && exx_coul_mat_ptr == &coul_mat
         && LIBRPA::parallel_routing != LIBRPA::ParallelRouting::R_TAU
         && mpi_comm_global_h.nprocs > 1;
+    const bool use_existing_local_vr_partition =
+        !use_abacus_exx_symmetry && LIBRPA::parallel_routing != LIBRPA::ParallelRouting::R_TAU
+        && mpi_comm_global_h.nprocs > 1;
     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
     {
         // Full Coulomb case, have to re-distribute
@@ -893,10 +909,13 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     }
     else
     {
-        if (use_symmetry_direct_vr_local_cache)
+        if (use_symmetry_direct_vr_local_cache || use_existing_local_vr_partition)
         {
-            // Keep a full local replica on each MPI rank and skip the additional LibRI
-            // redistribution step below.
+            // For symmetry-restored EXX, `FT_Vq()` can leave a full local `V(R)` replica on every
+            // rank. For symmetry-off LibRI runs, `FT_Vq()` keeps the real-space Coulomb blocks
+            // partitioned across ranks already. In both cases, feed the currently available local
+            // blocks directly into `V_libri` and avoid a second task dispatch that would either
+            // duplicate or drop entries.
             for (const auto &I_JRV : exx_coul_mat)
             {
                 const auto I = I_JRV.first;
@@ -1281,6 +1300,8 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     Profiler::start("build_real_space_exx_2", "Prepare V libRI object");
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> V_libri;
     Profiler::start("build_real_space_exx_2_1");
+    const bool use_existing_local_vr_partition =
+        LIBRPA::parallel_routing != LIBRPA::ParallelRouting::R_TAU && mpi_comm_global_h.nprocs > 1;
     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
     {
         // Full Coulomb case, have to re-distribute
@@ -1302,7 +1323,32 @@ mpi_comm_global_h.myid, mpi_comm_global_h.nprocs, true, true))
     }
     else
     {
-        if (mpi_comm_global_h.nprocs > 1)
+        if (use_existing_local_vr_partition)
+        {
+            // In LibRI atom-pair routing the incoming `coul_mat` is already partitioned by MPI
+            // rank after the reciprocal-to-real transform. Re-dispatching the existing local map
+            // would drop most entries, so pass the local blocks through directly.
+            for (const auto &I_JRV : coul_mat)
+            {
+                const auto I = I_JRV.first;
+                for (const auto &J_RV : I_JRV.second)
+                {
+                    const auto J = J_RV.first;
+                    for (const auto &R_V : J_RV.second)
+                    {
+                        const auto &R = R_V.first;
+                        const auto &V = R_V.second;
+                        std::array<int, 3> Ra{R.x, R.y, R.z};
+                        std::valarray<double> VIJR_va(V->c, V->size);
+                        auto pv = std::make_shared<std::valarray<double>>();
+                        *pv = VIJR_va;
+                        V_libri[I][{J, Ra}] = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)},
+                                                                 pv);
+                    }
+                }
+            }
+        }
+        else if (mpi_comm_global_h.nprocs > 1)
         {
             // `FT_Vq()` currently leaves the restored real-space Coulomb map replicated on each
             // MPI rank. Feed only a deterministic local subset into LibRI so `set_Vs()` does not
@@ -1506,7 +1552,8 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
     desc_nband_nband.init_1b1p(n_bands, n_bands, 0, 0);
     desc_nband_nband_fb.init(n_bands, n_bands, n_bands, n_bands, 0, 0);
     const bool use_root_dense_projection =
-        use_abacus_ibz_root_projection(n_target_kpoints, this->mf_.get_n_kpoints());
+        use_abacus_ibz_root_projection(n_target_kpoints, this->mf_.get_n_kpoints())
+        || force_root_dense_ks_projection();
     Array_Desc desc_nao_nao_fb(blacs_ctxt_global_h);
     if (use_root_dense_projection)
     {
@@ -1648,6 +1695,13 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
 
                 exx_I_JR.clear();
                 Profiler::stop("build_real_space_exx_5");
+
+                {
+                    std::ostringstream oss;
+                    oss << Params::output_dir << "debug_exx_HR_before_fourier_spin" << isp
+                        << "_soc" << isoc1 << "_" << isoc2 << ".txt";
+                    dump_tensor_map_summary(exx_I_JR_local, oss.str());
+                }
 
                 utils::lib_printf("Task %4d: tensor communicate elapsed time: %f\n",
                                   mpi_comm_global_h.myid,

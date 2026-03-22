@@ -2,7 +2,9 @@
 
 #include <fstream>
 #include <functional>
+#include <iomanip>
 #include <map>
+#include <numeric>
 #include <sstream>
 #include <type_traits>
 
@@ -165,6 +167,146 @@ std::size_t tensor_map_key_count_gw(
         count += i_entry.second.size();
     }
     return count;
+}
+
+template <typename T>
+bool tensor_has_nonfinite_gw(const RI::Tensor<T>& tensor)
+{
+    const int size = std::accumulate(
+        tensor.shape.begin(), tensor.shape.end(), 1, std::multiplies<int>());
+    const auto* data = tensor.ptr();
+    for (int i = 0; i < size; ++i)
+    {
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            if (!std::isfinite(data[i].real()) || !std::isfinite(data[i].imag()))
+            {
+                return true;
+            }
+        }
+        else
+        {
+            if (!std::isfinite(static_cast<double>(data[i])))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+template <typename T>
+double tensor_max_abs_gw(const RI::Tensor<T>& tensor)
+{
+    const int size = std::accumulate(
+        tensor.shape.begin(), tensor.shape.end(), 1, std::multiplies<int>());
+    const auto* data = tensor.ptr();
+    double max_abs = 0.0;
+    for (int i = 0; i < size; ++i)
+    {
+        max_abs = std::max(max_abs, static_cast<double>(std::abs(data[i])));
+    }
+    return max_abs;
+}
+
+template <typename T>
+std::complex<double> tensor_sum_gw(const RI::Tensor<T>& tensor)
+{
+    const int size = std::accumulate(
+        tensor.shape.begin(), tensor.shape.end(), 1, std::multiplies<int>());
+    const auto* data = tensor.ptr();
+    std::complex<double> sum(0.0, 0.0);
+    for (int i = 0; i < size; ++i)
+    {
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            sum += data[i];
+        }
+        else
+        {
+            sum += std::complex<double>(static_cast<double>(data[i]), 0.0);
+        }
+    }
+    return sum;
+}
+
+template <typename T>
+double tensor_frobenius_norm_gw(const RI::Tensor<T>& tensor)
+{
+    const int size = std::accumulate(
+        tensor.shape.begin(), tensor.shape.end(), 1, std::multiplies<int>());
+    const auto* data = tensor.ptr();
+    double norm_sq = 0.0;
+    for (int i = 0; i < size; ++i)
+    {
+        const double abs_value = static_cast<double>(std::abs(data[i]));
+        norm_sq += abs_value * abs_value;
+    }
+    return std::sqrt(norm_sq);
+}
+
+template <typename T>
+std::complex<double> tensor_trace_gw(const RI::Tensor<T>& tensor)
+{
+    const auto shape = tensor.shape;
+    const int nrows = static_cast<int>(shape.empty() ? 0 : shape[0]);
+    const int ncols = static_cast<int>(shape.size() < 2 ? 0 : shape[1]);
+    const int ndiag = std::min(nrows, ncols);
+    const auto* data = tensor.ptr();
+    std::complex<double> trace(0.0, 0.0);
+    for (int i = 0; i < ndiag; ++i)
+    {
+        const int index = i * ncols + i;
+        if constexpr (std::is_same<T, std::complex<double>>::value)
+        {
+            trace += data[index];
+        }
+        else
+        {
+            trace += std::complex<double>(static_cast<double>(data[index]), 0.0);
+        }
+    }
+    return trace;
+}
+
+template <typename T>
+void dump_tensor_map_summary_gw(
+    const std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<T>>>& tensors,
+    const std::string& file_path)
+{
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ofstream ofs(file_path);
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    ofs << std::scientific << std::setprecision(15);
+    ofs << "# I J Rx Ry Rz rows cols nonfinite maxabs frob sum_re sum_im trace_re trace_im\n";
+    for (const auto& i_entry : tensors)
+    {
+        const int iatom = i_entry.first;
+        for (const auto& jr_entry : i_entry.second)
+        {
+            const int jatom = jr_entry.first.first;
+            const auto& R = jr_entry.first.second;
+            const auto& tensor = jr_entry.second;
+            const auto shape = tensor.shape;
+            const int nrows = static_cast<int>(shape.empty() ? 0 : shape[0]);
+            const int ncols = static_cast<int>(shape.size() < 2 ? 0 : shape[1]);
+            const auto sum = tensor_sum_gw(tensor);
+            const auto trace = tensor_trace_gw(tensor);
+            ofs << iatom << " " << jatom << " " << R[0] << " " << R[1] << " " << R[2] << " "
+                << nrows << " " << ncols << " " << (tensor_has_nonfinite_gw(tensor) ? 1 : 0)
+                << " " << tensor_max_abs_gw(tensor) << " " << tensor_frobenius_norm_gw(tensor)
+                << " " << sum.real() << " " << sum.imag() << " " << trace.real() << " "
+                << trace.imag() << "\n";
+        }
+    }
 }
 
 template <typename Tdata>
@@ -757,10 +899,30 @@ void G0W0::build_spacetime(
                 }
             }
             gw_libri.set_Cs(data_libri, Params::libri_g0w0_threshold_C);
+            if (Params::debug)
+            {
+                envs::ofs_myid << "Number of GW Cs input keys: " << get_num_keys(data_libri)
+                               << "\n";
+                dump_tensor_map_summary_gw(data_libri,
+                                           Params::output_dir + "debug_gw_C_input_summary.txt");
+                dump_tensor_map_summary_gw(gw_libri.lri.data_pool.at("Cs_").Ds_ab,
+                                           Params::output_dir
+                                               + "debug_gw_C_after_set_summary.txt");
+            }
         }
         else
         {
             gw_libri.set_Cs(LRI_Cs.data_libri, Params::libri_g0w0_threshold_C);
+            if (Params::debug)
+            {
+                envs::ofs_myid << "Number of GW Cs input keys: " << get_num_keys(LRI_Cs.data_libri)
+                               << "\n";
+                dump_tensor_map_summary_gw(LRI_Cs.data_libri,
+                                           Params::output_dir + "debug_gw_C_input_summary.txt");
+                dump_tensor_map_summary_gw(gw_libri.lri.data_pool.at("Cs_").Ds_ab,
+                                           Params::output_dir
+                                               + "debug_gw_C_after_set_summary.txt");
+            }
         }
 
         Profiler::stop("g0w0_build_spacetime_2");
@@ -897,8 +1059,24 @@ void G0W0::build_spacetime(
         {
             n_obj_wc_libri += w.second.size();
         }
+        if (Params::debug)
+        {
+            envs::ofs_myid << "Number of GW Wc input keys at tau " << tau << ": "
+                           << get_num_keys(Wc_libri) << "\n";
+            std::ostringstream oss;
+            oss << Params::output_dir << "debug_gw_W_tau_" << std::setfill('0') << std::setw(3)
+                << itau << "_summary.txt";
+            dump_tensor_map_summary_gw(Wc_libri, oss.str());
+        }
         stage_tag = format_stage_tag("set LibRI W object", itau);
         gw_libri.set_Ws(Wc_libri, Params::libri_g0w0_threshold_Wc);
+        if (Params::debug)
+        {
+            std::ostringstream oss;
+            oss << Params::output_dir << "debug_gw_W_after_set_tau_" << std::setfill('0')
+                << std::setw(3) << itau << "_summary.txt";
+            dump_tensor_map_summary_gw(gw_libri.lri.data_pool.at("Ws_").Ds_ab, oss.str());
+        }
         Wc_libri.clear();
 
         Profiler::stop("g0w0_build_spacetime_3");
@@ -980,12 +1158,31 @@ void G0W0::build_spacetime(
                             const auto &gf_libri = tau_gf_libri.at(t);
                             size_t n_obj_gf_libri = 0;
                             for (const auto &gf : gf_libri) n_obj_gf_libri += gf.second.size();
+                            if (Params::debug)
+                            {
+                                envs::ofs_myid << "Number of GW GF input keys at tau " << t
+                                               << ": " << get_num_keys(gf_libri) << "\n";
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_G_tau_" << std::setfill('0')
+                                    << std::setw(3) << itau << "_" << (t > 0 ? "pos" : "neg")
+                                    << "_summary.txt";
+                                dump_tensor_map_summary_gw(gf_libri, oss.str());
+                            }
 
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
                             stage_tag = format_stage_tag(
                                 "set LibRI G object", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
                             gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
+                            if (Params::debug)
+                            {
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_G_after_set_tau_"
+                                    << std::setfill('0') << std::setw(3) << itau << "_"
+                                    << (t > 0 ? "pos" : "neg") << "_summary.txt";
+                                dump_tensor_map_summary_gw(gw_libri.lri.data_pool.at("Gs_").Ds_ab,
+                                                           oss.str());
+                            }
                             stage_tag = format_stage_tag(
                                 "call LibRI cal_Sigmas", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
@@ -996,6 +1193,16 @@ void G0W0::build_spacetime(
                             {
                                 gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
                                     gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
+                            }
+                            if (Params::debug)
+                            {
+                                envs::ofs_myid << "Number of GW Sigma output keys at tau " << t
+                                               << ": " << get_num_keys(gw_libri.Sigmas) << "\n";
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_Sigma_tau_"
+                                    << std::setfill('0') << std::setw(3) << itau << "_"
+                                    << (t > 0 ? "pos" : "neg") << "_summary.txt";
+                                dump_tensor_map_summary_gw(gw_libri.Sigmas, oss.str());
                             }
                             stage_tag = format_stage_tag(
                                 "free LibRI G object", itau, ispin, isoc1, isoc2,
@@ -1086,12 +1293,31 @@ void G0W0::build_spacetime(
                             const auto &gf_libri = tau_gf_libri.at(t);
                             size_t n_obj_gf_libri = 0;
                             for (const auto &gf : gf_libri) n_obj_gf_libri += gf.second.size();
+                            if (Params::debug)
+                            {
+                                envs::ofs_myid << "Number of GW GF input keys at tau " << t
+                                               << ": " << get_num_keys(gf_libri) << "\n";
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_G_tau_" << std::setfill('0')
+                                    << std::setw(3) << itau << "_" << (t > 0 ? "pos" : "neg")
+                                    << "_summary.txt";
+                                dump_tensor_map_summary_gw(gf_libri, oss.str());
+                            }
 
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
                             stage_tag = format_stage_tag(
                                 "set LibRI G object", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
                             gw_libri.set_Gs(gf_libri, Params::libri_g0w0_threshold_G);
+                            if (Params::debug)
+                            {
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_G_after_set_tau_"
+                                    << std::setfill('0') << std::setw(3) << itau << "_"
+                                    << (t > 0 ? "pos" : "neg") << "_summary.txt";
+                                dump_tensor_map_summary_gw(gw_libri.lri.data_pool.at("Gs_").Ds_ab,
+                                                           oss.str());
+                            }
                             stage_tag = format_stage_tag(
                                 "call LibRI cal_Sigmas", itau, ispin, isoc1, isoc2,
                                 "tau_node=" + std::to_string(t));
@@ -1102,6 +1328,16 @@ void G0W0::build_spacetime(
                             {
                                 gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
                                     gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
+                            }
+                            if (Params::debug)
+                            {
+                                envs::ofs_myid << "Number of GW Sigma output keys at tau " << t
+                                               << ": " << get_num_keys(gw_libri.Sigmas) << "\n";
+                                std::ostringstream oss;
+                                oss << Params::output_dir << "debug_gw_Sigma_tau_"
+                                    << std::setfill('0') << std::setw(3) << itau << "_"
+                                    << (t > 0 ? "pos" : "neg") << "_summary.txt";
+                                dump_tensor_map_summary_gw(gw_libri.Sigmas, oss.str());
                             }
                             stage_tag = format_stage_tag(
                                 "free LibRI G object", itau, ispin, isoc1, isoc2,
