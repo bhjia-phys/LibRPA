@@ -725,11 +725,10 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         use_abacus_exx_symmetry
             ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector)
             : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
-    // The current `filter_atom` path changes the contracted `Hs` blocks even when `D(R)` and
-    // `V(R)` already match the symmetry-off reference. Keep the EXX contraction on the full
-    // real-space sector until a native LibRI symmetry path is available; otherwise the restored
-    // KS EXX matrix disagrees with the symmetry-off reference.
-    const bool use_libri_exx_symmetry_filter = false;
+    // Restore the validated EXX output-only symmetry filter. The internal LibRI contractions stay
+    // unchanged, while the returned `Hs(R)` blocks are restricted to the ABACUS irreducible
+    // sector and restored to the full AO real-space sector below.
+    const bool use_libri_exx_symmetry_filter = use_abacus_exx_symmetry;
     abacus_rspace_sector_stars_t abacus_sector_stars;
     if (use_abacus_exx_symmetry)
     {
