@@ -49,14 +49,30 @@ namespace
 
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
-    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector)
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector,
+    const std::array<int, 3>& period)
 {
+    auto canonicalize_r = [&period](const std::array<int, 3>& r) {
+        auto centered_mod = [](const int value, const int cell_period) {
+            if (cell_period <= 0)
+            {
+                return value;
+            }
+            return (value % cell_period + 3 * cell_period / 2) % cell_period - cell_period / 2;
+        };
+        return std::array<int, 3>{centered_mod(r[0], period[0]),
+                                  centered_mod(r[1], period[1]),
+                                  centered_mod(r[2], period[2])};
+    };
     std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
     for (const auto& pair_Rs : irreducible_sector)
     {
         const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
                                             static_cast<int>(pair_Rs.first.second)};
-        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+        for (const auto& r : pair_Rs.second)
+        {
+            libri_sector[atom_pair].insert(canonicalize_r(r));
+        }
     }
     return libri_sector;
 }
@@ -1008,7 +1024,8 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(
             lib_printf("Reducing chi0 real-space outputs with ABACUS irreducible sectors\n");
         }
         libri_irreducible_sector =
-            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector);
+            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector,
+                                                       period_array);
         const auto chi0_Rlist = construct_R_grid(R_period);
         LIBRPA::build_abacus_rspace_sector_stars(
             symmetry_ctx, coord_frac, R_period, chi0_Rlist, abacus_sector_stars, nullptr);

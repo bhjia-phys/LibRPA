@@ -41,14 +41,30 @@ namespace
 
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
-    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector)
+    const LIBRPA::abacus_irreducible_sector_t& irreducible_sector,
+    const std::array<int, 3>& period)
 {
+    auto canonicalize_r = [&period](const std::array<int, 3>& r) {
+        auto centered_mod = [](const int value, const int cell_period) {
+            if (cell_period <= 0)
+            {
+                return value;
+            }
+            return (value % cell_period + 3 * cell_period / 2) % cell_period - cell_period / 2;
+        };
+        return std::array<int, 3>{centered_mod(r[0], period[0]),
+                                  centered_mod(r[1], period[1]),
+                                  centered_mod(r[2], period[2])};
+    };
     std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
     for (const auto& pair_Rs : irreducible_sector)
     {
         const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
                                             static_cast<int>(pair_Rs.first.second)};
-        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+        for (const auto& r : pair_Rs.second)
+        {
+            libri_sector[atom_pair].insert(canonicalize_r(r));
+        }
     }
     return libri_sector;
 }
@@ -243,6 +259,72 @@ double tensor_frobenius_norm_gw(const RI::Tensor<T>& tensor)
         norm_sq += abs_value * abs_value;
     }
     return std::sqrt(norm_sq);
+}
+
+bool matrix_has_nonfinite_gw(const matrix_m<std::complex<double>>& matrix)
+{
+    const auto* data = matrix.ptr();
+    for (int i = 0; i < static_cast<int>(matrix.size()); ++i)
+    {
+        const auto value = data[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+double matrix_max_abs_gw(const matrix_m<std::complex<double>>& matrix)
+{
+    const auto* data = matrix.ptr();
+    double max_abs = 0.0;
+    for (int i = 0; i < static_cast<int>(matrix.size()); ++i)
+    {
+        const auto value = data[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            continue;
+        }
+        max_abs = std::max(max_abs, static_cast<double>(std::abs(value)));
+    }
+    return max_abs;
+}
+
+template <typename NestedMapT>
+void log_nested_w_summary_gw(
+    const char* label,
+    const double tau,
+    const NestedMapT& tensors)
+{
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::size_t n_blocks = 0;
+    std::size_t n_nonfinite_blocks = 0;
+    double max_abs = 0.0;
+    for (const auto& i_entry : tensors)
+    {
+        for (const auto& j_entry : i_entry.second)
+        {
+            for (const auto& key_matrix : j_entry.second)
+            {
+                ++n_blocks;
+                const auto& matrix = key_matrix.second;
+                if (matrix_has_nonfinite_gw(matrix))
+                {
+                    ++n_nonfinite_blocks;
+                }
+                max_abs = std::max(max_abs, matrix_max_abs_gw(matrix));
+            }
+        }
+    }
+
+    LIBRPA::utils::lib_printf(
+        "GW debug %s tau = %12.6f, blocks = %zu, nonfinite_blocks = %zu, maxabs = %20.12e\n",
+        label, tau, n_blocks, n_nonfinite_blocks, max_abs);
 }
 
 template <typename T>
@@ -796,7 +878,7 @@ void G0W0::build_spacetime(
                 mpi_comm_global_h.barrier();
                 Profiler::stop("construct_Wc_lower_half");
                 stage_tag = "export Wc(R,w=0)";
-                FT_Wc_q2R(Wc_q_f0, tfg, get_full_bz_kpoint_count(), Rlist, true);
+                FT_Wc_q2R(Wc_q_f0, tfg, get_full_bz_kpoint_count(), Rlist, true, 0.0);
                 Wc_q_f0.clear();
             }
             else if (Params::output_Wc_Rf_mat > 1)
@@ -863,7 +945,8 @@ void G0W0::build_spacetime(
     if (use_abacus_sigc_symmetry)
     {
         libri_irreducible_sector =
-            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector);
+            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector,
+                                                       period_array);
         LIBRPA::build_abacus_rspace_sector_stars(
             symmetry_ctx, coord_frac, this->period_, Rlist, abacus_sector_stars, nullptr);
     }
@@ -962,6 +1045,7 @@ void G0W0::build_spacetime(
                             "Construct Lower Half of Wc(q,t)");
             complete_hermitian_Wc_q_blocks(Wc_tau_q[tau]);
             Profiler::stop("construct_Wc_tau_lower_half");
+            log_nested_w_summary_gw("Wc_q_pre_ft", tau, Wc_tau_q[tau]);
             if (Params::debug && Params::output_Wc_Rf_mat == 1 && itau == 0)
             {
                 char fn[128];
@@ -985,8 +1069,9 @@ void G0W0::build_spacetime(
             stage_tag = format_stage_tag("transform Wc(q,t) -> Wc(R,t)", itau);
             Profiler::start("g0w0_build_spacetime_Rq_ft_wc", "Tranform Wc (q,t) -> (R,t)");
             Wc_tau_R[tau] =
-                FT_Wc_q2R(Wc_tau_q[tau], tfg, get_full_bz_kpoint_count(), Rlist, false);
+                FT_Wc_q2R(Wc_tau_q[tau], tfg, get_full_bz_kpoint_count(), Rlist, false, tau);
             Profiler::stop("g0w0_build_spacetime_Rq_ft_wc");
+            log_nested_w_summary_gw("Wc_R_post_ft", tau, Wc_tau_R[tau]);
             Wc_tau_q[tau].clear();
             atom_mu = atom_mu_l;
             LIBRPA::atomic_basis_abf.set(atom_mu);

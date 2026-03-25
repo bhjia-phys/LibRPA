@@ -14,6 +14,7 @@
 #include "geometry.h"
 #include "lapack_connector.h"
 #include "params.h"
+#include "pbc.h"
 #include "ri.h"
 #include "utils_io.h"
 
@@ -43,6 +44,22 @@ bool can_restore_gf_from_abacus_symmetry(const LIBRPA::AbacusSymmetryContext& ct
            && meanfield.get_n_kpoints() == static_cast<int>(ctx.kstars.size())
            && ctx.atom_to_type.size() == atom_nw.size()
            && coord_frac.size() == atom_nw.size();
+}
+
+std::vector<LIBRPA::AbacusKStarGridMappingEntry> build_abacus_full_k_mapping_for_restore(
+    const LIBRPA::AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& kfrac_list)
+{
+    if (!Params::use_abacus_gw_symmetry || !ctx.available || ctx.kstars.empty())
+    {
+        return {};
+    }
+    if (ctx.kstars.size() != kfrac_list.size())
+    {
+        throw std::runtime_error(
+            "ABACUS full-k restore mapping is inconsistent with the loaded IBZ k-point count");
+    }
+    return LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
 }
 
 std::vector<double> build_gf_kpoint_weights(
@@ -468,6 +485,8 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
         if (use_abacus_gw_symmetry)
         {
             const int nsym_space = static_cast<int>(symmetry_ctx.rspace_operations.size());
+            const auto kstar_grid_mapping =
+                build_abacus_full_k_mapping_for_restore(symmetry_ctx, kfrac_list);
             for (int ik_ibz = 0; ik_ibz != n_kpoints; ++ik_ibz)
             {
                 auto scaled_wfc_conj = conj(wfc[ispin][isoc2][ik_ibz]);
@@ -490,7 +509,14 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
                     transpose(wfc[ispin][isoc1][ik_ibz], false) * scaled_wfc_conj;
                 const auto& k_ibz = kfrac_list[ik_ibz];
                 const auto& star = find_abacus_kstar_for_ibz_kpoint(symmetry_ctx, k_ibz);
+                const auto& mapping_entry =
+                    kstar_grid_mapping.at(static_cast<std::size_t>(ik_ibz));
                 const double star_factor = 1.0 / static_cast<double>(star.members.size());
+                if (mapping_entry.member_q_bz_keys.size() != star.members.size())
+                {
+                    throw std::runtime_error(
+                        "ABACUS full-k restore mapping is inconsistent with k-star members");
+                }
 
                 maybe_dump_gf_k_debug(gf_k_ibz,
                                       "ibz",
@@ -505,23 +531,16 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
                 for (std::size_t imember = 0; imember < star.members.size(); ++imember)
                 {
                     const auto& member = star.members[imember];
-                    ComplexMatrix gf_k_bz;
-                    if (member.isym == 0)
-                    {
-                        gf_k_bz = gf_k_ibz;
-                    }
-                    else
-                    {
-                        // `k_bz = -k_ibz` does not uniquely identify a pure time-reversal branch.
-                        // A spatial operation can also map an IBZ representative to the opposite
-                        // k-point, and a time-reversal member may still carry a non-trivial spatial
-                        // rotation block. Therefore every non-identity member must be rebuilt with
-                        // the sidecar AO rotation instead of a bare complex conjugation.
-                        const bool use_time_reversal = member.isym >= nsym_space;
-                        gf_k_bz = LIBRPA::rotate_abacus_kspace_matrix(
-                            symmetry_ctx, member, gf_k_ibz, atom_nw, k_ibz, coord_frac,
-                            use_time_reversal);
-                    }
+                    const auto k_bz_target_vec = latvec * mapping_entry.member_q_bz_keys[imember];
+                    const Vector3_Order<double> k_bz_target{
+                        k_bz_target_vec.x, k_bz_target_vec.y, k_bz_target_vec.z};
+                    // Always go through the ABACUS restore helper here. Even the identity member
+                    // may need a reciprocal-lattice gauge shift when LibRPA stores an equivalent
+                    // full-k representative outside the sidecar convention.
+                    const bool use_time_reversal = member.isym >= nsym_space;
+                    const ComplexMatrix gf_k_bz = LIBRPA::rotate_abacus_kspace_matrix(
+                        symmetry_ctx, member, gf_k_ibz, atom_nw, k_ibz, coord_frac,
+                        use_time_reversal, &k_bz_target);
 
                     maybe_dump_gf_k_debug(gf_k_bz,
                                           "restored",
@@ -529,7 +548,7 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
                                           isoc1,
                                           isoc2,
                                           tau,
-                                          member.k_bz,
+                                          k_bz_target,
                                           "star" + std::to_string(star.star_index) + "_ikibz"
                                               + std::to_string(ik_ibz) + "_member"
                                               + std::to_string(imember) + "_isym"
@@ -537,7 +556,7 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
 
                     for (const auto& R : Rs)
                     {
-                        const double ang = -member.k_bz * R * TWO_PI;
+                        const double ang = -k_bz_target * R * TWO_PI;
                         const auto kphase = std::complex<double>(std::cos(ang), std::sin(ang));
                         if (gf_tau_R.count(tau) == 0 || gf_tau_R.at(tau).count(R) == 0)
                         {

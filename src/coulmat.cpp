@@ -119,7 +119,7 @@ std::map<Vector3_Order<double>, Vector3_Order<double>> build_abacus_restored_qfr
         for (std::size_t imember = 0; imember < star.members.size(); ++imember)
         {
             qfrac_lookup[mapping_entry.member_q_bz_keys[imember]] =
-                canonicalize_mp_fractional_qpoint(star.members[imember].k_bz);
+                canonicalize_mp_fractional_qpoint(latvec * mapping_entry.member_q_bz_keys[imember]);
         }
     }
     return qfrac_lookup;
@@ -340,11 +340,16 @@ atpair_k_cplx_mat_t restore_abacus_abf_full_qspace_operator(
             const auto& abf_member =
                 (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
             const bool use_time_reversal = member.isym >= nsym_space;
+            const auto q_bz_target_frac_vec =
+                latvec * star_mapping.member_q_bz_keys[static_cast<std::size_t>(imember)];
+            const Vector3_Order<double> q_bz_target_frac{
+                q_bz_target_frac_vec.x, q_bz_target_frac_vec.y, q_bz_target_frac_vec.z};
             LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
             try
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
-                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal);
+                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac,
+                    use_time_reversal, nullptr, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {
@@ -470,12 +475,16 @@ atpair_R_mat_t accumulate_abacus_abf_irreducible_sector_vr(
             const auto& abf_member =
                 (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
             const bool use_time_reversal = member.isym >= nsym_space;
+            const auto q_bz_target_frac_vec =
+                latvec * star_mapping.member_q_bz_keys[static_cast<std::size_t>(imember)];
+            const Vector3_Order<double> q_bz_target_frac{
+                q_bz_target_frac_vec.x, q_bz_target_frac_vec.y, q_bz_target_frac_vec.z};
             LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
             try
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
-                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal,
-                    &target_atom_pairs);
+                    ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac,
+                    use_time_reversal, &target_atom_pairs, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {

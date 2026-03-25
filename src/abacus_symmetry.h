@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "atoms.h"
@@ -141,6 +142,8 @@ struct AbacusSymmetryContext
     std::vector<AbacusAOTypeLayout> ao_type_layouts;
     std::vector<std::vector<AbacusAOTypeLayout>> abf_type_layout_candidates;
     std::map<atom_t, int> atom_to_type;
+    std::map<std::pair<int, int>, Vector3_Order<int>> kspace_return_lattice;
+    std::map<std::pair<int, int>, Vector3_Order<int>> kstar_member_fold_G;
 
     void clear();
     bool empty() const;
@@ -200,7 +203,8 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     const Vector3_Order<double>& k_ibz,
     const std::map<atom_t, std::array<double, 3>>& coord_frac,
     bool use_time_reversal = false,
-    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr,
+    const Vector3_Order<double>* k_bz_target = nullptr);
 
 abacus_atom_block_matrix_map_t symmetrize_abacus_abf_ibz_kspace_operator_blocks(
     const AbacusSymmetryContext& ctx,
@@ -218,7 +222,8 @@ ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
     const std::map<atom_t, size_t>& atom_nabf,
     const Vector3_Order<double>& k_ibz,
     const std::map<atom_t, std::array<double, 3>>& coord_frac,
-    bool use_time_reversal = false);
+    bool use_time_reversal = false,
+    const Vector3_Order<double>* k_bz_target = nullptr);
 
 ComplexMatrix symmetrize_abacus_abf_ibz_kspace_operator_matrix(
     const AbacusSymmetryContext& ctx,
@@ -233,7 +238,8 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
                                           const std::map<atom_t, size_t>& atom_nw,
                                           const Vector3_Order<double>& k_ibz,
                                           const std::map<atom_t, std::array<double, 3>>& coord_frac,
-                                          bool use_time_reversal = false);
+                                          bool use_time_reversal = false,
+                                          const Vector3_Order<double>* k_bz_target = nullptr);
 
 void build_abacus_rspace_sector_stars(
     const AbacusSymmetryContext& ctx,

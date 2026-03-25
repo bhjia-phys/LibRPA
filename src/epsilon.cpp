@@ -117,6 +117,148 @@ ComplexMatrix to_complex_matrix(const matrix_m<std::complex<double>>& mat)
     return complex_mat;
 }
 
+bool matrix_has_nonfinite_abf(const matrix_m<std::complex<double>>& matrix)
+{
+    const auto* data = matrix.ptr();
+    for (int i = 0; i < static_cast<int>(matrix.size()); ++i)
+    {
+        const auto value = data[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+double matrix_max_abs_abf(const matrix_m<std::complex<double>>& matrix)
+{
+    const auto* data = matrix.ptr();
+    double max_abs = 0.0;
+    for (int i = 0; i < static_cast<int>(matrix.size()); ++i)
+    {
+        const auto value = data[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            continue;
+        }
+        max_abs = std::max(max_abs, static_cast<double>(std::abs(value)));
+    }
+    return max_abs;
+}
+
+template <typename QSpaceMapT>
+void log_abf_qspace_summary(const char* label, const double debug_tau, const QSpaceMapT& blocks_by_q)
+{
+    if (!Params::debug || !mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::size_t n_blocks = 0;
+    std::size_t n_nonfinite_blocks = 0;
+    double max_abs = 0.0;
+    for (const auto& atom_i_pair : blocks_by_q)
+    {
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            for (const auto& q_block : atom_j_pair.second)
+            {
+                ++n_blocks;
+                const auto& matrix = q_block.second;
+                if (matrix_has_nonfinite_abf(matrix))
+                {
+                    ++n_nonfinite_blocks;
+                }
+                max_abs = std::max(max_abs, matrix_max_abs_abf(matrix));
+            }
+        }
+    }
+
+    LIBRPA::utils::lib_printf_root(
+        "GW debug %s tau = %12.6f, blocks = %zu, nonfinite_blocks = %zu, maxabs = %20.12e\n",
+        label, debug_tau, n_blocks, n_nonfinite_blocks, max_abs);
+}
+
+bool complex_matrix_has_nonfinite(const ComplexMatrix& matrix)
+{
+    for (int i = 0; i < matrix.size; ++i)
+    {
+        const auto value = matrix.c[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+double complex_matrix_max_abs_finite(const ComplexMatrix& matrix)
+{
+    double max_abs = 0.0;
+    for (int i = 0; i < matrix.size; ++i)
+    {
+        const auto value = matrix.c[i];
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            continue;
+        }
+        max_abs = std::max(max_abs, static_cast<double>(std::abs(value)));
+    }
+    return max_abs;
+}
+
+void log_abacus_atom_block_summary_once(const char* label,
+                                        const int iq_ibz,
+                                        const int star_index,
+                                        const int member_index,
+                                        const LIBRPA::abacus_atom_block_matrix_map_t& blocks)
+{
+    if (!Params::debug || !mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::size_t n_blocks = 0;
+    std::size_t n_nonfinite_blocks = 0;
+    double max_abs = 0.0;
+    for (const auto& atom_i_pair : blocks)
+    {
+        for (const auto& atom_j_pair : atom_i_pair.second)
+        {
+            ++n_blocks;
+            if (complex_matrix_has_nonfinite(atom_j_pair.second))
+            {
+                ++n_nonfinite_blocks;
+            }
+            max_abs = std::max(max_abs, complex_matrix_max_abs_finite(atom_j_pair.second));
+        }
+    }
+
+    static bool reported_finite = false;
+    static bool reported_nonfinite = false;
+    if (n_nonfinite_blocks == 0)
+    {
+        if (reported_finite)
+        {
+            return;
+        }
+        reported_finite = true;
+    }
+    else
+    {
+        if (reported_nonfinite)
+        {
+            return;
+        }
+        reported_nonfinite = true;
+    }
+
+    LIBRPA::utils::lib_printf_root(
+        "ABACUS GW restore debug %s iq_ibz=%d star=%d member=%d blocks=%zu nonfinite_blocks=%zu maxabs=%20.12e\n",
+        label, iq_ibz, star_index, member_index, n_blocks, n_nonfinite_blocks, max_abs);
+}
+
 ComplexMatrix allreduce_dense_complex_matrix_via_real_imag(const ComplexMatrix& local_matrix)
 {
     constexpr int dense_sum_tag = 90123;
@@ -844,6 +986,8 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
         // chosen as the representative.
         blocks_ibz = symmetrize_abacus_abf_ibz_blocks(
             ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf, target_atom_pairs);
+        log_abacus_atom_block_summary_once(
+            "symmetrized_ibz", mapping_entry.iq_ibz, star.star_index, -1, blocks_ibz);
         if (Params::debug)
         {
             std::fprintf(stderr,
@@ -870,12 +1014,16 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
                 std::fflush(stderr);
             }
             const bool use_time_reversal = member.isym >= nsym_space;
+            const auto q_bz_target_frac_vec =
+                latvec * mapping_entry.member_q_bz_keys[static_cast<std::size_t>(imember)];
+            const Vector3_Order<double> q_bz_target_frac{
+                q_bz_target_frac_vec.x, q_bz_target_frac_vec.y, q_bz_target_frac_vec.z};
             LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
             try
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
                     ctx, abf_member, blocks_ibz, atom_nabf, k_ibz_frac, coord_frac,
-                    use_time_reversal, &target_atom_pairs);
+                    use_time_reversal, &target_atom_pairs, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {
@@ -893,6 +1041,9 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
                              rotated_blocks.size());
                 std::fflush(stderr);
             }
+            log_abacus_atom_block_summary_once(
+                "rotated_member", mapping_entry.iq_ibz, star.star_index,
+                static_cast<int>(imember), rotated_blocks);
             for (const auto& atom_i_pair : rotated_blocks)
             {
                 for (const auto& atom_j_pair : atom_i_pair.second)
@@ -1198,12 +1349,16 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
             const auto& abf_member =
                 (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
             const bool use_time_reversal = member.isym >= plan.nsym_space;
+            const auto q_bz_target_frac_vec =
+                latvec * star_mapping.member_q_bz_keys[static_cast<std::size_t>(imember)];
+            const Vector3_Order<double> q_bz_target_frac{
+                q_bz_target_frac_vec.x, q_bz_target_frac_vec.y, q_bz_target_frac_vec.z};
             LIBRPA::abacus_atom_block_matrix_map_t rotated_blocks;
             try
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
                     ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal,
-                    &plan.local_irreducible_pairs);
+                    &plan.local_irreducible_pairs, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {
@@ -4650,7 +4805,8 @@ CT_Wc_freq2time_q(
 atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old FT_Wc_q2R(
     const atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old
         &Wc_q,
-    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist, const bool is_freq)
+    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist,
+    const bool is_freq, const double debug_tau)
 {
     // major of Wc_freq_q input and Wc_tau_R output
     const MAJOR major_Wc = MAJOR::ROW;
@@ -4684,6 +4840,7 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     {
         LIBRPA::utils::lib_printf_root(
             "ABACUS GW symmetry restores the full ABF q-star before `FT_Wc_q2R`\n");
+        log_abf_qspace_summary("Wc_q_restored_fullq", debug_tau, Wc_q_full);
 
         // Dump the reconstructed full-q blocks once so we can compare them against the
         // symmetry-off reference and isolate whether the mismatch starts before the q->R FT.

@@ -80,7 +80,8 @@ CT_Wc_freq2time_q(
 atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old FT_Wc_q2R(
     const atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old
         &Wc_tau_q,
-    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist, const bool is_freq);
+    const TFGrids &tfg, const int &n_kpoints, const vector<Vector3_Order<int>> &Rlist,
+    const bool is_freq, const double debug_tau = 0.0);
 
 ComplexMatrix compute_Pi_freq_q_row_ri(const Vector3_Order<double> &ik_vec,
                                        const atom_mapping<ComplexMatrix>::pair_t_old &chi0_freq_q,

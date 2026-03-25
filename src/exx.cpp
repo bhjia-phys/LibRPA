@@ -69,6 +69,22 @@ std::string format_debug_double(const double value)
     return text;
 }
 
+std::vector<LIBRPA::AbacusKStarGridMappingEntry> build_abacus_full_k_mapping_for_restore(
+    const std::vector<Vector3_Order<double>>& kfrac_list)
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (!Params::use_abacus_gw_symmetry || !ctx.available || ctx.kstars.empty())
+    {
+        return {};
+    }
+    if (ctx.kstars.size() != kfrac_list.size())
+    {
+        throw std::runtime_error(
+            "ABACUS full-k restore mapping is inconsistent with the loaded IBZ k-point count");
+    }
+    return LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+}
+
 bool complex_array_has_nonfinite(const std::complex<double>* data, const int size)
 {
     for (int i = 0; i < size; ++i)
@@ -259,14 +275,30 @@ bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
 
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
-    const abacus_irreducible_sector_t& irreducible_sector)
+    const abacus_irreducible_sector_t& irreducible_sector,
+    const std::array<int, 3>& period)
 {
+    auto canonicalize_r = [&period](const std::array<int, 3>& r) {
+        auto centered_mod = [](const int value, const int cell_period) {
+            if (cell_period <= 0)
+            {
+                return value;
+            }
+            return (value % cell_period + 3 * cell_period / 2) % cell_period - cell_period / 2;
+        };
+        return std::array<int, 3>{centered_mod(r[0], period[0]),
+                                  centered_mod(r[1], period[1]),
+                                  centered_mod(r[2], period[2])};
+    };
     std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_sector;
     for (const auto& pair_Rs : irreducible_sector)
     {
         const std::pair<int, int> atom_pair{static_cast<int>(pair_Rs.first.first),
                                             static_cast<int>(pair_Rs.first.second)};
-        libri_sector[atom_pair].insert(pair_Rs.second.begin(), pair_Rs.second.end());
+        for (const auto& r : pair_Rs.second)
+        {
+            libri_sector[atom_pair].insert(canonicalize_r(r));
+        }
     }
     return libri_sector;
 }
@@ -416,6 +448,7 @@ ComplexMatrix Exx::get_dmat_cplx_R_symmetry_restored(const int& ispin, const int
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const auto kstar_grid_mapping = build_abacus_full_k_mapping_for_restore(this->kfrac_list_);
     ComplexMatrix dmat_cplx(this->mf_.get_n_aos(), this->mf_.get_n_aos());
     this->maybe_dump_abacus_kstar_debug();
 
@@ -423,32 +456,34 @@ ComplexMatrix Exx::get_dmat_cplx_R_symmetry_restored(const int& ispin, const int
     {
         const auto& k_ibz = this->kfrac_list_[static_cast<std::size_t>(ik_ibz)];
         const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+        const auto& mapping_entry = kstar_grid_mapping.at(static_cast<std::size_t>(ik_ibz));
 
         if (star.members.empty())
         {
             throw std::runtime_error("ABACUS k-star member list is empty");
         }
+        if (mapping_entry.member_q_bz_keys.size() != star.members.size())
+        {
+            throw std::runtime_error("ABACUS full-k restore mapping is inconsistent with k-star members");
+        }
 
         const double star_factor = 1.0 / static_cast<double>(star.members.size());
         const ComplexMatrix dmat_ibz = this->mf_.get_dmat_cplx(ispin, isoc1, isoc2, ik_ibz);
-        for (const auto& member : star.members)
+        for (std::size_t imember = 0; imember < star.members.size(); ++imember)
         {
-            ComplexMatrix dmat_member;
-            if (member.isym == 0)
-            {
-                dmat_member = dmat_ibz;
-            }
-            else
-            {
-                // `k_bz = -k_ibz` can come from a spatial operation as well as from
-                // time reversal. Rebuild every non-identity member through the sidecar AO
-                // rotation so EXX follows the exact ABACUS atom/orbital mapping.
-                const bool use_time_reversal = member.isym >= nsym_space;
-                dmat_member = rotate_abacus_kspace_matrix(ctx, member, dmat_ibz, atom_nw,
-                                                          k_ibz, coord_frac, use_time_reversal);
-            }
+            const auto& member = star.members[imember];
+            const auto k_bz_target_vec = latvec * mapping_entry.member_q_bz_keys[imember];
+            const Vector3_Order<double> k_bz_target{
+                k_bz_target_vec.x, k_bz_target_vec.y, k_bz_target_vec.z};
+            // Always go through the ABACUS restore helper here. Even the identity member may
+            // need a reciprocal-lattice gauge shift when LibRPA stores an equivalent full-k
+            // representative outside the sidecar convention.
+            const bool use_time_reversal = member.isym >= nsym_space;
+            const ComplexMatrix dmat_member = rotate_abacus_kspace_matrix(
+                ctx, member, dmat_ibz, atom_nw, k_ibz, coord_frac, use_time_reversal,
+                &k_bz_target);
 
-            const auto ang = -(member.k_bz * R) * TWO_PI;
+            const auto ang = -(k_bz_target * R) * TWO_PI;
             const auto kphase = std::complex<double>(std::cos(ang), std::sin(ang));
             dmat_cplx += (star_factor * kphase) * dmat_member;
         }
@@ -551,10 +586,12 @@ void Exx::maybe_dump_restored_kspace_dmat_debug(const int& ispin, const int& iso
 
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     const int nsym_space = static_cast<int>(ctx.rspace_operations.size());
+    const auto kstar_grid_mapping = build_abacus_full_k_mapping_for_restore(this->kfrac_list_);
     for (int ik_ibz = 0; ik_ibz < this->mf_.get_n_kpoints(); ++ik_ibz)
     {
         const auto& k_ibz = this->kfrac_list_[static_cast<std::size_t>(ik_ibz)];
         const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, k_ibz);
+        const auto& mapping_entry = kstar_grid_mapping.at(static_cast<std::size_t>(ik_ibz));
         const ComplexMatrix dmat_ibz = this->mf_.get_dmat_cplx(ispin, isoc1, isoc2, ik_ibz);
 
         std::ostringstream ibz_tag;
@@ -570,24 +607,19 @@ void Exx::maybe_dump_restored_kspace_dmat_debug(const int& ispin, const int& iso
         for (std::size_t imember = 0; imember < star.members.size(); ++imember)
         {
             const auto& member = star.members[imember];
-            ComplexMatrix dmat_member;
-            if (member.isym == 0)
-            {
-                dmat_member = dmat_ibz;
-            }
-            else
-            {
-                // Keep the debug dump on the same restore path as the production EXX flow.
-                const bool use_time_reversal = member.isym >= nsym_space;
-                dmat_member = rotate_abacus_kspace_matrix(
-                    ctx, member, dmat_ibz, atom_nw, k_ibz, coord_frac, use_time_reversal);
-            }
+            const auto k_bz_target_vec = latvec * mapping_entry.member_q_bz_keys[imember];
+            const Vector3_Order<double> k_bz_target{
+                k_bz_target_vec.x, k_bz_target_vec.y, k_bz_target_vec.z};
+            const bool use_time_reversal = member.isym >= nsym_space;
+            const ComplexMatrix dmat_member = rotate_abacus_kspace_matrix(
+                ctx, member, dmat_ibz, atom_nw, k_ibz, coord_frac, use_time_reversal,
+                &k_bz_target);
 
             std::ostringstream tag;
             tag << "restored_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ikibz"
                 << ik_ibz << "_member" << imember << "_isym" << member.isym << "_kx_"
-                << format_debug_double(member.k_bz.x) << "_ky_" << format_debug_double(member.k_bz.y)
-                << "_kz_" << format_debug_double(member.k_bz.z);
+                << format_debug_double(k_bz_target.x) << "_ky_" << format_debug_double(k_bz_target.y)
+                << "_kz_" << format_debug_double(k_bz_target.z);
             if (!this->debug_dmat_dump_tags_.insert(tag.str()).second)
             {
                 continue;
@@ -723,7 +755,8 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
         && coord_frac.size() == static_cast<std::size_t>(natom);
     const auto libri_irreducible_sector =
         use_abacus_exx_symmetry
-            ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector)
+            ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector,
+                                                         period_array)
             : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
     // Restore the validated EXX output-only symmetry filter. The internal LibRI contractions stay
     // unchanged, while the returned `Hs(R)` blocks are restricted to the ABACUS irreducible

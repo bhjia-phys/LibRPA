@@ -481,6 +481,57 @@ int main()
     assert(std::abs(matrix_symmetrized(0, 0) - block_matrix_input(0, 0)) < 1e-12);
     assert(std::abs(block_symmetrized.at(0).at(0)(0, 0) - matrix_symmetrized(0, 0)) < 1e-12);
 
+    LIBRPA::AbacusSymmetryContext abf_gauge_ctx;
+    abf_gauge_ctx.available = true;
+    abf_gauge_ctx.abf_shell_layout_available = true;
+    abf_gauge_ctx.abf_lmax = 0;
+    abf_gauge_ctx.abf_type_layout_candidates = {
+        {LIBRPA::AbacusAOTypeLayout{"X", "X.abf", {1}, 1}}
+    };
+    abf_gauge_ctx.atom_to_type = {{0, 0}, {1, 0}};
+    abf_gauge_ctx.rspace_operations = {block_identity};
+
+    LIBRPA::AbacusKAtomRotation abf_atom0 = block_atom_rotation;
+    abf_atom0.atom_from = 0;
+    abf_atom0.atom_to = 0;
+    LIBRPA::AbacusKAtomRotation abf_atom1 = block_atom_rotation;
+    abf_atom1.atom_from = 1;
+    abf_atom1.atom_to = 1;
+
+    LIBRPA::AbacusKStarMember abf_exact_member;
+    abf_exact_member.isym = 0;
+    abf_exact_member.k_bz = {0.5, 0.0, 0.0};
+    abf_exact_member.atom_rotations = {abf_atom0, abf_atom1};
+
+    LIBRPA::AbacusKStarMember abf_equiv_member = abf_exact_member;
+    abf_equiv_member.k_bz = {-0.5, 0.0, 0.0};
+
+    LIBRPA::AbacusKStar abf_gauge_star;
+    abf_gauge_star.star_index = 0;
+    abf_gauge_star.k_ibz = {0.5, 0.0, 0.0};
+    abf_gauge_star.members = {abf_exact_member, abf_equiv_member};
+    abf_gauge_ctx.kstars = {abf_gauge_star};
+
+    LIBRPA::abacus_atom_block_matrix_map_t abf_gauge_input;
+    abf_gauge_input[0][1] = ComplexMatrix(1, 1);
+    abf_gauge_input[0][1](0, 0) = std::complex<double>(1.0, 0.0);
+    abf_gauge_input[1][0] = ComplexMatrix(1, 1);
+    abf_gauge_input[1][0](0, 0) = std::complex<double>(1.0, 0.0);
+
+    const std::map<atom_t, size_t> abf_gauge_atom_nabf{{0, 1}, {1, 1}};
+    const std::map<atom_t, std::array<double, 3>> abf_gauge_coord_frac{
+        {0, {0.0, 0.0, 0.0}},
+        {1, {0.25, 0.0, 0.0}},
+    };
+    const auto abf_gauge_symmetrized = LIBRPA::symmetrize_abacus_abf_ibz_kspace_operator_blocks(
+        abf_gauge_ctx, {0.5, 0.0, 0.0}, abf_gauge_input, abf_gauge_atom_nabf,
+        abf_gauge_coord_frac);
+    const std::complex<double> expected_abf_gauge_average(0.5, -0.5);
+    assert(std::abs(abf_gauge_symmetrized.at(0).at(1)(0, 0) - expected_abf_gauge_average) < 1e-12);
+    assert(std::abs(abf_gauge_symmetrized.at(1).at(0)(0, 0)
+                    - std::conj(expected_abf_gauge_average))
+           < 1e-12);
+
     LIBRPA::AbacusSymmetryContext opposite_k_ctx;
     opposite_k_ctx.available = true;
     opposite_k_ctx.ao_shell_layout_available = true;

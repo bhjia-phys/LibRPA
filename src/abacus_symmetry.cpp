@@ -1103,6 +1103,9 @@ void parse_symrot_abf_layout_header(
 
 void parse_symrot_k_file(const std::string& file_path,
                          std::vector<AbacusKStar>& kstars,
+                         std::map<std::pair<int, int>, Vector3_Order<int>>* kspace_return_lattice = nullptr,
+                         std::map<std::pair<int, int>, Vector3_Order<int>>* kstar_member_fold_G = nullptr,
+                         const int nsym_space = -1,
                          std::vector<AbacusAOTypeLayout>* ao_layouts = nullptr,
                          std::vector<std::vector<AbacusAOTypeLayout>>* abf_layout_candidates = nullptr)
 {
@@ -1195,6 +1198,22 @@ void parse_symrot_k_file(const std::string& file_path,
             member.k_bz = parse_vec3_double(lines[index], file_path);
             ++index;
 
+            while (index < lines.size() && trim(lines[index]).empty())
+            {
+                ++index;
+            }
+            if (index < lines.size() && starts_with(trim(lines[index]), "fold_G"))
+            {
+                const auto fold_G = parse_vec3_int(lines[index], file_path);
+                if (kstar_member_fold_G != nullptr)
+                {
+                    (*kstar_member_fold_G)[{star.star_index,
+                                            static_cast<int>(star.members.size())}] =
+                        {fold_G[0], fold_G[1], fold_G[2]};
+                }
+                ++index;
+            }
+
             while (index < lines.size())
             {
                 while (index < lines.size() && trim(lines[index]).empty())
@@ -1222,6 +1241,26 @@ void parse_symrot_k_file(const std::string& file_path,
                 atom_rotation.atom_type = static_cast<int>(values[2]) - 1;
                 atom_rotation.lmax = static_cast<int>(values[3]);
                 ++index;
+
+                while (index < lines.size() && trim(lines[index]).empty())
+                {
+                    ++index;
+                }
+                if (index < lines.size() && starts_with(trim(lines[index]), "return_lattice"))
+                {
+                    const auto return_lattice = parse_vec3_int(lines[index], file_path);
+                    if (kspace_return_lattice != nullptr)
+                    {
+                        int spatial_isym = member.isym;
+                        if (nsym_space > 0 && spatial_isym >= nsym_space)
+                        {
+                            spatial_isym -= nsym_space;
+                        }
+                        (*kspace_return_lattice)[{atom_rotation.atom_from, spatial_isym}] =
+                            {return_lattice[0], return_lattice[1], return_lattice[2]};
+                    }
+                    ++index;
+                }
 
                 for (int l = 0; l <= atom_rotation.lmax; ++l)
                 {
@@ -1267,7 +1306,12 @@ void load_symrot_k_file(const std::string& file_path, AbacusSymmetryContext& ctx
 {
     ctx.kstars.clear();
     ctx.ao_type_layouts.clear();
-    parse_symrot_k_file(file_path, ctx.kstars, &ctx.ao_type_layouts, nullptr);
+    ctx.kspace_return_lattice.clear();
+    ctx.kstar_member_fold_G.clear();
+    parse_symrot_k_file(file_path, ctx.kstars, &ctx.kspace_return_lattice,
+                        &ctx.kstar_member_fold_G,
+                        static_cast<int>(ctx.rspace_operations.size()),
+                        &ctx.ao_type_layouts, nullptr);
     ctx.ao_shell_layout_available = !ctx.ao_type_layouts.empty();
     infer_atom_to_type_from_kstars(ctx.kstars, ctx.atom_to_type);
 }
@@ -1679,6 +1723,8 @@ void AbacusSymmetryContext::clear()
     ao_type_layouts.clear();
     abf_type_layout_candidates.clear();
     atom_to_type.clear();
+    kspace_return_lattice.clear();
+    kstar_member_fold_G.clear();
 }
 
 bool AbacusSymmetryContext::empty() const
@@ -1686,7 +1732,8 @@ bool AbacusSymmetryContext::empty() const
     return irreducible_sector.empty() && rspace_operations.empty() && kstars.empty()
            && abf_kstars.empty()
            && ao_type_layouts.empty() && abf_type_layout_candidates.empty()
-           && atom_to_type.empty();
+           && atom_to_type.empty()
+           && kspace_return_lattice.empty() && kstar_member_fold_G.empty();
 }
 
 bool AbacusSymmetryContext::has_ao_shell_layout() const
@@ -1838,7 +1885,7 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     load_symrot_k_file(symrot_k_file, ctx);
     if (has_symrot_abf_k)
     {
-        parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars, nullptr,
+        parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars, nullptr, nullptr, -1, nullptr,
                             &ctx.abf_type_layout_candidates);
     }
     ctx.abf_shell_layout_available = !ctx.abf_type_layout_candidates.empty();
@@ -2250,6 +2297,13 @@ Vector3_Order<int> build_abacus_kspace_return_lattice(
     const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
     const int spatial_isym)
 {
+    const auto stored_return_lattice =
+        ctx.kspace_return_lattice.find({atom_rotation.atom_from, spatial_isym});
+    if (stored_return_lattice != ctx.kspace_return_lattice.end())
+    {
+        return stored_return_lattice->second;
+    }
+
     const auto coord_from_iter = coord_frac_map.find(static_cast<atom_t>(atom_rotation.atom_from));
     const auto coord_to_iter = coord_frac_map.find(static_cast<atom_t>(atom_rotation.atom_to));
     if (coord_from_iter == coord_frac_map.end() || coord_to_iter == coord_frac_map.end())
@@ -2281,6 +2335,45 @@ Vector3_Order<int> build_abacus_kspace_return_lattice(
     return round_vec3_to_int(return_lattice);
 }
 
+Vector3_Order<int> build_abacus_equivalent_kpoint_shift(
+    const Vector3_Order<double>& k_bz_source,
+    const Vector3_Order<double>& k_bz_target)
+{
+    const Vector3_Order<double> k_shift{
+        k_bz_target.x - k_bz_source.x,
+        k_bz_target.y - k_bz_source.y,
+        k_bz_target.z - k_bz_source.z,
+    };
+    if (!is_nearly_integer_vec3(k_shift))
+    {
+        throw std::runtime_error(
+            "ABACUS symmetry restore encountered non-equivalent full-k representatives");
+    }
+    return round_vec3_to_int(k_shift);
+}
+
+std::complex<double> build_abacus_reciprocal_gauge_phase(
+    const Vector3_Order<int>& k_shift,
+    const atom_t atom,
+    const std::map<atom_t, std::array<double, 3>>& coord_frac_map)
+{
+    const auto coord_iter = coord_frac_map.find(atom);
+    if (coord_iter == coord_frac_map.end())
+    {
+        throw std::runtime_error("Missing fractional coordinate for ABACUS reciprocal-gauge phase");
+    }
+
+    const Vector3_Order<double> tau =
+        restrict_fractional_coordinate({coord_iter->second[0],
+                                        coord_iter->second[1],
+                                        coord_iter->second[2]});
+    const double phase_arg =
+        TWO_PI * (static_cast<double>(k_shift.x) * tau.x
+                  + static_cast<double>(k_shift.y) * tau.y
+                  + static_cast<double>(k_shift.z) * tau.z);
+    return std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
+}
+
 abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     const AbacusSymmetryContext& ctx,
     const AbacusKStarMember& member,
@@ -2289,7 +2382,8 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     const Vector3_Order<double>& k_ibz,
     const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
     const bool use_time_reversal,
-    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs)
+    const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs,
+    const Vector3_Order<double>* k_bz_target)
 {
     if (!ctx.has_abf_shell_layout())
     {
@@ -2319,6 +2413,31 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
 
         throw std::runtime_error("Missing ABF atom block while rotating the ABACUS q-space operator");
     };
+
+    // The identity member at the IBZ representative is an exact no-op as long as no
+    // target-representative gauge shift is requested. Returning the original/hermitian-completed
+    // blocks here avoids rebuilding an M matrix that should mathematically be the identity.
+    if (!use_time_reversal && member.isym == 0 && k_bz_target == nullptr
+        && nearly_same_kpoint(member.k_bz, k_ibz))
+    {
+        abacus_atom_block_matrix_map_t identity_blocks;
+        for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
+        {
+            for (std::size_t atom_j = 0; atom_j < atom_nabf.size(); ++atom_j)
+            {
+                if (target_atom_pairs != nullptr
+                    && target_atom_pairs->count({static_cast<atom_t>(atom_i),
+                                                 static_cast<atom_t>(atom_j)}) == 0)
+                {
+                    continue;
+                }
+                identity_blocks[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
+                    get_block_or_hermitian(static_cast<atom_t>(atom_i),
+                                           static_cast<atom_t>(atom_j));
+            }
+        }
+        return identity_blocks;
+    }
 
     std::vector<const AbacusKAtomRotation*> rotations_by_from(atom_nabf.size(), nullptr);
     std::vector<bool> visited_to(atom_nabf.size(), false);
@@ -2372,6 +2491,18 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
         atom_M_blocks[atom] *= std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
     }
 
+    const bool apply_target_gauge = (k_bz_target != nullptr);
+    std::vector<std::complex<double>> atom_target_phases(atom_nabf.size(), {1.0, 0.0});
+    if (apply_target_gauge)
+    {
+        const auto k_shift = build_abacus_equivalent_kpoint_shift(member.k_bz, *k_bz_target);
+        for (std::size_t atom = 0; atom < atom_nabf.size(); ++atom)
+        {
+            atom_target_phases[atom] = build_abacus_reciprocal_gauge_phase(
+                k_shift, static_cast<atom_t>(atom), coord_frac_map);
+        }
+    }
+
     abacus_atom_block_matrix_map_t rotated_blocks;
     for (std::size_t atom_i = 0; atom_i < atom_nabf.size(); ++atom_i)
     {
@@ -2409,6 +2540,12 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
                 // Row-major equivalent of the ABACUS col-major rotation:
                 //   non-TRS: O_bz[I,J] = M_I^T · O_ibz[S(I),S(J)] · conj(M_J)
                 block_rotated = transpose(M_i, false) * block_ibz * conj(M_j);
+            }
+            if (apply_target_gauge)
+            {
+                const auto left_phase = atom_target_phases[atom_i];
+                const auto right_phase = atom_target_phases[atom_j];
+                block_rotated *= left_phase * std::conj(right_phase);
             }
             rotated_blocks[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
                 std::move(block_rotated);
@@ -2484,8 +2621,12 @@ abacus_atom_block_matrix_map_t symmetrize_abacus_abf_ibz_kspace_operator_blocks(
 
         const auto& abf_member =
             (abf_star == nullptr) ? member : find_matching_abf_kstar_member(*abf_star, member);
+        // Little-group members can return an equivalent IBZ representative that differs from the
+        // active LibRPA label by a reciprocal-lattice vector G. Re-apply the target gauge so the
+        // averaged operator is accumulated in the same k_ibz representative used by LibRPA.
         const auto rotated_blocks = rotate_abacus_abf_kspace_operator_blocks(
-            ctx, abf_member, blocks_ibz, atom_nabf, k_ibz, coord_frac, false, target_atom_pairs);
+            ctx, abf_member, blocks_ibz, atom_nabf, k_ibz, coord_frac, false, target_atom_pairs,
+            &k_ibz);
 
         for (const auto& atom_i_pair : rotated_blocks)
         {
@@ -2528,7 +2669,8 @@ ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
     const std::map<atom_t, size_t>& atom_nabf,
     const Vector3_Order<double>& k_ibz,
     const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
-    const bool use_time_reversal)
+    const bool use_time_reversal,
+    const Vector3_Order<double>* k_bz_target)
 {
     if (!ctx.has_abf_shell_layout())
     {
@@ -2554,7 +2696,8 @@ ComplexMatrix rotate_abacus_abf_kspace_operator_matrix(
     }
 
     const auto rotated_blocks = rotate_abacus_abf_kspace_operator_blocks(
-        ctx, member, blocks_ibz, atom_nabf, k_ibz, coord_frac_map, use_time_reversal);
+        ctx, member, blocks_ibz, atom_nabf, k_ibz, coord_frac_map, use_time_reversal,
+        nullptr, k_bz_target);
 
     ComplexMatrix rotated_matrix(nabf_total, nabf_total);
     for (const auto& atom_i_pair : rotated_blocks)
@@ -2613,7 +2756,8 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
                                           const std::map<atom_t, size_t>& atom_nw,
                                           const Vector3_Order<double>& k_ibz,
                                           const std::map<atom_t, std::array<double, 3>>& coord_frac_map,
-                                          const bool use_time_reversal)
+                                          const bool use_time_reversal,
+                                          const Vector3_Order<double>* k_bz_target)
 {
     // -------------------------------------------------------------------------
     // Rotate D(k_ibz) to D(k_bz) using the Bloch rotation matrix M from
@@ -2700,6 +2844,18 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
         atom_M_blocks[atom] *= std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
     }
 
+    const bool apply_target_gauge = (k_bz_target != nullptr);
+    std::vector<std::complex<double>> atom_target_phases(atom_nw.size(), {1.0, 0.0});
+    if (apply_target_gauge)
+    {
+        const auto k_shift = build_abacus_equivalent_kpoint_shift(member.k_bz, *k_bz_target);
+        for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
+        {
+            atom_target_phases[atom] = build_abacus_reciprocal_gauge_phase(
+                k_shift, static_cast<atom_t>(atom), coord_frac_map);
+        }
+    }
+
     // Apply the block-level rotation formula.
     //
     // ABACUS col-major formula:  D^T(k_bz) = M† · D^T(k_ibz) · M
@@ -2737,6 +2893,12 @@ ComplexMatrix rotate_abacus_kspace_matrix(const AbacusSymmetryContext& ctx,
             {
                 // Space group: D_bz[I,J] = M_I^T · D_ibz[S(I),S(J)] · conj(M_J)
                 block_rotated = transpose(M_i, false) * block_ibz * conj(M_j);
+            }
+            if (apply_target_gauge)
+            {
+                const auto left_phase = atom_target_phases[atom_i];
+                const auto right_phase = atom_target_phases[atom_j];
+                block_rotated *= left_phase * std::conj(right_phase);
             }
             // Write to D_bz at the ORIGINAL atom positions I, J
             set_atom_block(rotated_matrix,
