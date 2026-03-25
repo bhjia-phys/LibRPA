@@ -40,6 +40,7 @@ bool can_restore_gf_from_abacus_symmetry(const LIBRPA::AbacusSymmetryContext& ct
                                          const MeanField& meanfield)
 {
     return Params::use_abacus_gw_symmetry && ctx.available && ctx.has_ao_shell_layout()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
            && !ctx.kstars.empty() && ctx.kstars.size() == kfrac_list.size()
            && meanfield.get_n_kpoints() == static_cast<int>(ctx.kstars.size())
            && ctx.atom_to_type.size() == atom_nw.size()
@@ -51,6 +52,10 @@ std::vector<LIBRPA::AbacusKStarGridMappingEntry> build_abacus_full_k_mapping_for
     const std::vector<Vector3_Order<double>>& kfrac_list)
 {
     if (!Params::use_abacus_gw_symmetry || !ctx.available || ctx.kstars.empty())
+    {
+        return {};
+    }
+    if (static_cast<int>(klist.size()) >= get_full_bz_kpoint_count())
     {
         return {};
     }

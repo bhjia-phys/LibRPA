@@ -445,6 +445,7 @@ bool use_abacus_ibz_root_projection(const int n_target_kpoints,
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     return Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
            && ctx.kstars.size() == static_cast<std::size_t>(n_meanfield_kpoints)
            && n_target_kpoints == n_meanfield_kpoints;
 }
@@ -936,6 +937,7 @@ void G0W0::build_spacetime(
     const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
     const bool use_abacus_sigc_symmetry =
         Params::use_abacus_gw_symmetry && symmetry_ctx.available
+        && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
         && symmetry_ctx.has_ao_shell_layout() && !symmetry_ctx.irreducible_sector.empty()
         && !symmetry_ctx.rspace_operations.empty()
         && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)

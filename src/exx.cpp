@@ -43,6 +43,7 @@ bool use_abacus_ibz_root_projection(const int n_target_kpoints,
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     return Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
            && ctx.kstars.size() == static_cast<std::size_t>(n_meanfield_kpoints)
            && n_target_kpoints == n_meanfield_kpoints;
 }
@@ -77,6 +78,10 @@ std::vector<LIBRPA::AbacusKStarGridMappingEntry> build_abacus_full_k_mapping_for
     {
         return {};
     }
+    if (static_cast<int>(klist.size()) >= get_full_bz_kpoint_count())
+    {
+        return {};
+    }
     if (ctx.kstars.size() != kfrac_list.size())
     {
         throw std::runtime_error(
@@ -101,6 +106,42 @@ bool complex_array_has_nonfinite(const std::complex<double>* data, const int siz
 bool complex_matrix_has_nonfinite(const ComplexMatrix& mat)
 {
     return complex_array_has_nonfinite(mat.c, mat.size);
+}
+
+bool exx_coulomb_uses_abacus_irreducible_sector_layout(
+    const atpair_R_mat_t& coul_mat,
+    const LIBRPA::AbacusSymmetryContext& symmetry_ctx)
+{
+    if (coul_mat.empty())
+    {
+        return false;
+    }
+
+    for (const auto& i_entry : coul_mat)
+    {
+        const auto ir_I = static_cast<atom_t>(i_entry.first);
+        for (const auto& j_entry : i_entry.second)
+        {
+            const auto ir_J = static_cast<atom_t>(j_entry.first);
+            const auto sector_iter = symmetry_ctx.irreducible_sector.find({ir_I, ir_J});
+            if (sector_iter == symmetry_ctx.irreducible_sector.end())
+            {
+                return false;
+            }
+
+            for (const auto& r_entry : j_entry.second)
+            {
+                const auto& R = r_entry.first;
+                const abacus_R_t r_array{R.x, R.y, R.z};
+                if (sector_iter->second.count(r_array) == 0)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
 }
 
 template <typename T>
@@ -438,6 +479,7 @@ bool Exx::can_restore_dmat_from_abacus_symmetry() const
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     return ctx.available && ctx.has_ao_shell_layout() && !ctx.kstars.empty()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
            && ctx.kstars.size() == this->kfrac_list_.size()
            && this->mf_.get_n_kpoints() == static_cast<int>(ctx.kstars.size());
 }
@@ -749,6 +791,7 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
     const bool use_abacus_exx_symmetry =
         Params::use_abacus_exx_symmetry && symmetry_ctx.available
+        && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
         && symmetry_ctx.has_ao_shell_layout()
         && !symmetry_ctx.irreducible_sector.empty() && !symmetry_ctx.rspace_operations.empty()
         && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
@@ -843,7 +886,10 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     Profiler::start("build_real_space_exx_2_1");
     atpair_R_mat_t exx_coul_mat_restored;
     const atpair_R_mat_t* exx_coul_mat_ptr = &coul_mat;
-    if (use_abacus_exx_symmetry)
+    const bool use_abacus_exx_coulomb_restore =
+        use_abacus_exx_symmetry
+        && exx_coulomb_uses_abacus_irreducible_sector_layout(coul_mat, symmetry_ctx);
+    if (use_abacus_exx_coulomb_restore)
     {
         if (mpi_comm_global_h.is_root())
         {
@@ -901,6 +947,11 @@ void Exx::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
             }
         }
         exx_coul_mat_ptr = &exx_coul_mat_restored;
+    }
+    else if (use_abacus_exx_symmetry && mpi_comm_global_h.is_root())
+    {
+        utils::lib_printf(
+            "ABACUS EXX Coulomb input already spans the full real-space sector; skip irreducible-sector restore\n");
     }
     const auto& exx_coul_mat = *exx_coul_mat_ptr;
     const bool use_symmetry_direct_vr_local_cache =
