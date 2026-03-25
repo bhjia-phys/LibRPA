@@ -409,6 +409,48 @@ int main()
     assert(kstar_grid_mapping[1].member_q_bz_keys[0] == q_gamma_member0);
     assert(kstar_grid_mapping[1].member_q_bz_keys[1] == q_gamma_member1);
 
+    // If LibRPA's rebuilt full-star list chooses a different representative set from the
+    // ABACUS sidecar, the mapping helper must still trust the sidecar coordinates instead of
+    // aborting. This mirrors the production path where ABACUS exports the authoritative k-star.
+    map_irk_ks.clear();
+    map_irk_ks[klist[0]] = {{0.5, 0.0, 0.0}, {0.25, 0.25, 0.0}};
+    map_irk_ks[klist[1]] = {{0.0, 0.0, 0.0}, {-0.5, 0.0, 0.0}};
+    const auto fallback_kstar_grid_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(kmap_ctx, klist, kfrac_list, map_irk_ks);
+    assert(fallback_kstar_grid_mapping[0].member_q_bz_keys[0] == q_edge_member0);
+    assert(fallback_kstar_grid_mapping[0].member_q_bz_keys[1] == q_edge_member1);
+
+    // The sidecar->internal conversion must use the same row-vector convention as `klist`.
+    // A non-symmetric reciprocal matrix catches accidental use of the column-vector formula.
+    G = Matrix3(1.0, 2.0, 0.0,
+                3.0, 4.0, 0.0,
+                0.0, 0.0, 1.0);
+    klist.clear();
+    kfrac_list.clear();
+    map_irk_ks.clear();
+    klist.push_back({0.25 * G.e11 + 0.5 * G.e21, 0.25 * G.e12 + 0.5 * G.e22, 0.0});
+    kfrac_list.push_back({0.25, 0.5, 0.0});
+    map_irk_ks[klist[0]] = {klist[0]};
+    LIBRPA::AbacusKStar skew_star;
+    skew_star.star_index = 0;
+    skew_star.k_ibz = {0.25, 0.5, 0.0};
+    skew_star.members.push_back(LIBRPA::AbacusKStarMember{0, {0.25, 0.5, 0.0}, {}});
+    LIBRPA::AbacusSymmetryContext skew_ctx;
+    skew_ctx.available = true;
+    skew_ctx.kstars = {skew_star};
+    const auto skew_mapping =
+        LIBRPA::build_abacus_kstar_grid_mapping(skew_ctx, klist, kfrac_list, map_irk_ks);
+    assert(skew_mapping[0].member_q_bz_keys[0] == klist[0]);
+    G.Identity();
+    klist.clear();
+    kfrac_list.clear();
+    map_irk_ks.clear();
+    klist.push_back({0.5, 0.0, 0.0});
+    klist.push_back({0.0, 0.0, 0.0});
+    kfrac_list = klist;
+    map_irk_ks[klist[0]] = {{0.5, 0.0, 0.0}, {0.0, 0.5, 0.0}};
+    map_irk_ks[klist[1]] = {{0.0, 0.0, 0.0}, {-0.5, 0.0, 0.0}};
+
     // LibRPA can label an IBZ q-point by any symmetry-equivalent full-star member. The ABACUS
     // sidecar stores only one representative per star, so the matcher must also recognize member
     // coordinates and not only the canonical `k_ibz` entry.

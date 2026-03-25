@@ -2164,8 +2164,11 @@ std::vector<AbacusKStarGridMappingEntry> build_abacus_kstar_grid_mapping(
     }
 
     auto convert_fractional_to_internal = [](const Vector3_Order<double>& kfrac) {
-        const auto k_internal = G * Vector3<double>(kfrac.x, kfrac.y, kfrac.z);
-        return Vector3_Order<double>{k_internal.x, k_internal.y, k_internal.z};
+        // Keep the same row-vector convention as `read_data.cpp::convert_fractional_kpoint_to_klist_units`
+        // so the sidecar-derived q/k keys are identical to the keys used in `klist` and `map_irk_ks`.
+        return Vector3_Order<double>{kfrac.x * G.e11 + kfrac.y * G.e21 + kfrac.z * G.e31,
+                                     kfrac.x * G.e12 + kfrac.y * G.e22 + kfrac.z * G.e32,
+                                     kfrac.x * G.e13 + kfrac.y * G.e23 + kfrac.z * G.e33};
     };
 
     auto find_matching_ibz_full_list =
@@ -2199,33 +2202,33 @@ std::vector<AbacusKStarGridMappingEntry> build_abacus_kstar_grid_mapping(
         const auto& star = ctx.kstars[static_cast<std::size_t>(matched_star_index)];
         const auto q_ibz_key = klist_internal[iq_ibz];
         const auto full_list_iter = find_matching_ibz_full_list(q_ibz_key);
-
-        if (full_list_iter == irk_to_full_kpoints.end())
-        {
-            // Fall back to the converted sidecar coordinates if the full star list is not
-            // available yet. The IBZ source key still comes from the exact LibRPA `klist`
-            // index above, which is the critical part for the restore path.
-            entry.member_q_bz_keys.reserve(star.members.size());
-            for (const auto& member : star.members)
-            {
-                entry.member_q_bz_keys.push_back(convert_fractional_to_internal(member.k_bz));
-            }
-            continue;
-        }
-
-        const auto& full_q_keys = full_list_iter->second;
+        const std::vector<Vector3_Order<double>>* full_q_keys =
+            (full_list_iter == irk_to_full_kpoints.end()) ? nullptr : &full_list_iter->second;
+        std::vector<bool> matched_full_q(
+            (full_q_keys == nullptr) ? 0 : full_q_keys->size(), false);
         entry.member_q_bz_keys.resize(star.members.size());
-        std::vector<bool> matched_full_q(full_q_keys.size(), false);
 
         for (std::size_t imember = 0; imember < star.members.size(); ++imember)
         {
             const auto member_q_internal =
                 convert_fractional_to_internal(star.members[imember].k_bz);
+            entry.member_q_bz_keys[imember] = member_q_internal;
+
+            // The ABACUS sidecar is the authoritative description of the k-star members,
+            // including the exact representative chosen after symmetry and BZ folding.
+            // LibRPA's `map_irk_ks` is only used here as an optional source of already
+            // existing internal q keys. If a member cannot be matched back to that rebuilt
+            // list, keep the sidecar-derived key instead of rejecting the star.
+            if (full_q_keys == nullptr)
+            {
+                continue;
+            }
+
             int matched_full_index = -1;
-            for (std::size_t ifull = 0; ifull < full_q_keys.size(); ++ifull)
+            for (std::size_t ifull = 0; ifull < full_q_keys->size(); ++ifull)
             {
                 if (matched_full_q[ifull]
-                    || !nearly_same_kpoint(full_q_keys[ifull], member_q_internal))
+                    || !nearly_same_kpoint((*full_q_keys)[ifull], member_q_internal))
                 {
                     continue;
                 }
@@ -2237,18 +2240,12 @@ std::vector<AbacusKStarGridMappingEntry> build_abacus_kstar_grid_mapping(
                 matched_full_index = static_cast<int>(ifull);
             }
 
-            if (matched_full_index < 0)
+            if (matched_full_index >= 0)
             {
-                std::ostringstream oss;
-                oss << "Failed to match ABACUS star member " << imember << " of star "
-                    << star.star_index << " with the LibRPA full-q star reconstructed from "
-                    << "map_irk_ks";
-                throw std::runtime_error(oss.str());
+                matched_full_q[static_cast<std::size_t>(matched_full_index)] = true;
+                entry.member_q_bz_keys[imember] =
+                    (*full_q_keys)[static_cast<std::size_t>(matched_full_index)];
             }
-
-            matched_full_q[static_cast<std::size_t>(matched_full_index)] = true;
-            entry.member_q_bz_keys[imember] =
-                full_q_keys[static_cast<std::size_t>(matched_full_index)];
         }
     }
 

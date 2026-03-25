@@ -71,9 +71,10 @@ struct AbacusKStar
 /*!
  * @brief Explicit mapping between one loaded LibRPA IBZ q-index and one ABACUS k-star.
  *
- * The mapping also stores the exact full-BZ q keys that LibRPA should use for every
- * star member. This avoids rebuilding q keys from floating-point coordinates during
- * GW restore and keeps the sidecar traversal aligned with LibRPA's own q ordering.
+ * The mapping stores the full-BZ q keys that LibRPA should use for every star member.
+ * ABACUS sidecar coordinates are treated as the source of truth; when LibRPA already
+ * has an equivalent internal q key, that exact key is reused to keep later lookups
+ * aligned with existing storage.
  */
 struct AbacusKStarGridMappingEntry
 {
