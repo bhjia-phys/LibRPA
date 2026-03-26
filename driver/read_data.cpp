@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -43,6 +44,29 @@ bool path_exists(const string &path)
 const string kPyatbBundleDir = "pyatb_librpa_df/";
 
 constexpr double kAbacusKpointMatchTol = 1e-5;
+
+string ensure_trailing_slash(const string& dir_path)
+{
+    if (dir_path.empty() || dir_path.back() == '/')
+    {
+        return dir_path;
+    }
+    return dir_path + "/";
+}
+
+void ensure_dir_exists(const string& dir_path)
+{
+    const auto normalized = ensure_trailing_slash(dir_path);
+    if (normalized.empty())
+    {
+        throw std::runtime_error("Cannot create an empty output directory");
+    }
+    const auto command = "mkdir -p \"" + normalized + "\"";
+    if (std::system(command.c_str()) != 0)
+    {
+        throw std::runtime_error("Failed to create directory: " + normalized);
+    }
+}
 
 std::string read_required_token(std::ifstream& infile, const std::string& file_path,
                                 const std::string& item_desc)
@@ -537,25 +561,105 @@ void read_velocity(const string &file_path, MeanField &mf)
 {
     ifstream infile;
     infile.open(file_path);
-    string alpha, kk, single_re, single_im;
-    int n_kpoints, n_spins, n_bands, n_aos;
+    if (!infile.good())
+    {
+        throw std::runtime_error("Failed to open velocity file " + file_path);
+    }
+
+    string alpha, kk, spin_token, single_re, single_im;
+    int n_kpoints = 0;
     infile >> n_kpoints;
-    n_spins = 1;
-    infile >> n_bands;
-    infile >> n_aos;
+    if (!infile.good())
+    {
+        throw std::runtime_error("Failed to read velocity header from " + file_path);
+    }
+
+    const auto header_pos = infile.tellg();
+    int n_spins = 1;
+    int n_bands = 0;
+    int n_aos = 0;
+    bool has_spin_header = false;
+    {
+        int token2 = 0;
+        int token3 = 0;
+        int token4 = 0;
+        if (infile >> token2 >> token3 >> token4)
+        {
+            const int expected_n_spins = mf.get_n_spins();
+            const int expected_n_bands = mf.get_n_bands();
+            const int expected_n_basis = mf.get_n_aos() * mf.get_n_soc();
+            if (token2 == expected_n_spins && token3 == expected_n_bands
+                && (token4 == expected_n_basis || token4 == expected_n_bands))
+            {
+                has_spin_header = true;
+                n_spins = token2;
+                n_bands = token3;
+                n_aos = token4;
+            }
+        }
+    }
+
+    infile.clear();
+    infile.seekg(header_pos);
+    if (has_spin_header)
+    {
+        infile >> n_spins >> n_bands >> n_aos;
+    }
+    else
+    {
+        infile >> n_bands >> n_aos;
+    }
+
+    if (!infile.good())
+    {
+        throw std::runtime_error("Failed to parse velocity header from " + file_path);
+    }
+
+    if (n_kpoints != mf.get_n_kpoints() || n_spins != mf.get_n_spins()
+        || n_bands != mf.get_n_bands())
+    {
+        std::ostringstream oss;
+        oss << "Velocity header in " << file_path << " is inconsistent with MeanField"
+            << " (file nk/spin/bands = " << n_kpoints << "/" << n_spins << "/" << n_bands
+            << ", meanfield = " << mf.get_n_kpoints() << "/" << mf.get_n_spins() << "/"
+            << mf.get_n_bands() << ")";
+        throw std::runtime_error(oss.str());
+    }
 
     auto &velocity = mf.get_velocity();
+    auto &velocity0 = mf.get_velocity0();
     for (int is = 0; is != n_spins; is++)
     {
         for (int ik = 0; ik != n_kpoints; ik++)
         {
             for (int ia = 0; ia != 3; ia++)
             {
-                infile >> alpha >> kk;
+                if (has_spin_header)
+                {
+                    infile >> alpha >> kk >> spin_token;
+                }
+                else
+                {
+                    infile >> alpha >> kk;
+                }
+                if (!infile.good())
+                {
+                    throw std::runtime_error("Failed to read velocity block header from "
+                                             + file_path);
+                }
                 int k_index = stoi(kk) - 1;
                 int a_index = stoi(alpha) - 1;
                 assert(k_index == ik);
                 assert(a_index == ia);
+                if (has_spin_header)
+                {
+                    const int spin_index = stoi(spin_token) - 1;
+                    if (spin_index != is)
+                    {
+                        throw std::runtime_error("Velocity block spin index mismatch in "
+                                                 + file_path);
+                    }
+                }
                 for (int i = 0; i != n_bands; i++)
                 {
                     for (int j = 0; j != n_bands; j++)
@@ -563,6 +667,7 @@ void read_velocity(const string &file_path, MeanField &mf)
                         infile >> single_re >> single_im;
                         velocity.at(is).at(ik).at(ia)(i, j) =
                             ANG2BOHR * complex<double>(stod(single_re), stod(single_im)) / HA2EV;
+                        velocity0.at(is).at(ik).at(ia)(i, j) = velocity.at(is).at(ik).at(ia)(i, j);
                     }
                 }
             }
@@ -577,6 +682,7 @@ void read_velocity_aims(MeanField &mf, const string &file_path)
     int n_spins = mf.get_n_spins();
     int nbands = mf.get_n_bands();
     auto &velocity = mf.get_velocity();
+    auto &velocity0 = mf.get_velocity0();
 
     ifstream infile;
     for (int ik = 0; ik != nk; ik++)
@@ -617,6 +723,12 @@ void read_velocity_aims(MeanField &mf, const string &file_path)
                     velocity.at(is).at(ik).at(0)(im, in) = conj(px[iline]);
                     velocity.at(is).at(ik).at(1)(im, in) = conj(py[iline]);
                     velocity.at(is).at(ik).at(2)(im, in) = conj(pz[iline]);
+                    velocity0.at(is).at(ik).at(0)(in, im) = velocity.at(is).at(ik).at(0)(in, im);
+                    velocity0.at(is).at(ik).at(1)(in, im) = velocity.at(is).at(ik).at(1)(in, im);
+                    velocity0.at(is).at(ik).at(2)(in, im) = velocity.at(is).at(ik).at(2)(in, im);
+                    velocity0.at(is).at(ik).at(0)(im, in) = velocity.at(is).at(ik).at(0)(im, in);
+                    velocity0.at(is).at(ik).at(1)(im, in) = velocity.at(is).at(ik).at(1)(im, in);
+                    velocity0.at(is).at(ik).at(2)(im, in) = velocity.at(is).at(ik).at(2)(im, in);
                     iline++;
                     /*if (in == im)
                     {
@@ -676,6 +788,157 @@ void read_velocity_aims(MeanField &mf, const string &file_path)
     // std::cout << "px(k=26, m=5, n=40): " << velocity.at(0).at(26).at(0)(5, 40) << std::endl;
     // std::cout << "px(k=26, m=40, n=5): " << velocity.at(0).at(26).at(0)(40, 5) << std::endl;
     std::cout << "* Success: read moment from moment_KS_spin_01_kpt_*.dat(FHI-aims)." << std::endl;
+}
+
+void write_scf_occ_eigenvalues(const string &file_path, const MeanField &mf)
+{
+    ofstream outfile(file_path);
+    if (!outfile.good())
+    {
+        throw std::runtime_error("Failed to open band_out for write: " + file_path);
+    }
+
+    const int n_kpoints = mf.get_n_kpoints();
+    const int n_spins = mf.get_n_spins();
+    const int n_bands = mf.get_n_bands();
+    const int n_basis = mf.get_n_aos() * mf.get_n_soc();
+
+    outfile << n_kpoints << '\n';
+    outfile << n_spins << '\n';
+    outfile << n_bands << '\n';
+    outfile << n_basis << '\n';
+    outfile << std::setprecision(17) << mf.get_efermi() << '\n';
+
+    for (int ik = 0; ik != n_kpoints; ++ik)
+    {
+        for (int is = 0; is != n_spins; ++is)
+        {
+            outfile << ik + 1 << " " << is + 1 << '\n';
+            for (int ib = 0; ib != n_bands; ++ib)
+            {
+                const double occupation_raw = mf.get_weight()[is](ik, ib) * n_kpoints;
+                const double eig_ha = mf.get_eigenvals()[is](ik, ib);
+                outfile << ib + 1 << " " << std::setprecision(16) << occupation_raw << " "
+                        << eig_ha << " " << eig_ha * HA2EV << '\n';
+            }
+        }
+    }
+}
+
+void write_eigenvector(const string &dir_path, const MeanField &mf)
+{
+    const auto normalized_dir = ensure_trailing_slash(dir_path);
+    ensure_dir_exists(normalized_dir);
+
+    const int n_kpoints = mf.get_n_kpoints();
+    const int n_spins = mf.get_n_spins();
+    const int n_soc = mf.get_n_soc();
+    const int n_bands = mf.get_n_bands();
+    const int n_aos = mf.get_n_aos();
+
+    for (int ik = 0; ik != n_kpoints; ++ik)
+    {
+        std::ostringstream path;
+        path << normalized_dir << "KS_eigenvector_" << ik << ".dat";
+        ofstream outfile(path.str());
+        if (!outfile.good())
+        {
+            throw std::runtime_error("Failed to open eigenvector file for write: " + path.str());
+        }
+
+        outfile << ik + 1 << '\n';
+        outfile << std::scientific << std::setprecision(16);
+        for (int iao = 0; iao != n_aos; ++iao)
+        {
+            for (int isoc = 0; isoc != n_soc; ++isoc)
+            {
+                for (int ib = 0; ib != n_bands; ++ib)
+                {
+                    for (int is = 0; is != n_spins; ++is)
+                    {
+                        const auto value = mf.get_eigenvectors()[is][isoc][ik](ib, iao);
+                        outfile << value.real() << " " << value.imag() << '\n';
+                    }
+                }
+            }
+        }
+    }
+}
+
+void write_velocity(const string &file_path, const MeanField &mf)
+{
+    ofstream outfile(file_path);
+    if (!outfile.good())
+    {
+        throw std::runtime_error("Failed to open velocity_matrix for write: " + file_path);
+    }
+
+    const int n_kpoints = mf.get_n_kpoints();
+    const int n_spins = mf.get_n_spins();
+    const int n_bands = mf.get_n_bands();
+    const int n_basis = mf.get_n_aos() * mf.get_n_soc();
+
+    outfile << n_kpoints << '\n';
+    outfile << n_spins << '\n';
+    outfile << n_bands << '\n';
+    outfile << n_basis << '\n';
+    outfile << std::scientific << std::setprecision(16);
+
+    for (int is = 0; is != n_spins; ++is)
+    {
+        for (int ik = 0; ik != n_kpoints; ++ik)
+        {
+            for (int ia = 0; ia != 3; ++ia)
+            {
+                outfile << ia + 1 << " " << ik + 1 << " " << is + 1 << '\n';
+                for (int ib = 0; ib != n_bands; ++ib)
+                {
+                    for (int jb = 0; jb != n_bands; ++jb)
+                    {
+                        const auto value = mf.get_velocity()[is][ik][ia](ib, jb) * HA2EV / ANG2BOHR;
+                        outfile << value.real() << " " << value.imag() << '\n';
+                    }
+                }
+            }
+        }
+    }
+}
+
+void write_band_kpath_info(const string &file_path, const MeanField &mf,
+                           const std::vector<Vector3_Order<double>> &kfrac)
+{
+    if (static_cast<int>(kfrac.size()) != mf.get_n_kpoints())
+    {
+        throw std::runtime_error("k-point count mismatch while writing k_path_info to "
+                                 + file_path);
+    }
+
+    ofstream outfile(file_path);
+    if (!outfile.good())
+    {
+        throw std::runtime_error("Failed to open k_path_info for write: " + file_path);
+    }
+
+    const int n_basis = mf.get_n_aos() * mf.get_n_soc();
+    outfile << std::setw(8) << n_basis << std::setw(8) << mf.get_n_bands() << std::setw(8)
+            << mf.get_n_spins() << std::setw(8) << mf.get_n_kpoints() << '\n';
+    outfile << std::fixed << std::setprecision(16);
+    for (const auto &kpt : kfrac)
+    {
+        outfile << std::setw(24) << kpt.x << std::setw(24) << kpt.y << std::setw(24) << kpt.z
+                << '\n';
+    }
+}
+
+void write_pyatb_bundle(const string &dir_path, const MeanField &mf,
+                        const std::vector<Vector3_Order<double>> &kfrac)
+{
+    const auto normalized_dir = ensure_trailing_slash(dir_path);
+    ensure_dir_exists(normalized_dir);
+    write_scf_occ_eigenvalues(normalized_dir + "band_out", mf);
+    write_eigenvector(normalized_dir, mf);
+    write_velocity(normalized_dir + "velocity_matrix", mf);
+    write_band_kpath_info(normalized_dir + "k_path_info", mf, kfrac);
 }
 
 static size_t handle_Cs_file(const string &file_path, double threshold,

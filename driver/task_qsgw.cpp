@@ -859,6 +859,10 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     {
         reset_iteration_history();
         ensure_dir(checkpoint_save_root);
+        if (use_iterative_pyatb_headwing_bundle())
+        {
+            initialize_headwing_velocity_from_input(meanfield);
+        }
 
         if (Params::qsgw_restart)
         {
@@ -900,6 +904,11 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
                       << "LUMO = " << lumo * HA2EV << " eV, "
                       << "Fermi Energy = " << efermi * HA2EV << " eV\n";
+        }
+
+        if (use_iterative_pyatb_headwing_bundle())
+        {
+            refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
         }
 
         plot_homo_lumo_vs_iterations();
@@ -1625,6 +1634,11 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
                 compute_homo_lumo_ha(meanfield, homo, lumo);
+
+                if (use_iterative_pyatb_headwing_bundle())
+                {
+                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
+                }
 
                 // 输出当前 HOMO 和 LUMO 值
                 std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "

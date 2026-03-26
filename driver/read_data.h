@@ -33,6 +33,13 @@ int read_eigenvector(const string &dir_path, MeanField &mf);
 size_t read_Cs(const string &dir_path, double threshold, const vector<atpair_t> &local_atpair);
 void read_velocity(const string &file_path, MeanField &mf);
 void read_velocity_aims(MeanField &mf, const string &file_path);
+void write_scf_occ_eigenvalues(const string &file_path, const MeanField &mf);
+void write_eigenvector(const string &dir_path, const MeanField &mf);
+void write_velocity(const string &file_path, const MeanField &mf);
+void write_band_kpath_info(const string &file_path, const MeanField &mf,
+                           const std::vector<Vector3_Order<double>> &kfrac);
+void write_pyatb_bundle(const string &dir_path, const MeanField &mf,
+                        const std::vector<Vector3_Order<double>> &kfrac);
 
 size_t read_Cs_evenly_distribute(const string &dir_path, double threshold, int myid, int nprocs,
                                  const string keyword = "Cs_data");

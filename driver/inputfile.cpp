@@ -220,6 +220,12 @@ void parse_inputfile_to_params(const std::string &fn)
     }
     parser.parse_int("qsgw_restart_iteration", Params::qsgw_restart_iteration, -1, flag);
     parser.parse_int("qsgw_checkpoint_every", Params::qsgw_checkpoint_every, 1, flag);
+    parser.parse_bool("qsgw_iterative_headwing", Params::qsgw_iterative_headwing, true, flag);
+    parser.parse_string("qsgw_headwing_bundle_dir", Params::qsgw_headwing_bundle_dir, "", flag);
+    if (!Params::qsgw_headwing_bundle_dir.empty())
+    {
+        Params::qsgw_headwing_bundle_dir = check_dirpath(Params::qsgw_headwing_bundle_dir);
+    }
 }
 
 const std::string input_filename = "librpa.in";

@@ -625,11 +625,17 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     // 设置收敛条件
     double eigenvalue_tolerance = 1e-5;  // 设置一个适当的小值，作为本征值收敛的判断标准
     int max_iterations = 500;             // 最大迭代次数
+    int hamiltonian_cut_above_fermi = -1;
+    double hamiltonian_cut_diag_shift_ev = 20.0;
     {
         int local_flag = 0;
         InputFile inputf;
         auto parser = inputf.load(input_filename, false);
         parser.parse_int("max_iter", max_iterations, max_iterations, local_flag);
+        parser.parse_int("hamiltonian_cut_above_fermi", hamiltonian_cut_above_fermi,
+                         hamiltonian_cut_above_fermi, local_flag);
+        parser.parse_double("hamiltonian_cut_diag_shift_ev", hamiltonian_cut_diag_shift_ev,
+                            hamiltonian_cut_diag_shift_ev, local_flag);
     }
     int iteration = 0;
     const double temperature = 0.0001;
@@ -645,12 +651,17 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     {
         reset_iteration_history_band();
         ensure_dir_band(checkpoint_save_root);
+        if (use_iterative_pyatb_headwing_bundle())
+        {
+            initialize_headwing_velocity_from_input(meanfield);
+        }
 
         if (Params::qsgw_restart)
         {
             const auto checkpoint = load_qsgw_checkpoint_band(
                 checkpoint_load_root, Params::qsgw_restart_iteration, n_spins, n_kpoints);
-            diagonalize_and_store(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands);
+            diagonalize_and_store_fixed_basis(meanfield, checkpoint.H0_GW_all, n_spins,
+                                              n_kpoints, n_bands);
             update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
             compute_homo_lumo_ha_band(meanfield, homo, lumo);
             efermi = checkpoint.efermi_ha;
@@ -677,6 +688,11 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
                       << "LUMO = " << lumo * HA2EV << " eV, "
                       << "Fermi Energy = " << efermi * HA2EV << " eV\n";
+        }
+
+        if (use_iterative_pyatb_headwing_bundle())
+        {
+            refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
         }
 
         plot_homo_lumo_vs_iterations();
@@ -990,8 +1006,18 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 }
                 Profiler::stop("qsgw_solve_qpe");
 
-                auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
-                                                 n_spins, n_kpoints, n_bands);
+                std::map<int, std::map<int, Matz>> H0_GW_all;
+                if (hamiltonian_cut_above_fermi >= 0)
+                {
+                    H0_GW_all = construct_H0_GW_fermi_window(
+                        meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all, n_spins, n_kpoints,
+                        n_bands, hamiltonian_cut_above_fermi, hamiltonian_cut_diag_shift_ev);
+                }
+                else
+                {
+                    H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                                                n_spins, n_kpoints, n_bands);
+                }
                 
                                                  
                 
@@ -1008,7 +1034,8 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 //  }
 
                 // 第三步：对 Hamiltonian 进行对角化并存储本征值
-                diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
+                diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints,
+                                                  n_bands);
 
                 // 计算全局费米能和占据数
                 const auto &Efermi0 = meanfield.get_efermi();
@@ -1022,6 +1049,10 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 // 将占据数和费米能级更新到 MeanField 对象中
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
+                if (use_iterative_pyatb_headwing_bundle())
+                {
+                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
+                }
 
                 // const std::string final_banner(90, '-');
                 lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
@@ -1178,11 +1209,23 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
 
             // reconstruct H0_GW_all
-            auto H0_GW_all_band = construct_H0_GW(
-                meanfield_band, H_KS0_band, vxc_band, exx.exx_is_ik_KS, Vc_all,
-                meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands);
-            diagonalize_and_store(meanfield_band, H0_GW_all_band, meanfield_band.get_n_spins(),
-                                  meanfield_band.get_n_kpoints(), n_bands);
+            std::map<int, std::map<int, Matz>> H0_GW_all_band;
+            if (hamiltonian_cut_above_fermi >= 0)
+            {
+                H0_GW_all_band = construct_H0_GW_fermi_window(
+                    meanfield_band, H_KS0_band, vxc_band, exx.exx_is_ik_KS, Vc_all,
+                    meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands,
+                    hamiltonian_cut_above_fermi, hamiltonian_cut_diag_shift_ev);
+            }
+            else
+            {
+                H0_GW_all_band = construct_H0_GW(
+                    meanfield_band, H_KS0_band, vxc_band, exx.exx_is_ik_KS, Vc_all,
+                    meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands);
+            }
+            diagonalize_and_store_fixed_basis(meanfield_band, H0_GW_all_band,
+                                              meanfield_band.get_n_spins(),
+                                              meanfield_band.get_n_kpoints(), n_bands);
 
             double total_electrons_band = total_electrons;
             printf("%5s\n", "Total_electrons_band");

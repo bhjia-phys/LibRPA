@@ -193,6 +193,13 @@ struct Params
     //! write a QSGW checkpoint every N iterations. Non-positive disables periodic checkpoints
     static int qsgw_checkpoint_every;
 
+    //! refresh the pyatb-style head/wing bundle from the current QSGW meanfield every iteration
+    static bool qsgw_iterative_headwing;
+
+    //! output directory for the refreshed pyatb-style head/wing bundle. Empty means
+    //! output_dir/pyatb_librpa_df_iterative/
+    static std::string qsgw_headwing_bundle_dir;
+
     static void check_consistency();
     static void print();
 };

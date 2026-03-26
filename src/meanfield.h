@@ -41,6 +41,8 @@ class MeanField
     std::vector<std::vector<std::vector<ComplexMatrix>>> wfc0;
     //! unit: eV*m , velocity_matrix, (n_spins, n_kpoint, n_alpha, n_bands, n_bands)
     std::vector<std::vector<std::vector<ComplexMatrix>>> velocity;
+    //! fixed-reference velocity matrix, used by fixed-basis QSGW updates
+    std::vector<std::vector<std::vector<ComplexMatrix>>> velocity0;
     //! Fermi energy
     double efermi;
     void resize(int ns, int nk, int nb, int nao);
@@ -82,6 +84,15 @@ class MeanField
     }
 
     std::vector<std::vector<std::vector<ComplexMatrix>>>& get_velocity() { return velocity; }
+    const std::vector<std::vector<std::vector<ComplexMatrix>>>& get_velocity() const
+    {
+        return velocity;
+    }
+    std::vector<std::vector<std::vector<ComplexMatrix>>>& get_velocity0() { return velocity0; }
+    const std::vector<std::vector<std::vector<ComplexMatrix>>>& get_velocity0() const
+    {
+        return velocity0;
+    }
     double get_E_min_max(double& emin, double& emax) const;
     double get_band_gap() const;
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs(

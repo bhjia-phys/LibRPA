@@ -556,12 +556,84 @@ std::map<int, std::map<int, Matz>> construct_H0_HF(
     return H0_HF_all;
 }
 
+namespace
+{
+
+Matz collect_wfc_rows(const MeanField& meanfield, const int ispin, const int ikpt,
+                      const bool use_fixed_basis)
+{
+    const int dimension = meanfield.get_n_bands();
+    const int n_soc = meanfield.get_n_soc();
+    const int nao = meanfield.get_n_aos();
+    Matz wfc_rows(dimension, nao * n_soc, MAJOR::COL);
+    const auto& source =
+        use_fixed_basis ? meanfield.get_eigenvectors0() : meanfield.get_eigenvectors();
+    for (int ib = 0; ib < dimension; ++ib)
+    {
+        for (int isoc = 0; isoc < n_soc; ++isoc)
+        {
+            for (int iao = 0; iao < nao; ++iao)
+            {
+                const int col = iao * n_soc + isoc;
+                wfc_rows(ib, col) = source[ispin][isoc][ikpt](ib, iao);
+            }
+        }
+    }
+    return wfc_rows;
+}
+
+void store_rotated_wfc(MeanField& meanfield, const int ispin, const int ikpt,
+                       const Matz& eigvec_nao)
+{
+    const int dimension = meanfield.get_n_bands();
+    const int n_soc = meanfield.get_n_soc();
+    const int nao = meanfield.get_n_aos();
+    for (int ib = 0; ib < dimension; ++ib)
+    {
+        for (int isoc = 0; isoc < n_soc; ++isoc)
+        {
+            for (int iao = 0; iao < nao; ++iao)
+            {
+                const int col = iao * n_soc + isoc;
+                meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib, iao) = eigvec_nao(ib, col);
+            }
+        }
+    }
+}
+
+ComplexMatrix matz_to_complex_matrix(const Matz& mat)
+{
+    ComplexMatrix converted(mat.nr(), mat.nc());
+    for (int ir = 0; ir < mat.nr(); ++ir)
+    {
+        for (int ic = 0; ic < mat.nc(); ++ic)
+        {
+            converted(ir, ic) = mat(ir, ic);
+        }
+    }
+    return converted;
+}
+
+void rotate_velocity_to_qp_basis(MeanField& meanfield, const int ispin, const int ikpt,
+                                 const Matz& eigvec_ks, const bool use_fixed_reference)
+{
+    const auto rotation_right = matz_to_complex_matrix(eigvec_ks);
+    const auto rotation_left = transpose(rotation_right, true);
+    const auto& velocity_source =
+        use_fixed_reference ? meanfield.get_velocity0()[ispin][ikpt]
+                            : meanfield.get_velocity()[ispin][ikpt];
+    auto& velocity_target = meanfield.get_velocity()[ispin][ikpt];
+    for (int ia = 0; ia != 3; ++ia)
+    {
+        velocity_target[ia] = rotation_left * velocity_source[ia] * rotation_right;
+    }
+}
+
+} // namespace
+
 void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
                            int n_spins, int n_kpoints, int dimension)
 {
-    int n_bands = meanfield.get_n_bands();
-    int n_soc = meanfield.get_n_soc();
-    int nao = meanfield.get_n_aos();
     for (int ispin = 0; ispin < n_spins; ++ispin)
     {  
         for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
@@ -609,62 +681,9 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
             {
                 meanfield.get_eigenvals()[ispin](ikpt, ib) = w[ib];
             }
-            
-
-            // 将本征向量存储到 MeanField 的 wfc 矩阵
-            Matz wfc(dimension, nao * n_soc, MAJOR::COL);
-            for (int ib1 = 0; ib1 < dimension; ++ib1)
-            {
-                for (int isoc = 0; isoc < n_soc; isoc++)
-                {
-                    for (int iao = 0; iao < nao; iao++)
-                    {
-                        int ib2 = iao * n_soc + isoc;
-                        wfc(ib1, ib2) = meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao);
-                    }   
-                }
-            }
-           
-            
-            auto eigvec_NAO = transpose(eigvec_KS) * wfc;
-
-            // for (int isoc = 0; isoc < n_soc; isoc++)
-        
-            // printf("%77s\n", final_banner.c_str());
-            // printf("Eigenvectors2:\n");
-            // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-            //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-            //         const auto &eigenvectors = meanfield.get_eigenvectors()[ispin][ikpt](i, j) ;
-            //         printf("%20.16f ", eigenvectors.real());
-            //     }
-            //     printf("\n"); // 换行
-            // }
-            // printf("%77s\n", final_banner.c_str());
-            // printf("\n");
-            // 将 KS 表示旋转到 NAO 表示
-
-            for (int ib1 = 0; ib1 < dimension; ++ib1)
-            {
-                for (int isoc = 0; isoc < n_soc; isoc++)
-                {
-                    for (int iao = 0; iao < nao; iao++)
-                    {
-                        int ib2 = iao * n_soc + isoc;
-                        meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao) = eigvec_NAO(ib1, ib2);
-                    }
-                }
-            }
-            // printf("%77s\n", final_banner.c_str());
-            // printf("Eigenvectors3:\n");
-            // for (int i = 0; i < meanfield.get_n_bands(); i++) {
-            //     for (int j = 0; j < meanfield.get_n_bands(); j++) {
-            //         const auto &eigenvectors = meanfield.get_eigenvectors()[ispin][ikpt](i, j) ;
-            //         printf("%20.16f ", eigenvectors.real()); 
-            //     }
-            //     printf("\n"); // 换行
-            // }
-            // printf("%77s\n", final_banner.c_str());
-            // printf("\n");
+            auto eigvec_NAO = transpose(eigvec_KS) * collect_wfc_rows(meanfield, ispin, ikpt, false);
+            store_rotated_wfc(meanfield, ispin, ikpt, eigvec_NAO);
+            rotate_velocity_to_qp_basis(meanfield, ispin, ikpt, eigvec_KS, false);
         }
         
         
@@ -675,9 +694,6 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
 void diagonalize_and_store_fixed_basis(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
                            int n_spins, int n_kpoints, int dimension)
 {
-    int n_bands = meanfield.get_n_bands();
-    int n_soc = meanfield.get_n_soc();
-    int nao = meanfield.get_n_aos();
     for (int ispin = 0; ispin < n_spins; ++ispin)
     {  
         for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
@@ -705,35 +721,9 @@ void diagonalize_and_store_fixed_basis(MeanField& meanfield, const std::map<int,
             {
                 meanfield.get_eigenvals()[ispin](ikpt, ib) = w[ib];
             }      
-
-            // 将本征向量存储到 MeanField 的 wfc 矩阵
-            Matz wfc(dimension, nao * n_soc, MAJOR::COL);
-            for (int ib1 = 0; ib1 < dimension; ++ib1)
-            {
-                for (int isoc = 0; isoc < n_soc; isoc++)
-                {
-                    for (int iao = 0; iao < nao; iao++)
-                    {
-                        int ib2 = iao * n_soc + isoc;
-                        wfc(ib1, ib2) = meanfield.get_eigenvectors0()[ispin][isoc][ikpt](ib1, iao);
-                        
-                    }   
-                }
-            }
-           
-            auto eigvec_NAO = transpose(eigvec_KS) * wfc;
-
-            for (int ib1 = 0; ib1 < dimension; ++ib1)
-            {
-                for (int isoc = 0; isoc < n_soc; isoc++)
-                {
-                    for (int iao = 0; iao < nao; iao++)
-                    {
-                        int ib2 = iao * n_soc + isoc;
-                        meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao) = eigvec_NAO(ib1, ib2);
-                    }
-                }
-            }
+            auto eigvec_NAO = transpose(eigvec_KS) * collect_wfc_rows(meanfield, ispin, ikpt, true);
+            store_rotated_wfc(meanfield, ispin, ikpt, eigvec_NAO);
+            rotate_velocity_to_qp_basis(meanfield, ispin, ikpt, eigvec_KS, true);
         }
         
         

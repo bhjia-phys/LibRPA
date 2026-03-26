@@ -226,6 +226,7 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
         wfc.clear();
         wfc0.clear();
         velocity.clear();
+        velocity0.clear();
     }
 
     n_spins = ns;
@@ -249,6 +250,7 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
     wfc.resize(n_spins);
     wfc0.resize(n_spins);
     velocity.resize(n_spins);
+    velocity0.resize(n_spins);
 
     for (int is = 0; is < n_spins; is++)
     {
@@ -258,11 +260,13 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
         wfc.resize(n_spins);
         wfc0.resize(n_spins);
         velocity.resize(n_spins);
+        velocity0.resize(n_spins);
         for (int is = 0; is < n_spins; is++)
         {
             wfc[is].resize(n_soc);
             wfc0[is].resize(n_soc);
             velocity[is].resize(n_kpoints);
+            velocity0[is].resize(n_kpoints);
             for (int isoc = 0; isoc < n_soc; isoc++)
             {
                 wfc[is][isoc].resize(n_kpoints);
@@ -275,9 +279,11 @@ void MeanField::resize(int ns, int nk, int nb, int nao)
             }
             for (int ik = 0; ik < n_kpoints; ik++){
                 velocity[is][ik].resize(3);
+                velocity0[is][ik].resize(3);
                 for (int ia = 0; ia < 3; ia++)
                 {
                     velocity[is][ik][ia].create(n_bands, n_bands);
+                    velocity0[is][ik][ia].create(n_bands, n_bands);
                 }
             }
         }
@@ -305,6 +311,8 @@ MeanField::MeanField(const MeanField &mf)
     wg0 = mf.wg0;
     wfc = mf.wfc;
     wfc0 = mf.wfc0;
+    velocity = mf.velocity;
+    velocity0 = mf.velocity0;
     efermi = mf.efermi;
 }
 
@@ -750,6 +758,30 @@ void MeanField::broadcast(const LIBRPA::MPI_COMM_handler& comm_hdl, int root) {
                 }
                 comm_hdl.broadcast_ComplexMatrix(temp_wfc, root);
                 k_wfc = temp_wfc;  // Now k_wfc is a ComplexMatrix, not a container
+            }
+        }
+    }
+    for (auto& spin_velocity : velocity) {
+        for (auto& k_velocity : spin_velocity) {
+            for (auto& alpha_velocity : k_velocity) {
+                ComplexMatrix temp_velocity;
+                if (comm_hdl.is_root()) {
+                    temp_velocity = alpha_velocity;
+                }
+                comm_hdl.broadcast_ComplexMatrix(temp_velocity, root);
+                alpha_velocity = temp_velocity;
+            }
+        }
+    }
+    for (auto& spin_velocity : velocity0) {
+        for (auto& k_velocity : spin_velocity) {
+            for (auto& alpha_velocity : k_velocity) {
+                ComplexMatrix temp_velocity;
+                if (comm_hdl.is_root()) {
+                    temp_velocity = alpha_velocity;
+                }
+                comm_hdl.broadcast_ComplexMatrix(temp_velocity, root);
+                alpha_velocity = temp_velocity;
             }
         }
     }

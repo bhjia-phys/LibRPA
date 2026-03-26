@@ -64,6 +64,18 @@ static bool task_requires_pyatb_headwing(const LIBRPA::task_t task)
     }
 }
 
+static bool task_supports_iterative_pyatb_headwing(const LIBRPA::task_t task)
+{
+    switch (task)
+    {
+        case LIBRPA::task_t::QSGW:
+        case LIBRPA::task_t::QSGW_band:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static bool validate_pyatb_headwing_inputs(const LIBRPA::task_t task)
 {
     using LIBRPA::envs::mpi_comm_global_h;
@@ -80,6 +92,29 @@ static bool validate_pyatb_headwing_inputs(const LIBRPA::task_t task)
     if (!task_requires_pyatb_headwing(task))
     {
         return true;
+    }
+    if (use_iterative_pyatb_headwing_bundle() && task_supports_iterative_pyatb_headwing(task))
+    {
+        const bool local_ok =
+            file_exists(driver_params.input_dir + "velocity_matrix")
+            || file_exists(driver_params.input_dir + "pyatb_librpa_df/velocity_matrix")
+            || file_exists(driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat");
+
+        int local_ok_int = local_ok ? 1 : 0;
+        int global_ok_int = 0;
+        MPI_Allreduce(&local_ok_int, &global_ok_int, 1, MPI_INT, MPI_MIN, mpi_comm_global_h.comm);
+        const bool global_ok = (global_ok_int == 1);
+
+        if (!global_ok && mpi_comm_global_h.is_root())
+        {
+            lib_printf("Error: iterative pyatb head/wing refresh requires an initial velocity seed.\n");
+            lib_printf("       Checked `%svelocity_matrix`, `%spyatb_librpa_df/velocity_matrix`,\n",
+                       driver_params.input_dir.c_str(), driver_params.input_dir.c_str());
+            lib_printf("       and `%smoment_KS_spin_01_kpt_000001.dat`, but none were found.\n",
+                       driver_params.input_dir.c_str());
+        }
+
+        return global_ok;
     }
 
     const std::vector<std::string> required_files{
