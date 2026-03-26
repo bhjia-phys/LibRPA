@@ -2,12 +2,16 @@
 
 #include "task_qsgw.h"
 // 标准库头文件
+#include <algorithm>
+#include <cstdint>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>   // 用于文件存在检查
 #include <iomanip>   // 用于格式化
 #include <iostream>  // 用于输入输出操作
 #include <map>       // 用于std::map容器
 #include <sstream>
+#include <stdexcept>
 #include <string>  // 用于std::string类
 #include <vector>
 // 自定义头文件
@@ -20,6 +24,7 @@
 #include "coulmat.h"  // 库仑矩阵相关
 #include "driver_params.h"
 #include "driver_utils.h"
+#include "inputfile.h"
 #include "envs_io.h"
 #include "envs_mpi.h"
 #include "epsilon.h"                  // 介电函数相关
@@ -36,6 +41,287 @@
 #include "ri.h"
 #include "utils_timefreq.h"
 #include "write_aims.h"
+
+namespace
+{
+void reset_iteration_history_band()
+{
+    iteration_numbers.clear();
+    homo_values.clear();
+    lumo_values.clear();
+    efermi_values.clear();
+}
+
+void append_iteration_history_band(const int iteration, const double homo_ev, const double lumo_ev,
+                                   const double efermi_ev)
+{
+    iteration_numbers.push_back(iteration);
+    homo_values.push_back(homo_ev);
+    lumo_values.push_back(lumo_ev);
+    efermi_values.push_back(efermi_ev);
+}
+
+void write_iteration_history_file_band(const std::string &path)
+{
+    std::ofstream file(path);
+    if (!file.good())
+    {
+        throw std::runtime_error("Failed to open history file for write: " + path);
+    }
+
+    for (size_t i = 0; i < iteration_numbers.size(); ++i)
+    {
+        file << iteration_numbers[i] << " " << homo_values[i] << " " << lumo_values[i] << " "
+             << efermi_values[i] << std::endl;
+    }
+}
+
+bool load_iteration_history_file_band(const std::string &path, const int max_iteration)
+{
+    std::ifstream file(path);
+    if (!file.good())
+    {
+        return false;
+    }
+
+    reset_iteration_history_band();
+    int iteration = 0;
+    double homo_ev = 0.0;
+    double lumo_ev = 0.0;
+    double efermi_ev = 0.0;
+    while (file >> iteration >> homo_ev >> lumo_ev >> efermi_ev)
+    {
+        if (max_iteration >= 0 && iteration > max_iteration)
+        {
+            break;
+        }
+        append_iteration_history_band(iteration, homo_ev, lumo_ev, efermi_ev);
+    }
+    return !iteration_numbers.empty();
+}
+
+void compute_homo_lumo_ha_band(const MeanField &mf, double &homo_ha, double &lumo_ha)
+{
+    homo_ha = -1e6;
+    lumo_ha = 1e6;
+    for (int ispin = 0; ispin < mf.get_n_spins(); ++ispin)
+    {
+        for (int ikpt = 0; ikpt < mf.get_n_kpoints(); ++ikpt)
+        {
+            int homo_level = -1;
+            for (int ib = 0; ib < mf.get_n_bands(); ++ib)
+            {
+                const double weight = mf.get_weight()[ispin](ikpt, ib);
+                if (weight >= 1.0 / (mf.get_n_spins() * mf.get_n_kpoints()))
+                {
+                    homo_level = ib;
+                }
+            }
+            if (homo_level >= 0)
+            {
+                homo_ha = std::max(homo_ha, mf.get_eigenvals()[ispin](ikpt, homo_level));
+                if (homo_level + 1 < mf.get_n_bands())
+                {
+                    lumo_ha = std::min(lumo_ha, mf.get_eigenvals()[ispin](ikpt, homo_level + 1));
+                }
+            }
+        }
+    }
+}
+
+void ensure_dir_band(const std::string &dir)
+{
+    std::system(("mkdir -p " + dir).c_str());
+}
+
+std::string qsgw_checkpoint_save_root_band()
+{
+    return Params::output_dir + "qsgw_checkpoints/";
+}
+
+std::string qsgw_checkpoint_load_root_band()
+{
+    if (!Params::qsgw_restart_dir.empty())
+    {
+        return Params::qsgw_restart_dir;
+    }
+    return qsgw_checkpoint_save_root_band();
+}
+
+std::string checkpoint_iteration_dir_band(const std::string &checkpoint_root, const int iteration)
+{
+    std::ostringstream oss;
+    oss << checkpoint_root << "iter_" << std::setw(5) << std::setfill('0') << iteration << "/";
+    return oss.str();
+}
+
+std::string checkpoint_matrix_file_band(const std::string &checkpoint_dir, const int ispin,
+                                        const int ikpt)
+{
+    std::ostringstream oss;
+    oss << checkpoint_dir << "H0_GW_spin_" << std::setw(2) << std::setfill('0') << (ispin + 1)
+        << "_k_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".bin";
+    return oss.str();
+}
+
+void write_matz_binary_band(const Matz &mat, const std::string &path)
+{
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs.good())
+    {
+        throw std::runtime_error("Failed to open checkpoint matrix for write: " + path);
+    }
+
+    const std::int32_t nr = mat.nr();
+    const std::int32_t nc = mat.nc();
+    ofs.write(reinterpret_cast<const char *>(&nr), sizeof(nr));
+    ofs.write(reinterpret_cast<const char *>(&nc), sizeof(nc));
+    for (int i = 0; i < nr; ++i)
+    {
+        for (int j = 0; j < nc; ++j)
+        {
+            const auto value = mat(i, j);
+            const double re = value.real();
+            const double im = value.imag();
+            ofs.write(reinterpret_cast<const char *>(&re), sizeof(re));
+            ofs.write(reinterpret_cast<const char *>(&im), sizeof(im));
+        }
+    }
+}
+
+Matz read_matz_binary_band(const std::string &path)
+{
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs.good())
+    {
+        throw std::runtime_error("Failed to open checkpoint matrix for read: " + path);
+    }
+
+    std::int32_t nr = 0;
+    std::int32_t nc = 0;
+    ifs.read(reinterpret_cast<char *>(&nr), sizeof(nr));
+    ifs.read(reinterpret_cast<char *>(&nc), sizeof(nc));
+    if (!ifs.good() || nr <= 0 || nc <= 0)
+    {
+        throw std::runtime_error("Invalid checkpoint matrix header: " + path);
+    }
+
+    Matz mat(nr, nc, MAJOR::COL);
+    for (int i = 0; i < nr; ++i)
+    {
+        for (int j = 0; j < nc; ++j)
+        {
+            double re = 0.0;
+            double im = 0.0;
+            ifs.read(reinterpret_cast<char *>(&re), sizeof(re));
+            ifs.read(reinterpret_cast<char *>(&im), sizeof(im));
+            if (!ifs.good())
+            {
+                throw std::runtime_error("Failed to read checkpoint matrix body: " + path);
+            }
+            mat(i, j) = std::complex<double>(re, im);
+        }
+    }
+    return mat;
+}
+
+void write_qsgw_checkpoint_band(const std::string &checkpoint_root, const int iteration,
+                                const std::map<int, std::map<int, Matz>> &H0_GW_all,
+                                const double efermi_ha)
+{
+    ensure_dir_band(checkpoint_root);
+    const auto checkpoint_dir = checkpoint_iteration_dir_band(checkpoint_root, iteration);
+    ensure_dir_band(checkpoint_dir);
+
+    std::ofstream meta(checkpoint_dir + "checkpoint.meta");
+    if (!meta.good())
+    {
+        throw std::runtime_error("Failed to open checkpoint meta for write: " + checkpoint_dir);
+    }
+    meta << "iteration " << iteration << "\n";
+    meta << "efermi_ha " << std::setprecision(17) << efermi_ha << "\n";
+    meta << "has_hartree0 0\n";
+
+    for (const auto &spin_entry : H0_GW_all)
+    {
+        for (const auto &k_entry : spin_entry.second)
+        {
+            write_matz_binary_band(
+                k_entry.second,
+                checkpoint_matrix_file_band(checkpoint_dir, spin_entry.first, k_entry.first));
+        }
+    }
+
+    std::ofstream latest(checkpoint_root + "latest_iteration.txt");
+    if (!latest.good())
+    {
+        throw std::runtime_error("Failed to open latest checkpoint marker for write: " +
+                                 checkpoint_root);
+    }
+    latest << iteration << "\n";
+}
+
+struct QsgwCheckpointStateBand
+{
+    int iteration = -1;
+    double efermi_ha = 0.0;
+    std::map<int, std::map<int, Matz>> H0_GW_all;
+};
+
+QsgwCheckpointStateBand load_qsgw_checkpoint_band(const std::string &checkpoint_root,
+                                                  const int requested_iteration, const int n_spins,
+                                                  const int n_kpoints)
+{
+    QsgwCheckpointStateBand state;
+    if (requested_iteration > 0)
+    {
+        state.iteration = requested_iteration;
+    }
+    else
+    {
+        std::ifstream latest(checkpoint_root + "latest_iteration.txt");
+        if (!latest.good())
+        {
+            throw std::runtime_error("Cannot find latest_iteration.txt in " + checkpoint_root);
+        }
+        latest >> state.iteration;
+    }
+    if (state.iteration <= 0)
+    {
+        throw std::runtime_error("Invalid QSGW restart iteration in " + checkpoint_root);
+    }
+
+    const auto checkpoint_dir = checkpoint_iteration_dir_band(checkpoint_root, state.iteration);
+    std::ifstream meta(checkpoint_dir + "checkpoint.meta");
+    if (!meta.good())
+    {
+        throw std::runtime_error("Cannot open checkpoint meta: " + checkpoint_dir);
+    }
+
+    std::string key;
+    while (meta >> key)
+    {
+        if (key == "iteration")
+        {
+            meta >> state.iteration;
+        }
+        else if (key == "efermi_ha")
+        {
+            meta >> state.efermi_ha;
+        }
+    }
+
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            state.H0_GW_all[ispin][ikpt] =
+                read_matz_binary_band(checkpoint_matrix_file_band(checkpoint_dir, ispin, ikpt));
+        }
+    }
+    return state;
+}
+}  // namespace
 
 void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
@@ -203,8 +489,10 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
      * First load the information of k-points along the k-path */
     int n_basis_band, n_states_band, n_spin_band;
     int flag;
+    const auto band_bundle_dir =
+        resolve_input_dir_with_pyatb_fallback(driver_params.input_dir, "band_kpath_info");
     std::vector<Vector3_Order<double>> kfrac_band = read_band_kpath_info(
-        driver_params.input_dir + "band_kpath_info", n_basis_band, n_states_band, n_spin_band, flag);
+        band_bundle_dir + "band_kpath_info", n_basis_band, n_states_band, n_spin_band, flag);
     if (mpi_comm_global_h.is_root())
     {
         std::cout << "Band k-points to compute:\n";
@@ -217,12 +505,15 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     mpi_comm_global_h.barrier();
 
     Profiler::start("g0w0_band_load_band_mf", "Read eigen solutions at band kpoints");
-    auto meanfield_band = read_meanfield_band(driver_params.input_dir, n_basis_band, n_states_band,
+    auto meanfield_band = read_meanfield_band(band_bundle_dir, n_basis_band, n_states_band,
                                               n_spin_band, kfrac_band.size());
 
     Profiler::stop("g0w0_band_load_band_mf");
 
     Profiler::start("read_vxc_band", "Load DFT xc potential");
+    const auto band_vxc_dir =
+        resolve_input_dir_with_pyatb_fallback(driver_params.input_dir,
+                                              "band_vxc_mat_spin_1_k_00001.csc");
 
     // 读取 vxc_band 文件,H_KS0_band
     for (int i_spin = 0; i_spin < meanfield_band.get_n_spins(); i_spin++)
@@ -237,14 +528,14 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
             oss_vxc_band << "band_vxc_mat_spin_" << (i_spin + 1) << "_k_" << std::setw(5)
                          << std::setfill('0') << (i_kpoint + 1) << ".csc";
-            std::string vxcFilePath_band = oss_vxc_band.str();
+            std::string vxcFilePath_band = band_vxc_dir + oss_vxc_band.str();
 
-            vxc_band[i_spin][i_kpoint] = Matz(n_aos, n_aos, MAJOR::COL);
+            vxc_band[i_spin][i_kpoint] = Matz(n_bands, n_bands, MAJOR::COL);
 
             // 初始化 vxc_band 矩阵为零矩阵
-            for (int i = 0; i < n_aos; ++i)
+            for (int i = 0; i < n_bands; ++i)
             {
-                for (int j = 0; j < n_aos; ++j)
+                for (int j = 0; j < n_bands; ++j)
                 {
                     vxc_band[i_spin][i_kpoint](i, j) = 0.0;
                 }
@@ -262,6 +553,16 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 else
                 {
                     vxc_band[i_spin][i_kpoint] = arrays_band[key_vxc_band];
+                    if (vxc_band[i_spin][i_kpoint].nr() != n_bands ||
+                        vxc_band[i_spin][i_kpoint].nc() != n_bands)
+                    {
+                        std::ostringstream err;
+                        err << "band_vxc matrix dimension mismatch in " << vxcFilePath_band
+                            << ": expected " << n_bands << "x" << n_bands << ", got "
+                            << vxc_band[i_spin][i_kpoint].nr() << "x"
+                            << vxc_band[i_spin][i_kpoint].nc();
+                        throw std::runtime_error(err.str());
+                    }
                     vxc_band_file_found = true;
                 }
             }
@@ -298,45 +599,10 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::flush(ofs_myid);
     // 在迭代开始前计算初始 HOMO, LUMO 和费米能级
     double efermi = meanfield.get_efermi();
-    printf("%5s\n", "efermi_band1");
-    printf("%5f\n", efermi);
     double homo = -1e6;
     double lumo = 1e6;
-
-    for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
-    {
-        for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
-        {
-            int homo_level = -1;
-            for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
-            {
-                double weight = meanfield.get_weight()[ispin](ikpt, ib);
-                double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
-
-                if (weight >= 1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
-                {
-                    homo_level = ib;
-                }
-            }
-
-            if (homo_level != -1)
-            {
-                homo = std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
-                lumo = std::min(lumo, meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
-            }
-        }
-    }
-
-    // 保存初始状态数据
-    homo_values.push_back(homo * HA2EV);      // 初始 HOMO 值
-    lumo_values.push_back(lumo * HA2EV);      // 初始 LUMO 值
-    efermi_values.push_back(efermi * HA2EV);  // 初始费米能级
-    iteration_numbers.push_back(0);           // 初始迭代次数为 0
-
-    std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
-              << "LUMO = " << lumo * HA2EV << " eV, "
-              << "Fermi Energy = " << efermi * HA2EV << " eV\n";
-    plot_homo_lumo_vs_iterations();
+    printf("%5s\n", "efermi_band1");
+    printf("%5f\n", efermi);
 
     // 计算初始体系总电子数/初始总占据数
     double total_electrons = meanfield.get_total_weight();
@@ -345,7 +611,13 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     // 设置收敛条件
     double eigenvalue_tolerance = 1e-5;  // 设置一个适当的小值，作为本征值收敛的判断标准
-    int max_iterations = 1;             // 最大迭代次数
+    int max_iterations = 500;             // 最大迭代次数
+    {
+        int local_flag = 0;
+        InputFile inputf;
+        auto parser = inputf.load(input_filename, false);
+        parser.parse_int("max_iter", max_iterations, max_iterations, local_flag);
+    }
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -353,12 +625,53 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::vector<std::pair<int, int>> significant_positions;
     // 定义存储前一轮的本征值以检查收敛性
     std::vector<matrix> previous_eigenvalues(n_spins);
+    const auto checkpoint_save_root = qsgw_checkpoint_save_root_band();
+    const auto checkpoint_load_root = qsgw_checkpoint_load_root_band();
     mpi_comm_global_h.barrier();
     if (mpi_comm_global_h.is_root())
     {
-        std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
-        file.close();
+        reset_iteration_history_band();
+        ensure_dir_band(checkpoint_save_root);
+
+        if (Params::qsgw_restart)
+        {
+            const auto checkpoint = load_qsgw_checkpoint_band(
+                checkpoint_load_root, Params::qsgw_restart_iteration, n_spins, n_kpoints);
+            diagonalize_and_store(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands);
+            update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
+            compute_homo_lumo_ha_band(meanfield, homo, lumo);
+            efermi = checkpoint.efermi_ha;
+            iteration = checkpoint.iteration;
+
+            const bool history_loaded = load_iteration_history_file_band(
+                checkpoint_load_root + "homo_lumo_vs_iterations.dat", iteration);
+            if (!history_loaded)
+            {
+                append_iteration_history_band(iteration, homo * HA2EV, lumo * HA2EV,
+                                              efermi * HA2EV);
+            }
+
+            std::cout << "[QSGW_BAND] Restarting from checkpoint iteration " << iteration << " at "
+                      << checkpoint_load_root << std::endl;
+            std::cout << "[QSGW_BAND] Restored HOMO = " << homo * HA2EV << " eV, "
+                      << "LUMO = " << lumo * HA2EV << " eV, "
+                      << "Fermi Energy = " << efermi * HA2EV << " eV\n";
+        }
+        else
+        {
+            compute_homo_lumo_ha_band(meanfield, homo, lumo);
+            append_iteration_history_band(0, homo * HA2EV, lumo * HA2EV, efermi * HA2EV);
+            std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
+                      << "LUMO = " << lumo * HA2EV << " eV, "
+                      << "Fermi Energy = " << efermi * HA2EV << " eV\n";
+        }
+
+        plot_homo_lumo_vs_iterations();
+        write_iteration_history_file_band(checkpoint_save_root + "homo_lumo_vs_iterations.dat");
     }
+    mpi_comm_global_h.broadcast(iteration, 0);
+    meanfield.broadcast(mpi_comm_global_h, 0);
+    mpi_comm_global_h.barrier();
     meanfield_band.get_efermi() = meanfield.get_efermi();
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations)
@@ -455,10 +768,20 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+            if (Params::use_shrink_abfs)
+            {
+                if (Params::use_soc)
+                    exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
+                else
+                    exx.build<double>(Cs_shrinked_data, Rlist, VR);
+            }
             else
-                exx.build<double>(Cs_data, Rlist, VR);
+            {
+                if (Params::use_soc)
+                    exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+                else
+                    exx.build<double>(Cs_data, Rlist, VR);
+            }
             exx.build_KS_kgrid0();  // rotate
             Profiler::stop("g0w0_exx_real_work");
         }
@@ -579,8 +902,12 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                                 // 存储值到 sigcmat
                                 sigcmat[i_state_row][i_state_col][i_state_row] = result;
                                 sigcmat[i_state_row][i_state_col][n_bands] = result1;
-                                printf("%16.6f ", result1 * HA2EV);
-                                printf("\n");
+                                if (Params::debug)
+                                {
+                                    printf("sigc(0) [%d,%d,%d,%d] = (%16.6f, %16.6f) eV\n",
+                                           i_spin, i_kpoint, i_state_row, i_state_col,
+                                           result1.real() * HA2EV, result1.imag() * HA2EV);
+                                }
                             }
                         }
 
@@ -606,46 +933,47 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         //     printf("\n");
                         // }
                         // printf("\n");
-                        std::cout << "EXX_real " << std::endl;
-                        for (int ib = 0; ib < n_bands; ++ib) {
-                            for (int iao = 0; iao < n_aos; iao++) {
-                                // wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
-                                const auto &Vc_k_ks_value = exx.exx_is_ik_KS[i_spin][i_kpoint](ib,iao) ;
-                                printf("%16.6f ", Vc_k_ks_value.real()* HA2EV);
+                        if (Params::debug)
+                        {
+                            std::cout << "EXX_real " << std::endl;
+                            for (int ib = 0; ib < n_bands; ++ib) {
+                                for (int iao = 0; iao < n_aos; iao++) {
+                                    const auto &Vc_k_ks_value =
+                                        exx.exx_is_ik_KS[i_spin][i_kpoint](ib, iao);
+                                    printf("%16.6f ", Vc_k_ks_value.real() * HA2EV);
+                                }
+                                printf("\n");
+                            }
+                            printf("\n");
+                            std::cout << "EXX_imag " << std::endl;
+                            for (int ib = 0; ib < n_bands; ++ib) {
+                                for (int iao = 0; iao < n_aos; iao++) {
+                                    const auto &Vc_k_ks_value =
+                                        exx.exx_is_ik_KS[i_spin][i_kpoint](ib, iao);
+                                    printf("%16.6f ", Vc_k_ks_value.imag() * HA2EV);
+                                }
+                                printf("\n");
+                            }
+                            printf("\n");
+                            std::cout << "Vxc0_real " << std::endl;
+                            for (int ib = 0; ib < n_bands; ++ib) {
+                                for (int iao = 0; iao < n_aos; iao++) {
+                                    const auto &Vc_k_ks_value = vxc0[i_spin][i_kpoint](ib, iao);
+                                    printf("%16.6f ", Vc_k_ks_value.real() * HA2EV);
+                                }
+                                printf("\n");
+                            }
+                            printf("\n");
+                            std::cout << "Vxc0_imag " << std::endl;
+                            for (int ib = 0; ib < n_bands; ++ib) {
+                                for (int iao = 0; iao < n_aos; iao++) {
+                                    const auto &Vc_k_ks_value = vxc0[i_spin][i_kpoint](ib, iao);
+                                    printf("%16.6f ", Vc_k_ks_value.imag() * HA2EV);
+                                }
+                                printf("\n");
                             }
                             printf("\n");
                         }
-                        printf("\n");
-                        std::cout << "EXX_imag " << std::endl;
-                        for (int ib = 0; ib < n_bands; ++ib) {
-                            for (int iao = 0; iao < n_aos; iao++) {
-                                // wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
-                                const auto &Vc_k_ks_value = exx.exx_is_ik_KS[i_spin][i_kpoint](ib,iao) ;
-                                printf("%16.6f ", Vc_k_ks_value.imag() * HA2EV);
-                            }
-                            printf("\n");
-                        }
-                        printf("\n");
-                        std::cout << "Vxc0_real " << std::endl;
-                        for (int ib = 0; ib < n_bands; ++ib) {
-                            for (int iao = 0; iao < n_aos; iao++) {
-                                // wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
-                                const auto &Vc_k_ks_value = vxc0[i_spin][i_kpoint](ib,iao) ;
-                                printf("%16.6f ", Vc_k_ks_value.real()* HA2EV);
-                            }
-                            printf("\n");
-                        }
-                        printf("\n");
-                        std::cout << "Vxc0_imag " << std::endl;
-                        for (int ib = 0; ib < n_bands; ++ib) {
-                            for (int iao = 0; iao < n_aos; iao++) {
-                                // wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
-                                const auto &Vc_k_ks_value = vxc0[i_spin][i_kpoint](ib,iao) ;
-                                printf("%16.6f ", Vc_k_ks_value.imag() * HA2EV);
-                            }
-                            printf("\n");
-                        }
-                        printf("\n");
 
                         
                     }
@@ -674,17 +1002,16 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 // 计算全局费米能和占据数
                 const auto &Efermi0 = meanfield.get_efermi();
-                printf("%5s\n", "efermi0");
+                printf("%5s\n", "efermi_input");
                 printf("%5f\n", Efermi0);
                 // 计算费米能级
 
                 double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
-                printf("%5s\n", "efermi0");
+                printf("%5s\n", "efermi_qsgw");
                 printf("%5f\n", efermi);
 
                 // 将占据数和费米能级更新到 MeanField 对象中
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
-                efermi_values.push_back(efermi * HA2EV);
 
                 // const std::string final_banner(90, '-');
                 lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
@@ -722,55 +1049,13 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 }
 
                 // 计算 HOMO 和 LUMO
-                homo = -1e6;  //
-                lumo = 1e6;   //
-                for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
-                {
-                    for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
-                    {
-                        int homo_level = -1;
-                        for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
-                        {
-                            double weight = meanfield.get_weight()[ispin](ikpt, ib);
-                            double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
-
-                            if (weight >=
-                                1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
-                            {
-                                homo_level = ib;
-                            }
-                        }
-
-                        //
-                        if (homo_level != -1)
-                        {
-                            //
-                            homo =
-                                std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
-                            //
-                            lumo = std::min(lumo,
-                                            meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
-                        }
-                    }
-                }
-
-                //
-                homo_values.push_back(homo * HA2EV);  //
-                lumo_values.push_back(lumo * HA2EV);  //
-                iteration_numbers.push_back(iteration);
+                compute_homo_lumo_ha_band(meanfield, homo, lumo);
 
                 // 输出当前 HOMO 和 LUMO 值
                 std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "
                           << "LUMO = " << lumo * HA2EV << " eV, "
                           << "Efermi = " << efermi * HA2EV << " eV\n";
 
-                // 保存 HOMO、LUMO 和费米能级数据
-                {
-                    std::ofstream file("homo_lumo_vs_iterations.dat",
-                                       std::ios::app);  // 使用 std::ios::app 以追加模式打开文件
-                    file << iteration << " " << homo_values[iteration] << " "
-                         << lumo_values[iteration] << " " << efermi_values[iteration] << std::endl;
-                }
                 // 比较本轮和前一轮的本征值判断是否收敛
                 converged = true;
                 for (int ispin = 0; ispin < n_spins; ++ispin)
@@ -785,7 +1070,25 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     }
                 }
 
-                std::cout << "Converged after " << iteration << " iterations.\n";
+                append_iteration_history_band(iteration, homo * HA2EV, lumo * HA2EV,
+                                              efermi * HA2EV);
+                plot_homo_lumo_vs_iterations();
+                write_iteration_history_file_band(checkpoint_save_root +
+                                                  "homo_lumo_vs_iterations.dat");
+
+                const bool should_write_checkpoint =
+                    (Params::qsgw_checkpoint_every > 0 &&
+                     (iteration % Params::qsgw_checkpoint_every == 0)) ||
+                    converged || iteration == max_iterations;
+                if (should_write_checkpoint)
+                {
+                    write_qsgw_checkpoint_band(checkpoint_save_root, iteration, H0_GW_all, efermi);
+                }
+
+                if (converged)
+                {
+                    std::cout << "Converged after " << iteration << " iterations.\n";
+                }
             }
         }
         mpi_comm_global_h.barrier();

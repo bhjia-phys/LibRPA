@@ -188,6 +188,23 @@ void parse_inputfile_to_params(const std::string &fn)
     parser.parse_bool("output_gw_sigc_mat_rt", Params::output_gw_sigc_mat_rt, false, flag);
     parser.parse_bool("output_gw_sigc_mat_rf", Params::output_gw_sigc_mat_rf, false, flag);
     parser.parse_int("nbands_G", Params::nbands_G, -1, flag);
+    parser.parse_int("topology_nk1", Params::topology_nk1, 0, flag);
+    parser.parse_int("topology_nk2", Params::topology_nk2, 0, flag);
+    parser.parse_int("topology_nocc", Params::topology_nocc, -1, flag);
+    parser.parse_bool("topology_shift_mu", Params::topology_shift_mu, true, flag);
+    parser.parse_bool("topology_dump_sigma0", Params::topology_dump_sigma0, false, flag);
+    parser.parse_bool("topology_dump_hmat", Params::topology_dump_hmat, false, flag);
+    parser.parse_bool("topology_dump_occ_evec", Params::topology_dump_occ_evec, false, flag);
+    parser.parse_bool("topology_allow_diag_vxc_fallback",
+                      Params::topology_allow_diag_vxc_fallback, false, flag);
+    parser.parse_bool("qsgw_restart", Params::qsgw_restart, false, flag);
+    parser.parse_string("qsgw_restart_dir", Params::qsgw_restart_dir, "", flag);
+    if (!Params::qsgw_restart_dir.empty())
+    {
+        Params::qsgw_restart_dir = check_dirpath(Params::qsgw_restart_dir);
+    }
+    parser.parse_int("qsgw_restart_iteration", Params::qsgw_restart_iteration, -1, flag);
+    parser.parse_int("qsgw_checkpoint_every", Params::qsgw_checkpoint_every, 1, flag);
 }
 
 const std::string input_filename = "librpa.in";

@@ -21,6 +21,7 @@
 #include "task_exx_band.h"
 #include "task_gw.h"
 #include "task_gw_band.h"
+#include "task_topo_gw_band.h"
 #include "task_qsgw.h"
 #include "task_rpa.h"
 #include "task_screened_coulomb.h"
@@ -141,6 +142,8 @@ int main(int argc, char **argv)
         task = task_t::G0W0;
     else if (task_lower == "g0w0_band")
         task = task_t::G0W0_band;
+    else if (task_lower == "topo_gw_band")
+        task = task_t::TOPO_GW_band;
     else if (task_lower == "exx")
         task = task_t::EXX;
     else if (task_lower == "exx_band")
@@ -182,7 +185,8 @@ int main(int argc, char **argv)
     Profiler::stop("driver_read_params");
 
     Profiler::start("driver_band_out", "Driver Read Meanfield band");
-    read_scf_occ_eigenvalues(driver_params.input_dir + "band_out", meanfield);
+    const auto scf_band_out = resolve_input_file_with_pyatb_fallback(driver_params.input_dir, "band_out");
+    read_scf_occ_eigenvalues(scf_band_out, meanfield);
     if (mpi_comm_global_h.is_root())
     {
         cout << "Information of mean-field starting-point" << endl;
@@ -249,6 +253,11 @@ int main(int argc, char **argv)
 
     Profiler::start("driver_read_eigenvector");
     int ret_eigenvec = read_eigenvector(driver_params.input_dir, meanfield);
+    if (ret_eigenvec != 0)
+    {
+        ret_eigenvec =
+            read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/", meanfield);
+    }
     if (ret_eigenvec == 0)
     {
         lib_printf("Successfully read eigenvector files\n");
@@ -471,6 +480,10 @@ int main(int argc, char **argv)
     else if (task == task_t::G0W0_band)
     {
         task_g0w0_band(sinvS);
+    }
+    else if (task == task_t::TOPO_GW_band)
+    {
+        task_topo_gw_band(sinvS);
     }
     else if (task == task_t::EXX)
     {

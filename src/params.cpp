@@ -46,6 +46,18 @@ bool Params::output_gw_sigc_mat = false;
 bool Params::output_gw_sigc_mat_rt = false;
 bool Params::output_gw_sigc_mat_rf = false;
 int Params::nbands_G = -1;
+int Params::topology_nk1 = 0;
+int Params::topology_nk2 = 0;
+int Params::topology_nocc = -1;
+bool Params::topology_shift_mu = true;
+bool Params::topology_dump_sigma0 = false;
+bool Params::topology_dump_hmat = false;
+bool Params::topology_dump_occ_evec = false;
+bool Params::topology_allow_diag_vxc_fallback = false;
+bool Params::qsgw_restart = false;
+std::string Params::qsgw_restart_dir = "";
+int Params::qsgw_restart_iteration = -1;
+int Params::qsgw_checkpoint_every = 1;
 /* ==========================================================
  * output options end
  * ========================================================== */
@@ -80,6 +92,11 @@ void Params::print()
         {"n_params_anacon", n_params_anacon},
         {"option_dielect_func", option_dielect_func},
         {"nbands_G", nbands_G},
+        {"topology_nk1", topology_nk1},
+        {"topology_nk2", topology_nk2},
+        {"topology_nocc", topology_nocc},
+        {"qsgw_restart_iteration", qsgw_restart_iteration},
+        {"qsgw_checkpoint_every", qsgw_checkpoint_every},
     };
 
     const std::vector<std::pair<std::string, std::string>> str_params{
@@ -88,6 +105,7 @@ void Params::print()
         {"output_file", output_file},
         {"tfgrids_type", tfgrids_type},
         {"parallel_routing", parallel_routing},
+        {"qsgw_restart_dir", qsgw_restart_dir.empty() ? "(current-output-dir)" : qsgw_restart_dir},
     };
 
     const std::vector<std::pair<std::string, bool>> bool_params{
@@ -98,6 +116,12 @@ void Params::print()
         {"replace_w_head", replace_w_head},
         {"use_shrink_abfs", use_shrink_abfs},
         {"use_soc", use_soc},
+        {"topology_shift_mu", topology_shift_mu},
+        {"topology_dump_sigma0", topology_dump_sigma0},
+        {"topology_dump_hmat", topology_dump_hmat},
+        {"topology_dump_occ_evec", topology_dump_occ_evec},
+        {"topology_allow_diag_vxc_fallback", topology_allow_diag_vxc_fallback},
+        {"qsgw_restart", qsgw_restart},
     };
 
     for (const auto &param : str_params)

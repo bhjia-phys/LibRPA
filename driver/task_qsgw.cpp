@@ -1,6 +1,7 @@
 ﻿#include "task_qsgw.h"
 // 标准库头文件
 #include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -49,6 +50,337 @@ std::vector<double> efermi_values;
 std::vector<double> homo_values;
 std::vector<double> lumo_values;
 std::vector<int> iteration_numbers;
+
+namespace
+{
+void reset_iteration_history()
+{
+    efermi_values.clear();
+    homo_values.clear();
+    lumo_values.clear();
+    iteration_numbers.clear();
+}
+
+void append_iteration_history(const int iteration, const double homo_ev, const double lumo_ev,
+                              const double efermi_ev)
+{
+    iteration_numbers.push_back(iteration);
+    homo_values.push_back(homo_ev);
+    lumo_values.push_back(lumo_ev);
+    efermi_values.push_back(efermi_ev);
+}
+
+void write_iteration_history_file(const std::string &path)
+{
+    std::ofstream file(path);
+    if (!file.good())
+    {
+        throw std::runtime_error("Failed to open history file for write: " + path);
+    }
+
+    for (size_t i = 0; i < iteration_numbers.size(); ++i)
+    {
+        file << iteration_numbers[i] << " " << homo_values[i] << " " << lumo_values[i] << " "
+             << efermi_values[i] << std::endl;
+    }
+}
+
+bool load_iteration_history_file(const std::string &path, const int max_iteration)
+{
+    std::ifstream file(path);
+    if (!file.good())
+    {
+        return false;
+    }
+
+    reset_iteration_history();
+
+    int iteration = 0;
+    double homo_ev = 0.0;
+    double lumo_ev = 0.0;
+    double efermi_ev = 0.0;
+    while (file >> iteration >> homo_ev >> lumo_ev >> efermi_ev)
+    {
+        if (max_iteration >= 0 && iteration > max_iteration)
+        {
+            break;
+        }
+        append_iteration_history(iteration, homo_ev, lumo_ev, efermi_ev);
+    }
+
+    return !iteration_numbers.empty();
+}
+
+void compute_homo_lumo_ha(const MeanField &mf, double &homo_ha, double &lumo_ha)
+{
+    homo_ha = -1e6;
+    lumo_ha = 1e6;
+
+    for (int ispin = 0; ispin < mf.get_n_spins(); ++ispin)
+    {
+        for (int ikpt = 0; ikpt < mf.get_n_kpoints(); ++ikpt)
+        {
+            int homo_level = -1;
+            for (int ib = 0; ib < mf.get_n_bands(); ++ib)
+            {
+                const double weight = mf.get_weight()[ispin](ikpt, ib);
+                if (weight >= 1.0 / (mf.get_n_spins() * mf.get_n_kpoints()))
+                {
+                    homo_level = ib;
+                }
+            }
+
+            if (homo_level >= 0)
+            {
+                homo_ha = std::max(homo_ha, mf.get_eigenvals()[ispin](ikpt, homo_level));
+                if (homo_level + 1 < mf.get_n_bands())
+                {
+                    lumo_ha = std::min(lumo_ha,
+                                       mf.get_eigenvals()[ispin](ikpt, homo_level + 1));
+                }
+            }
+        }
+    }
+}
+
+void ensure_dir(const std::string &dir)
+{
+    std::system(("mkdir -p " + dir).c_str());
+}
+
+std::string qsgw_checkpoint_save_root()
+{
+    return Params::output_dir + "qsgw_checkpoints/";
+}
+
+std::string qsgw_checkpoint_load_root()
+{
+    if (!Params::qsgw_restart_dir.empty())
+    {
+        return Params::qsgw_restart_dir;
+    }
+    return qsgw_checkpoint_save_root();
+}
+
+std::string checkpoint_iteration_dir(const std::string &checkpoint_root, const int iteration)
+{
+    std::ostringstream oss;
+    oss << checkpoint_root << "iter_" << std::setw(5) << std::setfill('0') << iteration << "/";
+    return oss.str();
+}
+
+std::string checkpoint_matrix_file(const std::string &checkpoint_dir, const int ispin,
+                                   const int ikpt)
+{
+    std::ostringstream oss;
+    oss << checkpoint_dir << "H0_GW_spin_" << std::setw(2) << std::setfill('0') << (ispin + 1)
+        << "_k_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".bin";
+    return oss.str();
+}
+
+std::string checkpoint_hartree0_file(const std::string &checkpoint_dir, const int ispin,
+                                     const int ikpt)
+{
+    std::ostringstream oss;
+    oss << checkpoint_dir << "Hartree0_spin_" << std::setw(2) << std::setfill('0') << (ispin + 1)
+        << "_k_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".bin";
+    return oss.str();
+}
+
+void write_matz_binary(const Matz &mat, const std::string &path)
+{
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs.good())
+    {
+        throw std::runtime_error("Failed to open checkpoint matrix for write: " + path);
+    }
+
+    const std::int32_t nr = mat.nr();
+    const std::int32_t nc = mat.nc();
+    ofs.write(reinterpret_cast<const char *>(&nr), sizeof(nr));
+    ofs.write(reinterpret_cast<const char *>(&nc), sizeof(nc));
+    for (int i = 0; i < nr; ++i)
+    {
+        for (int j = 0; j < nc; ++j)
+        {
+            const auto value = mat(i, j);
+            const double re = value.real();
+            const double im = value.imag();
+            ofs.write(reinterpret_cast<const char *>(&re), sizeof(re));
+            ofs.write(reinterpret_cast<const char *>(&im), sizeof(im));
+        }
+    }
+}
+
+Matz read_matz_binary(const std::string &path)
+{
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs.good())
+    {
+        throw std::runtime_error("Failed to open checkpoint matrix for read: " + path);
+    }
+
+    std::int32_t nr = 0;
+    std::int32_t nc = 0;
+    ifs.read(reinterpret_cast<char *>(&nr), sizeof(nr));
+    ifs.read(reinterpret_cast<char *>(&nc), sizeof(nc));
+    if (!ifs.good() || nr <= 0 || nc <= 0)
+    {
+        throw std::runtime_error("Invalid checkpoint matrix header: " + path);
+    }
+
+    Matz mat(nr, nc, MAJOR::COL);
+    for (int i = 0; i < nr; ++i)
+    {
+        for (int j = 0; j < nc; ++j)
+        {
+            double re = 0.0;
+            double im = 0.0;
+            ifs.read(reinterpret_cast<char *>(&re), sizeof(re));
+            ifs.read(reinterpret_cast<char *>(&im), sizeof(im));
+            if (!ifs.good())
+            {
+                throw std::runtime_error("Failed to read checkpoint matrix body: " + path);
+            }
+            mat(i, j) = std::complex<double>(re, im);
+        }
+    }
+
+    return mat;
+}
+
+void write_qsgw_checkpoint(const std::string &checkpoint_root, const int iteration,
+                           const std::map<int, std::map<int, Matz>> &H0_GW_all,
+                           const double efermi_ha,
+                           const std::map<int, std::map<int, Matz>> *hartree0 = nullptr)
+{
+    ensure_dir(checkpoint_root);
+    const auto checkpoint_dir = checkpoint_iteration_dir(checkpoint_root, iteration);
+    ensure_dir(checkpoint_dir);
+    const bool has_hartree0 = (hartree0 != nullptr && !hartree0->empty());
+
+    {
+        std::ofstream meta(checkpoint_dir + "checkpoint.meta");
+        if (!meta.good())
+        {
+            throw std::runtime_error("Failed to open checkpoint meta for write: " + checkpoint_dir);
+        }
+        meta << "iteration " << iteration << "\n";
+        meta << "efermi_ha " << std::setprecision(17) << efermi_ha << "\n";
+        meta << "has_hartree0 " << (has_hartree0 ? 1 : 0) << "\n";
+    }
+
+    for (const auto &spin_entry : H0_GW_all)
+    {
+        for (const auto &k_entry : spin_entry.second)
+        {
+            write_matz_binary(k_entry.second,
+                              checkpoint_matrix_file(checkpoint_dir, spin_entry.first, k_entry.first));
+        }
+    }
+
+    if (has_hartree0)
+    {
+        for (const auto &spin_entry : *hartree0)
+        {
+            for (const auto &k_entry : spin_entry.second)
+            {
+                write_matz_binary(
+                    k_entry.second,
+                    checkpoint_hartree0_file(checkpoint_dir, spin_entry.first, k_entry.first));
+            }
+        }
+    }
+
+    {
+        std::ofstream latest(checkpoint_root + "latest_iteration.txt");
+        if (!latest.good())
+        {
+            throw std::runtime_error("Failed to open latest checkpoint marker for write: " +
+                                     checkpoint_root);
+        }
+        latest << iteration << "\n";
+    }
+}
+
+struct QsgwCheckpointState
+{
+    int iteration = -1;
+    double efermi_ha = 0.0;
+    std::map<int, std::map<int, Matz>> H0_GW_all;
+    std::map<int, std::map<int, Matz>> Hartree_0;
+    bool has_hartree0 = false;
+};
+
+QsgwCheckpointState load_qsgw_checkpoint(const std::string &checkpoint_root,
+                                         const int requested_iteration, const int n_spins,
+                                         const int n_kpoints)
+{
+    QsgwCheckpointState state;
+    if (requested_iteration > 0)
+    {
+        state.iteration = requested_iteration;
+    }
+    else
+    {
+        std::ifstream latest(checkpoint_root + "latest_iteration.txt");
+        if (!latest.good())
+        {
+            throw std::runtime_error("Cannot find latest_iteration.txt in " + checkpoint_root);
+        }
+        latest >> state.iteration;
+    }
+
+    if (state.iteration <= 0)
+    {
+        throw std::runtime_error("Invalid QSGW restart iteration in " + checkpoint_root);
+    }
+
+    const auto checkpoint_dir = checkpoint_iteration_dir(checkpoint_root, state.iteration);
+    {
+        std::ifstream meta(checkpoint_dir + "checkpoint.meta");
+        if (!meta.good())
+        {
+            throw std::runtime_error("Cannot open checkpoint meta: " + checkpoint_dir);
+        }
+
+        std::string key;
+        while (meta >> key)
+        {
+            if (key == "iteration")
+            {
+                meta >> state.iteration;
+            }
+            else if (key == "efermi_ha")
+            {
+                meta >> state.efermi_ha;
+            }
+            else if (key == "has_hartree0")
+            {
+                int has_hartree0 = 0;
+                meta >> has_hartree0;
+                state.has_hartree0 = (has_hartree0 != 0);
+            }
+        }
+    }
+
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            state.H0_GW_all[ispin][ikpt] =
+                read_matz_binary(checkpoint_matrix_file(checkpoint_dir, ispin, ikpt));
+            if (state.has_hartree0)
+            {
+                state.Hartree_0[ispin][ikpt] =
+                    read_matz_binary(checkpoint_hartree0_file(checkpoint_dir, ispin, ikpt));
+            }
+        }
+    }
+
+    return state;
+}
+}  // namespace
 
 void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
@@ -390,41 +722,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     double efermi = meanfield.get_efermi();
     double homo = -1e6;
     double lumo = 1e6;
-
-    for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
-    {
-        for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
-        {
-            int homo_level = -1;
-            for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
-            {
-                double weight = meanfield.get_weight()[ispin](ikpt, ib);
-                double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
-
-                if (weight >= 1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
-                {
-                    homo_level = ib;
-                }
-            }
-
-            if (homo_level != -1)
-            {
-                homo = std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
-                lumo = std::min(lumo, meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
-            }
-        }
-    }
-
-    // 保存初始状态数据
-    homo_values.push_back(homo * HA2EV);      // 初始 HOMO 值
-    lumo_values.push_back(lumo * HA2EV);      // 初始 LUMO 值
-    efermi_values.push_back(efermi * HA2EV);  // 初始费米能级
-    iteration_numbers.push_back(0);           // 初始迭代次数为 0
-
-    std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
-              << "LUMO = " << lumo * HA2EV << " eV, "
-              << "Fermi Energy = " << efermi * HA2EV << " eV\n";
-    plot_homo_lumo_vs_iterations();
+    compute_homo_lumo_ha(meanfield, homo, lumo);
 
     // 计算初始体系总电子数/初始总占据数
     double total_electrons = meanfield.get_total_weight();
@@ -522,8 +820,6 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     // No beta clamping / adaptive caps here: follow historical fixed settings.
 
-    double previous_homo = homo * HA2EV;   // 保存前一轮HOMO
-    double previous_lumo = lumo * HA2EV;   // 保存前一轮LUMO
     int iteration = 0;
     const double temperature = 0.0001;
     bool converged = false;
@@ -538,13 +834,63 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     // ==========================================
     PulayMixer mixer(mixing_history, mixing_beta);
     bool mixer_initialized = false;
+    const auto checkpoint_save_root = qsgw_checkpoint_save_root();
+    const auto checkpoint_load_root = qsgw_checkpoint_load_root();
 
     mpi_comm_global_h.barrier();
     if (mpi_comm_global_h.is_root())
     {
-        std::ofstream file("homo_lumo_vs_iterations.dat", std::ios::trunc);
-        file.close();
+        reset_iteration_history();
+        ensure_dir(checkpoint_save_root);
+
+        if (Params::qsgw_restart)
+        {
+            const auto checkpoint =
+                load_qsgw_checkpoint(checkpoint_load_root, Params::qsgw_restart_iteration,
+                                     n_spins, n_kpoints);
+            diagonalize_and_store_fixed_basis(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints,
+                                              n_bands);
+            update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
+            compute_homo_lumo_ha(meanfield, homo, lumo);
+            iteration = checkpoint.iteration;
+            Hartree_0 = checkpoint.Hartree_0;
+
+            if (!checkpoint.has_hartree0)
+            {
+                throw std::runtime_error(
+                    "QSGW restart checkpoint is missing Hartree_0. "
+                    "Regenerate checkpoints with the updated code before resuming.");
+            }
+
+            const auto history_loaded =
+                load_iteration_history_file(checkpoint_load_root + "homo_lumo_vs_iterations.dat",
+                                            iteration);
+            if (!history_loaded)
+            {
+                append_iteration_history(iteration, homo * HA2EV, lumo * HA2EV,
+                                         checkpoint.efermi_ha * HA2EV);
+            }
+
+            std::cout << "[QSGW] Restarting from checkpoint iteration " << iteration << " at "
+                      << checkpoint_load_root << std::endl;
+            std::cout << "[QSGW] Restored HOMO = " << homo * HA2EV << " eV, "
+                      << "LUMO = " << lumo * HA2EV << " eV, "
+                      << "Fermi Energy = " << checkpoint.efermi_ha * HA2EV << " eV\n";
+        }
+        else
+        {
+            append_iteration_history(0, homo * HA2EV, lumo * HA2EV, efermi * HA2EV);
+            std::cout << "Initial HOMO = " << homo * HA2EV << " eV, "
+                      << "LUMO = " << lumo * HA2EV << " eV, "
+                      << "Fermi Energy = " << efermi * HA2EV << " eV\n";
+        }
+
+        plot_homo_lumo_vs_iterations();
+        write_iteration_history_file(checkpoint_save_root + "homo_lumo_vs_iterations.dat");
     }
+    mpi_comm_global_h.broadcast(iteration, 0);
+    meanfield.broadcast(mpi_comm_global_h, 0);
+    mpi_comm_global_h.barrier();
     // 初始化完毕，开始循环
     while (!converged && iteration < max_iterations)
     {
@@ -568,7 +914,14 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
             Profiler::stop("ft_vq_cut"); 
             Profiler::start("qsgw_hartree_real_work");
-            Hartree.build(Cs_data, Rlist, VR); 
+            if (Params::use_shrink_abfs)
+            {
+                Hartree.build(Cs_shrinked_data, Rlist, VR);
+            }
+            else
+            {
+                Hartree.build(Cs_data, Rlist, VR);
+            }
             
             Hartree.build_KS_kgrid0();//rotate  
             Profiler::stop("qsgw_hartree_real_work");
@@ -587,9 +940,6 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 }
                 Hartree_i_delta[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
                 for (int i = 0; i < n_bands; ++i) {
-                    
-                    const auto &hartree0_k_ks_value = Hartree.EHartree[ispin][ikpt][i];
-                    printf("%16.6f ", hartree0_k_ks_value ); 
                     for (int j = 0; j < n_bands;++j) {
 
                         const auto &hartree_k_ks_value = Hartree.Hartree_is_ik_KS[ispin][ikpt](i, j);
@@ -604,9 +954,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                             
                         }
                     }
-                    printf("\n");
                 }
-                printf("\n");
             }
         
         }
@@ -685,10 +1033,20 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            if (Params::use_soc)
-                exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+            if (Params::use_shrink_abfs)
+            {
+                if (Params::use_soc)
+                    exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
+                else
+                    exx.build<double>(Cs_shrinked_data, Rlist, VR);
+            }
             else
-                exx.build<double>(Cs_data, Rlist, VR);
+            {
+                if (Params::use_soc)
+                    exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+                else
+                    exx.build<double>(Cs_data, Rlist, VR);
+            }
             exx.build_KS_kgrid0();  // rotate
             Profiler::stop("g0w0_exx_real_work");
             for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
@@ -1249,68 +1607,21 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 // ==========================================
                 // 计算全局费米能和占据数
                 const auto &Efermi0 = meanfield.get_efermi();
-                printf("%5s\n", "efermi0");
+                printf("%5s\n", "efermi_input");
                 printf("%5f\n", Efermi0);
                 // 计算费米能级
 
                 double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
-                printf("%5s\n", "efermi0");
+                printf("%5s\n", "efermi_qsgw");
                 printf("%5f\n", efermi);
 
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
-                efermi_values.push_back(efermi * HA2EV);
-
-                // 计算 HOMO 和 LUMO
-                homo = -1e6;  //
-                lumo = 1e6;   //
-                for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin)
-                {
-                    for (int ikpt = 0; ikpt < meanfield.get_n_kpoints(); ++ikpt)
-                    {
-                        int homo_level = -1;
-                        for (int ib = 0; ib < meanfield.get_n_bands(); ++ib)
-                        {
-                            double weight = meanfield.get_weight()[ispin](ikpt, ib);
-                            double energy = meanfield.get_eigenvals()[ispin](ikpt, ib);
-
-                            //
-                            if (weight >=
-                                1.0 / (meanfield.get_n_spins() * meanfield.get_n_kpoints()))
-                            {
-                                homo_level = ib;
-                            }
-                        }
-
-                        //
-                        if (homo_level != -1)
-                        {
-                            //
-                            homo =
-                                std::max(homo, meanfield.get_eigenvals()[ispin](ikpt, homo_level));
-                            //
-                            lumo = std::min(lumo,
-                                            meanfield.get_eigenvals()[ispin](ikpt, homo_level + 1));
-                        }
-                    }
-                }
-
-                //
-                homo_values.push_back(homo * HA2EV);  //
-                lumo_values.push_back(lumo * HA2EV);  //
-                iteration_numbers.push_back(iteration);
+                compute_homo_lumo_ha(meanfield, homo, lumo);
 
                 // 输出当前 HOMO 和 LUMO 值
                 std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "
                           << "LUMO = " << lumo * HA2EV << " eV, "
                           << "Efermi = " << efermi * HA2EV << " eV\n";
-
-                // 保存 HOMO、LUMO 和费米能级数据
-                {
-                    std::ofstream file("homo_lumo_vs_iterations.dat",
-                                       std::ios::app);  // 使用 std::ios::app 以追加模式打开文件
-                    file << iteration << " " << homo_values[iteration] << " "
-                         << lumo_values[iteration] << " " << efermi_values[iteration] << std::endl;
-                }
 
 
                 // Convergence check:
@@ -1436,6 +1747,22 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                             std::cout << "sorted";
                         std::cout << ") = " << eigdiff_for_conv << " eV" << std::endl;
                     }
+
+                    append_iteration_history(iteration, homo * HA2EV, lumo * HA2EV,
+                                             efermi * HA2EV);
+                    plot_homo_lumo_vs_iterations();
+                    write_iteration_history_file(checkpoint_save_root +
+                                                 "homo_lumo_vs_iterations.dat");
+
+                    const bool should_write_checkpoint =
+                        (Params::qsgw_checkpoint_every > 0 &&
+                         (iteration % Params::qsgw_checkpoint_every == 0)) ||
+                        converged || iteration == max_iterations;
+                    if (should_write_checkpoint)
+                    {
+                        write_qsgw_checkpoint(checkpoint_save_root, iteration, H0_GW_all, efermi,
+                                              &Hartree_0);
+                    }
                 }
             }
         }
@@ -1463,12 +1790,5 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
 void plot_homo_lumo_vs_iterations()
 {
-    // 将 HOMO、LUMO 和费米能级数据保存到文件
-    std::ofstream file("homo_lumo_vs_iterations.dat");
-    for (size_t i = 0; i < iteration_numbers.size(); ++i)
-    {
-        file << iteration_numbers[i] << " " << homo_values[i] << " " << lumo_values[i] << " "
-             << efermi_values[i] << std::endl;
-    }
-    file.close();
+    write_iteration_history_file("homo_lumo_vs_iterations.dat");
 }

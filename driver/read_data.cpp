@@ -30,6 +30,41 @@
 using std::ifstream;
 using std::string;
 
+namespace
+{
+bool path_exists(const string &path)
+{
+    ifstream infile(path, std::ios::binary);
+    return infile.good();
+}
+
+const string kPyatbBundleDir = "pyatb_librpa_df/";
+
+Vector3_Order<double> irk_qvec_from_index(const int iq)
+{
+    if (iq < 0)
+    {
+        throw std::out_of_range("Negative q-point index in irk_qvec_from_index");
+    }
+    // coulomb_mat/shrink_sinvS q_num enumerates irreducible q-points when symmetry reduction is
+    // enabled. Reuse the same IBZ key space as the initial irk_weight construction to avoid
+    // polluting irk_weight with a second, incompatible full-BZ key set during file reads.
+    if (!klist_ibz.empty())
+    {
+        if (iq >= static_cast<int>(klist_ibz.size()))
+        {
+            throw std::out_of_range("IBZ q-point index exceeds klist_ibz size");
+        }
+        return klist_ibz[iq];
+    }
+    if (iq >= static_cast<int>(klist.size()))
+    {
+        throw std::out_of_range("q-point index exceeds klist size");
+    }
+    return klist[iq];
+}
+}  // namespace
+
 void read_scf_occ_eigenvalues(const string &file_path, MeanField &mf)
 {
     // cout << "Begin to read aims-band_out" << endl;
@@ -230,6 +265,10 @@ int read_eigenvector(const string &dir_path, MeanField &mf)
     struct dirent *ptr;
     DIR *dir;
     dir = opendir(dir_path.c_str());
+    if (dir == NULL)
+    {
+        return -1;
+    }
     vector<string> files;
     while ((ptr = readdir(dir)) != NULL)
     {
@@ -1061,7 +1100,7 @@ static int handle_Vq_full_file(const string &file_path,
             bcol--;
             ecol--;
             iq--;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
 
             if (irk_weight.count(qvec) == 0)
             {
@@ -1112,7 +1151,7 @@ static int handle_Vq_full_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -1332,7 +1371,7 @@ static int handle_Vq_row_file(
             ecol--;
             iq--;
 
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
             if (irk_weight.count(qvec) == 0)
             {
                 irk_points.push_back(qvec);
@@ -1412,7 +1451,7 @@ static int handle_Vq_row_file(
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
 
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -1739,6 +1778,40 @@ std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path,
     return kfrac_band;
 }
 
+std::string resolve_input_file_with_pyatb_fallback(const string &input_dir, const string &filename)
+{
+    const auto direct_path = input_dir + filename;
+    if (path_exists(direct_path))
+    {
+        return direct_path;
+    }
+
+    const auto pyatb_path = input_dir + kPyatbBundleDir + filename;
+    if (path_exists(pyatb_path))
+    {
+        return pyatb_path;
+    }
+
+    return direct_path;
+}
+
+std::string resolve_input_dir_with_pyatb_fallback(const string &input_dir,
+                                                  const string &sentinel_filename)
+{
+    if (path_exists(input_dir + sentinel_filename))
+    {
+        return input_dir;
+    }
+
+    const auto pyatb_dir = input_dir + kPyatbBundleDir;
+    if (path_exists(pyatb_dir + sentinel_filename))
+    {
+        return pyatb_dir;
+    }
+
+    return input_dir;
+}
+
 /* MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states, int n_spin,
                               int n_kpoints_band)
 {
@@ -1754,10 +1827,10 @@ std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path,
     {
         // Load occupation weights and eigenvalues
         std::stringstream ss;
-        ss << dir_path << "band_KS_eigenvalue_k_" << std::setfill('0') << std::setw(5) << ik + 1
-           << ".txt";
+        ss << "band_KS_eigenvalue_k_" << std::setfill('0') << std::setw(5) << ik + 1 << ".txt";
+        const auto eigenvalue_path = resolve_input_file_with_pyatb_fallback(dir_path, ss.str());
         ifstream infile;
-        infile.open(ss.str());
+        infile.open(eigenvalue_path);
 
         for (int i_spin = 0; i_spin < n_spin; i_spin++)
         {
@@ -1837,6 +1910,10 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
            << ".txt";
         ifstream infile;
         infile.open(ss.str());
+        if (!infile)
+        {
+            throw std::runtime_error("Error: Cannot open file " + ss.str());
+        }
 
         for (int i_spin = 0; i_spin < n_spin; i_spin++)
         {
@@ -1853,17 +1930,18 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
         // Load eigenvectors
         ss.str("");
         ss.clear();
-        ss << dir_path << "band_KS_eigenvector_k_" << std::setfill('0') << std::setw(5) << ik + 1
-           << ".txt";
-        infile.open(ss.str(), std::ios::binary);
+        ss << "band_KS_eigenvector_k_" << std::setfill('0') << std::setw(5) << ik + 1 << ".txt";
+        const auto eigenvector_path = resolve_input_file_with_pyatb_fallback(dir_path, ss.str());
+        infile.open(eigenvector_path, std::ios::binary);
         if (!infile)
         {
-            throw std::runtime_error("Error: Cannot open file " + ss.str());
+            throw std::runtime_error("Error: Cannot open file " + eigenvector_path);
         }
 
         int nbasis_full = Params::use_soc ? n_basis * 2 : n_basis;
-        size_t total_complex = static_cast<size_t>(n_states) * static_cast<size_t>(nbasis_full) * n_spin;//bug comes from Mr. gong
-        // size_t total_complex = static_cast<size_t>(n_states) * static_cast<size_t>(nbasis_full) ;//bug comes from Mr. gong
+        const size_t spin_stride =
+            static_cast<size_t>(n_states) * static_cast<size_t>(nbasis_full);
+        size_t total_complex = spin_stride * n_spin;
 
         size_t total_doubles = total_complex * 2;
 
@@ -1871,7 +1949,7 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
         infile.read(reinterpret_cast<char *>(double_buffer.data()), total_doubles * sizeof(double));
         if (!infile || infile.gcount() != static_cast<ptrdiff_t>(total_doubles * sizeof(double)))
         {
-            throw std::runtime_error("Error: failed to read " + ss.str());
+            throw std::runtime_error("Error: failed to read " + eigenvector_path);
         }
 
         std::vector<std::complex<double>> vecs(total_complex);
@@ -1883,6 +1961,7 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
         int n_soc = Params::use_soc ? 2 : 1;
         for (int i_spin = 0; i_spin < n_spin; ++i_spin)
         {
+            const size_t spin_offset = static_cast<size_t>(i_spin) * spin_stride;
             for (int ib = 0; ib < n_states; ++ib)
             {
                 for (int iw = 0; iw < n_basis; ++iw)
@@ -1892,11 +1971,12 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
                         size_t index;
                         if (Params::use_soc)
                         {
-                            index = ib * n_basis * n_soc + iw * n_soc + i_soc;
+                            index = spin_offset + static_cast<size_t>(ib) * n_basis * n_soc +
+                                    static_cast<size_t>(iw) * n_soc + i_soc;
                         }
                         else
                         {
-                            index = ib * n_basis + iw;
+                            index = spin_offset + static_cast<size_t>(ib) * n_basis + iw;
                         }
                         mf_band.get_eigenvectors()[i_spin][i_soc][ik](ib, iw) = vecs[index];
                     }
@@ -1924,9 +2004,14 @@ std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_sp
     {
         // Load occupation weights and eigenvalues
         std::stringstream ss;
-        ss << dir_path << "band_vxc_k_" << std::setfill('0') << std::setw(5) << ik + 1 << ".txt";
+        ss << "band_vxc_k_" << std::setfill('0') << std::setw(5) << ik + 1 << ".txt";
+        const auto vxc_path = resolve_input_file_with_pyatb_fallback(dir_path, ss.str());
         ifstream infile;
-        infile.open(ss.str());
+        infile.open(vxc_path);
+        if (!infile)
+        {
+            throw std::runtime_error("Error: Cannot open file " + vxc_path);
+        }
         ss.clear();
 
         for (int i_spin = 0; i_spin < n_spin; i_spin++)
@@ -2058,7 +2143,7 @@ static int handle_sinvS_file(const string &file_path,
             {
                 shrinked_mu.emplace_back(erow - brow + 1);
             }
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
 
             if (!sinvS.count(qvec))
             {
@@ -2108,7 +2193,7 @@ static int handle_sinvS_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec(kvec_c[iq]);
+            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
             if (!sinvS.count(qvec))
             {
                 sinvS[qvec].create(mu, nu);

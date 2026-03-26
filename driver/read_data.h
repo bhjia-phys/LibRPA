@@ -57,6 +57,12 @@ void get_natom_ncell_from_first_Cs_file(int &n_atom, int &n_cell, const string &
 std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path, int &n_basis,
                                                         int &n_states, int &n_spin, int &flag);
 
+std::string resolve_input_file_with_pyatb_fallback(const string &input_dir,
+                                                   const string &filename);
+
+std::string resolve_input_dir_with_pyatb_fallback(const string &input_dir,
+                                                  const string &sentinel_filename);
+
 MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states, int n_spin,
                               int n_kpoints_band);
 

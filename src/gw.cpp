@@ -136,6 +136,13 @@ void static unfold_abfs_Wc(
     {
         const auto &q = qlist[iq];
         std::array<double, 3> qa = {q.x, q.y, q.z};
+        if (!sinvS.count(q))
+        {
+            std::ostringstream oss;
+            oss << "Missing shrink_sinvS block for q=(" << q.x << ", " << q.y << ", " << q.z
+                << ")";
+            throw std::runtime_error(oss.str());
+        }
         const auto &U = sinvS.at(q);
         Profiler::start("unfold_prepare_Wc_2d", "Prepare Wc 2D block for unfold");
         Wc_block.zero_out();
@@ -257,11 +264,21 @@ void static unfold_abfs_Wc(
                     auto qq = qc.first;
                     if (qq != q) continue;
                     Matz matz_Wc(atom_mu_large[I], atom_mu_large[J]);
+                    const auto it_I = IJq_chi.find(I);
+                    if (it_I == IJq_chi.end() || !it_I->second.count({J, qa}))
+                    {
+                        envs::ofs_myid << "unfold_Wc_abfs missing IJq block for I=" << I
+                                       << " J=" << J << " q=(" << q.x << ", " << q.y << ", "
+                                       << q.z << "); keeping zero block\n";
+                        qc.second = matz_Wc;
+                        continue;
+                    }
+                    const auto &Wc_unfold = it_I->second.at({J, qa});
                     for (int ir = 0; ir < atom_mu_large[I]; ir++)
                     {
                         for (int ic = 0; ic < atom_mu_large[J]; ic++)
                         {
-                            matz_Wc(ir, ic) = IJq_chi.at(I).at({J, qa})(ir, ic);
+                            matz_Wc(ir, ic) = Wc_unfold(ir, ic);
                         }
                     }
                     qc.second = matz_Wc;

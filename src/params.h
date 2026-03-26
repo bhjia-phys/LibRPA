@@ -109,6 +109,43 @@ struct Params
     //! sum of nbands in Green's function. nbands < 0 meanns sum over all states.
     static int nbands_G;
 
+    //! topology mesh dimension along the first reciprocal direction
+    static int topology_nk1;
+
+    //! topology mesh dimension along the second reciprocal direction
+    static int topology_nk2;
+
+    //! number of occupied bands per spin channel for topology. Negative means infer from KS bands.
+    static int topology_nocc;
+
+    //! shift the topological Hamiltonian by the chemical potential
+    static bool topology_shift_mu;
+
+    //! dump Sigma_c(i0,k) matrices in MatrixMarket format
+    static bool topology_dump_sigma0;
+
+    //! dump H_top(k) matrices in MatrixMarket format
+    static bool topology_dump_hmat;
+
+    //! dump occupied H_top eigenvectors in KS basis in MatrixMarket format
+    static bool topology_dump_occ_evec;
+
+    //! allow a diagonal Vxc fallback from band_vxc_k_*.txt when full band_vxc_mat_spin_*_k_*.csc
+    //! matrices are unavailable. This is an approximation and should be enabled explicitly.
+    static bool topology_allow_diag_vxc_fallback;
+
+    //! enable restart from a saved QSGW checkpoint
+    static bool qsgw_restart;
+
+    //! checkpoint root used for QSGW restart. Empty means use current output_dir/qsgw_checkpoints/
+    static std::string qsgw_restart_dir;
+
+    //! restart from the requested iteration. Non-positive means use latest checkpoint
+    static int qsgw_restart_iteration;
+
+    //! write a QSGW checkpoint every N iterations. Non-positive disables periodic checkpoints
+    static int qsgw_checkpoint_every;
+
     static void check_consistency();
     static void print();
 };

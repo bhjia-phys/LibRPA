@@ -9,6 +9,7 @@ enum class task_t {
     EXX_band,
     G0W0,
     G0W0_band,
+    TOPO_GW_band,
     Wc_Rf,
     print_minimax,
     test,  // a task for convenience of test 

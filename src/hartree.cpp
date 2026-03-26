@@ -20,9 +20,70 @@
 #include "libri_stub.h"
 #endif
 #include "utils_io.h"
+#include <set>
+#include <sstream>
+#include <stdexcept>
 
 namespace LIBRPA
 {
+namespace
+{
+template <typename Tdata>
+std::string tensor_shape_string(const RI::Tensor<Tdata> &tensor)
+{
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < tensor.shape.size(); ++i)
+    {
+        if (i != 0)
+        {
+            oss << " x ";
+        }
+        oss << tensor.shape[i];
+    }
+    oss << "]";
+    return oss.str();
+}
+
+template <typename Tdata>
+void validate_tensor_shape_or_throw(const RI::Tensor<Tdata> &tensor,
+                                    const std::vector<std::size_t> &expected_shape,
+                                    const std::string &label)
+{
+    if (tensor.shape.size() != expected_shape.size())
+    {
+        throw std::runtime_error(label + ": expected rank " +
+                                 std::to_string(expected_shape.size()) + ", got rank " +
+                                 std::to_string(tensor.shape.size()) + " with shape " +
+                                 tensor_shape_string(tensor));
+    }
+
+    for (size_t i = 0; i < expected_shape.size(); ++i)
+    {
+        if (tensor.shape[i] != expected_shape[i])
+        {
+            std::ostringstream oss;
+            oss << label << ": expected shape [";
+            for (size_t j = 0; j < expected_shape.size(); ++j)
+            {
+                if (j != 0)
+                {
+                    oss << " x ";
+                }
+                oss << expected_shape[j];
+            }
+            oss << "], got " << tensor_shape_string(tensor);
+            throw std::runtime_error(oss.str());
+        }
+    }
+}
+
+std::vector<int> unique_sorted_values(const std::vector<int> &values)
+{
+    std::set<int> uniq(values.begin(), values.end());
+    return std::vector<int>(uniq.begin(), uniq.end());
+}
+}  // namespace
 
 Hartree::Hartree(const MeanField &mf, const vector<Vector3_Order<double>> &kfrac_list,
          const Vector3_Order<int> &period)
@@ -173,6 +234,12 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     set_IJ.insert(set_I.begin(), set_I.end());
     set_IJ.insert(set_J.begin(), set_J.end());
     list_IJ.assign(set_IJ.begin(), set_IJ.end());
+    const auto list_I_unique = unique_sorted_values(list_I);
+    const auto list_J_unique = unique_sorted_values(list_J);
+    const auto list_k_index_unique = unique_sorted_values(list_k_index);
+    envs::ofs_myid << "Hartree unique list sizes: I=" << list_I_unique.size()
+                   << " J=" << list_J_unique.size() << " IJ=" << list_IJ.size()
+                   << " k=" << list_k_index_unique.size() << "\n";
     // for(int i = 0; i != natom; i++)
     // {
     //     set_all_atom.insert(i);
@@ -195,6 +262,12 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
             const auto &C = JR_C.second;
             auto JR = std::pair<int, std::array<int, 3>>(J, R);
             C_libri_cplx[I][JR] = RI::Global_Func::convert<std::complex<double>>(C);
+            validate_tensor_shape_or_throw(
+                C_libri_cplx[I][JR],
+                {atom_mu.at(I), atom_nw.at(I), atom_nw.at(J)},
+                "Hartree Cs tensor mismatch for I=" + std::to_string(I) + " J=" +
+                    std::to_string(J) + " R=(" + std::to_string(R[0]) + "," +
+                    std::to_string(R[1]) + "," + std::to_string(R[2]) + ")");
         }
     }
     hartree_libri.set_Cs(C_libri_cplx, Params::libri_exx_threshold_C, set_IJ, set_IJ);
@@ -228,6 +301,12 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                 *pv = VIJR_va;
                 V_double_tmp = RI::Tensor<double>({size_t(V->nr), size_t(V->nc)}, pv);
                 V_libri_cplx[I][{J, Ra}] = RI::Global_Func::convert<std::complex<double>>(V_double_tmp);
+                validate_tensor_shape_or_throw(
+                    V_libri_cplx[I][{J, Ra}],
+                    {atom_mu.at(I), atom_mu.at(J)},
+                    "Hartree V tensor mismatch for I=" + std::to_string(I) + " J=" +
+                        std::to_string(J) + " R=(" + std::to_string(R.x) + "," +
+                        std::to_string(R.y) + "," + std::to_string(R.z) + ")");
             }
         }
     }
@@ -244,13 +323,13 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     Profiler::start("build_real_space_Hartree_3", "Prepare DM libRI object");
     std::map<int, std::map<int, std::map<int, RI::Tensor<std::complex<double>>>>> dmat_libri;
     // <I,<J,<k, Tensor>>>
-    for (const int k : list_k_index)
+    for (const int k : list_k_index_unique)
     {
         const auto dmat_cplx = this->get_dmat_cplx_k_global(k);
 
-        for (const int I : list_I)
+        for (const int I : list_I_unique)
         {
-            for (const int J: list_J)
+            for (const int J: list_J_unique)
             {
                 const auto dmat_IJk =
                     this->extract_dmat_cplx_IJblock(dmat_cplx, I, J);
@@ -261,6 +340,11 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                 *pdmat = dmat_va;
                 dmat_libri[I][J][k] = RI::Tensor<std::complex<double>>(
                     {size_t(dmat_IJk.nr), size_t(dmat_IJk.nc)}, pdmat);
+                validate_tensor_shape_or_throw(
+                    dmat_libri[I][J][k],
+                    {atom_nw.at(I), atom_nw.at(J)},
+                    "Hartree density-matrix block mismatch for I=" + std::to_string(I) +
+                        " J=" + std::to_string(J) + " k=" + std::to_string(k));
             }
         }
     }
@@ -272,7 +356,8 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
     Profiler::start("build_real_space_Hartree_4_1", "Call libRI HHartree(<I,J,k>)");
     std::map<int, std::map<int, std::map<int, RI::Tensor<std::complex<double>>>>> HHartree_k =
         hartree_libri.lri.cal_cvcd_k_hartree(dmat_libri, this->kfrac_array_list_,
-                                            list_k_index, list_I, list_J, list_IJ);
+                                            list_k_index_unique, list_I_unique, list_J_unique,
+                                            list_IJ);
     Profiler::stop("build_real_space_Hartree_4_1");
     utils::lib_printf("Task %4d: cal_cvcd_k_hartree elapsed time: %f\n",
                         mpi_comm_global_h.myid,
