@@ -16,6 +16,7 @@
 // 自定义头文件
 
 #include "Hamiltonian.h"  // 哈密顿量相关
+#include "abacus_symmetry.h"
 #include "analycont.h"    // 分析延拓相关
 #include "chi0.h"         // 响应函数相关
 #include "constants.h"    // 常量定义
@@ -45,7 +46,6 @@
 #include "utils_timefreq.h"
 #include "write_aims.h"
 #include "pulay_mixing.h"
-
 std::vector<double> efermi_values;
 std::vector<double> homo_values;
 std::vector<double> lumo_values;
@@ -53,6 +53,17 @@ std::vector<int> iteration_numbers;
 
 namespace
 {
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
 void reset_iteration_history()
 {
     efermi_values.clear();
@@ -703,8 +714,14 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     // 读取库伦相互作用
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+        || need_full_cut_coulomb_for_abacus_symmetry())
     {
+        if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+        {
+            lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                       " switching to `read_Vq_full`\n");
+        }
         read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
     }
     else
@@ -1003,8 +1020,9 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         {
             std::vector<double> omegas_dielect;
             std::vector<double> dielect_func;
-            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
-                             dielect_func);
+            if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+                read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
+                                 dielect_func);
 
             epsmac_LF_imagfreq_re =
                 interpolate_dielec_func(Params::option_dielect_func, omegas_dielect, dielect_func,
@@ -1022,31 +1040,21 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             }
         }
 
-
         // 构建V^{exx}矩阵,得到Hexx_nband_nband: exx.exx_is_ik_KS
 
         Profiler::start("qsgw_exx", "Build exchange self-energy");
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            if (Params::use_shrink_abfs)
-            {
-                if (Params::use_soc)
-                    exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
-                else
-                    exx.build<double>(Cs_shrinked_data, Rlist, VR);
-            }
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+            if (Params::use_soc)
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
             else
-            {
-                if (Params::use_soc)
-                    exx.build<std::complex<double>>(Cs_data, Rlist, VR);
-                else
-                    exx.build<double>(Cs_data, Rlist, VR);
-            }
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();  // rotate
             Profiler::stop("g0w0_exx_real_work");
             for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {

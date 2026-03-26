@@ -103,8 +103,8 @@ void task_hf_band()
             Matz wfc1(n_bands, n_aos, MAJOR::COL);
             for (int ib = 0; ib < n_bands; ++ib) {
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-                    meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
+                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][0][ikpt](ib, iao);
+                    meanfield.get_eigenvectors0()[ispin][0][ikpt](ib, iao) = wfc1(ib, iao);
                     
                 }
             }
@@ -527,8 +527,8 @@ void task_hf_band()
             for (int ib = 0; ib < n_bands; ++ib) {
                 meanfield_band.get_weight0()[i_spin](i_kpoint, ib) = meanfield_band.get_weight()[i_spin](i_kpoint, ib);
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc5(ib, iao) = meanfield_band.get_eigenvectors()[i_spin][i_kpoint](ib, iao);
-                    meanfield_band.get_eigenvectors0()[i_spin][i_kpoint](ib, iao) = wfc5(ib, iao);        
+                    wfc5(ib, iao) = meanfield_band.get_eigenvectors()[i_spin][0][i_kpoint](ib, iao);
+                    meanfield_band.get_eigenvectors0()[i_spin][0][i_kpoint](ib, iao) = wfc5(ib, iao);        
                 }
             }
 
@@ -672,11 +672,15 @@ void task_hf_band()
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+            if (Params::use_soc)
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
+            else
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
             // for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
@@ -1310,5 +1314,3 @@ void task_hf_band()
 
     Profiler::stop("hf_band");
 }
-
-

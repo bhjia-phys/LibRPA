@@ -27,10 +27,14 @@ macro(config_test TARGET NUMPROC)
       COMMAND $<TARGET_FILE:${TARGET}>
     )
   endif()
+  set_tests_properties(${TARGET} PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}/src:$ENV{LD_LIBRARY_PATH}"
+  )
 endmacro()
 
 # add serial tests
 foreach(target
+    test_abacus_symmetry
     test_analycont
     test_atoms
     test_atomic_basis

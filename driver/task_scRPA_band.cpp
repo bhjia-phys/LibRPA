@@ -12,6 +12,7 @@
 #include <cmath>
 // 自定义头文件
      
+#include "abacus_symmetry.h"
 #include "meanfield.h"              // MeanField类相关
 #include "params.h"                 // 参数设置相关
 #include "pbc.h"                    // 周期性边界条件相关
@@ -41,6 +42,22 @@
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
 
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+} // namespace
+
 
 
 
@@ -62,7 +79,8 @@ void task_scRPA_band()
         qlist.push_back(q_weight.first);
     }
 
-    
+    using cplxdb = std::complex<double>;
+    std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
 
     
     const auto n_spins = meanfield.get_n_spins();
@@ -105,8 +123,8 @@ void task_scRPA_band()
             Matz wfc1(n_bands, n_aos, MAJOR::COL);
             for (int ib = 0; ib < n_bands; ++ib) {
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-                    meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
+                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][0][ikpt](ib, iao);
+                    meanfield.get_eigenvectors0()[ispin][0][ikpt](ib, iao) = wfc1(ib, iao);
                     
                 }
             }
@@ -262,8 +280,8 @@ void task_scRPA_band()
             for (int ib = 0; ib < n_bands; ++ib) {
                 meanfield_band.get_weight0()[i_spin](i_kpoint, ib) = meanfield_band.get_weight()[i_spin](i_kpoint, ib);
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc5(ib, iao) = meanfield_band.get_eigenvectors()[i_spin][i_kpoint](ib, iao);
-                    meanfield_band.get_eigenvectors0()[i_spin][i_kpoint](ib, iao) = wfc5(ib, iao);        
+                    wfc5(ib, iao) = meanfield_band.get_eigenvectors()[i_spin][0][i_kpoint](ib, iao);
+                    meanfield_band.get_eigenvectors0()[i_spin][0][i_kpoint](ib, iao) = wfc5(ib, iao);        
                 }
             }
             
@@ -355,7 +373,7 @@ void task_scRPA_band()
 
         
         Profiler::start("chi0_build", "Build response function chi0");
-        chi0.build(Cs_data, Rlist, period, local_atpair, qlist);
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
         Profiler::stop("chi0_build"); 
 
         std::flush(ofs_myid);
@@ -384,8 +402,14 @@ void task_scRPA_band()
             }
         }
         Profiler::start("read_vq_cut", "Load truncated Coulomb");
-        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+            || need_full_cut_coulomb_for_abacus_symmetry())
         {
+            if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                           " switching to `read_Vq_full`\n");
+            }
             read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
         }
         else
@@ -417,11 +441,15 @@ void task_scRPA_band()
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+            if (Params::use_soc)
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
+            else
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
         
@@ -471,7 +499,10 @@ void task_scRPA_band()
         
         LIBRPA::G0W0 s_g0w0(meanfield, kfrac_list, chi0.tfg, period);
         Profiler::start("g0w0_sigc_IJ", "Build correlation self-energy");
-        s_g0w0.build_spacetime(Cs_data, Wc_freq_q, Rlist);
+        if (Params::use_soc)
+            s_g0w0.build_spacetime<std::complex<double>>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
+        else
+            s_g0w0.build_spacetime<double>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
         Profiler::stop("g0w0_sigc_IJ");
         std::flush(ofs_myid);
 
@@ -831,5 +862,3 @@ void task_scRPA_band()
     }
         Profiler::stop("scRPA_band");
 }
-
-

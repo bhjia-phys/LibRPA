@@ -8,10 +8,12 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
 #include "atomic_basis.h"
+#include "abacus_symmetry.h"
 #include "atoms.h"
 #include "constants.h"
 #include "envs_io.h"
@@ -40,30 +42,221 @@ bool path_exists(const string &path)
 
 const string kPyatbBundleDir = "pyatb_librpa_df/";
 
-Vector3_Order<double> irk_qvec_from_index(const int iq)
+constexpr double kAbacusKpointMatchTol = 1e-5;
+
+std::string read_required_token(std::ifstream& infile, const std::string& file_path,
+                                const std::string& item_desc)
+{
+    std::string token;
+    if (!(infile >> token))
+    {
+        throw std::runtime_error("Failed to read " + item_desc + " from " + file_path);
+    }
+    return token;
+}
+
+int parse_required_int(const std::string& token, const std::string& file_path,
+                       const std::string& item_desc)
+{
+    try
+    {
+        return std::stoi(token);
+    }
+    catch (const std::exception&)
+    {
+        throw std::runtime_error("Failed to parse integer token '" + token + "' for " + item_desc +
+                                 " in " + file_path);
+    }
+}
+
+double parse_required_double(const std::string& token, const std::string& file_path,
+                             const std::string& item_desc)
+{
+    try
+    {
+        return std::stod(token);
+    }
+    catch (const std::exception&)
+    {
+        throw std::runtime_error("Failed to parse floating-point token '" + token + "' for " +
+                                 item_desc + " in " + file_path);
+    }
+}
+
+bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
+                        const Vector3_Order<double>& rhs,
+                        const double tol = kAbacusKpointMatchTol)
+{
+    const auto is_same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return is_same_component(lhs.x, rhs.x) && is_same_component(lhs.y, rhs.y)
+           && is_same_component(lhs.z, rhs.z);
+}
+
+bool can_symmetrize_abacus_bare_coulomb_full()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry && ctx.available && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty() && ctx.kstars.size() == kfrac_list.size()
+           && ctx.atom_to_type.size() == atom_mu.size() && coord_frac.size() == atom_mu.size();
+}
+
+void maybe_symmetrize_abacus_bare_coulomb_full(std::map<Vector3_Order<double>, ComplexMatrix>& Vq_full)
+{
+    if (!can_symmetrize_abacus_bare_coulomb_full())
+    {
+        return;
+    }
+
+    std::map<atom_t, size_t> atom_nabf = atom_mu;
+    for (auto& q_Vq : Vq_full)
+    {
+        const auto klist_iter = std::find(klist.cbegin(), klist.cend(), q_Vq.first);
+        if (klist_iter == klist.cend())
+        {
+            throw std::runtime_error("Failed to match the current bare Coulomb q-point with LibRPA klist");
+        }
+        const int iq = static_cast<int>(std::distance(klist.cbegin(), klist_iter));
+        if (iq < 0 || iq >= static_cast<int>(kfrac_list.size()))
+        {
+            throw std::runtime_error("Failed to map the current bare Coulomb q-point to fractional coordinates");
+        }
+        q_Vq.second = LIBRPA::symmetrize_abacus_abf_ibz_kspace_operator_matrix(
+            LIBRPA::abacus_symmetry_ctx, kfrac_list[static_cast<std::size_t>(iq)], q_Vq.second,
+            atom_nabf, coord_frac);
+    }
+}
+
+Vector3_Order<double> convert_fractional_kpoint_to_klist_units(
+    const Vector3_Order<double>& kfrac)
+{
+    return {kfrac.x * G.e11 + kfrac.y * G.e21 + kfrac.z * G.e31,
+            kfrac.x * G.e12 + kfrac.y * G.e22 + kfrac.z * G.e32,
+            kfrac.x * G.e13 + kfrac.y * G.e23 + kfrac.z * G.e33};
+}
+
+Vector3_Order<double> resolve_abacus_file_qvec(const int iq,
+                                               const int n_file_qpoints,
+                                               const std::string& file_path)
 {
     if (iq < 0)
     {
-        throw std::out_of_range("Negative q-point index in irk_qvec_from_index");
+        throw std::runtime_error("Negative q-point index encountered while reading " + file_path);
     }
-    // coulomb_mat/shrink_sinvS q_num enumerates irreducible q-points when symmetry reduction is
-    // enabled. Reuse the same IBZ key space as the initial irk_weight construction to avoid
-    // polluting irk_weight with a second, incompatible full-BZ key set during file reads.
-    if (!klist_ibz.empty())
+
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (Params::use_abacus_gw_symmetry && ctx.available && !ctx.kstars.empty()
+        && n_file_qpoints == static_cast<int>(ctx.kstars.size()))
     {
-        if (iq >= static_cast<int>(klist_ibz.size()))
+        if (iq >= static_cast<int>(ctx.kstars.size()))
         {
-            throw std::out_of_range("IBZ q-point index exceeds klist_ibz size");
+            throw std::runtime_error("The q-point index in " + file_path
+                                     + " exceeds the number of ABACUS symmetry IBZ q-points");
         }
-        return klist_ibz[iq];
+        return convert_fractional_kpoint_to_klist_units(
+            ctx.kstars[static_cast<std::size_t>(iq)].k_ibz);
     }
-    if (iq >= static_cast<int>(klist.size()))
+
+    const int n_full_kpoints = kv_nmp[0] * kv_nmp[1] * kv_nmp[2];
+    if (iq >= n_full_kpoints)
     {
-        throw std::out_of_range("q-point index exceeds klist size");
+        throw std::runtime_error("The q-point index in " + file_path
+                                 + " exceeds the loaded LibRPA k-point list");
     }
-    return klist[iq];
+
+    return Vector3_Order<double>(kvec_c[iq]);
 }
-}  // namespace
+
+void append_unique_kpoint(std::vector<Vector3_Order<double>>& kpoints,
+                          const Vector3_Order<double>& candidate)
+{
+    for (const auto& kpoint : kpoints)
+    {
+        if (nearly_same_kpoint(kpoint, candidate))
+        {
+            return;
+        }
+    }
+    kpoints.push_back(candidate);
+}
+
+void populate_abacus_full_bz_k_mapping()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (!ctx.available || ctx.kstars.empty())
+    {
+        return;
+    }
+    if (ctx.kstars.size() != klist.size())
+    {
+        std::ostringstream oss;
+        oss << "ABACUS symmetry sidecar reports " << ctx.kstars.size()
+            << " IBZ k-stars, but LibRPA loaded " << klist.size() << " k-points";
+        throw std::runtime_error(oss.str());
+    }
+
+    map_irk_ks.clear();
+    std::vector<bool> matched_ibz_kpoints(klist.size(), false);
+
+    for (const auto& star : ctx.kstars)
+    {
+        const auto star_klist = convert_fractional_kpoint_to_klist_units(star.k_ibz);
+        int ik_ibz = -1;
+        for (int ik = 0; ik != static_cast<int>(klist.size()); ++ik)
+        {
+            if (!nearly_same_kpoint(klist[ik], star_klist))
+            {
+                continue;
+            }
+            if (ik_ibz >= 0)
+            {
+                throw std::runtime_error(
+                    "ABACUS symmetry k-star matching is ambiguous while rebuilding map_irk_ks");
+            }
+            ik_ibz = ik;
+        }
+
+        if (ik_ibz < 0)
+        {
+            std::ostringstream oss;
+            oss << "Failed to match an ABACUS IBZ k-star with the loaded LibRPA k-point list."
+                << " Star k = (" << star_klist.x << ", " << star_klist.y << ", " << star_klist.z
+                << "). Loaded klist:";
+            for (const auto& kpoint : klist)
+            {
+                oss << " (" << kpoint.x << ", " << kpoint.y << ", " << kpoint.z << ")";
+            }
+            throw std::runtime_error(oss.str());
+        }
+
+        matched_ibz_kpoints[static_cast<std::size_t>(ik_ibz)] = true;
+        auto& full_kpoints = map_irk_ks[klist[ik_ibz]];
+        full_kpoints.clear();
+        for (const auto& member : star.members)
+        {
+            append_unique_kpoint(full_kpoints,
+                                 convert_fractional_kpoint_to_klist_units(member.k_bz));
+        }
+
+        if (full_kpoints.empty())
+        {
+            throw std::runtime_error("ABACUS symmetry k-star does not contain any full-BZ member");
+        }
+    }
+
+    for (std::size_t ik = 0; ik != matched_ibz_kpoints.size(); ++ik)
+    {
+        if (!matched_ibz_kpoints[ik])
+        {
+            throw std::runtime_error(
+                "Not every loaded IBZ k-point was covered by the ABACUS symmetry sidecars");
+        }
+    }
+}
+
+} // namespace
 
 void read_scf_occ_eigenvalues(const string &file_path, MeanField &mf)
 {
@@ -1100,7 +1293,7 @@ static int handle_Vq_full_file(const string &file_path,
             bcol--;
             ecol--;
             iq--;
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
 
             if (irk_weight.count(qvec) == 0)
             {
@@ -1151,7 +1344,7 @@ static int handle_Vq_full_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -1224,6 +1417,14 @@ size_t read_Vq_full(const string &dir_path, const string &vq_fprefix, bool is_cu
         }
     }
     Profiler::stop("handle_Vq_full_file");
+
+    if (!is_cut_coulomb)
+    {
+        // The ABACUS full-matrix `coulomb_mat` on the irreducible q-mesh is already the fixed-q
+        // object that should enter epsilon(q). An extra little-group average here distorts the
+        // bare Coulomb matrix. Keep the raw IBZ matrix and apply symmetry only later when the
+        // full q-star must be restored for q -> R transforms.
+    }
 
     // cout << "FINISH coulomb files reading!" << endl;
     Profiler::start("set_aux_coulomb_k_atom_pair_out");
@@ -1371,7 +1572,7 @@ static int handle_Vq_row_file(
             ecol--;
             iq--;
 
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             if (irk_weight.count(qvec) == 0)
             {
                 irk_points.push_back(qvec);
@@ -1451,7 +1652,7 @@ static int handle_Vq_row_file(
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
 
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             // skip duplicate insert of k weight, since
             if (irk_weight.count(qvec) == 0)
             {
@@ -1719,7 +1920,11 @@ void read_stru(const int &n_kpoints, const std::string &file_path)
         infile >> x;
         nk[i] = stoi(x);
     }
-    assert(n_kpoints == nk[0] * nk[1] * nk[2]);
+    const int n_kpoints_full = nk[0] * nk[1] * nk[2];
+    if (n_kpoints > n_kpoints_full)
+    {
+        throw std::runtime_error("The number of k-points in band_out is larger than the full Monkhorst-Pack grid");
+    }
     std::vector<double> kvecs(3 * n_kpoints);
     // kvec_c = new Vector3<double>[n_kpoints];
     for (int i = 0; i != 3 * n_kpoints; i++)
@@ -1729,13 +1934,45 @@ void read_stru(const int &n_kpoints, const std::string &file_path)
     }
     set_kgrids_kvec_tot(nk[0], nk[1], nk[2], kvecs.data());
 
-    // TODO: use API for IBZ mapping
-    for (int i = 0; i != n_kpoints; i++)
+    irk_point_id_mapping.clear();
+    map_irk_ks.clear();
+
+    std::vector<int> mapping_lines;
+    while (infile >> x)
     {
-        infile >> x;
-        int id_irk = stoi(x) - 1;
-        irk_point_id_mapping.push_back(id_irk);
-        map_irk_ks[klist[id_irk]].push_back(klist[i]);
+        mapping_lines.push_back(stoi(x) - 1);
+    }
+
+    if (!mapping_lines.empty() && static_cast<int>(mapping_lines.size()) != n_kpoints)
+    {
+        throw std::runtime_error("The number of IBZ mapping entries in stru_out does not match band_out");
+    }
+
+    if (mapping_lines.empty())
+    {
+        for (int i = 0; i != n_kpoints; ++i)
+        {
+            irk_point_id_mapping.push_back(i);
+            map_irk_ks[klist[i]].push_back(klist[i]);
+        }
+    }
+    else
+    {
+        for (int i = 0; i != n_kpoints; i++)
+        {
+            const int id_irk = mapping_lines[i];
+            irk_point_id_mapping.push_back(id_irk);
+            map_irk_ks[klist[id_irk]].push_back(klist[i]);
+        }
+    }
+
+    if (mapping_lines.empty() && LIBRPA::abacus_symmetry_ctx.available
+        && !LIBRPA::abacus_symmetry_ctx.kstars.empty())
+    {
+        // When ABACUS writes only the irreducible k-mesh to `stru_out`, rebuild the
+        // irreducible-to-full star mapping from `symrot_k.txt` so that later q/k -> R
+        // Fourier transforms can still normalize with the full BZ count.
+        populate_abacus_full_bz_k_mapping();
     }
 }
 
@@ -1754,23 +1991,28 @@ std::vector<Vector3_Order<double>> read_band_kpath_info(const string &file_path,
         return kfrac_band;
     }
 
-    string x, y, z;
-    int n_kpoints_band;
-
-    // Read dimensions in the first row
-    infile >> x;
-    n_basis = stoi(x);
-    infile >> x;
-    n_states = stoi(x);
-    infile >> x;
-    n_spin = stoi(x);
-    infile >> x;
-    n_kpoints_band = stoi(x);
+    const auto n_basis_token = read_required_token(infile, file_path, "band-path basis count");
+    n_basis = parse_required_int(n_basis_token, file_path, "band-path basis count");
+    const auto n_states_token = read_required_token(infile, file_path, "band-path state count");
+    n_states = parse_required_int(n_states_token, file_path, "band-path state count");
+    const auto n_spin_token = read_required_token(infile, file_path, "band-path spin count");
+    n_spin = parse_required_int(n_spin_token, file_path, "band-path spin count");
+    const auto n_kpoints_token = read_required_token(infile, file_path, "band-path k-point count");
+    const int n_kpoints_band =
+        parse_required_int(n_kpoints_token, file_path, "band-path k-point count");
 
     for (int i = 0; i < n_kpoints_band; i++)
     {
-        infile >> x >> y >> z;
-        kfrac_band.push_back({stod(x), stod(y), stod(z)});
+        const auto x = read_required_token(
+            infile, file_path, "band-path kx for k-point " + std::to_string(i + 1));
+        const auto y = read_required_token(
+            infile, file_path, "band-path ky for k-point " + std::to_string(i + 1));
+        const auto z = read_required_token(
+            infile, file_path, "band-path kz for k-point " + std::to_string(i + 1));
+        kfrac_band.push_back(
+            {parse_required_double(x, file_path, "band-path kx for k-point " + std::to_string(i + 1)),
+             parse_required_double(y, file_path, "band-path ky for k-point " + std::to_string(i + 1)),
+             parse_required_double(z, file_path, "band-path kz for k-point " + std::to_string(i + 1))});
     }
 
     infile.close();
@@ -1895,7 +2137,6 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
                               int n_kpoints_band)
 {
     MeanField mf_band(n_spin, n_kpoints_band, n_states, n_basis);
-    std::string s1, s2, s3, s4, s5;
     if (Params::use_soc)
     {
         assert(n_basis % 2 == 0 && "Error: nbasis is not even when SOC!");
@@ -1919,9 +2160,20 @@ MeanField read_meanfield_band(const string &dir_path, int n_basis, int n_states,
         {
             for (int i_state = 0; i_state < n_states; i_state++)
             {
-                infile >> s1 >> s2 >> s3 >> s4 >> s5;
-                mf_band.get_weight()[i_spin](ik, i_state) = stod(s3);
-                mf_band.get_eigenvals()[i_spin](ik, i_state) = stod(s4);
+                const std::string state_desc =
+                    "band eigenvalue entry (k=" + std::to_string(ik + 1) + ", spin=" +
+                    std::to_string(i_spin + 1) + ", state=" + std::to_string(i_state + 1) + ")";
+                const auto state_index = read_required_token(infile, ss.str(), state_desc + " state index");
+                const auto spin_index = read_required_token(infile, ss.str(), state_desc + " spin index");
+                const auto occupation = read_required_token(infile, ss.str(), state_desc + " occupation");
+                const auto eigen_ha = read_required_token(infile, ss.str(), state_desc + " eigenvalue (Ha)");
+                read_required_token(infile, ss.str(), state_desc + " eigenvalue (eV)");
+                (void)state_index;
+                (void)spin_index;
+                mf_band.get_weight()[i_spin](ik, i_state) =
+                    parse_required_double(occupation, ss.str(), state_desc + " occupation");
+                mf_band.get_eigenvals()[i_spin](ik, i_state) =
+                    parse_required_double(eigen_ha, ss.str(), state_desc + " eigenvalue (Ha)");
             }
         }
 
@@ -1998,8 +2250,6 @@ std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_sp
     {
         vxc_band[i_spin].create(n_kpoints_band, n_states);
     }
-    std::string s1, s2, s3;
-
     for (int ik = 0; ik < n_kpoints_band; ik++)
     {
         // Load occupation weights and eigenvalues
@@ -2008,9 +2258,9 @@ std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_sp
         const auto vxc_path = resolve_input_file_with_pyatb_fallback(dir_path, ss.str());
         ifstream infile;
         infile.open(vxc_path);
-        if (!infile)
+        if (!infile.good())
         {
-            throw std::runtime_error("Error: Cannot open file " + vxc_path);
+            throw std::runtime_error("Failed to open band vxc file " + vxc_path);
         }
         ss.clear();
 
@@ -2018,8 +2268,14 @@ std::vector<matrix> read_vxc_band(const string &dir_path, int n_states, int n_sp
         {
             for (int i_state = 0; i_state < n_states; i_state++)
             {
-                infile >> s1 >> s2 >> s3;
-                vxc_band[i_spin](ik, i_state) = stod(s3);
+                const std::string state_desc =
+                    "band vxc entry (k=" + std::to_string(ik + 1) + ", spin=" +
+                    std::to_string(i_spin + 1) + ", state=" + std::to_string(i_state + 1) + ")";
+                read_required_token(infile, ss.str(), state_desc + " spin index");
+                read_required_token(infile, ss.str(), state_desc + " state index");
+                const auto vxc_ha = read_required_token(infile, ss.str(), state_desc + " vxc value");
+                vxc_band[i_spin](ik, i_state) =
+                    parse_required_double(vxc_ha, ss.str(), state_desc + " vxc value");
             }
         }
 
@@ -2143,7 +2399,7 @@ static int handle_sinvS_file(const string &file_path,
             {
                 shrinked_mu.emplace_back(erow - brow + 1);
             }
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
 
             if (!sinvS.count(qvec))
             {
@@ -2193,7 +2449,7 @@ static int handle_sinvS_file(const string &file_path,
 
             // skip empty coulumb_file
             if ((erow - brow < 0) || (ecol - bcol < 0) || iq < 0 || iq > klist.size()) return 4;
-            Vector3_Order<double> qvec = irk_qvec_from_index(iq);
+            Vector3_Order<double> qvec = resolve_abacus_file_qvec(iq, n_irk_points, file_path);
             if (!sinvS.count(qvec))
             {
                 sinvS[qvec].create(mu, nu);

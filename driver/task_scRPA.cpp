@@ -1,16 +1,4 @@
 #include "task_scRPA.h"
-
-#include "utils_io.h"
-
-// COMPILE_STUB: scRPA was not build-enabled in baseline;
-// keep a stub so merge-target compiles. Original code preserved below.
-void task_scRPA()
-{
-    LIBRPA::utils::lib_printf("task_scRPA: stub (disabled)");
-}
-
-#if 0
-#include "task_scRPA.h"
 #include "task_qsgw.h"
 // 标准库头文件
 #include <iostream>         // 用于输入输出操作
@@ -23,6 +11,7 @@ void task_scRPA()
 #include <cmath>
 // 自定义头文件     
 
+#include "abacus_symmetry.h"
 #include "envs_blacs.h"
 #include "utils_io.h"
 #include "meanfield.h"              // MeanField类相关
@@ -55,6 +44,22 @@ void task_scRPA()
 #include "convert_csc.h"
 #include "Hamiltonian.h"            // 哈密顿量相关
 
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+} // namespace
+
 
 
 
@@ -77,7 +82,7 @@ void task_scRPA()
         qlist.push_back(q_weight.first);
     }
 
-    
+    std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
 
     
     const auto n_spins = meanfield.get_n_spins();
@@ -119,8 +124,8 @@ void task_scRPA()
             Matz wfc1(n_bands, n_aos, MAJOR::COL);
             for (int ib = 0; ib < n_bands; ++ib) {
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-                    meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
+                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][0][ikpt](ib, iao);
+                    meanfield.get_eigenvectors0()[ispin][0][ikpt](ib, iao) = wfc1(ib, iao);
                     
                 }
             }
@@ -277,7 +282,7 @@ void task_scRPA()
         chi0.gf_R_threshold = Params::gf_R_threshold;
 
         Profiler::start("chi0_build", "Build response function chi0");
-        chi0.build(Cs_data, Rlist, period, local_atpair, qlist);
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
         Profiler::stop("chi0_build"); 
         std::flush(ofs_myid);
         mpi_comm_global_h.barrier();
@@ -307,8 +312,14 @@ void task_scRPA()
 
         // 读取库伦相互作用
         Profiler::start("read_vq_cut", "Load truncated Coulomb");
-        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU)
+        if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+            || need_full_cut_coulomb_for_abacus_symmetry())
         {
+            if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                           " switching to `read_Vq_full`\n");
+            }
             read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
         }
         else
@@ -350,11 +361,15 @@ void task_scRPA()
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+            if (Params::use_soc)
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
+            else
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
         
@@ -383,7 +398,10 @@ void task_scRPA()
 
         LIBRPA::G0W0 s_g0w0(meanfield, kfrac_list, chi0.tfg, period);
         Profiler::start("g0w0_sigc_IJ", "Build correlation self-energy");
-        s_g0w0.build_spacetime(Cs_data, Wc_freq_q, Rlist);
+        if (Params::use_soc)
+            s_g0w0.build_spacetime<std::complex<double>>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
+        else
+            s_g0w0.build_spacetime<double>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
         Profiler::stop("g0w0_sigc_IJ");
         std::flush(ofs_myid);
         Profiler::start("g0w0_sigc_rotate_KS", "Rotate self-energy, IJ -> ij -> KS");
@@ -634,6 +652,3 @@ void task_scRPA()
 
     Profiler::stop("scRPA");
 }
-
-
-#endif

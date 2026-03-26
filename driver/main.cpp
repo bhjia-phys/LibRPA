@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "abacus_symmetry.h"
 #include "driver_params.h"
 #include "driver_utils.h"
 #include "envs_blacs.h"
@@ -41,6 +42,77 @@
 #include "utils_cmake.h"
 #include "utils_mem.h"
 #include "utils_mpi_io.h"
+
+static bool file_exists(const std::string& path)
+{
+    std::ifstream ifs(path);
+    return ifs.good();
+}
+
+static bool task_requires_pyatb_headwing(const LIBRPA::task_t task)
+{
+    switch (task)
+    {
+        case LIBRPA::task_t::G0W0:
+        case LIBRPA::task_t::G0W0_band:
+        case LIBRPA::task_t::QSGW:
+        case LIBRPA::task_t::QSGW_band:
+        case LIBRPA::task_t::Wc_Rf:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool validate_pyatb_headwing_inputs(const LIBRPA::task_t task)
+{
+    using LIBRPA::envs::mpi_comm_global_h;
+    using LIBRPA::utils::lib_printf;
+
+    if (!Params::replace_w_head || !Params::use_pyatb)
+    {
+        return true;
+    }
+    if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+    {
+        return true;
+    }
+    if (!task_requires_pyatb_headwing(task))
+    {
+        return true;
+    }
+
+    const std::vector<std::string> required_files{
+        driver_params.input_dir + "pyatb_librpa_df/velocity_matrix",
+        driver_params.input_dir + "pyatb_librpa_df/band_out",
+        driver_params.input_dir + "pyatb_librpa_df/k_path_info",
+    };
+
+    bool local_ok = true;
+    for (const auto& file : required_files)
+    {
+        local_ok = local_ok && file_exists(file);
+    }
+
+    int local_ok_int = local_ok ? 1 : 0;
+    int global_ok_int = 0;
+    MPI_Allreduce(&local_ok_int, &global_ok_int, 1, MPI_INT, MPI_MIN, mpi_comm_global_h.comm);
+    const bool global_ok = (global_ok_int == 1);
+
+    if (!global_ok && mpi_comm_global_h.is_root())
+    {
+        lib_printf("Error: `use_pyatb = T` with `option_dielect_func = %d` requires "
+                   "`pyatb_librpa_df/{velocity_matrix,band_out,k_path_info}`.\n",
+                   Params::option_dielect_func);
+        lib_printf("       The current input directory `%s` is missing at least one of these "
+                   "files.\n",
+                   driver_params.input_dir.c_str());
+        lib_printf("       Check whether the PyATB preprocessing step (for example `get_diel.py`) "
+                   "finished successfully before launching LibRPA.\n");
+    }
+
+    return global_ok;
+}
 
 static void initialize(int argc, char **argv)
 {
@@ -184,6 +256,12 @@ int main(int argc, char **argv)
     mpi_comm_global_h.barrier();
     Profiler::stop("driver_read_params");
 
+    if (!validate_pyatb_headwing_inputs(task))
+    {
+        finalize(false);
+        return EXIT_FAILURE;
+    }
+
     Profiler::start("driver_band_out", "Driver Read Meanfield band");
     const auto scf_band_out = resolve_input_file_with_pyatb_fallback(driver_params.input_dir, "band_out");
     read_scf_occ_eigenvalues(scf_band_out, meanfield);
@@ -203,6 +281,21 @@ int main(int argc, char **argv)
              << endl;
     }
     Profiler::stop("driver_band_out");
+
+    Profiler::start("driver_abacus_symmetry", "Driver Read ABACUS symmetry sidecars");
+    const bool has_abacus_symmetry =
+        LIBRPA::load_global_abacus_symmetry_context(driver_params.input_dir,
+                                                    mpi_comm_global_h.is_root() ? &std::cout : nullptr);
+    if (has_abacus_symmetry && mpi_comm_global_h.is_root())
+    {
+        std::cout << "ABACUS symmetry sidecars are loaded and ready for later EXX/GW integration"
+                  << std::endl;
+        std::cout << "The current driver still uses identity IBZ->BZ mapping unless the dedicated "
+                     "symmetry restore path is enabled."
+                  << std::endl
+                  << std::endl;
+    }
+    Profiler::stop("driver_abacus_symmetry");
 
     // early exit for print_minimax task
     if (task == task_t::print_minimax)
@@ -336,8 +429,19 @@ int main(int argc, char **argv)
         //     printf("   |process %d , local_atom_pair:  %d,  %d\n",
         //     mpi_comm_global_h.myid,ap.first,ap.second);
         Profiler::start("driver_read_Vq");
-        read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
-                    false);
+        if (Params::use_abacus_gw_symmetry && LIBRPA::abacus_symmetry_ctx.has_abf_shell_layout())
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW symmetry canonicalizes bare Coulomb from the full q-space matrix; switching `coulomb_mat` loading to read_Vq_full\n");
+            }
+            read_Vq_full(driver_params.input_dir, "coulomb_mat", false);
+        }
+        else
+        {
+            read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
+                        false);
+        }
         Profiler::cease("driver_read_Vq");
         // test_libcomm_for_system(Vq);
     }
@@ -399,8 +503,19 @@ int main(int argc, char **argv)
             blacs_ctxt_global_h.myprow, blacs_ctxt_global_h.mypcol);
         for (auto &iap : trangular_loc_atpair) local_atpair.push_back(iap);
 
-        read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
-                    false);
+        if (Params::use_abacus_gw_symmetry && LIBRPA::abacus_symmetry_ctx.has_abf_shell_layout())
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("ABACUS GW symmetry canonicalizes bare Coulomb from the full q-space matrix; switching `coulomb_mat` loading to read_Vq_full\n");
+            }
+            read_Vq_full(driver_params.input_dir, "coulomb_mat", false);
+        }
+        else
+        {
+            read_Vq_row(driver_params.input_dir, "coulomb_mat", Params::vq_threshold, local_atpair,
+                        false);
+        }
         mpi_comm_global_h.barrier();
         Profiler::cease("driver_read_Vq");
         lib_printf_coll("| Process %5d: coulomb_mat read. Wall/CPU time [min]: %12.4f %12.4f\n",

@@ -1,15 +1,4 @@
 #include "task_qsgwA.h"
-
-#include "utils_io.h"
-
-// COMPILE_STUB: qsgwA task is disabled in merge-target build.
-void task_qsgwA()
-{
-    LIBRPA::utils::lib_printf("task_qsgwA: stub (disabled)");
-}
-
-#if 0
-#include "task_qsgwA.h"
 #include "task_qsgw.h"
 // 标准库头文件
 #include <iostream>         // 用于输入输出操作
@@ -71,6 +60,8 @@ void task_qsgwA()
         qlist.push_back(q_weight.first);
     }
 
+    std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
+
     
 
     
@@ -112,8 +103,8 @@ void task_qsgwA()
             Matz wfc1(n_bands, n_aos, MAJOR::COL);
             for (int ib = 0; ib < n_bands; ++ib) {
                 for (int iao = 0; iao < n_aos; iao++) {
-                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][ikpt](ib, iao);
-                    meanfield.get_eigenvectors0()[ispin][ikpt](ib, iao) = wfc1(ib, iao);
+                    wfc1(ib, iao) = meanfield.get_eigenvectors()[ispin][0][ikpt](ib, iao);
+                    meanfield.get_eigenvectors0()[ispin][0][ikpt](ib, iao) = wfc1(ib, iao);
                     
                 }
             }
@@ -546,7 +537,7 @@ void task_qsgwA()
         chi0.gf_R_threshold = Params::gf_R_threshold;
 
         Profiler::start("chi0_build", "Build response function chi0");
-        chi0.build(Cs_data, Rlist, period, local_atpair, qlist);
+        chi0.build(Cs_data, Rlist, period, local_atpair, qlist, sinvS);
         Profiler::stop("chi0_build"); 
         mpi_comm_global_h.barrier();
 
@@ -574,11 +565,15 @@ void task_qsgwA()
         auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
         {
             Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-            const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+            const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
             Profiler::stop("ft_vq_cut");
 
             Profiler::start("g0w0_exx_real_work");
-            exx.build(Cs_data, Rlist, VR);
+            const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+            if (Params::use_soc)
+                exx.build<std::complex<double>>(exx_cs, Rlist, VR);
+            else
+                exx.build<double>(exx_cs, Rlist, VR);
             exx.build_KS_kgrid0();//rotate  
             Profiler::stop("g0w0_exx_real_work");
             // for (int ispin = 0; ispin < meanfield.get_n_spins(); ++ispin) {
@@ -710,7 +705,10 @@ void task_qsgwA()
 
         LIBRPA::G0W0 s_g0w0(meanfield, kfrac_list, chi0.tfg, period);
         Profiler::start("g0w0_sigc_IJ", "Build correlation self-energy");
-        s_g0w0.build_spacetime(Cs_data, Wc_freq_q, Rlist);
+        if (Params::use_soc)
+            s_g0w0.build_spacetime<std::complex<double>>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
+        else
+            s_g0w0.build_spacetime<double>(Cs_data, Wc_freq_q, Rlist, qlist, sinvS);
         Profiler::stop("g0w0_sigc_IJ");
 
         Profiler::start("g0w0_sigc_rotate_KS", "Rotate self-energy, IJ -> ij -> KS");
@@ -776,7 +774,7 @@ void task_qsgwA()
                         std::cout << "VC_KS_1_real " << std::endl;
                         for (int ib = 0; ib < n_bands; ++ib) {
                             for (int iao = 0; iao < n_aos; iao++) {
-                                wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
+                                wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][0][i_kpoint](ib, iao); 
                                 const auto &Vc_k_ks_value = Vc_all[i_spin][i_kpoint](ib,iao) ;
                                 printf("%16.6f ", Vc_k_ks_value.real()* HA2EV); 
                             }
@@ -786,7 +784,7 @@ void task_qsgwA()
                         std::cout << "VC_KS_1_imag " << std::endl;
                         for (int ib = 0; ib < n_bands; ++ib) {
                             for (int iao = 0; iao < n_aos; iao++) {
-                                wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][i_kpoint](ib, iao); 
+                                wfc3(ib, iao) = meanfield.get_eigenvectors0()[i_spin][0][i_kpoint](ib, iao); 
                                 const auto &Vc_k_ks_value = Vc_all[i_spin][i_kpoint](ib,iao) ;
                                 printf("%16.6f ", Vc_k_ks_value.imag()* HA2EV); 
                             }
@@ -1318,6 +1316,3 @@ void task_qsgwA()
 
     Profiler::stop("qsgwA");
 }
-
-
-#endif

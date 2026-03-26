@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "abacus_symmetry.h"
 #include "constants.h"
 #include "coulmat.h"
 #include "driver_params.h"
@@ -15,6 +16,30 @@
 #include "profiler.h"
 #include "read_data.h"
 #include "ri.h"
+
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+bool can_expand_exx_output_to_full_bz()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return ctx.available && !ctx.kstars.empty()
+           && ctx.kstars.size() == static_cast<std::size_t>(meanfield.get_n_kpoints())
+           && static_cast<int>(ctx.count_kstar_members()) > meanfield.get_n_kpoints();
+}
+
+} // namespace
 
 void task_exx_band()
 {
@@ -33,25 +58,53 @@ void task_exx_band()
         qlist.push_back(q_weight.first);
     }
 
-    // Prepare time-frequency grids
     Profiler::start("read_vq_cut", "Load truncated Coulomb");
-    read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
-    Profiler::stop("read_vq_cut");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+        || need_full_cut_coulomb_for_abacus_symmetry())
+    {
+        if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+        {
+            lib_printf("ABACUS EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                       " switching to `read_Vq_full`\n");
+        }
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
+                    true);
+    }
+    Profiler::cease("read_vq_cut");
 
     std::vector<double> epsmac_LF_imagfreq_re;
 
     Profiler::start("exx_real_space", "Build exchange self-energy");
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
-        Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-        const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
-        Profiler::stop("ft_vq_cut");
+        atpair_R_mat_t VR;
+        if (Params::use_fullcoul_exx)
+        {
+            Profiler::start("ft_vq_full", "Fourier transform full Coulomb");
+            VR = FT_Vq(Vq, get_full_bz_kpoint_count(), Rlist, true);
+            Profiler::stop("ft_vq_full");
+        }
+        else
+        {
+            Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
+            VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
+            Profiler::stop("ft_vq_cut");
+        }
 
         Profiler::start("exx_real_work");
+        const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
         if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+            exx.build<std::complex<double>>(exx_cs, Rlist, VR);
         else
-            exx.build<double>(Cs_data, Rlist, VR);
+            exx.build<double>(exx_cs, Rlist, VR);
         Profiler::stop("exx_real_work");
     }
     Profiler::stop("exx_real_space");
@@ -80,9 +133,46 @@ void task_exx_band()
     {
         // display results
         const std::string banner(90, '-');
+        const auto full_k_members =
+            can_expand_exx_output_to_full_bz()
+                ? LIBRPA::build_abacus_full_kpoint_member_list(LIBRPA::abacus_symmetry_ctx,
+                                                               kfrac_list)
+                : std::vector<LIBRPA::AbacusFullKpointMemberEntry>{};
+        const int occupation_scale =
+            full_k_members.empty() ? meanfield.get_n_kpoints() : get_full_bz_kpoint_count();
         printf("Printing EXX@DFT energy [unit: eV]\n\n");
         for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
         {
+            if (!full_k_members.empty())
+            {
+                for (int ifull = 0; ifull != static_cast<int>(full_k_members.size()); ++ifull)
+                {
+                    const auto& member = full_k_members[static_cast<std::size_t>(ifull)];
+                    const int i_kpoint = member.ik_ibz;
+                    const auto& k = member.k_bz;
+                    printf("spin %2d, k-point %4d: (%.5f, %.5f, %.5f) \n", i_spin + 1, ifull + 1,
+                           k.x, k.y, k.z);
+                    printf("%90s\n", banner.c_str());
+                    printf("%5s %16s %16s %16s %16s %16s\n", "State", "occ", "e_mf", "v_xc",
+                           "v_exx", "e_exx");
+                    printf("%90s\n", banner.c_str());
+                    for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                    {
+                        const auto& occ_state =
+                            meanfield.get_weight()[i_spin](i_kpoint, i_state) * occupation_scale;
+                        const auto& eks_state =
+                            meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
+                        const auto& exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
+                        const auto& vxc_state = vxc[i_spin](i_kpoint, i_state) * HA2EV;
+                        printf("%5d %16.5f %16.5f %16.5f %16.5f %16.5f\n", i_state + 1,
+                               occ_state, eks_state, vxc_state, exx_state,
+                               eks_state - vxc_state + exx_state);
+                    }
+                    printf("\n");
+                }
+                continue;
+            }
+
             for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
             {
                 const auto &k = kfrac_list[i_kpoint];
@@ -95,7 +185,7 @@ void task_exx_band()
                 for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
                 {
                     const auto &occ_state = meanfield.get_weight()[i_spin](i_kpoint, i_state) *
-                                            meanfield.get_n_kpoints();
+                                            occupation_scale;
                     const auto &eks_state =
                         meanfield.get_eigenvals()[i_spin](i_kpoint, i_state) * HA2EV;
                     const auto &exx_state = exx.Eexx[i_spin][i_kpoint][i_state] * HA2EV;
@@ -118,8 +208,9 @@ void task_exx_band()
      * First load the information of k-points along the k-path */
     int n_basis_band, n_states_band, n_spin_band;
     int flag;
-    std::vector<Vector3_Order<double>> kfrac_band = read_band_kpath_info(
-        driver_params.input_dir + "band_kpath_info", n_basis_band, n_states_band, n_spin_band, flag);
+    std::vector<Vector3_Order<double>> kfrac_band =
+        read_band_kpath_info(driver_params.input_dir + "band_kpath_info", n_basis_band,
+                             n_states_band, n_spin_band, flag);
 
     if (flag == 0)
     {
@@ -140,8 +231,8 @@ void task_exx_band()
         if (mpi_comm_global_h.is_root())
         {
             const auto fn = driver_params.input_dir + "band_kpath_info";
-            std::cout << "Warning! Failed to read " << fn
-                      << " , skip band structure" << std::endl << std::endl;
+            std::cout << "Warning! Failed to read " << fn << " , skip band structure" << std::endl
+                      << std::endl;
         }
         mpi_comm_global_h.barrier();
         Profiler::stop("exx_band");
@@ -169,6 +260,29 @@ void task_exx_band()
     // TODO: parallelize analytic continuation and QPE solver among tasks
     if (mpi_comm_global_h.is_root())
     {
+        // output bandgap
+        double exx_bandgap = 0.0;
+        double exx_valence = -1.e10;
+        double exx_conduct = 1.e10;
+        double dft_bandgap = 0.0;
+        double dft_valence = -1.e10;
+        double dft_conduct = 1.e10;
+        int ik_val_dft = 0;
+        int ik_cond_dft = 0;
+        int ik_val_exx = 0;
+        int ik_cond_exx = 0;
+        int nocc = 0;
+        auto &wg = meanfield.get_weight()[0];
+        for (int i = 0; i != wg.size; i++)
+        {
+            if (wg.c[i] == 0.)
+            {
+                nocc = i;
+                break;
+            }
+        }
+        lib_printf("Bands of occupation: %4d \n", nocc);
+
         const auto &mf = meanfield_band;
         // display results
         for (int i_spin = 0; i_spin < mf.get_n_spins(); i_spin++)
@@ -209,11 +323,62 @@ void task_exx_band()
                            << std::setprecision(5) << eks_state;
                     ofs_hf << std::setw(15) << std::setprecision(5) << occ_state << std::setw(15)
                            << std::setprecision(5) << eks_state - vxc_state + exx_state;
+
+                    // output EXX bandgap
+                    if (i_state == nocc - 1)  // HOMO
+                    {
+                        if (eks_state - vxc_state + exx_state > exx_valence)
+                        {
+                            exx_valence = eks_state - vxc_state + exx_state;
+                            ik_val_exx = i_kpoint;
+                        }
+                    }
+                    else if (i_state == nocc)  // LUMO
+                    {
+                        if (eks_state - vxc_state + exx_state < exx_conduct)
+                        {
+                            exx_conduct = eks_state - vxc_state + exx_state;
+                            ik_cond_exx = i_kpoint;
+                        }
+                    }
+                    // output DFT bandgap
+                    if (i_state == nocc - 1)  // HOMO
+                    {
+                        if (eks_state > dft_valence)
+                        {
+                            dft_valence = eks_state;
+                            ik_val_dft = i_kpoint;
+                        }
+                    }
+                    else if (i_state == nocc)  // LUMO
+                    {
+                        if (eks_state < dft_conduct)
+                        {
+                            dft_conduct = eks_state;
+                            ik_cond_dft = i_kpoint;
+                        }
+                    }
                 }
                 ofs_hf << "\n";
                 ofs_ks << "\n";
             }
         }
+        exx_bandgap = exx_conduct - exx_valence;
+        dft_bandgap = dft_conduct - dft_valence;
+        const auto &k_val_exx = kfrac_band[ik_val_exx];
+        const auto &k_cond_exx = kfrac_band[ik_cond_exx];
+        printf("EXX VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val_exx + 1, k_val_exx.x,
+               k_val_exx.y, k_val_exx.z);
+        printf("EXX CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond_exx + 1, k_cond_exx.x,
+               k_cond_exx.y, k_cond_exx.z);
+        lib_printf("EXX bandgap(eV): %12.7f \n", exx_bandgap);
+        const auto &k_val_dft = kfrac_band[ik_val_dft];
+        const auto &k_cond_dft = kfrac_band[ik_cond_dft];
+        printf("DFT VBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_val_dft + 1, k_val_dft.x,
+               k_val_dft.y, k_val_dft.z);
+        printf("DFT CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond_dft + 1, k_cond_dft.x,
+               k_cond_dft.y, k_cond_dft.z);
+        lib_printf("DFT bandgap(eV): %12.7f \n", dft_bandgap);
     }
 
     Profiler::stop("exx_band");
