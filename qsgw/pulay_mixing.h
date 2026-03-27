@@ -9,6 +9,17 @@
 #include <cmath>
 #include <iostream>
 
+struct PulayMixerState {
+    int max_history = 0;
+    int current_step = 0;
+    double mixing_beta = 0.0;
+    bool initialized = false;
+    int nrows = 0;
+    int ncols = 0;
+    std::vector<matrix> input_history;
+    std::vector<matrix> residual_history;
+};
+
 class PulayMixer {
 private:
     int max_history_;           // 最大历史记录数
@@ -99,6 +110,12 @@ public:
     const std::deque<double>& get_residual_history() const {
         return residual_history_norms_;
     }
+
+    /**
+     * @brief 导出/恢复 mixer 续算所需的最小状态
+     */
+    PulayMixerState snapshot() const;
+    void restore(const PulayMixerState& state);
 };
 
 #endif // PULAY_MIXER_H

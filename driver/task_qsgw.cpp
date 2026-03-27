@@ -260,15 +260,193 @@ Matz read_matz_binary(const std::string &path)
     return mat;
 }
 
+matrix pack_pulay_input_matrix(const std::map<int, std::map<int, Matz>> &H0_GW_all,
+                               const int n_spins, const int n_kpoints, const int n_bands)
+{
+    matrix packed_input(n_spins * n_kpoints * n_bands, 2 * n_bands, true);
+    int row_offset = 0;
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            const auto &mat = H0_GW_all.at(ispin).at(ikpt);
+            for (int i = 0; i < n_bands; ++i)
+            {
+                for (int j = 0; j < n_bands; ++j)
+                {
+                    const std::complex<double> value = mat(i, j);
+                    packed_input(row_offset + i, j) = value.real();
+                    packed_input(row_offset + i, j + n_bands) = value.imag();
+                }
+            }
+            row_offset += n_bands;
+        }
+    }
+    return packed_input;
+}
+
+std::string checkpoint_pulay_meta_file(const std::string &checkpoint_dir)
+{
+    return checkpoint_dir + "pulay.meta";
+}
+
+std::string checkpoint_pulay_matrix_file(const std::string &checkpoint_dir,
+                                         const std::string &kind, const int index)
+{
+    std::ostringstream oss;
+    oss << checkpoint_dir << "pulay_" << kind << "_" << std::setw(3) << std::setfill('0')
+        << index << ".bin";
+    return oss.str();
+}
+
+void write_dense_matrix_binary(const matrix &mat, const std::string &path)
+{
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs.good())
+    {
+        throw std::runtime_error("Failed to open Pulay checkpoint matrix for write: " + path);
+    }
+
+    const std::int32_t nr = mat.nr;
+    const std::int32_t nc = mat.nc;
+    ofs.write(reinterpret_cast<const char *>(&nr), sizeof(nr));
+    ofs.write(reinterpret_cast<const char *>(&nc), sizeof(nc));
+    ofs.write(reinterpret_cast<const char *>(mat.c), sizeof(double) * mat.size);
+}
+
+matrix read_dense_matrix_binary(const std::string &path)
+{
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs.good())
+    {
+        throw std::runtime_error("Failed to open Pulay checkpoint matrix for read: " + path);
+    }
+
+    std::int32_t nr = 0;
+    std::int32_t nc = 0;
+    ifs.read(reinterpret_cast<char *>(&nr), sizeof(nr));
+    ifs.read(reinterpret_cast<char *>(&nc), sizeof(nc));
+    if (!ifs.good() || nr <= 0 || nc <= 0)
+    {
+        throw std::runtime_error("Invalid Pulay checkpoint matrix header: " + path);
+    }
+
+    matrix mat(nr, nc, false);
+    ifs.read(reinterpret_cast<char *>(mat.c), sizeof(double) * mat.size);
+    if (!ifs.good())
+    {
+        throw std::runtime_error("Failed to read Pulay checkpoint matrix body: " + path);
+    }
+    return mat;
+}
+
+void write_pulay_mixer_checkpoint(const std::string &checkpoint_dir, const PulayMixer &mixer)
+{
+    const auto state = mixer.snapshot();
+    {
+        std::ofstream meta(checkpoint_pulay_meta_file(checkpoint_dir));
+        if (!meta.good())
+        {
+            throw std::runtime_error("Failed to open Pulay checkpoint meta for write: " +
+                                     checkpoint_dir);
+        }
+        meta << "initialized " << (state.initialized ? 1 : 0) << "\n";
+        meta << "current_step " << state.current_step << "\n";
+        meta << "max_history " << state.max_history << "\n";
+        meta << "mixing_beta " << std::setprecision(17) << state.mixing_beta << "\n";
+        meta << "nrows " << state.nrows << "\n";
+        meta << "ncols " << state.ncols << "\n";
+        meta << "input_history_count " << state.input_history.size() << "\n";
+        meta << "residual_history_count " << state.residual_history.size() << "\n";
+    }
+
+    for (std::size_t i = 0; i < state.input_history.size(); ++i)
+    {
+        write_dense_matrix_binary(
+            state.input_history[i], checkpoint_pulay_matrix_file(checkpoint_dir, "input", i));
+    }
+    for (std::size_t i = 0; i < state.residual_history.size(); ++i)
+    {
+        write_dense_matrix_binary(state.residual_history[i],
+                                  checkpoint_pulay_matrix_file(checkpoint_dir, "residual", i));
+    }
+}
+
+bool load_pulay_mixer_checkpoint(const std::string &checkpoint_dir, PulayMixerState &state)
+{
+    std::ifstream meta(checkpoint_pulay_meta_file(checkpoint_dir));
+    if (!meta.good())
+    {
+        return false;
+    }
+
+    std::size_t input_history_count = 0;
+    std::size_t residual_history_count = 0;
+    std::string key;
+    while (meta >> key)
+    {
+        if (key == "initialized")
+        {
+            int initialized = 0;
+            meta >> initialized;
+            state.initialized = (initialized != 0);
+        }
+        else if (key == "current_step")
+        {
+            meta >> state.current_step;
+        }
+        else if (key == "max_history")
+        {
+            meta >> state.max_history;
+        }
+        else if (key == "mixing_beta")
+        {
+            meta >> state.mixing_beta;
+        }
+        else if (key == "nrows")
+        {
+            meta >> state.nrows;
+        }
+        else if (key == "ncols")
+        {
+            meta >> state.ncols;
+        }
+        else if (key == "input_history_count")
+        {
+            meta >> input_history_count;
+        }
+        else if (key == "residual_history_count")
+        {
+            meta >> residual_history_count;
+        }
+    }
+
+    state.input_history.clear();
+    state.residual_history.clear();
+    for (std::size_t i = 0; i < input_history_count; ++i)
+    {
+        state.input_history.push_back(
+            read_dense_matrix_binary(checkpoint_pulay_matrix_file(checkpoint_dir, "input", i)));
+    }
+    for (std::size_t i = 0; i < residual_history_count; ++i)
+    {
+        state.residual_history.push_back(
+            read_dense_matrix_binary(checkpoint_pulay_matrix_file(checkpoint_dir, "residual", i)));
+    }
+    return true;
+}
+
 void write_qsgw_checkpoint(const std::string &checkpoint_root, const int iteration,
                            const std::map<int, std::map<int, Matz>> &H0_GW_all,
                            const double efermi_ha,
-                           const std::map<int, std::map<int, Matz>> *hartree0 = nullptr)
+                           const std::map<int, std::map<int, Matz>> *hartree0 = nullptr,
+                           const PulayMixer *mixer = nullptr)
 {
     ensure_dir(checkpoint_root);
     const auto checkpoint_dir = checkpoint_iteration_dir(checkpoint_root, iteration);
     ensure_dir(checkpoint_dir);
     const bool has_hartree0 = (hartree0 != nullptr && !hartree0->empty());
+    const bool has_pulay_mixer = (mixer != nullptr);
 
     {
         std::ofstream meta(checkpoint_dir + "checkpoint.meta");
@@ -279,6 +457,7 @@ void write_qsgw_checkpoint(const std::string &checkpoint_root, const int iterati
         meta << "iteration " << iteration << "\n";
         meta << "efermi_ha " << std::setprecision(17) << efermi_ha << "\n";
         meta << "has_hartree0 " << (has_hartree0 ? 1 : 0) << "\n";
+        meta << "has_pulay_mixer " << (has_pulay_mixer ? 1 : 0) << "\n";
     }
 
     for (const auto &spin_entry : H0_GW_all)
@@ -303,6 +482,11 @@ void write_qsgw_checkpoint(const std::string &checkpoint_root, const int iterati
         }
     }
 
+    if (has_pulay_mixer)
+    {
+        write_pulay_mixer_checkpoint(checkpoint_dir, *mixer);
+    }
+
     {
         std::ofstream latest(checkpoint_root + "latest_iteration.txt");
         if (!latest.good())
@@ -321,6 +505,8 @@ struct QsgwCheckpointState
     std::map<int, std::map<int, Matz>> H0_GW_all;
     std::map<int, std::map<int, Matz>> Hartree_0;
     bool has_hartree0 = false;
+    PulayMixerState pulay_state;
+    bool has_pulay_mixer = false;
 };
 
 QsgwCheckpointState load_qsgw_checkpoint(const std::string &checkpoint_root,
@@ -372,6 +558,12 @@ QsgwCheckpointState load_qsgw_checkpoint(const std::string &checkpoint_root,
                 meta >> has_hartree0;
                 state.has_hartree0 = (has_hartree0 != 0);
             }
+            else if (key == "has_pulay_mixer")
+            {
+                int has_pulay_mixer = 0;
+                meta >> has_pulay_mixer;
+                state.has_pulay_mixer = (has_pulay_mixer != 0);
+            }
         }
     }
 
@@ -387,6 +579,13 @@ QsgwCheckpointState load_qsgw_checkpoint(const std::string &checkpoint_root,
                     read_matz_binary(checkpoint_hartree0_file(checkpoint_dir, ispin, ikpt));
             }
         }
+    }
+
+    if (state.has_pulay_mixer &&
+        !load_pulay_mixer_checkpoint(checkpoint_dir, state.pulay_state))
+    {
+        throw std::runtime_error("Checkpoint declares Pulay mixer state but pulay.meta is missing: " +
+                                 checkpoint_dir);
     }
 
     return state;
@@ -874,6 +1073,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
             compute_homo_lumo_ha(meanfield, homo, lumo);
             iteration = checkpoint.iteration;
+            efermi = checkpoint.efermi_ha;
             Hartree_0 = checkpoint.Hartree_0;
 
             if (!checkpoint.has_hartree0)
@@ -881,6 +1081,26 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 throw std::runtime_error(
                     "QSGW restart checkpoint is missing Hartree_0. "
                     "Regenerate checkpoints with the updated code before resuming.");
+            }
+
+            if (checkpoint.has_pulay_mixer)
+            {
+                mixer.restore(checkpoint.pulay_state);
+                mixer_initialized = checkpoint.pulay_state.initialized;
+            }
+            else if (checkpoint.iteration == 1)
+            {
+                mixer.initialize(
+                    pack_pulay_input_matrix(checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands));
+                mixer_initialized = true;
+                std::cout << "[QSGW] Warning: checkpoint iteration 1 is missing Pulay mixer state. "
+                             "Reconstructed the minimal mixer state from H0_GW.\n";
+            }
+            else
+            {
+                throw std::runtime_error(
+                    "QSGW restart checkpoint is missing Pulay mixer state. "
+                    "Regenerate checkpoints with the updated code before resuming from iteration > 1.");
             }
 
             const auto history_loaded =
@@ -1783,7 +2003,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     if (should_write_checkpoint)
                     {
                         write_qsgw_checkpoint(checkpoint_save_root, iteration, H0_GW_all, efermi,
-                                              &Hartree_0);
+                                              &Hartree_0, &mixer);
                     }
                 }
             }

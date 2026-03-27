@@ -367,6 +367,7 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
 
     Profiler::start("build_real_space_Hartree_4_2",
         "Convert HHartree (<I,<J,<k,Tensor>>>) to nearest (<I,<<J,R>,Tensor>>)");
+    std::size_t skipped_empty_hartree_k_blocks = 0;
 
     for (const auto &I_HartreeJk : HHartree_k)
     {
@@ -382,7 +383,18 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
                 {
                     const int k = k_Hartree.first;
                     const auto &Hartree_k_tensor = k_Hartree.second;
-                    
+                    if (Hartree_k_tensor.empty() || !Hartree_k_tensor.data)
+                    {
+                        ++skipped_empty_hartree_k_blocks;
+                        continue;
+                    }
+                    validate_tensor_shape_or_throw(
+                        Hartree_k_tensor,
+                        {static_cast<std::size_t>(atom_nw.at(I)),
+                         static_cast<std::size_t>(atom_nw.at(J))},
+                        "Hartree k-space tensor mismatch for I=" + std::to_string(I) +
+                            " J=" + std::to_string(J) + " k=" + std::to_string(k));
+
                     double phase_angle = -TWO_PI * (kfrac_list_[k].x * R_bvk[0] +
                                                     kfrac_list_[k].y * R_bvk[1] +
                                                     kfrac_list_[k].z * R_bvk[2]);
@@ -394,6 +406,13 @@ void Hartree::build(const Cs_LRI &Cs, const vector<Vector3_Order<int>> &Rlist,
             }
         }
     }
+    if (skipped_empty_hartree_k_blocks != 0)
+    {
+        utils::lib_printf(
+            "Task %4d: skipped %zu empty Hartree k-blocks returned by LibRI\n",
+            mpi_comm_global_h.myid, skipped_empty_hartree_k_blocks);
+    }
+
     Profiler::stop("build_real_space_Hartree_4_2");
     envs::ofs_myid << "Number of HHartree_libri (<I,<<J,R>,Tensor>>) keys: "
                     << get_num_keys(this->HHartree_libri) << "\n";

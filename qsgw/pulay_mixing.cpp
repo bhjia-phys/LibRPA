@@ -392,6 +392,33 @@ double PulayMixer::get_mixing_beta() const {
     return mixing_beta_;
 }
 
+PulayMixerState PulayMixer::snapshot() const {
+    PulayMixerState state;
+    state.max_history = max_history_;
+    state.current_step = current_step_;
+    state.mixing_beta = mixing_beta_;
+    state.initialized = initialized_;
+    state.nrows = nrows_;
+    state.ncols = ncols_;
+    state.input_history = input_history_;
+    state.residual_history = residual_history_;
+    return state;
+}
+
+void PulayMixer::restore(const PulayMixerState& state) {
+    max_history_ = state.max_history;
+    current_step_ = state.current_step;
+    mixing_beta_ = state.mixing_beta;
+    initialized_ = state.initialized;
+    nrows_ = state.nrows;
+    ncols_ = state.ncols;
+    input_history_ = state.input_history;
+    residual_history_ = state.residual_history;
+    residual_history_norms_.clear();
+    eigenvalue_change_history_.clear();
+    last_beta_adjustment_step_ = 0;
+}
+
 double PulayMixer::matrix_inner_product(const matrix& A, const matrix& B) {
     if (A.nr != B.nr || A.nc != B.nc) {
         throw std::runtime_error("[PulayMixer] Matrix dimensions must match for inner product.");
