@@ -1857,7 +1857,8 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                 if (use_iterative_pyatb_headwing_bundle())
                 {
-                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
+                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list, "", &H0_GW_all,
+                                                  iteration, "kgrid");
                 }
 
                 // 输出当前 HOMO 和 LUMO 值

@@ -75,6 +75,9 @@ int Params::qsgw_restart_iteration = -1;
 int Params::qsgw_checkpoint_every = 1;
 bool Params::qsgw_iterative_headwing = true;
 std::string Params::qsgw_headwing_bundle_dir = "";
+bool Params::qsgw_export_hamiltonian_for_pyatb = false;
+std::string Params::qsgw_pyatb_rebuild_command = "";
+bool Params::qsgw_pyatb_require_rebuild_success = false;
 /* ==========================================================
  * output options end
  * ========================================================== */
@@ -129,6 +132,8 @@ void Params::print()
         {"qsgw_headwing_bundle_dir",
          qsgw_headwing_bundle_dir.empty() ? "(output_dir/pyatb_librpa_df_iterative/)"
                                           : qsgw_headwing_bundle_dir},
+        {"qsgw_pyatb_rebuild_command",
+         qsgw_pyatb_rebuild_command.empty() ? "(disabled)" : qsgw_pyatb_rebuild_command},
     };
 
     const std::vector<std::pair<std::string, bool>> bool_params{
@@ -159,6 +164,8 @@ void Params::print()
         {"topology_allow_diag_vxc_fallback", topology_allow_diag_vxc_fallback},
         {"qsgw_restart", qsgw_restart},
         {"qsgw_iterative_headwing", qsgw_iterative_headwing},
+        {"qsgw_export_hamiltonian_for_pyatb", qsgw_export_hamiltonian_for_pyatb},
+        {"qsgw_pyatb_require_rebuild_success", qsgw_pyatb_require_rebuild_success},
     };
 
     for (const auto &param : str_params)

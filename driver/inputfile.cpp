@@ -226,6 +226,12 @@ void parse_inputfile_to_params(const std::string &fn)
     {
         Params::qsgw_headwing_bundle_dir = check_dirpath(Params::qsgw_headwing_bundle_dir);
     }
+    parser.parse_bool("qsgw_export_hamiltonian_for_pyatb",
+                      Params::qsgw_export_hamiltonian_for_pyatb, false, flag);
+    parser.parse_string("qsgw_pyatb_rebuild_command", Params::qsgw_pyatb_rebuild_command, "",
+                        flag);
+    parser.parse_bool("qsgw_pyatb_require_rebuild_success",
+                      Params::qsgw_pyatb_require_rebuild_success, false, flag);
 }
 
 const std::string input_filename = "librpa.in";

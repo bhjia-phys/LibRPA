@@ -1051,7 +1051,8 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 update_fermi_energy_and_occupations(meanfield, temperature, efermi);
                 if (use_iterative_pyatb_headwing_bundle())
                 {
-                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list);
+                    refresh_pyatb_headwing_bundle(meanfield, kfrac_list, "", &H0_GW_all,
+                                                  iteration, "kgrid");
                 }
 
                 // const std::string final_banner(90, '-');
@@ -1239,6 +1240,14 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             printf("%5s\n", "efermi_band1");
             printf("%5f\n", efermi_band1);
             meanfield_band.get_efermi() = meanfield.get_efermi();
+            if (Params::use_pyatb
+                && (Params::qsgw_export_hamiltonian_for_pyatb
+                    || !Params::qsgw_pyatb_rebuild_command.empty()))
+            {
+                export_pyatb_state_bundle(
+                    meanfield_band, kfrac_band, get_iterative_pyatb_headwing_bundle_dir() + "band/",
+                    &H0_GW_all_band, iteration, "band", false);
+            }
             // display results
             for (int i_spin = 0; i_spin < meanfield_band.get_n_spins(); i_spin++)
             {

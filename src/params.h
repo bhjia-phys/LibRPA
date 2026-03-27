@@ -200,6 +200,17 @@ struct Params
     //! output_dir/pyatb_librpa_df_iterative/
     static std::string qsgw_headwing_bundle_dir;
 
+    //! export the current QSGW Hamiltonian matrices into the pyatb iterative bundle each
+    //! iteration so external tooling can rebuild momentum / velocity data from H_qsgw(k)
+    static bool qsgw_export_hamiltonian_for_pyatb;
+
+    //! optional shell command used to rebuild pyatb momentum / velocity data after the current
+    //! QSGW Hamiltonian bundle is exported. The command runs inside the target bundle directory.
+    static std::string qsgw_pyatb_rebuild_command;
+
+    //! if true, abort the QSGW iteration when qsgw_pyatb_rebuild_command returns non-zero
+    static bool qsgw_pyatb_require_rebuild_success;
+
     static void check_consistency();
     static void print();
 };
