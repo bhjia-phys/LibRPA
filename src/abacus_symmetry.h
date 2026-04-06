@@ -143,6 +143,7 @@ struct AbacusSymmetryContext
     std::vector<AbacusAOTypeLayout> ao_type_layouts;
     std::vector<std::vector<AbacusAOTypeLayout>> abf_type_layout_candidates;
     std::map<atom_t, int> atom_to_type;
+    std::map<atom_t, std::array<double, 3>> input_coord_frac;
     std::map<std::pair<int, int>, Vector3_Order<int>> kspace_return_lattice;
     std::map<std::pair<int, int>, Vector3_Order<int>> kstar_member_fold_G;
 

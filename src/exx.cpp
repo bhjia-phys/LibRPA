@@ -36,8 +36,6 @@ namespace LIBRPA
 namespace
 {
 
-constexpr double kAbacusKpointTol = 1e-5;
-
 bool use_abacus_ibz_root_projection(const int n_target_kpoints,
                                     const int n_meanfield_kpoints)
 {
@@ -302,16 +300,26 @@ void maybe_dump_hexx_ks_debug(const ComplexMatrix& hexx_ks,
                             false);
 }
 
-bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
-                        const Vector3_Order<double>& rhs,
-                        const double tol = kAbacusKpointTol)
+void maybe_dump_hexx_ao_debug(const ComplexMatrix& hexx_ao,
+                              const int ispin,
+                              const int isoc1,
+                              const int isoc2,
+                              const int ik,
+                              const Vector3_Order<double>& kfrac)
 {
-    const auto is_same_component = [tol](const double lhs_component, const double rhs_component) {
-        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
-               < tol;
-    };
-    return is_same_component(lhs.x, rhs.x) && is_same_component(lhs.y, rhs.y)
-           && is_same_component(lhs.z, rhs.z);
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ostringstream tag;
+    tag << "spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_ik" << ik << "_kx_"
+        << format_debug_double(kfrac.x) << "_ky_" << format_debug_double(kfrac.y) << "_kz_"
+        << format_debug_double(kfrac.z);
+    print_complex_matrix_mm(hexx_ao,
+                            Params::output_dir + "abacus_hexx_ao_" + tag.str() + ".mtx",
+                            1e-14,
+                            false);
 }
 
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
@@ -1724,15 +1732,15 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                                 Iset_Jset.first, Iset_Jset.second);
                 exx_I_JR_local.clear();
 
-                // Convert each <I,<J, R>> pair to the nearest neighbour to speed up later
-                // Fourier transform while keep the accuracy in further band interpolation.
-                // Reuse the cleared-up exx_I_JR_local object
+                std::map<int, std::map<std::pair<int, std::array<int, 3>>,
+                                       RI::Tensor<std::complex<double>>>>
+                    exx_I_JR_local_bvk;
                 if (coord_frac.size() > 0)
                 {
-                    for (auto &I_exxJR : exx_I_JR)
+                    for (const auto &I_exxJR : exx_I_JR)
                     {
                         const auto &I = I_exxJR.first;
-                        for (auto &JR_exx : I_exxJR.second)
+                        for (const auto &JR_exx : I_exxJR.second)
                         {
                             const auto &J = JR_exx.first.first;
                             const auto &R = JR_exx.first.second;
@@ -1767,23 +1775,18 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                     }
                                 }
                             }
-                            exx_I_JR_local[I][{J, R_bvk}] = std::move(JR_exx.second);
+                            exx_I_JR_local_bvk[I][{J, R_bvk}] = JR_exx.second;
                         }
                     }
                 }
-                else
-                {
-                    exx_I_JR_local = std::move(exx_I_JR);
-                }
 
-                exx_I_JR.clear();
                 Profiler::stop("build_real_space_exx_5");
 
                 {
                     std::ostringstream oss;
                     oss << Params::output_dir << "debug_exx_HR_before_fourier_spin" << isp
                         << "_soc" << isoc1 << "_" << isoc2 << ".txt";
-                    dump_tensor_map_summary(exx_I_JR_local, oss.str());
+                    dump_tensor_map_summary(exx_I_JR, oss.str());
                 }
 
                 utils::lib_printf("Task %4d: tensor communicate elapsed time: %f\n",
@@ -1806,9 +1809,11 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                         const auto ang = (kfrac * R_IJ) * TWO_PI;
                         return complex<double>{std::cos(ang), std::sin(ang)};
                     };
+                    const auto& exx_I_JR_active =
+                        coord_frac.size() > 0 ? exx_I_JR_local_bvk : exx_I_JR;
                     collect_block_from_IJ_storage_tensor_transform(
                         Hexx_nao_nao, desc_nao_nao, atomic_basis_wfc, atomic_basis_wfc, fourier,
-                        exx_I_JR_local);
+                        exx_I_JR_active);
                     if (complex_array_has_nonfinite(Hexx_nao_nao.ptr(), Hexx_nao_nao.size()))
                     {
                         std::ostringstream oss;
@@ -1840,6 +1845,8 @@ void Exx::build_KS(const std::vector<std::vector<std::vector<ComplexMatrix>>> &w
                                     Hexx_nao_nao_dense(iao, jao) = Hexx_nao_nao_fb(iao, jao);
                                 }
                             }
+                            maybe_dump_hexx_ao_debug(
+                                Hexx_nao_nao_dense, isp, isoc1, isoc2, ik, kfrac);
 
                             const auto& wfc_isp1_k = wfc_target[isp][isoc1][ik];
                             const auto& wfc_isp2_k = wfc_target[isp][isoc2][ik];

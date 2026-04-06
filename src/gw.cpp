@@ -39,6 +39,193 @@ namespace LIBRPA
 namespace
 {
 
+struct GwBandMatrixDebugSpec
+{
+    bool enabled = false;
+    int spin = -1;
+    int kpoint = -1;
+    int state = -1;
+};
+
+GwBandMatrixDebugSpec get_gw_band_matrix_debug_spec()
+{
+    static const GwBandMatrixDebugSpec spec = []() {
+        GwBandMatrixDebugSpec parsed;
+        const char* env_value = std::getenv("LIBRPA_DEBUG_GW_BAND_STATE");
+        if (env_value == nullptr)
+        {
+            return parsed;
+        }
+
+        std::string value(env_value);
+        for (char& ch : value)
+        {
+            if (ch == ',' || ch == ':' || ch == ';')
+            {
+                ch = ' ';
+            }
+        }
+
+        std::istringstream iss(value);
+        int spin = 0;
+        int kpoint = 0;
+        int state = 0;
+        if (!(iss >> spin >> kpoint >> state))
+        {
+            return parsed;
+        }
+        if (spin <= 0 || kpoint <= 0)
+        {
+            return parsed;
+        }
+
+        parsed.enabled = true;
+        parsed.spin = spin - 1;
+        parsed.kpoint = kpoint - 1;
+        parsed.state = state - 1;
+        return parsed;
+    }();
+    return spec;
+}
+
+bool need_gw_band_matrix_debug_dump(const int spin, const int kpoint)
+{
+    const auto& spec = get_gw_band_matrix_debug_spec();
+    return spec.enabled && spec.spin == spin && spec.kpoint == kpoint;
+}
+
+int gw_band_matrix_debug_state()
+{
+    const auto& spec = get_gw_band_matrix_debug_spec();
+    return spec.enabled ? spec.state : -1;
+}
+
+double complex_matrix_frobenius_norm_gw(const ComplexMatrix& matrix)
+{
+    double accum = 0.0;
+    for (int index = 0; index < matrix.nr * matrix.nc; ++index)
+    {
+        accum += std::norm(matrix.c[index]);
+    }
+    return std::sqrt(accum);
+}
+
+double complex_matrix_max_abs_gw(const ComplexMatrix& matrix)
+{
+    double max_abs = 0.0;
+    for (int index = 0; index < matrix.nr * matrix.nc; ++index)
+    {
+        max_abs = std::max(max_abs, std::abs(matrix.c[index]));
+    }
+    return max_abs;
+}
+
+std::complex<double> complex_matrix_trace_gw(const ComplexMatrix& matrix)
+{
+    const int ntrace = std::min(matrix.nr, matrix.nc);
+    std::complex<double> trace(0.0, 0.0);
+    for (int i = 0; i < ntrace; ++i)
+    {
+        trace += matrix(i, i);
+    }
+    return trace;
+}
+
+double complex_matrix_antihermitian_residual_gw(const ComplexMatrix& matrix)
+{
+    double accum = 0.0;
+    for (int i = 0; i < matrix.nr; ++i)
+    {
+        for (int j = 0; j < matrix.nc; ++j)
+        {
+            accum += std::norm(matrix(i, j) - std::conj(matrix(j, i)));
+        }
+    }
+    const double denom = complex_matrix_frobenius_norm_gw(matrix);
+    return denom > 0.0 ? std::sqrt(accum) / denom : 0.0;
+}
+
+void append_gw_band_matrix_summary(const std::string& file_path,
+                                   const int ifreq,
+                                   const double omega,
+                                   const ComplexMatrix& matrix,
+                                   const int selected_state)
+{
+    if (!LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    const bool write_header = !std::ifstream(file_path).good();
+    std::ofstream ofs(file_path, std::ios::app);
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    if (write_header)
+    {
+        ofs << "# ifreq omega_Ha trace_re trace_im frob maxabs antiherm_res";
+        if (selected_state >= 0)
+        {
+            ofs << " diag_state_re diag_state_im";
+        }
+        ofs << "\n";
+    }
+
+    ofs << std::scientific << std::setprecision(15);
+    const auto trace = complex_matrix_trace_gw(matrix);
+    ofs << ifreq << " " << omega << " " << trace.real() << " " << trace.imag() << " "
+        << complex_matrix_frobenius_norm_gw(matrix) << " " << complex_matrix_max_abs_gw(matrix)
+        << " " << complex_matrix_antihermitian_residual_gw(matrix);
+    if (selected_state >= 0 && selected_state < matrix.nr && selected_state < matrix.nc)
+    {
+        const auto diag = matrix(selected_state, selected_state);
+        ofs << " " << diag.real() << " " << diag.imag();
+    }
+    ofs << "\n";
+}
+
+void append_gw_band_matrix_window(const std::string& file_path,
+                                  const int ifreq,
+                                  const double omega,
+                                  const ComplexMatrix& matrix,
+                                  const int selected_state,
+                                  const int half_width = 2)
+{
+    if (!LIBRPA::envs::mpi_comm_global_h.is_root() || selected_state < 0
+        || selected_state >= matrix.nr || selected_state >= matrix.nc)
+    {
+        return;
+    }
+
+    const int begin = std::max(0, selected_state - half_width);
+    const int end = std::min(std::min(matrix.nr, matrix.nc) - 1, selected_state + half_width);
+    const bool write_header = !std::ifstream(file_path).good();
+    std::ofstream ofs(file_path, std::ios::app);
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    if (write_header)
+    {
+        ofs << "# ifreq omega_Ha begin_state end_state row_state col_state real imag abs\n";
+    }
+
+    ofs << std::scientific << std::setprecision(15);
+    for (int row = begin; row <= end; ++row)
+    {
+        for (int col = begin; col <= end; ++col)
+        {
+            const auto value = matrix(row, col);
+            ofs << ifreq << " " << omega << " " << begin + 1 << " " << end + 1 << " "
+                << row + 1 << " " << col + 1 << " " << value.real() << " "
+                << value.imag() << " " << std::abs(value) << "\n";
+        }
+    }
+}
+
 std::map<std::pair<int, int>, std::set<std::array<int, 3>>>
 convert_abacus_irreducible_sector_to_libri(
     const LIBRPA::abacus_irreducible_sector_t& irreducible_sector,
@@ -387,6 +574,68 @@ void dump_tensor_map_summary_gw(
                 << " " << tensor_max_abs_gw(tensor) << " " << tensor_frobenius_norm_gw(tensor)
                 << " " << sum.real() << " " << sum.imag() << " " << trace.real() << " "
                 << trace.imag() << "\n";
+        }
+    }
+}
+
+template <typename Tatom>
+void dump_sigc_rspace_summary_gw(
+    const std::map<Vector3_Order<int>,
+                   std::map<Tatom, std::map<Tatom, matrix_m<std::complex<double>>>>>& tensors,
+    const std::string& file_path)
+{
+    if (!Params::debug || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    std::ofstream ofs(file_path);
+    if (!ofs.good())
+    {
+        return;
+    }
+
+    ofs << std::scientific << std::setprecision(15);
+    ofs << "# Rx Ry Rz I J rows cols nonfinite maxabs frob sum_re sum_im trace_re trace_im\n";
+    for (const auto& r_entry : tensors)
+    {
+        const auto& R = r_entry.first;
+        for (const auto& i_entry : r_entry.second)
+        {
+            const int iatom = i_entry.first;
+            for (const auto& j_entry : i_entry.second)
+            {
+                const int jatom = j_entry.first;
+                const auto& matrix = j_entry.second;
+                bool has_nonfinite = false;
+                double max_abs = 0.0;
+                double frob_sq = 0.0;
+                std::complex<double> sum(0.0, 0.0);
+                std::complex<double> trace(0.0, 0.0);
+                for (int i = 0; i < matrix.nr(); ++i)
+                {
+                    for (int j = 0; j < matrix.nc(); ++j)
+                    {
+                        const auto value = matrix(i, j);
+                        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+                        {
+                            has_nonfinite = true;
+                        }
+                        max_abs = std::max(max_abs, std::abs(value));
+                        frob_sq += std::norm(value);
+                        sum += value;
+                        if (i == j)
+                        {
+                            trace += value;
+                        }
+                    }
+                }
+
+                ofs << R.x << " " << R.y << " " << R.z << " " << iatom << " " << jatom << " "
+                    << matrix.nr() << " " << matrix.nc() << " " << (has_nonfinite ? 1 : 0)
+                    << " " << max_abs << " " << std::sqrt(frob_sq) << " " << sum.real() << " "
+                    << sum.imag() << " " << trace.real() << " " << trace.imag() << "\n";
+            }
         }
     }
 }
@@ -1643,6 +1892,43 @@ void G0W0::build_spacetime(
     {
         sinvS.clear();
     }
+
+    if (is_rspace_built_ && Params::debug)
+    {
+        for (int ispin = 0; ispin != mf.get_n_spins(); ++ispin)
+        {
+            for (int isoc1 = 0; isoc1 != mf.get_n_soc(); ++isoc1)
+            {
+                for (int isoc2 = 0; isoc2 != mf.get_n_soc(); ++isoc2)
+                {
+                    if (sigc_is_f_R_IJ.count(ispin) == 0 ||
+                        sigc_is_f_R_IJ.at(ispin).count(isoc1) == 0 ||
+                        sigc_is_f_R_IJ.at(ispin).at(isoc1).count(isoc2) == 0)
+                    {
+                        continue;
+                    }
+                    for (int iomega = 0; iomega != tfg.get_n_grids(); ++iomega)
+                    {
+                        const auto omega = tfg.get_freq_nodes()[iomega];
+                        const auto omega_iter =
+                            sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).find(omega);
+                        if (omega_iter ==
+                            sigc_is_f_R_IJ.at(ispin).at(isoc1).at(isoc2).end())
+                        {
+                            continue;
+                        }
+
+                        std::ostringstream oss;
+                        oss << Params::output_dir << "debug_gw_Sigma_iw_"
+                            << std::setfill('0') << std::setw(3) << iomega << "_ispin_"
+                            << std::setw(2) << ispin << "_s_" << isoc1 << isoc2
+                            << "_summary.txt";
+                        dump_sigc_rspace_summary_gw(omega_iter->second, oss.str());
+                    }
+                }
+            }
+        }
+    }
 #endif
 
     // Export real-space imaginary-frequency NAO sigma_c matrices
@@ -1808,10 +2094,11 @@ void G0W0::build_sigc_matrix_KS(
     desc_nband_nband.init_1b1p(n_bands, n_bands, 0, 0);
     Array_Desc desc_nband_nband_fb(blacs_ctxt_global_h);
     desc_nband_nband_fb.init(n_bands, n_bands, n_bands, n_bands, 0, 0);
+    const bool need_band_matrix_debug = get_gw_band_matrix_debug_spec().enabled;
     const bool use_root_dense_projection =
         use_abacus_ibz_root_projection(n_target_kpoints, this->mf.get_n_kpoints());
     Array_Desc desc_nao_nao_fb(blacs_ctxt_global_h);
-    if (use_root_dense_projection)
+    if (use_root_dense_projection || need_band_matrix_debug)
     {
         desc_nao_nao_fb.init(n_aos, n_aos, n_aos, n_aos, 0, 0);
     }
@@ -1866,15 +2153,15 @@ void G0W0::build_sigc_matrix_KS(
                                                      s0_s1.first, s0_s1.second);
                     sigc_I_JR_local.clear();
 
-                    // Convert each <I,<J, R>> pair to the nearest neighbour to speed up later
-                    // Fourier transform while keep the accuracy in further band interpolation.
-                    // Reuse the cleared-up sigc_I_JR_local object
+                    std::map<int, std::map<std::pair<int, std::array<int, 3>>,
+                                           Tensor<complex<double>>>>
+                        sigc_I_JR_local_bvk;
                     if (coord_frac.size() > 0)
                     {
-                        for (auto &I_sigcJR : sigc_I_JR)
+                        for (const auto &I_sigcJR : sigc_I_JR)
                         {
                             const auto &I = I_sigcJR.first;
-                            for (auto &JR_sigc : I_sigcJR.second)
+                            for (const auto &JR_sigc : I_sigcJR.second)
                             {
                                 const auto &J = JR_sigc.first.first;
                                 const auto &n_I = atomic_basis_wfc.get_atom_nb(I);
@@ -1911,12 +2198,12 @@ void G0W0::build_sigc_matrix_KS(
                                         }
                                     }
                                 }
-                                auto& target_map = sigc_I_JR_local[I];
+                                auto& target_map = sigc_I_JR_local_bvk[I];
                                 const auto key = std::make_pair(J, R_bvk);
                                 auto target_iter = target_map.find(key);
                                 if (target_iter == target_map.end())
                                 {
-                                    target_map[key] = std::move(JR_sigc.second);
+                                    target_map[key] = JR_sigc.second;
                                 }
                                 else
                                 {
@@ -1931,15 +2218,13 @@ void G0W0::build_sigc_matrix_KS(
                             }
                         }
                     }
-                    else
-                    {
-                        sigc_I_JR_local = std::move(sigc_I_JR);
-                    }
 
                     // Perform Fourier transform
                     for (int ik = 0; ik < n_target_kpoints; ik++)
                     {
+                        const int ifreq = this->tfg.get_freq_index(freq);
                         const auto kfrac = kfrac_target[ik];
+                        const int debug_state = gw_band_matrix_debug_state();
 
                         const std::function<complex<double>(
                             const int &, const std::pair<int, std::array<int, 3>> &)>
@@ -1953,9 +2238,41 @@ void G0W0::build_sigc_matrix_KS(
                         };
 
                         sigc_nao_nao.zero_out();
+                        const auto& sigc_I_JR_active =
+                            coord_frac.size() > 0 ? sigc_I_JR_local_bvk : sigc_I_JR;
                         collect_block_from_IJ_storage_tensor_transform(
                             sigc_nao_nao, desc_nao_nao, atomic_basis_wfc, atomic_basis_wfc, fourier,
-                            sigc_I_JR_local);
+                            sigc_I_JR_active);
+                        if (need_gw_band_matrix_debug_dump(ispin, ik))
+                        {
+                            auto sigc_nao_nao_fb =
+                                init_local_mat<complex<double>>(desc_nao_nao_fb, MAJOR::COL);
+                            ScalapackConnector::pgemr2d_f(
+                                n_aos, n_aos, sigc_nao_nao.ptr(), 1, 1, desc_nao_nao.desc,
+                                sigc_nao_nao_fb.ptr(), 1, 1, desc_nao_nao_fb.desc,
+                                desc_nao_nao_fb.ictxt());
+                            if (mpi_comm_global_h.is_root())
+                            {
+                                ComplexMatrix sigc_nao_nao_dense(n_aos, n_aos);
+                                for (int iao = 0; iao != n_aos; ++iao)
+                                {
+                                    for (int jao = 0; jao != n_aos; ++jao)
+                                    {
+                                        sigc_nao_nao_dense(iao, jao) = sigc_nao_nao_fb(iao, jao);
+                                    }
+                                }
+                                std::ostringstream fn;
+                                fn << Params::output_dir << "sigc_ao_summary_spin_" << ispin + 1
+                                   << "_k_" << ik + 1 << ".dat";
+                                append_gw_band_matrix_summary(
+                                    fn.str(), ifreq, freq, sigc_nao_nao_dense, -1);
+                                std::ostringstream fn_mm;
+                                fn_mm << Params::output_dir << "sigc_ao_matrix_spin_"
+                                      << ispin + 1 << "_k_" << ik + 1 << "_ifreq_"
+                                      << std::setfill('0') << std::setw(3) << ifreq << ".mtx";
+                                print_complex_matrix_mm(sigc_nao_nao_dense, fn_mm.str(), 1e-14, false);
+                            }
+                        }
                         if (use_root_dense_projection)
                         {
                             auto sigc_nao_nao_fb =
@@ -1986,6 +2303,20 @@ void G0W0::build_sigc_matrix_KS(
                                 sigc_nband_nband_dense =
                                     conj(wfc_isp1_k) * sigc_nao_nao_dense
                                     * transpose(wfc_isp2_k, false);
+                                if (need_gw_band_matrix_debug_dump(ispin, ik))
+                                {
+                                    std::ostringstream fn;
+                                    fn << Params::output_dir << "sigc_ks_summary_spin_"
+                                       << ispin + 1 << "_k_" << ik + 1 << ".dat";
+                                    append_gw_band_matrix_summary(
+                                        fn.str(), ifreq, freq, sigc_nband_nband_dense, debug_state);
+                                    std::ostringstream fn_window;
+                                    fn_window << Params::output_dir << "sigc_ks_window_spin_"
+                                              << ispin + 1 << "_k_" << ik + 1 << ".dat";
+                                    append_gw_band_matrix_window(fn_window.str(), ifreq, freq,
+                                                                 sigc_nband_nband_dense,
+                                                                 debug_state);
+                                }
                             }
                             mpi_comm_global_h.broadcast_ComplexMatrix(sigc_nband_nband_dense, 0);
                             if (sigc_is_ik_f_KS.count(ispin) == 0 ||
@@ -2029,6 +2360,27 @@ void G0W0::build_sigc_matrix_KS(
                             n_bands, n_bands, sigc_nband_nband.ptr(), 1, 1, desc_nband_nband.desc,
                             sigc_nband_nband_fb.ptr(), 1, 1, desc_nband_nband_fb.desc,
                             desc_nband_nband_fb.ictxt());
+                        if (need_gw_band_matrix_debug_dump(ispin, ik) && mpi_comm_global_h.is_root())
+                        {
+                            ComplexMatrix sigc_nband_nband_dense(n_bands, n_bands);
+                            for (int ib = 0; ib != n_bands; ++ib)
+                            {
+                                for (int jb = 0; jb != n_bands; ++jb)
+                                {
+                                    sigc_nband_nband_dense(ib, jb) = sigc_nband_nband_fb(ib, jb);
+                                }
+                            }
+                            std::ostringstream fn;
+                            fn << Params::output_dir << "sigc_ks_summary_spin_" << ispin + 1
+                               << "_k_" << ik + 1 << ".dat";
+                            append_gw_band_matrix_summary(
+                                fn.str(), ifreq, freq, sigc_nband_nband_dense, debug_state);
+                            std::ostringstream fn_window;
+                            fn_window << Params::output_dir << "sigc_ks_window_spin_"
+                                      << ispin + 1 << "_k_" << ik + 1 << ".dat";
+                            append_gw_band_matrix_window(fn_window.str(), ifreq, freq,
+                                                         sigc_nband_nband_dense, debug_state);
+                        }
                         // NOTE: only the matrices at master process is meaningful
                         if (sigc_is_ik_f_KS.count(ispin) == 0 ||
                             sigc_is_ik_f_KS.at(ispin).count(ik) == 0 ||

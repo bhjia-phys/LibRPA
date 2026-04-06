@@ -23,6 +23,10 @@ namespace
 {
 
 constexpr double kAbacusSymmetryCoordTol = 1e-5;
+// Real-space atom mapping is reconstructed from ABACUS text sidecars. When exact fractional
+// coordinates are available from the input `STRU`, LibRPA uses them directly. The looser
+// tolerance below remains as a fallback for text-derived coordinates and lattice-inversion noise.
+constexpr double kAbacusSymmetryRSpaceAtomMapTol = 5e-5;
 const std::complex<double> kImagUnit(0.0, 1.0);
 
 std::string trim(const std::string& text)
@@ -626,16 +630,18 @@ std::vector<AbacusRSpaceOperationInfo> build_rspace_operation_info(
     for (std::size_t isym = 0; isym < ctx.rspace_operations.size(); ++isym)
     {
         const auto& op = ctx.rspace_operations[isym];
+        const double atom_map_tol = kAbacusSymmetryRSpaceAtomMapTol;
         for (atom_t atom_from = 0; atom_from < coord_frac.size(); ++atom_from)
         {
             const auto& coord_from = coord_frac.at(atom_from);
             const Vector3_Order<double> coord_from_vec =
-                restrict_fractional_coordinate({coord_from[0], coord_from[1], coord_from[2]});
+                restrict_fractional_coordinate({coord_from[0], coord_from[1], coord_from[2]},
+                                               atom_map_tol);
             // Keep the unwrapped rotated position so that the integer return lattice is preserved
             // exactly as in the ABACUS irreducible-sector construction.
             const Vector3_Order<double> transformed =
                 multiply_row_vector(coord_from_vec, op.rotation)
-                + restrict_fractional_coordinate(op.translation);
+                + restrict_fractional_coordinate(op.translation, atom_map_tol);
 
             atom_t matched_atom = static_cast<atom_t>(-1);
             Vector3_Order<int> matched_return{0, 0, 0};
@@ -646,10 +652,12 @@ std::vector<AbacusRSpaceOperationInfo> build_rspace_operation_info(
                     continue;
                 }
                 const auto& coord_to = coord_frac.at(atom_to);
-                const Vector3_Order<double> coord_to_vec{coord_to[0], coord_to[1], coord_to[2]};
+                const Vector3_Order<double> coord_to_vec =
+                    restrict_fractional_coordinate({coord_to[0], coord_to[1], coord_to[2]},
+                                                   atom_map_tol);
                 const Vector3_Order<double> diff =
-                    transformed - restrict_fractional_coordinate(coord_to_vec);
-                if (!is_nearly_integer_vec3(diff))
+                    transformed - coord_to_vec;
+                if (!is_nearly_integer_vec3(diff, atom_map_tol))
                 {
                     continue;
                 }
@@ -1358,6 +1366,7 @@ struct ParsedAbacusStru
     std::vector<std::string> species_labels;
     std::vector<std::string> orbital_files;
     std::map<atom_t, int> atom_to_type;
+    std::map<atom_t, std::array<double, 3>> coord_frac;
 };
 
 ParsedAbacusStru parse_abacus_stru_file(const std::string& stru_file)
@@ -1380,10 +1389,57 @@ ParsedAbacusStru parse_abacus_stru_file(const std::string& stru_file)
     }
 
     ParsedAbacusStru parsed;
+    double lattice_constant = 1.0;
+    Matrix3 lattice_vectors;
+    bool has_lattice_vectors = false;
     std::size_t index = 0;
     while (index < lines.size())
     {
         const std::string& current = lines[index];
+        if (current == "LATTICE_CONSTANT")
+        {
+            ++index;
+            if (index >= lines.size())
+            {
+                throw std::runtime_error("Missing LATTICE_CONSTANT value in " + stru_file);
+            }
+            const auto fields = split_fields(lines[index]);
+            if (fields.empty())
+            {
+                throw std::runtime_error("Missing LATTICE_CONSTANT value in " + stru_file);
+            }
+            lattice_constant = std::stod(fields.front());
+            ++index;
+            continue;
+        }
+        if (current == "LATTICE_VECTORS")
+        {
+            ++index;
+            if (index + 2 >= lines.size())
+            {
+                throw std::runtime_error("Incomplete LATTICE_VECTORS block in " + stru_file);
+            }
+            std::array<std::array<double, 3>, 3> lattice_rows{{{{0.0, 0.0, 0.0}},
+                                                                {{0.0, 0.0, 0.0}},
+                                                                {{0.0, 0.0, 0.0}}}};
+            for (int row = 0; row < 3; ++row, ++index)
+            {
+                const auto values = extract_doubles(lines[index]);
+                if (values.size() != 3)
+                {
+                    throw std::runtime_error("Failed to parse LATTICE_VECTORS row in "
+                                             + stru_file + ": " + lines[index]);
+                }
+                for (int col = 0; col < 3; ++col)
+                {
+                    lattice_rows[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)] =
+                        values[static_cast<std::size_t>(col)] * lattice_constant;
+                }
+            }
+            lattice_vectors = build_matrix3_from_array(lattice_rows);
+            has_lattice_vectors = true;
+            continue;
+        }
         if (current == "ATOMIC_SPECIES")
         {
             ++index;
@@ -1411,10 +1467,12 @@ ParsedAbacusStru parse_abacus_stru_file(const std::string& stru_file)
         if (current == "ATOMIC_POSITIONS")
         {
             ++index;
-            if (index < lines.size())
+            if (index >= lines.size())
             {
-                ++index;
+                throw std::runtime_error("Missing ATOMIC_POSITIONS mode in " + stru_file);
             }
+            const std::string position_mode = lines[index];
+            ++index;
 
             atom_t atom_index = 0;
             while (index < lines.size() && !is_section_header(lines[index]))
@@ -1461,7 +1519,56 @@ ParsedAbacusStru parse_abacus_stru_file(const std::string& stru_file)
                         throw std::runtime_error("Unexpected end of file while reading atomic positions in "
                                                  + stru_file);
                     }
-                    parsed.atom_to_type[atom_index++] = atom_type;
+                    const auto atom_fields = split_fields(lines[index]);
+                    if (atom_fields.size() < 3)
+                    {
+                        throw std::runtime_error("Failed to parse atomic coordinate in "
+                                                 + stru_file + ": " + lines[index]);
+                    }
+                    std::array<double, 3> coord_raw{
+                        std::stod(atom_fields[0]),
+                        std::stod(atom_fields[1]),
+                        std::stod(atom_fields[2]),
+                    };
+
+                    std::array<double, 3> coord_frac = coord_raw;
+                    std::string mode_lower = position_mode;
+                    std::transform(mode_lower.begin(), mode_lower.end(), mode_lower.begin(),
+                                   [](unsigned char ch) {
+                                       return static_cast<char>(std::tolower(ch));
+                                   });
+                    if (mode_lower == "direct")
+                    {
+                        coord_frac = coord_raw;
+                    }
+                    else if (starts_with(mode_lower, "cartesian"))
+                    {
+                        if (!has_lattice_vectors)
+                        {
+                            throw std::runtime_error("ATOMIC_POSITIONS uses Cartesian coordinates but "
+                                                     "LATTICE_VECTORS is unavailable in "
+                                                     + stru_file);
+                        }
+                        Vector3<double> coord_cart(coord_raw[0], coord_raw[1], coord_raw[2]);
+                        if (mode_lower.find("angstrom") != std::string::npos)
+                        {
+                            coord_cart.x *= ANG2BOHR;
+                            coord_cart.y *= ANG2BOHR;
+                            coord_cart.z *= ANG2BOHR;
+                        }
+                        const Vector3<double> coord_frac_vec =
+                            coord_cart * lattice_vectors.Inverse();
+                        coord_frac = {coord_frac_vec.x, coord_frac_vec.y, coord_frac_vec.z};
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Unsupported ATOMIC_POSITIONS mode `" + position_mode
+                                                 + "` in " + stru_file);
+                    }
+
+                    parsed.atom_to_type[atom_index] = atom_type;
+                    parsed.coord_frac[atom_index] = coord_frac;
+                    ++atom_index;
                     ++index;
                 }
             }
@@ -1471,6 +1578,63 @@ ParsedAbacusStru parse_abacus_stru_file(const std::string& stru_file)
     }
 
     return parsed;
+}
+
+void try_load_abacus_input_coord_frac(const std::string& dir_path,
+                                      AbacusSymmetryContext& ctx,
+                                      std::ostream* log)
+{
+    const auto candidate_dirs = build_abacus_path_candidates(dir_path);
+    std::vector<std::string> stru_candidates;
+    for (const auto& dir : candidate_dirs)
+    {
+        stru_candidates.push_back(join_path(dir, "STRU"));
+    }
+
+    const std::string stru_file = find_first_existing_file(stru_candidates);
+    if (stru_file.empty())
+    {
+        if (log != nullptr)
+        {
+            (*log) << "| Input fractional coords: unavailable (STRU not found)\n";
+        }
+        return;
+    }
+
+    try
+    {
+        const ParsedAbacusStru parsed = parse_abacus_stru_file(stru_file);
+        if (parsed.coord_frac.empty())
+        {
+            throw std::runtime_error("ATOMIC_POSITIONS not found in " + stru_file);
+        }
+        if (!ctx.atom_to_type.empty() && parsed.atom_to_type.size() != ctx.atom_to_type.size())
+        {
+            throw std::runtime_error("STRU atom count does not match symrot_k.txt in " + stru_file);
+        }
+        for (const auto& atom_type : parsed.atom_to_type)
+        {
+            const auto iter = ctx.atom_to_type.find(atom_type.first);
+            if (iter != ctx.atom_to_type.end() && iter->second != atom_type.second)
+            {
+                throw std::runtime_error("STRU atom ordering/type mapping is inconsistent with "
+                                         "symrot_k.txt in " + stru_file);
+            }
+        }
+        ctx.input_coord_frac = parsed.coord_frac;
+        if (log != nullptr)
+        {
+            (*log) << "| Input fractional coords: loaded from " << base_name(stru_file)
+                   << " for " << ctx.input_coord_frac.size() << " atoms\n";
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        if (log != nullptr)
+        {
+            (*log) << "| Input fractional coords: unavailable (" << ex.what() << ")\n";
+        }
+    }
 }
 
 AbacusAOTypeLayout parse_abacus_orbital_file(const std::string& orbital_file,
@@ -1671,6 +1835,7 @@ bool append_unique_abf_layout(std::vector<AbacusAOTypeLayout>& candidates,
         }
 
         ctx.atom_to_type = parsed.atom_to_type;
+        ctx.input_coord_frac = parsed.coord_frac;
         ctx.ao_shell_layout_available = true;
         if (log != nullptr)
         {
@@ -1723,6 +1888,7 @@ void AbacusSymmetryContext::clear()
     ao_type_layouts.clear();
     abf_type_layout_candidates.clear();
     atom_to_type.clear();
+    input_coord_frac.clear();
     kspace_return_lattice.clear();
     kstar_member_fold_G.clear();
 }
@@ -1883,6 +2049,7 @@ bool load_abacus_symmetry_context(const std::string& dir_path,
     load_irreducible_sector_file(irreducible_sector_file, ctx.irreducible_sector);
     load_symrot_R_file(symrot_R_file, ctx);
     load_symrot_k_file(symrot_k_file, ctx);
+    try_load_abacus_input_coord_frac(dir_path, ctx, log);
     if (has_symrot_abf_k)
     {
         parse_symrot_k_file(symrot_abf_k_file, ctx.abf_kstars, nullptr, nullptr, -1, nullptr,
@@ -2926,8 +3093,10 @@ void build_abacus_rspace_sector_stars(const AbacusSymmetryContext& ctx,
         throw std::runtime_error("ABACUS atom-to-type mapping is unavailable for real-space symmetry");
     }
 
-    const auto op_infos = build_rspace_operation_info(ctx, coord_frac);
-    const auto inverse_map = build_rspace_inverse_map(ctx, coord_frac);
+    const auto& rspace_coord_frac =
+        (ctx.input_coord_frac.size() == ctx.atom_to_type.size()) ? ctx.input_coord_frac : coord_frac;
+    const auto op_infos = build_rspace_operation_info(ctx, rspace_coord_frac);
+    const auto inverse_map = build_rspace_inverse_map(ctx, rspace_coord_frac);
 
     sector_stars.clear();
     std::set<Vector3_Order<int>> Rset(Rlist.begin(), Rlist.end());

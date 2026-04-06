@@ -4,6 +4,7 @@
  */
 #pragma once
 #include <array>
+#include <complex>
 #include <map>
 #include <vector>
 #include "vector3_order.h"
@@ -17,6 +18,37 @@ int get_R_index(const std::vector<Vector3_Order<int>> &Rlist, const Vector3_Orde
 
 bool is_gamma_point(const Vector3_Order<double> &kpt);
 bool is_gamma_point(const Vector3_Order<int> &kpt);
+
+// Find the pair-dependent BvK representative of a lattice translation for the AO pair (I, J).
+Vector3_Order<int> collapse_to_pairwise_bvk_R(const std::array<double, 3>& tau_I,
+                                              const std::array<double, 3>& tau_J,
+                                              const Matrix3& lattice,
+                                              const Vector3_Order<int>& period,
+                                              const Vector3_Order<int>& reference_R);
+
+// Build the pair-dependent BvK translation set used by AO Fourier interpolation.
+std::vector<Vector3_Order<int>> build_pairwise_bvk_R_grid(
+    const std::array<double, 3>& tau_I,
+    const std::array<double, 3>& tau_J,
+    const Matrix3& lattice,
+    const Vector3_Order<int>& period,
+    const std::vector<Vector3_Order<int>>& reference_Rs);
+
+// Compute the AO Fourier interpolation coefficient on a precomputed pair-dependent BvK grid.
+std::complex<double> pairwise_bvk_interpolation_coeff(
+    const std::vector<Vector3_Order<int>>& pair_bvk_Rs,
+    const Vector3_Order<double>& target_k,
+    const Vector3_Order<double>& mesh_k);
+
+// Convenience overload that constructs the pair-dependent BvK grid on demand.
+std::complex<double> pairwise_bvk_interpolation_coeff(
+    const std::array<double, 3>& tau_I,
+    const std::array<double, 3>& tau_J,
+    const Matrix3& lattice,
+    const Vector3_Order<int>& period,
+    const std::vector<Vector3_Order<int>>& reference_Rs,
+    const Vector3_Order<double>& target_k,
+    const Vector3_Order<double>& mesh_k);
 
 extern int kv_nmp[3];
 //! lattice vectors as a 3D-matrix, each row as a lattice vector. Unit: Bohr
