@@ -80,3 +80,6 @@ input_librpa/
 
 # regression test workspace
 regression_tests/workspace
+
+# local git worktrees
+.worktrees/
