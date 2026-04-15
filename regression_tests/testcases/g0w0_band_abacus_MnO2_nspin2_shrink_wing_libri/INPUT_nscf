@@ -7,7 +7,6 @@ out_eband_terms		1
 out_mat_xc		    1
 out_wfc_lcao		1
 out_band            1
-out_bandgap         1
 
 # SPIN SOC
 nspin                           2
@@ -30,5 +29,4 @@ dft_functional			pbe
 symmetry			-1
 exx_separate_loop		1
 exx_pca_threshold		10
-
 

@@ -22,6 +22,7 @@ rpa				1
 symmetry			-1
 exx_separate_loop		1
 exx_pca_threshold		1e-2
+exx_singularity_correction	massidda
 
 #exx_v_threshold			0
 #exx_c_threshold			0	
@@ -29,7 +30,6 @@ exx_pca_threshold		1e-2
 #exx_schwarz_threshold	0	
 #exx_cauchy_threshold	1E-7
 
-exx_use_ewald           1
 exx_ccp_rmesh_times		2
 rpa_ccp_rmesh_times     5
 exx_real_number         1
