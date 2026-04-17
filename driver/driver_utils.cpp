@@ -1,6 +1,7 @@
 #include "driver_utils.h"
 
 #include <cassert>
+#include <fstream>
 #include <stdexcept>
 
 #include "dielecmodel.h"
@@ -11,6 +12,16 @@
 #include "meanfield.h"
 #include "read_data.h"
 #include "ri.h"
+
+namespace
+{
+bool has_aims_moment_probe(const std::string& input_dir)
+{
+    // FHI-aims exports band moments as mommat_ks_kpt_*.dat.
+    std::ifstream infile(input_dir + "mommat_ks_kpt_000001.dat", std::ios::binary);
+    return infile.is_open();
+}
+}  // namespace
 
 std::vector<double> interpolate_dielec_func(int option, const std::vector<double> &frequencies_in,
                                             const std::vector<double> &df_in,
@@ -82,11 +93,8 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
             {
                 // Use velocity_matrix mode (current method)
                 std::string file_abacus = driver_params.input_dir + "velocity_matrix";
-                std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
                 ifstream infile_abacus;
-                ifstream infile_aims;
                 infile_abacus.open(file_abacus);
-                infile_aims.open(file_aims);
                 if (infile_abacus.is_open())
                 {
                     read_velocity(file_abacus, meanfield);
@@ -96,7 +104,7 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                     df_headwing.set(meanfield, kfrac_list, frequencies_target, n_basis, n_states,
                                     n_spin);
                 }
-                else if (infile_aims.is_open())
+                else if (has_aims_moment_probe(driver_params.input_dir))
                 {
                     read_velocity_aims(meanfield, driver_params.input_dir);
                     n_basis = meanfield.get_n_aos();
@@ -110,7 +118,6 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                     throw std::runtime_error("Cannot find moment files for head/wing!");
                 }
                 infile_abacus.close();
-                infile_aims.close();
             }
 
             df_headwing.cal_head();
@@ -161,11 +168,8 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
             {
                 // Use velocity_matrix mode (current method)
                 std::string file_abacus = driver_params.input_dir + "velocity_matrix";
-                std::string file_aims = driver_params.input_dir + "moment_KS_spin_01_kpt_000001.dat";
                 ifstream infile_abacus;
-                ifstream infile_aims;
                 infile_abacus.open(file_abacus);
-                infile_aims.open(file_aims);
                 if (infile_abacus.is_open())
                 {
                     read_velocity(file_abacus, meanfield);
@@ -175,7 +179,7 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                     df_headwing.set(meanfield, kfrac_list, frequencies_target, n_basis, n_states,
                                     n_spin);
                 }
-                else if (infile_aims.is_open())
+                else if (has_aims_moment_probe(driver_params.input_dir))
                 {
                     read_velocity_aims(meanfield, driver_params.input_dir);
                     n_basis = meanfield.get_n_aos();
@@ -189,7 +193,6 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                     throw std::runtime_error("Cannot find moment files for head!");
                 }
                 infile_abacus.close();
-                infile_aims.close();
             }
 
             df_headwing.cal_head();
