@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <set>
 #include <stdexcept>
+#include <string>
 #include <valarray>
 
 #include "abacus_symmetry.h"
@@ -878,19 +879,24 @@ LIBRPA::abacus_atom_block_matrix_map_t gather_abacus_ibz_blocks_for_local_target
     const std::map<atom_t, size_t>& atom_nabf,
     const std::array<double, 3>& q_key_array)
 {
-    if (mpi_comm_global_h.nprocs <= 1 || local_target_pairs.empty())
+    if (mpi_comm_global_h.nprocs <= 1)
     {
         return blocks_ibz_local;
     }
 
-    const auto source_atom_sets = collect_abacus_required_source_atom_sets(
-        star, local_target_pairs, atom_nabf.size());
-    const auto gathered_tensor_map = comm_map2_first(
-        mpi_comm_global_h.comm,
-        convert_abacus_blocks_to_tensor_map(blocks_ibz_local, q_key_array),
-        source_atom_sets.first,
-        source_atom_sets.second);
-    return convert_tensor_map_to_abacus_blocks(gathered_tensor_map, q_key_array, atom_nabf);
+    (void)star;
+    (void)q_key_array;
+    (void)local_target_pairs;
+    // The direct `IBZ W(q) -> irreducible W(R)` route still needs the full Hermitian IBZ
+    // operator as the source for local symmetry rotations. The sparse `comm_map2_first()`
+    // gather can deadlock here when some ranks own no local target pairs for a given q block.
+    // Reconstruct the dense IBZ matrix collectively on every rank, but keep the later
+    // restore/accumulation restricted to each rank's local target pairs so we do not replicate the
+    // symmetry-off `W(R)` ownership across all ranks.
+    const auto dense_ibz_local =
+        build_dense_abacus_hermitian_matrix_from_local_blocks(blocks_ibz_local, atom_nabf);
+    const auto dense_ibz_global = allreduce_dense_complex_matrix_via_real_imag(dense_ibz_local);
+    return build_abacus_blocks_from_dense_matrix(dense_ibz_global, atom_nabf);
 }
 #endif
 
@@ -981,9 +987,8 @@ abf_qspace_complex_block_map_t restore_abacus_abf_full_qspace_operator(
         }
 
         // Unlike the bare Coulomb exported by ABACUS, `W(q_ibz)` is built numerically inside
-        // LibRPA. We therefore enforce the little-group average on the IBZ representative before
-        // expanding it to the full star, so the result does not depend on the specific member
-        // chosen as the representative.
+        // LibRPA. Enforce the little-group average on the IBZ representative before expanding it
+        // to the full star, so the result does not depend on the specific representative member.
         blocks_ibz = symmetrize_abacus_abf_ibz_blocks(
             ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf, target_atom_pairs);
         log_abacus_atom_block_summary_once(
@@ -1134,11 +1139,6 @@ AbacusIrreducibleWRPlan build_abacus_irreducible_wr_plan(
     const std::vector<Vector3_Order<int>>& Rlist)
 {
     AbacusIrreducibleWRPlan plan;
-    if (local_target_pairs.empty())
-    {
-        return plan;
-    }
-
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
     const auto filtered_sector = filter_abacus_irreducible_sector_by_rlist(ctx.irreducible_sector, Rlist);
     if (filtered_sector.empty())
@@ -1174,11 +1174,9 @@ AbacusIrreducibleWRPlan build_abacus_irreducible_wr_plan(
         }
     }
 
-    if (plan.local_irreducible_sector.empty())
-    {
-        return plan;
-    }
-
+    // Ranks with no local full `(I,J,R)` owners must still traverse the global q-star loop so
+    // they participate in the collective IBZ source reconstruction. Keep the plan active and let
+    // the empty local sector accumulate nothing on those ranks.
     plan.local_irreducible_pairs =
         build_abacus_irreducible_target_atom_pairs(plan.local_irreducible_sector);
     plan.kstar_grid_mapping =
@@ -1281,13 +1279,14 @@ abf_rspace_dense_block_map_t restore_abacus_abf_rspace_dense_blocks(
 
 bool can_use_abacus_irreducible_sector_wr_restore(const std::map<atom_t, size_t>& atom_nabf)
 {
-    (void)atom_nabf;
-    // Keep the direct `IBZ W(q) -> irreducible W(R) -> full W(R)` path compiled but disabled.
-    // The current LibRPA GW workflow still restores full `W(R)` before `set_Ws`, so this path
-    // does not reduce the dominant LibRI contraction cost yet. On the current AlAs benchmark it
-    // also does not improve wall time. Re-enable it only together with a symmetry-aware `Ws`
-    // access/contraction path that can consume irreducible-sector `W(R)` directly.
-    return false;
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    // For the current production GW contraction, `set_Ws()` still expects the same owner-unique
+    // full `(I,J,R)` distribution as the symmetry-off path. Materializing the full q-star on every
+    // rank breaks that contract and can overcount in `cal_Sigmas()`. Prefer the direct
+    // `IBZ W(q) -> irreducible W(R) -> local full W(R)` route whenever the ABACUS symmetry
+    // sidecars are complete enough to build the irreducible real-space restore map.
+    return can_restore_abacus_abf_full_qspace_operator(atom_nabf)
+           && !ctx.irreducible_sector.empty() && !ctx.rspace_operations.empty();
 }
 
 abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
@@ -1323,10 +1322,6 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
         const auto q_ibz_internal = klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto k_ibz_frac = kfrac_list.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto blocks_ibz_local = collect_abacus_abf_ibz_blocks_for_q(Wc_q, q_ibz_internal);
-        if (blocks_ibz_local.empty())
-        {
-            continue;
-        }
 
         const std::array<double, 3> q_ibz_array{q_ibz_internal.x, q_ibz_internal.y, q_ibz_internal.z};
         auto blocks_ibz = gather_abacus_ibz_blocks_for_local_target_pairs(
@@ -1337,7 +1332,8 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
         }
 
         blocks_ibz = symmetrize_abacus_abf_ibz_blocks(
-            ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf, plan.local_irreducible_pairs);
+            ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf,
+            plan.local_irreducible_pairs);
         if (star.members.size() != star_mapping.member_q_bz_keys.size())
         {
             throw std::runtime_error("ABACUS q-star mapping is inconsistent with the loaded full-q keys");
@@ -4445,14 +4441,6 @@ CT_FT_Wc_q2R_freq2time(
     mpi_comm_global_h.barrier();
     Profiler::stop("construct_Wc_lower_half");
 
-    static bool dumped_input_qspace_freq = false;
-    if (!dumped_input_qspace_freq && !Wc_freq_q.empty())
-    {
-        dump_abacus_abf_qspace_blocks(
-            "Wc_input_qspace_ct_ifreq0", Wc_freq_q.begin()->second, 1e-15, true);
-        dumped_input_qspace_freq = true;
-    }
-
     if (use_abacus_irreducible_wr)
     {
         LIBRPA::utils::lib_printf_root(
@@ -4481,12 +4469,16 @@ CT_FT_Wc_q2R_freq2time(
                 restore_abacus_abf_full_qspace_operator(freq_blocks, atom_mu);
         }
 
-        static bool dumped_restored_fullq_freq = false;
-        if (!dumped_restored_fullq_freq && !Wc_freq_q_full.empty())
+        // The restored full-q map may intentionally keep only the canonical atom-pair
+        // orientation. Rebuild the active pair set from the restored container itself so the
+        // later W(R,w) loops do not allocate missing lower pairs as zeros and overwrite the
+        // valid partner blocks during the W(R,w) -> W(R,t) / LibRI conversion.
+        atpairs_unique.clear();
+        for (const auto& freq_blocks : Wc_freq_q_full)
         {
-            dump_abacus_abf_qspace_blocks("Wc_restored_fullq_ct_ifreq0",
-                                          Wc_freq_q_full.begin()->second, 1e-15, true);
-            dumped_restored_fullq_freq = true;
+            const auto restored_pairs =
+                collect_local_target_atom_pairs_from_qspace(freq_blocks.second);
+            atpairs_unique.insert(restored_pairs.begin(), restored_pairs.end());
         }
     }
 
@@ -4827,6 +4819,7 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     }
 
     atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old Wc_R;
+    set<pair<atom_t, atom_t>> atpairs_unique;
     if (use_abacus_irreducible_wr)
     {
         LIBRPA::utils::lib_printf_root(
@@ -4842,23 +4835,11 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
             "ABACUS GW symmetry restores the full ABF q-star before `FT_Wc_q2R`\n");
         log_abf_qspace_summary("Wc_q_restored_fullq", debug_tau, Wc_q_full);
 
-        // Dump the reconstructed full-q blocks once so we can compare them against the
-        // symmetry-off reference and isolate whether the mismatch starts before the q->R FT.
-        static bool dumped_restored_fullq_freq = false;
-        static bool dumped_restored_fullq_tau = false;
-        if (is_freq)
-        {
-            if (!dumped_restored_fullq_freq)
-            {
-                dump_abacus_abf_qspace_blocks("Wc_restored_fullq_ifreq0", Wc_q_full);
-                dumped_restored_fullq_freq = true;
-            }
-        }
-        else if (!dumped_restored_fullq_tau)
-        {
-            dump_abacus_abf_qspace_blocks("Wc_restored_fullq_tau0", Wc_q_full);
-            dumped_restored_fullq_tau = true;
-        }
+        // The symmetry-restored q-space map can keep only the canonical pair orientation.
+        // Drive the q->R transform with the pair set actually present in `Wc_q_full`; otherwise
+        // the later W(R,t) map contains manufactured zero lower-pair blocks that overwrite the
+        // valid partner blocks reconstructed from the upper half.
+        atpairs_unique = collect_local_target_atom_pairs_from_qspace(Wc_q_full);
     }
 
     LIBRPA::utils::lib_printf_root("Converting Wc(q) -> W(R)\n");
@@ -4902,8 +4883,8 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
         return Wc_R;
     }
 
-    set<pair<atom_t, atom_t>> atpairs_unique;
-    for (const auto &MuNuqWc : Wc_q)
+    const auto& pair_source_q = use_abacus_full_q_restore ? Wc_q_full : Wc_q;
+    for (const auto &MuNuqWc : pair_source_q)
     {
         const auto Mu = MuNuqWc.first;
         for (const auto &Nu_qWc : MuNuqWc.second)

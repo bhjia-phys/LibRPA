@@ -69,7 +69,15 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                 {
                     read_scf_occ_eigenvalues(driver_params.input_dir + "pyatb_librpa_df/band_out",
                                              pyatb_meanfield);
-                    read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/", pyatb_meanfield);
+                    const int ret_pyatb_evec =
+                        read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/",
+                                         pyatb_meanfield);
+                    if (ret_pyatb_evec != 0)
+                    {
+                        throw std::runtime_error(
+                            "use_pyatb is enabled but failed to read "
+                            "pyatb_librpa_df/KS_eigenvector_*.dat");
+                    }
                     read_velocity(file_pyatb, pyatb_meanfield);
                     int flag;
                     std::vector<Vector3_Order<double>> kfrac_band =
@@ -144,7 +152,15 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
                 {
                     read_scf_occ_eigenvalues(driver_params.input_dir + "pyatb_librpa_df/band_out",
                                              pyatb_meanfield);
-                    read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/", pyatb_meanfield);
+                    const int ret_pyatb_evec =
+                        read_eigenvector(driver_params.input_dir + "pyatb_librpa_df/",
+                                         pyatb_meanfield);
+                    if (ret_pyatb_evec != 0)
+                    {
+                        throw std::runtime_error(
+                            "use_pyatb is enabled but failed to read "
+                            "pyatb_librpa_df/KS_eigenvector_*.dat");
+                    }
                     read_velocity(file_pyatb, pyatb_meanfield);
                     int flag;
                     std::vector<Vector3_Order<double>> kfrac_band =

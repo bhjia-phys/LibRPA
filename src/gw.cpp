@@ -1,10 +1,13 @@
 #include "gw.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <iomanip>
 #include <map>
 #include <numeric>
+#include <set>
 #include <sstream>
 #include <type_traits>
 
@@ -29,6 +32,7 @@
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
 #include <RI/physics/GW.h>
+#include <RI/physics/symmetry/Symmetry_Filter.h>
 using RI::Tensor;
 using RI::Communicate_Tensors_Map_Judge::comm_map2_first;
 #endif
@@ -86,6 +90,20 @@ GwBandMatrixDebugSpec get_gw_band_matrix_debug_spec()
         return parsed;
     }();
     return spec;
+}
+
+template <typename T>
+bool is_effectively_zero_matrix_gw(const matrix_m<T>& mat,
+                                   const typename matrix_m<T>::real_t threshold = 1e-15)
+{
+    for (size_t i = 0; i != mat.size(); ++i)
+    {
+        if (std::abs(mat.dataobj[i]) > threshold)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool need_gw_band_matrix_debug_dump(const int spin, const int kpoint)
@@ -265,7 +283,7 @@ class OutputOnlyFilter_GW_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC
     OutputOnlyFilter_GW_Symmetry(
         const TC& period,
         const std::map<std::pair<TA, TA>, std::set<TC>>& irreducible_sector)
-        : symmetry(period, irreducible_sector)
+        : symmetry_(period, irreducible_sector)
     {
     }
 
@@ -277,7 +295,7 @@ class OutputOnlyFilter_GW_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC
         switch (label)
         {
             case RI::Label::ab_ab::a0b0_a1b1:
-                return !this->symmetry.in_irreducible_sector(A1, A3);
+                return !this->symmetry_.in_irreducible_sector(A1, A3);
             default:
                 return false;
         }
@@ -291,7 +309,7 @@ class OutputOnlyFilter_GW_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC
         switch (label)
         {
             case RI::Label::ab_ab::a0b0_a1b2:
-                return !this->symmetry.in_irreducible_sector(A3, A1);
+                return !this->symmetry_.in_irreducible_sector(A3, A1);
             default:
                 return false;
         }
@@ -306,14 +324,14 @@ class OutputOnlyFilter_GW_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, TC
         {
             case RI::Label::ab_ab::a0b0_a2b1:
             case RI::Label::ab_ab::a0b0_a2b2:
-                return !this->symmetry.in_irreducible_sector(A1, A3);
+                return !this->symmetry_.in_irreducible_sector(A1, A3);
             default:
                 return false;
         }
     }
 
   private:
-    RI::Symmetry_Filter<TA, TC, Tdata> symmetry;
+    RI::Symmetry_Filter<TA, TC, Tdata> symmetry_;
 };
 
 template <typename Tdata>
@@ -827,7 +845,6 @@ void static unfold_abfs_Wc(
         Iset_Jset_c.first.insert(ap.first);
         Iset_Jset_c.second.insert(ap.second);
     }
-
     for (int iq = 0; iq < qlist.size(); iq++)
     {
         const auto &q = qlist[iq];
@@ -984,7 +1001,7 @@ void static unfold_abfs_Wc(
                             matz_Wc(ir, ic) = block_iter->second(ir, ic);
                         }
                     }
-                    qc.second = matz_Wc;
+                    qc.second = matz_Wc.copy();
                 }
             }
         }
@@ -1191,13 +1208,15 @@ void G0W0::build_spacetime(
         && !symmetry_ctx.rspace_operations.empty()
         && symmetry_ctx.atom_to_type.size() == static_cast<std::size_t>(natom)
         && coord_frac.size() == static_cast<std::size_t>(natom);
+    const auto libri_sigc_irreducible_sector =
+        use_abacus_sigc_symmetry
+            ? convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector,
+                                                         period_array)
+            : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
+    const bool restore_abacus_sigc_output = use_abacus_sigc_symmetry;
     LIBRPA::abacus_rspace_sector_stars_t abacus_sector_stars;
-    std::map<std::pair<int, int>, std::set<std::array<int, 3>>> libri_irreducible_sector;
     if (use_abacus_sigc_symmetry)
     {
-        libri_irreducible_sector =
-            convert_abacus_irreducible_sector_to_libri(symmetry_ctx.irreducible_sector,
-                                                       period_array);
         LIBRPA::build_abacus_rspace_sector_stars(
             symmetry_ctx, coord_frac, this->period_, Rlist, abacus_sector_stars, nullptr);
     }
@@ -1214,7 +1233,7 @@ void G0W0::build_spacetime(
                 "Reducing GW real-space self-energy outputs with ABACUS irreducible sectors\n");
             gw_libri.lri.filter_atom =
                 std::make_shared<OutputOnlyFilter_GW_Symmetry<int, std::array<int, 3>, Tdata>>(
-                    gw_libri.lri.period, libri_irreducible_sector);
+                    gw_libri.lri.period, libri_sigc_irreducible_sector);
         }
         // TODO: template Cs_LRI
         if constexpr (std::is_same<Tdata, std::complex<double>>::value)
@@ -1356,14 +1375,18 @@ void G0W0::build_spacetime(
                     for (const auto &R_Wc : J_RWc.second)
                     {
                         const auto &R = R_Wc.first;
+                        const bool direct_block_empty = is_effectively_zero_matrix_gw(R_Wc.second);
                         // handle the <IJ(R)> block
-                        if constexpr (std::is_same<Tdata, std::complex<double>>::value)
-                            Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
-                                RI::Tensor<std::complex<double>>({nabf_I, nabf_J},
-                                                                 R_Wc.second.sptr());
-                        else
-                            Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
-                                RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
+                        if (!direct_block_empty)
+                        {
+                            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+                                Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
+                                    RI::Tensor<std::complex<double>>({nabf_I, nabf_J},
+                                                                     R_Wc.second.sptr());
+                            else
+                                Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] =
+                                    RI::Tensor<double>({nabf_I, nabf_J}, R_Wc.second.get_real().sptr());
+                        }
                         // cout << "I " << I << " J " << J <<  " R " << R << " tau " << tau << endl; 
                         // cout << Wc_libri[static_cast<int>(I)][{static_cast<int>(J), {R.x, R.y, R.z}}] << endl; 
                         // std::cout << "R_Wc.second: " << R_Wc.second << std::endl;
@@ -1372,6 +1395,7 @@ void G0W0::build_spacetime(
                         if (I == J) continue;
                         auto minusR = (-R) % this->period_;
                         if (J_RWc.second.count(minusR) == 0) continue;
+                        if (is_effectively_zero_matrix_gw(J_RWc.second.at(minusR))) continue;
                         if constexpr (std::is_same<Tdata, std::complex<double>>::value)
                         {
                             const auto Wc_IJmR = J_RWc.second.at(minusR).get_transpose(true);
@@ -1504,7 +1528,6 @@ void G0W0::build_spacetime(
                                     << "_summary.txt";
                                 dump_tensor_map_summary_gw(gf_libri, oss.str());
                             }
-
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
                             stage_tag = format_stage_tag(
                                 "set LibRI G object", itau, ispin, isoc1, isoc2,
@@ -1525,7 +1548,7 @@ void G0W0::build_spacetime(
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
-                            if (use_abacus_sigc_symmetry)
+                            if (restore_abacus_sigc_output)
                             {
                                 gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
                                     gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
@@ -1639,7 +1662,6 @@ void G0W0::build_spacetime(
                                     << "_summary.txt";
                                 dump_tensor_map_summary_gw(gf_libri, oss.str());
                             }
-
                             double wtime_g0w0_cal_sigc = omp_get_wtime();
                             stage_tag = format_stage_tag(
                                 "set LibRI G object", itau, ispin, isoc1, isoc2,
@@ -1660,7 +1682,7 @@ void G0W0::build_spacetime(
                             Profiler::start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri.cal_Sigmas();
                             Profiler::stop("g0w0_build_spacetime_5");
-                            if (use_abacus_sigc_symmetry)
+                            if (restore_abacus_sigc_output)
                             {
                                 gw_libri.Sigmas = restore_abacus_ao_rspace_tensor_map_gw(
                                     gw_libri.Sigmas, symmetry_ctx, abacus_sector_stars);
