@@ -1322,6 +1322,8 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
         const auto q_ibz_internal = klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto k_ibz_frac = kfrac_list.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto blocks_ibz_local = collect_abacus_abf_ibz_blocks_for_q(Wc_q, q_ibz_internal);
+        const auto rotation_atom_pairs =
+            LIBRPA::build_abacus_upper_atom_pair_closure(star, plan.local_irreducible_pairs);
 
         const std::array<double, 3> q_ibz_array{q_ibz_internal.x, q_ibz_internal.y, q_ibz_internal.z};
         auto blocks_ibz = gather_abacus_ibz_blocks_for_local_target_pairs(
@@ -1333,7 +1335,7 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
 
         blocks_ibz = symmetrize_abacus_abf_ibz_blocks(
             ctx, star, abf_star, k_ibz_frac, blocks_ibz, atom_nabf,
-            plan.local_irreducible_pairs);
+            rotation_atom_pairs);
         if (star.members.size() != star_mapping.member_q_bz_keys.size())
         {
             throw std::runtime_error("ABACUS q-star mapping is inconsistent with the loaded full-q keys");
@@ -1354,7 +1356,7 @@ abf_rspace_complex_block_map_t accumulate_abacus_full_wr_from_ibz_q(
             {
                 rotated_blocks = LIBRPA::rotate_abacus_abf_kspace_operator_blocks(
                     ctx, abf_member, blocks_ibz, atom_nabf, star.k_ibz, coord_frac, use_time_reversal,
-                    &plan.local_irreducible_pairs, &q_bz_target_frac);
+                    &rotation_atom_pairs, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {

@@ -197,6 +197,10 @@ std::vector<AbacusFullKpointMemberEntry> build_abacus_full_kpoint_member_list(
     const AbacusSymmetryContext& ctx,
     const std::vector<Vector3_Order<double>>& kfrac_list);
 
+std::set<std::pair<atom_t, atom_t>> build_abacus_upper_atom_pair_closure(
+    const AbacusKStar& star,
+    const std::set<std::pair<atom_t, atom_t>>& target_atom_pairs);
+
 abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     const AbacusSymmetryContext& ctx,
     const AbacusKStarMember& member,

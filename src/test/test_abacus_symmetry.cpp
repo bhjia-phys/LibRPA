@@ -140,6 +140,25 @@ int main()
     assert(ctx.find_abf_type_layout(0, 9).shell_counts.size() == 3);
     assert(ctx.find_abf_type_layout(0, 9).shell_counts[2] == 1);
 
+    LIBRPA::AbacusKStar closure_star;
+    closure_star.star_index = 1;
+    closure_star.k_ibz = {0.0, 0.0, 0.0};
+    LIBRPA::AbacusKStarMember closure_member;
+    closure_member.isym = 1;
+    closure_member.k_bz = {0.0, 0.0, 0.0};
+    closure_member.atom_rotations = {
+        LIBRPA::AbacusKAtomRotation{0, 0, 0, 0, {}},
+        LIBRPA::AbacusKAtomRotation{1, 1, 0, 0, {}},
+        LIBRPA::AbacusKAtomRotation{2, 3, 0, 0, {}},
+        LIBRPA::AbacusKAtomRotation{3, 2, 0, 0, {}}};
+    closure_star.members.push_back(closure_member);
+
+    const auto closure_pairs = LIBRPA::build_abacus_upper_atom_pair_closure(
+        closure_star, {{0, 2}});
+    assert(closure_pairs.size() == 2);
+    assert(closure_pairs.count({0, 2}) == 1);
+    assert(closure_pairs.count({0, 3}) == 1);
+
     const auto full_rotation = LIBRPA::build_abacus_ao_rotation_matrix(
         ctx, 0, ctx.rspace_operations.front().shell_rotations);
     assert(full_rotation.nr == 4);

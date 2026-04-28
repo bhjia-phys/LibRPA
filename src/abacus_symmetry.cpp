@@ -2516,6 +2516,81 @@ Vector3_Order<int> build_abacus_equivalent_kpoint_shift(
     return round_vec3_to_int(k_shift);
 }
 
+std::pair<atom_t, atom_t> canonicalize_abacus_upper_atom_pair(const atom_t atom_i,
+                                                              const atom_t atom_j)
+{
+    return (atom_i <= atom_j) ? std::make_pair(atom_i, atom_j)
+                              : std::make_pair(atom_j, atom_i);
+}
+
+std::vector<const AbacusKAtomRotation*> build_abacus_rotations_by_from(
+    const AbacusKStarMember& member)
+{
+    int max_atom_index = -1;
+    for (const auto& atom_rotation : member.atom_rotations)
+    {
+        max_atom_index = std::max(max_atom_index, atom_rotation.atom_from);
+        max_atom_index = std::max(max_atom_index, atom_rotation.atom_to);
+    }
+    std::vector<const AbacusKAtomRotation*> rotations_by_from(
+        static_cast<std::size_t>(max_atom_index + 1), nullptr);
+    for (const auto& atom_rotation : member.atom_rotations)
+    {
+        rotations_by_from.at(static_cast<std::size_t>(atom_rotation.atom_from)) = &atom_rotation;
+    }
+    return rotations_by_from;
+}
+
+std::set<std::pair<atom_t, atom_t>> build_abacus_upper_atom_pair_closure(
+    const AbacusKStar& star,
+    const std::set<std::pair<atom_t, atom_t>>& target_atom_pairs)
+{
+    std::set<std::pair<atom_t, atom_t>> closure_pairs;
+    for (const auto& atom_pair : target_atom_pairs)
+    {
+        closure_pairs.insert(canonicalize_abacus_upper_atom_pair(
+            atom_pair.first, atom_pair.second));
+    }
+
+    bool changed = true;
+    while (changed)
+    {
+        changed = false;
+        const auto snapshot_pairs = closure_pairs;
+        for (const auto& member : star.members)
+        {
+            const auto rotations_by_from = build_abacus_rotations_by_from(member);
+            for (const auto& atom_pair : snapshot_pairs)
+            {
+                if (static_cast<std::size_t>(atom_pair.first) >= rotations_by_from.size()
+                    || static_cast<std::size_t>(atom_pair.second) >= rotations_by_from.size())
+                {
+                    throw std::runtime_error(
+                        "ABACUS atom-pair closure requested an atom outside the loaded star");
+                }
+                const auto* rot_i = rotations_by_from[static_cast<std::size_t>(atom_pair.first)];
+                const auto* rot_j = rotations_by_from[static_cast<std::size_t>(atom_pair.second)];
+                if (rot_i == nullptr || rot_j == nullptr)
+                {
+                    throw std::runtime_error(
+                        "ABACUS atom-pair closure found an incomplete atom permutation");
+                }
+                const auto source_pair = canonicalize_abacus_upper_atom_pair(
+                    static_cast<atom_t>(rot_i->atom_to),
+                    static_cast<atom_t>(rot_j->atom_to));
+                if (closure_pairs.insert(source_pair).second)
+                {
+                    changed = true;
+                }
+            }
+        }
+    }
+    return closure_pairs;
+}
+
+namespace
+{
+
 std::complex<double> build_abacus_reciprocal_gauge_phase(
     const Vector3_Order<int>& k_shift,
     const atom_t atom,
@@ -2537,6 +2612,8 @@ std::complex<double> build_abacus_reciprocal_gauge_phase(
                   + static_cast<double>(k_shift.z) * tau.z);
     return std::complex<double>(std::cos(phase_arg), std::sin(phase_arg));
 }
+
+} // namespace
 
 abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
     const AbacusSymmetryContext& ctx,
@@ -2577,7 +2654,6 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
 
         throw std::runtime_error("Missing ABF atom block while rotating the ABACUS q-space operator");
     };
-
     // The identity member at the IBZ representative is an exact no-op as long as no
     // target-representative gauge shift is requested. Returning the original/hermitian-completed
     // blocks here avoids rebuilding an M matrix that should mathematically be the identity.
@@ -2682,11 +2758,28 @@ abacus_atom_block_matrix_map_t rotate_abacus_abf_kspace_operator_blocks(
             }
             const auto* rot_j = rotations_by_from[atom_j];
             const auto& M_j = atom_M_blocks[atom_j];
-            const ComplexMatrix block_ibz = get_block_or_hermitian(
-                static_cast<atom_t>(rot_i->atom_to), static_cast<atom_t>(rot_j->atom_to));
+            const auto target_i = static_cast<atom_t>(atom_i);
+            const auto target_j = static_cast<atom_t>(atom_j);
+            const auto source_i = static_cast<atom_t>(rot_i->atom_to);
+            const auto source_j = static_cast<atom_t>(rot_j->atom_to);
+            ComplexMatrix block_ibz;
+            try
+            {
+                block_ibz = get_block_or_hermitian(source_i, source_j);
+            }
+            catch (const std::exception&)
+            {
+                std::ostringstream oss;
+                oss << "Missing ABF atom block while rotating the ABACUS q-space operator: "
+                    << "target_pair=(" << target_i << "," << target_j << "), "
+                    << "source_pair=(" << source_i << "," << source_j << "), "
+                    << "member_isym=" << member.isym << ", "
+                    << "use_time_reversal=" << (use_time_reversal ? "true" : "false");
+                throw std::runtime_error(oss.str());
+            }
 
-            if (block_ibz.nr != static_cast<int>(atom_nabf.at(static_cast<atom_t>(rot_i->atom_to)))
-                || block_ibz.nc != static_cast<int>(atom_nabf.at(static_cast<atom_t>(rot_j->atom_to))))
+            if (block_ibz.nr != static_cast<int>(atom_nabf.at(source_i))
+                || block_ibz.nc != static_cast<int>(atom_nabf.at(source_j)))
             {
                 throw std::runtime_error(
                     "The ABF atom block dimension is incompatible with the rotated source atom pair");
