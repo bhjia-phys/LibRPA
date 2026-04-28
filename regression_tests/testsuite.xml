@@ -7,7 +7,7 @@
       />
       <run ntasks_disable="none"
            nthreads_disable="none"
-           ntasks_enable="none"
+           ntasks_enable="1"
            nthreads_enable="none"
       />
       <validate name="Correlation energy"
@@ -24,8 +24,80 @@
       />
       <run ntasks_disable="none"
            nthreads_disable="none"
-           ntasks_enable="none"
+           ntasks_enable="1"
            nthreads_enable="none"
+      />
+    </testcase>
+    <testcase name="G0W0, BN headwing (abacus input)" directory="g0w0_band_abacus_BN_headwing_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="1"
+           nthreads_enable="none"
+      />
+      <validate name="Spin1-state1-eqp-sequence"
+                regex="^\s*1\s+2\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN shrink (abacus input)" directory="g0w0_band_abacus_BN_shrink_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="1"
+           nthreads_enable="none"
+      />
+      <validate name="Spin1-state1-eqp-sequence"
+                regex="^\s*1\s+2\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN SOC (abacus input)" directory="g0w0_band_abacus_BN_soc_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="1"
+           nthreads_enable="none"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN headwing shrink SOC (abacus input)" directory="g0w0_band_abacus_BN_headwing_shrink_soc_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="1"
+           nthreads_enable="none"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
       />
     </testcase>
     <testcase name="G0W0, MnO2 nspin2 shrink wing (abacus input)" directory="g0w0_band_abacus_MnO2_nspin2_shrink_wing_libri">
@@ -34,7 +106,7 @@
       />
       <run ntasks_disable="none"
            nthreads_disable="none"
-           ntasks_enable="none"
+           ntasks_enable="1"
            nthreads_enable="none"
       />
       <validate name="GW bandgap"
@@ -52,6 +124,152 @@
       <validate name="Spin1-k1-state1-eqp"
                 regex="^\s*1\s+1\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
                 occurences="0"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN symmetry shrink (abacus input)" directory="g0w0_band_abacus_BN_sym_shrink_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="1"
+           nthreads_enable="none"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+  </group>
+
+  <group name="One-shot GW quasi-particle energies (QPE MPI smoke)">
+    <testcase name="G0W0, BN headwing (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_BN_headwing_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="Spin1-state1-eqp-sequence"
+                regex="^\s*1\s+2\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN shrink (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_BN_shrink_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="Spin1-state1-eqp-sequence"
+                regex="^\s*1\s+2\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN SOC (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_BN_soc_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN headwing shrink SOC (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_BN_headwing_shrink_soc_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, MnO2 nspin2 shrink wing (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_MnO2_nspin2_shrink_wing_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="Spin1-k1-state1-eqp"
+                regex="^\s*1\s+1\.00000\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+[-+0-9.Ee]+\s+([-+0-9.Ee]+)\s*$"
+                occurences="0"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+    </testcase>
+    <testcase name="G0W0, BN symmetry shrink (abacus input, MPI4 smoke)" directory="g0w0_band_abacus_BN_sym_shrink_libri">
+      <build require_libri="true"
+             require_greenx_api="false"
+      />
+      <run ntasks_disable="none"
+           nthreads_disable="none"
+           ntasks_enable="4"
+           nthreads_enable="1"
+      />
+      <validate name="GW bandgap"
+                regex="GW bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="EXX bandgap"
+                regex="EXX bandgap\(eV\):\s+([-+]?\d*\.\d+)"
+                comparison="cmp_float.abs_diff(1e-4)"
+      />
+      <validate name="DFT bandgap"
+                regex="DFT bandgap\(eV\):\s+([-+]?\d*\.\d+)"
                 comparison="cmp_float.abs_diff(1e-4)"
       />
     </testcase>
