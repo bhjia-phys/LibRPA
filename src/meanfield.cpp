@@ -1,12 +1,218 @@
 #include "meanfield.h"
 
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <set>
+#include <sstream>
 #include <stdexcept>
 
+#include "abacus_symmetry.h"
 #include "constants.h"
 #include "envs_mpi.h"
+#include "geometry.h"
 #include "lapack_connector.h"
 #include "params.h"
+#include "pbc.h"
+#include "ri.h"
+#include "utils_io.h"
+
+namespace
+{
+
+constexpr double kAbacusKpointTol = 1e-5;
+
+bool nearly_same_kpoint(const Vector3_Order<double>& lhs,
+                        const Vector3_Order<double>& rhs,
+                        const double tol = kAbacusKpointTol)
+{
+    const auto is_same_component = [tol](const double lhs_component, const double rhs_component) {
+        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
+               < tol;
+    };
+    return is_same_component(lhs.x, rhs.x) && is_same_component(lhs.y, rhs.y)
+           && is_same_component(lhs.z, rhs.z);
+}
+
+bool can_restore_gf_from_abacus_symmetry(const LIBRPA::AbacusSymmetryContext& ctx,
+                                         const std::vector<Vector3_Order<double>>& kfrac_list,
+                                         const MeanField& meanfield)
+{
+    return Params::use_abacus_gw_symmetry && ctx.available && ctx.has_ao_shell_layout()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count()
+           && !ctx.kstars.empty() && ctx.kstars.size() == kfrac_list.size()
+           && meanfield.get_n_kpoints() == static_cast<int>(ctx.kstars.size())
+           && ctx.atom_to_type.size() == atom_nw.size()
+           && coord_frac.size() == atom_nw.size();
+}
+
+std::vector<LIBRPA::AbacusKStarGridMappingEntry> build_abacus_full_k_mapping_for_restore(
+    const LIBRPA::AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& kfrac_list)
+{
+    if (!Params::use_abacus_gw_symmetry || !ctx.available || ctx.kstars.empty())
+    {
+        return {};
+    }
+    if (static_cast<int>(klist.size()) >= get_full_bz_kpoint_count())
+    {
+        return {};
+    }
+    if (ctx.kstars.size() != kfrac_list.size())
+    {
+        throw std::runtime_error(
+            "ABACUS full-k restore mapping is inconsistent with the loaded IBZ k-point count");
+    }
+    return LIBRPA::build_abacus_kstar_grid_mapping(ctx, klist, kfrac_list, map_irk_ks);
+}
+
+std::vector<double> build_gf_kpoint_weights(
+    const LIBRPA::AbacusSymmetryContext& ctx,
+    const std::vector<Vector3_Order<double>>& kfrac_list,
+    const matrix& occupations,
+    const int n_bands,
+    const int n_spins,
+    const bool use_soc,
+    const bool use_abacus_gw_symmetry)
+{
+    std::vector<double> kpoint_weights(kfrac_list.size(), 0.0);
+    if (!use_abacus_gw_symmetry)
+    {
+        const double uniform_weight = 1.0 / static_cast<double>(kfrac_list.size());
+        std::fill(kpoint_weights.begin(), kpoint_weights.end(), uniform_weight);
+        return kpoint_weights;
+    }
+
+    const double nk_full = static_cast<double>(ctx.count_kstar_members());
+    if (nk_full <= 0.0)
+    {
+        throw std::runtime_error("ABACUS k-star metadata does not contain any full-BZ members");
+    }
+
+    for (std::size_t ik_ibz = 0; ik_ibz != kfrac_list.size(); ++ik_ibz)
+    {
+        const auto& star = find_abacus_kstar_for_ibz_kpoint(ctx, kfrac_list[ik_ibz]);
+        const double geometric_weight = static_cast<double>(star.members.size()) / nk_full;
+        kpoint_weights[ik_ibz] = geometric_weight;
+
+        if (Params::debug && LIBRPA::envs::mpi_comm_global_h.is_root())
+        {
+            double inferred_weight = 0.0;
+            for (int ib = 0; ib != n_bands; ++ib)
+            {
+                const double weight_single_spin =
+                    use_soc ? occupations(static_cast<int>(ik_ibz), ib)
+                            : occupations(static_cast<int>(ik_ibz), ib) * (0.5 * n_spins);
+                inferred_weight = std::max(inferred_weight, weight_single_spin);
+            }
+            if (inferred_weight > 0.0 && std::abs(inferred_weight - geometric_weight) > 1e-12)
+            {
+                LIBRPA::utils::lib_printf(
+                    "ABACUS GW symmetry weight check: ik_ibz %3zu inferred = %20.12f geometric = "
+                    "%20.12f\n",
+                    ik_ibz, inferred_weight, geometric_weight);
+            }
+        }
+    }
+    return kpoint_weights;
+}
+
+std::string format_debug_double(const double value)
+{
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6) << value;
+    std::string text = oss.str();
+    std::replace(text.begin(), text.end(), '-', 'm');
+    std::replace(text.begin(), text.end(), '.', 'p');
+    return text;
+}
+
+void maybe_dump_gf_tau_R_debug(const ComplexMatrix& gf_tau_R,
+                               const int ispin,
+                               const int isoc1,
+                               const int isoc2,
+                               const double tau,
+                               const Vector3_Order<int>& R,
+                               const bool symmetry_restored)
+{
+    if (!Params::output_abacus_gw_gf)
+    {
+        return;
+    }
+
+    const bool is_gamma_R = R.x == 0 && R.y == 0 && R.z == 0;
+    const int manhattan_norm = std::abs(R.x) + std::abs(R.y) + std::abs(R.z);
+    const bool is_nearest_neighbor_R = manhattan_norm == 1;
+
+    // Always dump the on-site block at R = 0. When debug mode is enabled,
+    // also dump the nearest-neighbor blocks so the full real-space symmetry
+    // restoration can be checked beyond the Gamma-cell contribution.
+    if (!is_gamma_R && !(Params::debug && is_nearest_neighbor_R))
+    {
+        return;
+    }
+
+    static std::set<std::string> dumped_tags;
+    std::ostringstream tag;
+    tag << (symmetry_restored ? "symmetry_restored" : "full_kgrid")
+        << "_spin" << ispin << "_soc" << isoc1 << "_" << isoc2
+        << "_tau_" << format_debug_double(tau)
+        << "_R_" << R.x << "_" << R.y << "_" << R.z;
+    if (!dumped_tags.insert(tag.str()).second)
+    {
+        return;
+    }
+
+    print_complex_matrix_mm(
+        gf_tau_R, Params::output_dir + "abacus_gf_" + tag.str() + ".mtx", 1e-14, false);
+}
+
+void maybe_dump_gf_k_debug(const ComplexMatrix& gf_k,
+                           const std::string& source_tag,
+                           const int ispin,
+                           const int isoc1,
+                           const int isoc2,
+                           const double tau,
+                           const Vector3_Order<double>& kfrac,
+                           const std::string& extra_tag = "")
+{
+    if (!Params::debug || !Params::output_abacus_gw_gf
+        || !LIBRPA::envs::mpi_comm_global_h.is_root())
+    {
+        return;
+    }
+
+    // Keep the k-space diagnostic focused on the two smallest positive/negative
+    // imaginary times, where the current symmetry mismatch is most visible.
+    if (std::abs(tau) >= 1.0)
+    {
+        return;
+    }
+
+    static std::set<std::string> dumped_tags;
+    std::ostringstream tag;
+    tag << source_tag;
+    if (!extra_tag.empty())
+    {
+        // Keep an explicit per-k-point suffix in the debug filename so that
+        // symmetry-restored and full-k-grid Green's functions can be compared
+        // one-to-one even when different stars contain the same formatted k tag.
+        tag << "_" << extra_tag;
+    }
+    tag << "_spin" << ispin << "_soc" << isoc1 << "_" << isoc2 << "_tau_"
+        << format_debug_double(tau) << "_kx_" << format_debug_double(kfrac.x) << "_ky_"
+        << format_debug_double(kfrac.y) << "_kz_" << format_debug_double(kfrac.z);
+    if (!dumped_tags.insert(tag.str()).second)
+    {
+        return;
+    }
+
+    print_complex_matrix_mm(
+        gf_k, Params::output_dir + "abacus_gf_k_" + tag.str() + ".mtx", 1e-14, false);
+}
+
+} // namespace
 
 void MeanField::resize(int ns, int nk, int nb, int nao)
 {
@@ -120,30 +326,32 @@ double MeanField::get_E_min_max(double &emin, double &emax) const
 
 double MeanField::get_band_gap() const
 {
+    constexpr double occupation_tol = 1e-8;
     double gap = 1e6;
     double homo = -1e6, lumo = 1e6;
-    // FIXME: should be nspins/nkpoints?
-    double midpoint = 1.0 / (n_spins * n_kpoints);
     for (int is = 0; is != n_spins; is++)
     {
-        // print_matrix("mf.eskb: ",this->eskb[is]);
         for (int ik = 0; ik != n_kpoints; ik++)
         {
             int homo_level = -1;
             for (int n = 0; n != n_bands; n++)
             {
-                if (wg[is](ik, n) >= midpoint)
+                // Use an absolute occupation tolerance instead of a uniform-k-point
+                // midpoint so that symmetry-reduced IBZ weights are handled correctly.
+                if (wg[is](ik, n) > occupation_tol)
                 {
                     homo_level = n;
                 }
             }
-            // cout<<"|is ik: "<<is<<" "<<ik<<"  homo_level: "<<homo_level<<"   eskb0:
-            // "<<eskb[is](ik, homo_level)<<"  eskb1: "<<eskb[is](ik, homo_level + 1)<<endl;
-            lumo = eskb[is](ik, homo_level + 1) < lumo ? eskb[is](ik, homo_level + 1) : lumo;
             if (homo_level != -1)
+            {
                 homo = eskb[is](ik, homo_level) > homo ? eskb[is](ik, homo_level) : homo;
+            }
+            if (homo_level + 1 < n_bands)
+            {
+                lumo = eskb[is](ik, homo_level + 1) < lumo ? eskb[is](ik, homo_level + 1) : lumo;
+            }
 
-            // cout<<"   homo: "<<homo<<"  lumo: "<<lumo<<endl;
         }
     }
     gap = lumo - homo;
@@ -210,17 +418,29 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
     std::vector<double> imagtimes, const std::vector<Vector3_Order<int>> &Rs) const
 {
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> gf_tau_R;
+    const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+    const bool use_abacus_gw_symmetry =
+        can_restore_gf_from_abacus_symmetry(symmetry_ctx, kfrac_list, *this);
+    const auto kpoint_weights =
+        build_gf_kpoint_weights(symmetry_ctx, kfrac_list, wg[ispin], n_bands, n_spins,
+                                Params::use_soc, use_abacus_gw_symmetry);
+
     // NOTE: occupation must be copied here, not reference
     auto wg_empty = wg[ispin];
     // cout << "In get_gf_cplx_imagtimes_Rs ispin " << ispin << endl << wg_empty << endl;
-    for (int i = 0; i != wg_empty.size; i++)
+    for (int ik = 0; ik != n_kpoints; ++ik)
     {
-        if (Params::use_soc)
-            wg_empty.c[i] = 1.0 / n_kpoints - wg_empty.c[i];
-        else
-            wg_empty.c[i] = 1.0 / n_kpoints - wg_empty.c[i] * (0.5 * n_spins);
-        if (wg_empty.c[i] < 0) wg_empty.c[i] = 0;
-        // printf("%d %f\n", i, wg_empty.c[i]);
+        for (int ib = 0; ib != n_bands; ++ib)
+        {
+            if (Params::use_soc)
+                wg_empty(ik, ib) = kpoint_weights[ik] - wg_empty(ik, ib);
+            else
+                wg_empty(ik, ib) = kpoint_weights[ik] - wg_empty(ik, ib) * (0.5 * n_spins);
+            if (wg_empty(ik, ib) < 0)
+            {
+                wg_empty(ik, ib) = 0;
+            }
+        }
     }
     // cout << "wg_empty " << wg_empty << endl;
     matrix wg_occ;
@@ -243,24 +463,170 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
             if (scale.c[ie] > 0) scale.c[ie] = 0;
             scale.c[ie] = std::exp(scale.c[ie]) * prefac_occ.c[ie];
         }
-        // ofs_myid cout << "tau " << tau << endl << scale << endl;
-        for (int ik = 0; ik != n_kpoints; ik++)
+        const double tau_sign = tau > 0 ? 1.0 : -1.0;
+        if (Params::output_abacus_gw_gf && use_abacus_gw_symmetry && tau > 0
+            && LIBRPA::envs::mpi_comm_global_h.is_root())
         {
-            auto scaled_wfc_conj = conj(wfc[ispin][isoc2][ik]);
-            for (int ib = 0; ib != n_bands; ib++)
-                LapackConnector::scal(n_aos, scale(ik, ib), scaled_wfc_conj.c + n_aos * ib, 1);
-            const auto gf_k = transpose(wfc[ispin][isoc1][ik], false) * scaled_wfc_conj;
-            for (const auto &R : Rs)
+            static std::set<double> dumped_positive_taus;
+            if (dumped_positive_taus.insert(tau).second)
             {
-                double ang = -kfrac_list[ik] * R * TWO_PI;
-                auto kphase = std::complex<double>(cos(ang), sin(ang));
-                auto phase = kphase * (tau > 0 ? 1.0 : -1.0);
-                if (gf_tau_R.count(tau) == 0 || gf_tau_R.at(tau).count(R) == 0)
+                double prefactor_sum = 0.0;
+                for (int ik = 0; ik != n_kpoints; ++ik)
                 {
-                    gf_tau_R[tau][R].create(n_aos, n_aos);
+                    for (int ib = 0; ib != n_bands; ++ib)
+                    {
+                        prefactor_sum += prefac_occ(ik, ib);
+                    }
                 }
-                gf_tau_R[tau][R] += gf_k * phase;
+                LIBRPA::utils::lib_printf(
+                    "ABACUS GW symmetry prefactor check: tau = %12.6f, prefactor_sum = "
+                    "%20.12f\n",
+                    tau, prefactor_sum);
+                for (int ik = 0; ik != n_kpoints; ++ik)
+                {
+                    LIBRPA::utils::lib_printf("  ik_ibz %3d single-spin k weight = %20.12f\n", ik,
+                                              kpoint_weights[static_cast<std::size_t>(ik)]);
+                }
             }
+        }
+
+        // Restore the full-k Green's function from the ABACUS IBZ k-stars when available.
+        // The k-dependent AO matrix G(k, i*tau) transforms with the same Bloch rotation matrix
+        // as D(k), because it is also built from c_{nk} c_{nk}^* times a symmetry-invariant
+        // scalar weight.
+        if (use_abacus_gw_symmetry)
+        {
+            const int nsym_space = static_cast<int>(symmetry_ctx.rspace_operations.size());
+            const auto kstar_grid_mapping =
+                build_abacus_full_k_mapping_for_restore(symmetry_ctx, kfrac_list);
+            for (int ik_ibz = 0; ik_ibz != n_kpoints; ++ik_ibz)
+            {
+                auto scaled_wfc_conj = conj(wfc[ispin][isoc2][ik_ibz]);
+                for (int ib = 0; ib != n_bands; ib++)
+                {
+                    LapackConnector::scal(
+                        n_aos, scale(ik_ibz, ib), scaled_wfc_conj.c + n_aos * ib, 1);
+                }
+                if (Params::nbands_G >= 0)
+                {
+                    for (int ib = Params::nbands_G; ib != n_bands; ++ib)
+                    {
+                        for (int iao = 0; iao != n_aos; ++iao)
+                        {
+                            scaled_wfc_conj(ib, iao) = 0.0;
+                        }
+                    }
+                }
+                const ComplexMatrix gf_k_ibz =
+                    transpose(wfc[ispin][isoc1][ik_ibz], false) * scaled_wfc_conj;
+                const auto& k_ibz = kfrac_list[ik_ibz];
+                const auto& star = find_abacus_kstar_for_ibz_kpoint(symmetry_ctx, k_ibz);
+                const auto& mapping_entry =
+                    kstar_grid_mapping.at(static_cast<std::size_t>(ik_ibz));
+                const double star_factor = 1.0 / static_cast<double>(star.members.size());
+                if (mapping_entry.member_q_bz_keys.size() != star.members.size())
+                {
+                    throw std::runtime_error(
+                        "ABACUS full-k restore mapping is inconsistent with k-star members");
+                }
+
+                maybe_dump_gf_k_debug(gf_k_ibz,
+                                      "ibz",
+                                      ispin,
+                                      isoc1,
+                                      isoc2,
+                                      tau,
+                                      k_ibz,
+                                      "star" + std::to_string(star.star_index) + "_ikibz"
+                                          + std::to_string(ik_ibz));
+
+                for (std::size_t imember = 0; imember < star.members.size(); ++imember)
+                {
+                    const auto& member = star.members[imember];
+                    const auto k_bz_target_vec = latvec * mapping_entry.member_q_bz_keys[imember];
+                    const Vector3_Order<double> k_bz_target{
+                        k_bz_target_vec.x, k_bz_target_vec.y, k_bz_target_vec.z};
+                    // Always go through the ABACUS restore helper here. Even the identity member
+                    // may need a reciprocal-lattice gauge shift when LibRPA stores an equivalent
+                    // full-k representative outside the sidecar convention.
+                    const bool use_time_reversal = member.isym >= nsym_space;
+                    const ComplexMatrix gf_k_bz = LIBRPA::rotate_abacus_kspace_matrix(
+                        symmetry_ctx, member, gf_k_ibz, atom_nw, k_ibz, coord_frac,
+                        use_time_reversal, &k_bz_target);
+
+                    maybe_dump_gf_k_debug(gf_k_bz,
+                                          "restored",
+                                          ispin,
+                                          isoc1,
+                                          isoc2,
+                                          tau,
+                                          k_bz_target,
+                                          "star" + std::to_string(star.star_index) + "_ikibz"
+                                              + std::to_string(ik_ibz) + "_member"
+                                              + std::to_string(imember) + "_isym"
+                                              + std::to_string(member.isym));
+
+                    for (const auto& R : Rs)
+                    {
+                        const double ang = -k_bz_target * R * TWO_PI;
+                        const auto kphase = std::complex<double>(std::cos(ang), std::sin(ang));
+                        if (gf_tau_R.count(tau) == 0 || gf_tau_R.at(tau).count(R) == 0)
+                        {
+                            gf_tau_R[tau][R].create(n_aos, n_aos);
+                        }
+                        gf_tau_R[tau][R] += gf_k_bz * (star_factor * tau_sign * kphase);
+                    }
+                }
+            }
+        }
+        else
+        {
+            // ofs_myid cout << "tau " << tau << endl << scale << endl;
+            for (int ik = 0; ik != n_kpoints; ik++)
+            {
+                auto scaled_wfc_conj = conj(wfc[ispin][isoc2][ik]);
+                for (int ib = 0; ib != n_bands; ib++)
+                    LapackConnector::scal(n_aos, scale(ik, ib), scaled_wfc_conj.c + n_aos * ib, 1);
+                if (Params::nbands_G >= 0)
+                {
+                    for (int ib = Params::nbands_G; ib != n_bands; ++ib)
+                    {
+                        for (int iao = 0; iao != n_aos; ++iao)
+                        {
+                            scaled_wfc_conj(ib, iao) = 0.0;
+                        }
+                    }
+                }
+                const auto gf_k = transpose(wfc[ispin][isoc1][ik], false) * scaled_wfc_conj;
+                maybe_dump_gf_k_debug(gf_k,
+                                      "full_kgrid",
+                                      ispin,
+                                      isoc1,
+                                      isoc2,
+                                      tau,
+                                      kfrac_list[ik],
+                                      "ik" + std::to_string(ik));
+                for (const auto &R : Rs)
+                {
+                    double ang = -kfrac_list[ik] * R * TWO_PI;
+                    auto kphase = std::complex<double>(cos(ang), sin(ang));
+                    auto phase = kphase * tau_sign;
+                    if (gf_tau_R.count(tau) == 0 || gf_tau_R.at(tau).count(R) == 0)
+                    {
+                        gf_tau_R[tau][R].create(n_aos, n_aos);
+                    }
+                    gf_tau_R[tau][R] += gf_k * phase;
+                }
+            }
+        }
+        for (const auto& R : Rs)
+        {
+            if (gf_tau_R.count(tau) == 0 || gf_tau_R.at(tau).count(R) == 0)
+            {
+                continue;
+            }
+            maybe_dump_gf_tau_R_debug(
+                gf_tau_R.at(tau).at(R), ispin, isoc1, isoc2, tau, R, use_abacus_gw_symmetry);
         }
         // zmy debug, print
         // for (const auto &R: Rs)

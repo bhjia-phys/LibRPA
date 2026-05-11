@@ -60,23 +60,14 @@ std::vector<double> compute_exx_orbital_energy_(int i_state_low, int i_state_hig
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+    const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
     // TODO: kfrac_list should depend on i_kpoints_compute
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
-    if (Params::use_shrink_abfs)
-    {
-        if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_shrinked_data, Rlist, VR);
-        else
-            exx.build<double>(Cs_shrinked_data, Rlist, VR);
-    }
+    const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
+    if (Params::use_soc)
+        exx.build<std::complex<double>>(exx_cs, Rlist, VR);
     else
-    {
-        if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
-        else
-            exx.build<double>(Cs_data, Rlist, VR);
-    }
+        exx.build<double>(exx_cs, Rlist, VR);
     exx.build_KS_kgrid();
 
     for (int isp = 0; isp != meanfield.get_n_spins(); isp++)
@@ -87,7 +78,7 @@ std::vector<double> compute_exx_orbital_energy_(int i_state_low, int i_state_hig
             for (int ib = i_state_low; ib < i_state_high; ib++)
             {
                 const int index =
-                    isp * n_kpoints_task * n_states_calc + ik * n_states_calc + ib - i_state_low;
+                    isp * n_kpoints_task * n_states_calc + i_ik * n_states_calc + ib - i_state_low;
                 exx_state[index] = exx.Eexx[isp][ik][ib];
             }
         }

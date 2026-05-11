@@ -1,8 +1,8 @@
 #include "utils_timefreq.h"
 
 #include "envs_mpi.h"
+#include "params.h"
 #include "utils_io.h"
-
 
 namespace LIBRPA
 {
@@ -10,7 +10,8 @@ namespace LIBRPA
 namespace utils
 {
 
-TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_str, const MeanField &mf)
+TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_str,
+                                const MeanField &mf)
 {
     TFGrids tfg(ngrids);
     auto grid_type = TFGrids::get_grid_type(grid_type_str);
@@ -26,6 +27,20 @@ TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_st
         case (TFGrids::GRID_TYPES::Minimax):
         {
             mf.get_E_min_max(emin, emax);
+            if (Params::minimax_min_gap > 0.0)
+            {
+                emin = Params::minimax_min_gap;
+            }
+            if (Params::minimax_max_transition > 0.0)
+            {
+                emax = Params::minimax_max_transition;
+            }
+            if (envs::mpi_comm_global_h.is_root())
+            {
+                LIBRPA::utils::lib_printf(
+                    "Minimax energy window: emin = %20.12f, emax = %20.12f, erange = %20.12f\n",
+                    emin, emax, emax / emin);
+            }
             break;
         }
         case (TFGrids::GRID_TYPES::EvenSpaced):
@@ -43,8 +58,9 @@ TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_st
             break;
         }
         default:
-        // Other cases are handled within TFGrids
-        {}
+            // Other cases are handled within TFGrids
+            {
+            }
     }
 
     auto retval = tfg.generate(grid_type, emin, eintv, emax, tmin, tintv);
@@ -59,8 +75,9 @@ TFGrids generate_timefreq_grids(unsigned ngrids, const std::string &grid_type_st
             }
         }
         default:
-        // Other cases are handled within TFGrids
-        {}
+            // Other cases are handled within TFGrids
+            {
+            }
     }
 
     return tfg;

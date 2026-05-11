@@ -294,20 +294,38 @@ void collect_block_from_ALL_IJ_Tensor(matrix_m<Tdst> &mat_lo, const LIBRPA::Arra
             int j_gl = ad.indx_l2g_c(jlo);
 
             atbasis.get_local_index(j_gl, J_loc, j_ab);
-            // Tdst temp;
-            //  LIBRPA::utils::lib_printf("i_gl I_loc i_ab %d %d %d j_gl J_loc j_ab %d %d %d\n",
-            //  i_gl, I_loc, i_ab, j_gl, J_loc, j_ab);
+            // Missing IJ blocks can legitimately appear after threshold filtering or
+            // symmetry-reduced communication. Treat those absent blocks as zeros instead of
+            // forcing callers to materialize explicit zero tensors for every dropped pair.
             if (I_loc <= J_loc)
             {
-                tmp_loc_row[jlo] = TMAP.at(I_loc).at({J_loc, cell})(i_ab, j_ab);
+                const auto atom_i = TMAP.find(I_loc);
+                if (atom_i != TMAP.end())
+                {
+                    const auto block_ij = atom_i->second.find({J_loc, cell});
+                    if (block_ij != atom_i->second.end())
+                    {
+                        tmp_loc_row[jlo] = block_ij->second(i_ab, j_ab);
+                        continue;
+                    }
+                }
             }
             else
             {
-                Tdst tmp_ele;
-                tmp_ele = TMAP.at(J_loc).at({I_loc, cell})(j_ab, i_ab);
-                if (conjugate) tmp_ele = get_conj(tmp_ele);
-                tmp_loc_row[jlo] = tmp_ele;
+                const auto atom_j = TMAP.find(J_loc);
+                if (atom_j != TMAP.end())
+                {
+                    const auto block_ji = atom_j->second.find({I_loc, cell});
+                    if (block_ji != atom_j->second.end())
+                    {
+                        Tdst tmp_ele = block_ji->second(j_ab, i_ab);
+                        if (conjugate) tmp_ele = get_conj(tmp_ele);
+                        tmp_loc_row[jlo] = tmp_ele;
+                        continue;
+                    }
+                }
             }
+            tmp_loc_row[jlo] = Tdst{};
         }
         Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
         omp_set_lock(&mat_lock);
