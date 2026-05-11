@@ -21,6 +21,7 @@ set_target_properties(rpa_lib PROPERTIES
 configure_file(envs_cmake.cpp.in envs_cmake.cpp)
 list(APPEND lib_sources
         abacus_symmetry.cpp
+        hartree.cpp
         # aperiodic_chi0.cpp
         analycont.cpp
         app_rpa.cpp
@@ -61,7 +62,6 @@ list(APPEND lib_sources
         utils_blacs.cpp
         utils_timefreq.cpp
         vector3_order.cpp
-        hartree.cpp
         )
 
 if(USE_GREENX_API)

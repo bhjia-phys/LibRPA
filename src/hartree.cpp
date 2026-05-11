@@ -14,8 +14,8 @@
 #include "utils_blacs.h"
 #include "vector3_order.h"
 #ifdef LIBRPA_USE_LIBRI
-#include <RI/physics/Hartree.h>
-#include <RI/ri/Cell_Nearest.h>
+#include <RI/physics/Hartree.h>  // FIXME: needs LibRI with Hartree module
+#include <RI/ri/Cell_Nearest.h>  // FIXME: needs LibRI with Cell_Nearest
 #else
 #include "libri_stub.h"
 #endif
