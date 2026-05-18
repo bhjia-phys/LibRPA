@@ -39,6 +39,7 @@ list(APPEND lib_sources
         envs_blacs.cpp
         epsilon.cpp
         exx.cpp
+        hartree.cpp
         fitting.cpp
         geometry.cpp
         gw.cpp

@@ -203,6 +203,14 @@ void parse_inputfile_to_params(const std::string &fn)
     parser.parse_bool("output_gw_sigc_mat_rf", Params::output_gw_sigc_mat_rf, false, flag);
     parser.parse_bool("output_hamgnn", Params::output_hamgnn, false, flag);
     parser.parse_int("nbands_G", Params::nbands_G, -1, flag);
+    parser.parse_bool("qsgw_restart", Params::qsgw_restart, false, flag);
+    parser.parse_string("qsgw_restart_dir", Params::qsgw_restart_dir, "", flag);
+    if (!Params::qsgw_restart_dir.empty())
+    {
+        Params::qsgw_restart_dir = check_dirpath(Params::qsgw_restart_dir);
+    }
+    parser.parse_int("qsgw_restart_iteration", Params::qsgw_restart_iteration, -1, flag);
+    parser.parse_int("qsgw_checkpoint_every", Params::qsgw_checkpoint_every, 1, flag);
 }
 
 const std::string input_filename = "librpa.in";

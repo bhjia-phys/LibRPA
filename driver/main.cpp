@@ -32,6 +32,7 @@
 #include "utils_mpi_io.h"
 // #include "task_qsgwA.h"
 #include "task_qsgw_band.h"
+#include "task_qsgw_band_0.h"
 // #include "task_hf_band.h"
 // #include "task_scRPA.h"
 // #include "task_scRPA_band.h"
@@ -55,6 +56,7 @@ static bool task_requires_pyatb_headwing(const LIBRPA::task_t task)
         case LIBRPA::task_t::G0W0_band:
         case LIBRPA::task_t::QSGW:
         case LIBRPA::task_t::QSGW_band:
+        case LIBRPA::task_t::QSGW_band0:
         case LIBRPA::task_t::Wc_Rf:
             return true;
         default:
@@ -222,6 +224,8 @@ int main(int argc, char **argv)
     //     task = task_t::QSGWA;
     else if (task_lower == "qsgw_band")
         task = task_t::QSGW_band;
+    else if (task_lower == "qsgw_band0" || task_lower == "qsgw_band_0")
+        task = task_t::QSGW_band0;
     // else if (task_lower == "hf_band")
     //     task = task_t::HF_band;
     // else if (task_lower == "scrpa")
@@ -236,6 +240,26 @@ int main(int argc, char **argv)
         task = task_t::test;
     else
         throw std::logic_error("Unknown task (" + Params::task + "). Please check your input");
+
+    bool qsgw_band0_debug_ks_export_only = false;
+    if (task == task_t::QSGW_band0)
+    {
+        bool debug_export_ks_hamiltonian_for_pyatb = false;
+        bool debug_export_ks_hamiltonian_only = false;
+        int flag = 0;
+        if (mpi_comm_global_h.is_root())
+        {
+            InputFile inputf;
+            auto parser = inputf.load(input_filename, false);
+            parser.parse_bool("qsgw_debug_export_ks_hamiltonian_for_pyatb",
+                              debug_export_ks_hamiltonian_for_pyatb, false, flag);
+            parser.parse_bool("qsgw_debug_export_ks_hamiltonian_only",
+                              debug_export_ks_hamiltonian_only, false, flag);
+            qsgw_band0_debug_ks_export_only =
+                debug_export_ks_hamiltonian_for_pyatb && debug_export_ks_hamiltonian_only;
+        }
+        mpi_comm_global_h.broadcast(qsgw_band0_debug_ks_export_only, 0);
+    }
 
     if (mpi_comm_global_h.is_root())
     {
@@ -359,6 +383,19 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     Profiler::stop("driver_read_eigenvector");
+
+    if (qsgw_band0_debug_ks_export_only)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            lib_printf("QSGW band0 debug-only KS H(R) export skips Cs/Vq initialization\n");
+        }
+        std::map<Vector3_Order<double>, ComplexMatrix> sinvS;
+        task_qsgw_band_0(sinvS);
+        finalize(true);
+        return 0;
+    }
+
     get_natom_ncell_from_first_Cs_file(natom, ncell, driver_params.input_dir);
     tot_atpair = generate_atom_pair_from_nat(natom, false);
     tot_atpair_ordered = generate_atom_pair_from_nat(natom, true);
@@ -607,6 +644,10 @@ int main(int argc, char **argv)
     else if (task == task_t::QSGW_band)
     {
         task_qsgw_band(sinvS);
+    }
+    else if (task == task_t::QSGW_band0)
+    {
+        task_qsgw_band_0(sinvS);
     }
     // else if (task == task_t::HF_band)
     // {

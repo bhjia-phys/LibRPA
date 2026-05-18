@@ -157,6 +157,18 @@ struct Params
     //! sum of nbands in Green's function. nbands < 0 meanns sum over all states.
     static int nbands_G;
 
+    //! enable restart from a saved QSGW checkpoint
+    static bool qsgw_restart;
+
+    //! checkpoint root used for QSGW restart. Empty means use current output_dir/qsgw_checkpoints/
+    static std::string qsgw_restart_dir;
+
+    //! restart from the requested iteration. Non-positive means use latest checkpoint
+    static int qsgw_restart_iteration;
+
+    //! write a QSGW checkpoint every N iterations. Non-positive disables periodic checkpoints
+    static int qsgw_checkpoint_every;
+
     static void check_consistency();
     static void print();
 };

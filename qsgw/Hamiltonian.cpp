@@ -1,6 +1,7 @@
 #include "Hamiltonian.h"
 #include "fermi_energy_occupation.h"
 #include "fermi_energy_occupation.h"
+#include <algorithm>
 #include <iostream>
 #include "pbc.h"
 #include "constants.h"
@@ -245,6 +246,109 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
     return H0_GW_all;
 }
 
+
+std::map<int, std::map<int, Matz>> construct_H0_GW_cut(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & vxc_all,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_bands,
+    int n_unoccupied_keep,
+    int cut_mode,
+    double cut_shift_ha) {
+
+    std::map<int, std::map<int, Matz>> H0_GW_all;
+    const double efermi = meanfield.get_efermi();
+
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
+            Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
+            Matz H0_GW_spin_k = H_KS_all.at(ispin).at(ikpt) - vxc_all.at(ispin).at(ikpt) + Vxc_construct_ispin_ik;
+            const Matz H0_KS_spin_k = H_KS_all.at(ispin).at(ikpt);
+
+            if (cut_mode != 0)
+            {
+                int N0 = 0;
+                for (int i = 0; i < n_bands; ++i)
+                {
+                    const double energy_i = meanfield.get_eigenvals()[ispin](ikpt, i);
+                    if (energy_i < efermi)
+                    {
+                        N0 = N0 + 1;
+                    }
+                }
+
+                const int active_band_limit = std::min(n_bands, N0 + std::max(0, n_unoccupied_keep));
+                for (int i = 0; i < n_bands; ++i)
+                {
+                    for (int j = 0; j < n_bands; ++j)
+                    {
+                        if ((i >= active_band_limit) || (j >= active_band_limit))
+                        {
+                            if (i == j)
+                            {
+                                H0_GW_spin_k(i, j) = H0_KS_spin_k(i, j)
+                                                    + (cut_mode == 2 ? cut_shift_ha : 0.0);
+                            }
+                            else
+                            {
+                                H0_GW_spin_k(i, j) = 0.0;
+                            }
+                        }
+                    }
+                }
+            }
+            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;
+        }
+    }
+
+    return H0_GW_all;
+}
+
+std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & H_DFT_nao,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_bands) {
+
+    std::map<int, std::map<int, Matz>> H0_GW_all;
+    const int n_aos = meanfield.get_n_aos();
+    const int n_soc = meanfield.get_n_soc();
+
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            Matz Hexx_ispin_ik = Hexx_all.at(ispin).at(ikpt);
+            Matz Vxc_construct_ispin_ik = Hexx_ispin_ik + Vc_all.at(ispin).at(ikpt);
+            Matz wfc1(n_bands, n_aos * n_soc, MAJOR::COL);
+            for (int ib1 = 0; ib1 < n_bands; ++ib1)
+            {
+                for (int isoc = 0; isoc < n_soc; isoc++)
+                {
+                    for (int iao = 0; iao < n_aos; iao++)
+                    {
+                        const int ib2 = iao * n_soc + isoc;
+                        wfc1(ib1, ib2) = meanfield.get_eigenvectors()[ispin][isoc][ikpt](ib1, iao);
+                        meanfield.get_eigenvectors0()[ispin][isoc][ikpt](ib1, iao) = wfc1(ib1, ib2);
+                    }
+                }
+            }
+            Matz H_DFT_spin_k = conj(wfc1) * H_DFT_nao.at(ispin).at(ikpt) * transpose(wfc1);
+            Matz H0_GW_spin_k = H_DFT_spin_k + Vxc_construct_ispin_ik;
+            H0_GW_all[ispin][ikpt] = H0_GW_spin_k;
+        }
+    }
+
+    return H0_GW_all;
+}
+
 std::map<int, std::map<int, Matz>> construct_H0_HF(
     MeanField& meanfield,
     const std::map<int, std::map<int, Matz>> & H_KS_all,
@@ -382,6 +486,31 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
     }
     std::cout << "所有本征值已存储到 MeanField 对象。" << std::endl;
 }
+
+void diagonalize_and_store_fixed_basis(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
+                           int n_spins, int n_kpoints, int dimension)
+{
+    for (int ispin = 0; ispin < n_spins; ++ispin)
+    {
+        for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+        {
+            const auto &h = H0_GW_all.at(ispin).at(ikpt).copy();
+            std::vector<double> w;
+            Matz eigvec_KS;
+            eigsh(h, w, eigvec_KS);
+
+            for (int ib = 0; ib < dimension; ++ib)
+            {
+                meanfield.get_eigenvals()[ispin](ikpt, ib) = w[ib];
+            }
+
+            // qsgw_band0 keeps later Green's-function and self-energy builds in the
+            // input KS basis; only the fixed-basis eigenvalues are updated here.
+        }
+    }
+    std::cout << "所有本征值已存储到 MeanField 对象。" << std::endl;
+}
+
 
 
 // 

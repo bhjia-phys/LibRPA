@@ -1,4 +1,4 @@
-#include "task_qsgw_band.h"
+#include "task_qsgw_band_0.h"
 
 #include "task_qsgw.h"
 // 标准库头文件
@@ -32,6 +32,7 @@
 #include "exx.h"                      // Exact exchange相关
 #include "fermi_energy_occupation.h"  // 费米能和占据数计算相关
 #include "gw.h"                       // GW计算相关
+#include "hartree.h"
 #include "inputfile.h"
 #include "matrix.h"
 #include "meanfield.h"   // MeanField类相关
@@ -103,29 +104,95 @@ bool load_iteration_history_file_band(const std::string &path, const int max_ite
     return !iteration_numbers.empty();
 }
 
+void restore_band_meanfield_from_qsgw_band_files(MeanField &mf_band,
+                                                 const std::vector<Vector3_Order<double>> &kfrac_band,
+                                                 const std::string &input_dir,
+                                                 const int iteration)
+{
+    const int n_spins = mf_band.get_n_spins();
+    const int n_kpoints = mf_band.get_n_kpoints();
+    const int n_bands = mf_band.get_n_bands();
+    const double occ_scale = static_cast<double>(n_kpoints * n_spins);
+    constexpr double k_tol = 5.0e-7;
+
+    if (iteration <= 0)
+    {
+        return;
+    }
+
+    for (int i_spin = 0; i_spin < n_spins; ++i_spin)
+    {
+        std::ostringstream filename;
+        filename << input_dir << "QSGW_band_spin_" << i_spin + 1 << "_" << iteration << ".dat";
+        std::ifstream file(filename.str());
+        if (!file.good())
+        {
+            throw std::runtime_error("QSGW band0 restart requires previous band file: "
+                                     + filename.str());
+        }
+
+        for (int i_kpoint = 0; i_kpoint < n_kpoints; ++i_kpoint)
+        {
+            int row_index = 0;
+            double kx = 0.0;
+            double ky = 0.0;
+            double kz = 0.0;
+            if (!(file >> row_index >> kx >> ky >> kz))
+            {
+                throw std::runtime_error("Malformed previous QSGW band file: " + filename.str());
+            }
+            if (row_index != i_kpoint + 1)
+            {
+                throw std::runtime_error("Unexpected k-point row index in previous QSGW band file: "
+                                         + filename.str());
+            }
+            const auto &k_ref = kfrac_band[i_kpoint];
+            if (std::abs(kx - k_ref.x) > k_tol || std::abs(ky - k_ref.y) > k_tol
+                || std::abs(kz - k_ref.z) > k_tol)
+            {
+                throw std::runtime_error("K-point mismatch in previous QSGW band file: "
+                                         + filename.str());
+            }
+
+            for (int i_band = 0; i_band < n_bands; ++i_band)
+            {
+                double occ_printed = 0.0;
+                double energy_ev = 0.0;
+                if (!(file >> occ_printed >> energy_ev))
+                {
+                    throw std::runtime_error("Missing band entries in previous QSGW band file: "
+                                             + filename.str());
+                }
+                mf_band.get_weight()[i_spin](i_kpoint, i_band) = occ_printed / occ_scale;
+                mf_band.get_eigenvals()[i_spin](i_kpoint, i_band) = energy_ev / HA2EV;
+            }
+        }
+    }
+
+    std::cout << "QSGW band0: restored band-path eigenvalues from iteration " << iteration
+              << " QSGW_band files." << std::endl;
+}
+
 void compute_homo_lumo_ha_band(const MeanField &mf, double &homo_ha, double &lumo_ha)
 {
     homo_ha = -1e6;
     lumo_ha = 1e6;
+    constexpr double occupation_tol = 1.0e-10;
     for (int ispin = 0; ispin < mf.get_n_spins(); ++ispin)
     {
         for (int ikpt = 0; ikpt < mf.get_n_kpoints(); ++ikpt)
         {
-            int homo_level = -1;
             for (int ib = 0; ib < mf.get_n_bands(); ++ib)
             {
                 const double weight = mf.get_weight()[ispin](ikpt, ib);
-                if (weight >= 1.0 / (mf.get_n_spins() * mf.get_n_kpoints()))
+                const double energy = mf.get_eigenvals()[ispin](ikpt, ib);
+                if (weight > occupation_tol)
                 {
-                    homo_level = ib;
+                    homo_ha = std::max(homo_ha, energy);
                 }
-            }
-            if (homo_level >= 0)
-            {
-                homo_ha = std::max(homo_ha, mf.get_eigenvals()[ispin](ikpt, homo_level));
-                if (homo_level + 1 < mf.get_n_bands())
+                else
                 {
-                    lumo_ha = std::min(lumo_ha, mf.get_eigenvals()[ispin](ikpt, homo_level + 1));
+                    lumo_ha = std::min(lumo_ha, energy);
                 }
             }
         }
@@ -164,6 +231,16 @@ std::string checkpoint_matrix_file_band(const std::string &checkpoint_dir, const
     std::ostringstream oss;
     oss << checkpoint_dir << "H0_GW_spin_" << std::setw(2) << std::setfill('0') << (ispin + 1)
         << "_k_" << std::setw(6) << std::setfill('0') << (ikpt + 1) << ".bin";
+    return oss.str();
+}
+
+std::string checkpoint_hartree0_matrix_file_band(const std::string &checkpoint_dir,
+                                                 const int ispin, const int ikpt)
+{
+    std::ostringstream oss;
+    oss << checkpoint_dir << "Hartree0_spin_" << std::setw(2) << std::setfill('0')
+        << (ispin + 1) << "_k_" << std::setw(6) << std::setfill('0') << (ikpt + 1)
+        << ".bin";
     return oss.str();
 }
 
@@ -230,7 +307,8 @@ Matz read_matz_binary_band(const std::string &path)
 
 void write_qsgw_checkpoint_band(const std::string &checkpoint_root, const int iteration,
                                 const std::map<int, std::map<int, Matz>> &H0_GW_all,
-                                const double efermi_ha)
+                                const double efermi_ha,
+                                const std::map<int, std::map<int, Matz>> *Hartree_0)
 {
     ensure_dir_band(checkpoint_root);
     const auto checkpoint_dir = checkpoint_iteration_dir_band(checkpoint_root, iteration);
@@ -243,7 +321,7 @@ void write_qsgw_checkpoint_band(const std::string &checkpoint_root, const int it
     }
     meta << "iteration " << iteration << "\n";
     meta << "efermi_ha " << std::setprecision(17) << efermi_ha << "\n";
-    meta << "has_hartree0 0\n";
+    meta << "has_hartree0 " << (Hartree_0 != nullptr ? 1 : 0) << "\n";
 
     for (const auto &spin_entry : H0_GW_all)
     {
@@ -252,6 +330,20 @@ void write_qsgw_checkpoint_band(const std::string &checkpoint_root, const int it
             write_matz_binary_band(
                 k_entry.second,
                 checkpoint_matrix_file_band(checkpoint_dir, spin_entry.first, k_entry.first));
+        }
+    }
+
+    if (Hartree_0 != nullptr)
+    {
+        for (const auto &spin_entry : *Hartree_0)
+        {
+            for (const auto &k_entry : spin_entry.second)
+            {
+                write_matz_binary_band(
+                    k_entry.second,
+                    checkpoint_hartree0_matrix_file_band(
+                        checkpoint_dir, spin_entry.first, k_entry.first));
+            }
         }
     }
 
@@ -268,7 +360,9 @@ struct QsgwCheckpointStateBand
 {
     int iteration = -1;
     double efermi_ha = 0.0;
+    bool has_hartree0 = false;
     std::map<int, std::map<int, Matz>> H0_GW_all;
+    std::map<int, std::map<int, Matz>> Hartree_0;
 };
 
 QsgwCheckpointStateBand load_qsgw_checkpoint_band(const std::string &checkpoint_root,
@@ -312,6 +406,12 @@ QsgwCheckpointStateBand load_qsgw_checkpoint_band(const std::string &checkpoint_
         {
             meta >> state.efermi_ha;
         }
+        else if (key == "has_hartree0")
+        {
+            int has_hartree0 = 0;
+            meta >> has_hartree0;
+            state.has_hartree0 = (has_hartree0 != 0);
+        }
     }
 
     for (int ispin = 0; ispin < n_spins; ++ispin)
@@ -320,6 +420,11 @@ QsgwCheckpointStateBand load_qsgw_checkpoint_band(const std::string &checkpoint_
         {
             state.H0_GW_all[ispin][ikpt] =
                 read_matz_binary_band(checkpoint_matrix_file_band(checkpoint_dir, ispin, ikpt));
+            if (state.has_hartree0)
+            {
+                state.Hartree_0[ispin][ikpt] = read_matz_binary_band(
+                    checkpoint_hartree0_matrix_file_band(checkpoint_dir, ispin, ikpt));
+            }
         }
     }
     return state;
@@ -476,6 +581,29 @@ void accumulate_complex_matrix_to_matz(Matz& accumulator,
     }
 }
 
+void ensure_atom_nw_for_qsgw_hr_export()
+{
+    if (!atom_nw.empty())
+    {
+        return;
+    }
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    if (!ctx.has_ao_shell_layout() || ctx.atom_to_type.empty())
+    {
+        return;
+    }
+    for (const auto& atom_type : ctx.atom_to_type)
+    {
+        const auto type_index = atom_type.second;
+        if (type_index < 0 || type_index >= static_cast<int>(ctx.ao_type_layouts.size()))
+        {
+            atom_nw.clear();
+            return;
+        }
+        atom_nw[atom_type.first] = ctx.ao_type_layouts[static_cast<std::size_t>(type_index)].nao;
+    }
+}
+
 bool can_restore_qsgw_hr_export_with_abacus_symmetry(const int n_kpoints)
 {
     const auto& ctx = LIBRPA::abacus_symmetry_ctx;
@@ -627,15 +755,136 @@ void write_real_csr_from_dense_blocks(const std::string& file_path,
     }
 }
 
+
+void export_band_basis_hamiltonian_to_abacus_csr(
+    const std::vector<std::string>& output_files,
+    const std::map<int, std::map<int, Matz>>& h_band,
+    const std::map<int, std::map<int, Matz>>& s_nao,
+    const MeanField& meanfield_ref,
+    const int n_spins,
+    const int n_kpoints,
+    const int n_bands,
+    const int n_aos,
+    const int n_soc,
+    const std::vector<Vector3_Order<int>>& rlist_abacus,
+    const std::string& log_label)
+{
+    if (static_cast<int>(output_files.size()) != n_spins)
+    {
+        throw std::runtime_error("QSGW H(R) export received inconsistent spin file count");
+    }
+    if (rlist_abacus.empty())
+    {
+        throw std::runtime_error("QSGW H(R) export requires a non-empty ABACUS R list");
+    }
+    if (n_soc != 1)
+    {
+        std::cerr << "QSGW H(R) export is currently implemented for non-SOC ABACUS cases only; "
+                  << "skip export for n_soc=" << n_soc << std::endl;
+        return;
+    }
+
+    for (int i_spin = 0; i_spin < n_spins; ++i_spin)
+    {
+        const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
+        const bool use_export_symmetry = can_restore_qsgw_hr_export_with_abacus_symmetry(n_kpoints);
+        const int nsym_space = static_cast<int>(symmetry_ctx.rspace_operations.size());
+        const int nk_export = use_export_symmetry
+                                  ? static_cast<int>(symmetry_ctx.count_kstar_members())
+                                  : n_kpoints;
+        const double inv_nk_export = 1.0 / static_cast<double>(nk_export);
+        if (use_export_symmetry)
+        {
+            LIBRPA::utils::lib_printf(
+                "%s: H(R) export restores full %d-point BZ from %d ABACUS IBZ k-stars\n",
+                log_label.c_str(), nk_export, n_kpoints);
+        }
+        else if (Params::use_abacus_gw_symmetry)
+        {
+            LIBRPA::utils::lib_printf(
+                "%s: H(R) export could not use ABACUS k-star restoration; falling back to %d loaded k-points\n",
+                log_label.c_str(), n_kpoints);
+        }
+
+        std::vector<std::pair<Vector3_Order<double>, ComplexMatrix>> h_nao_full_k;
+        h_nao_full_k.reserve(static_cast<std::size_t>(nk_export));
+        for (int i_kpoint = 0; i_kpoint < n_kpoints; ++i_kpoint)
+        {
+            Matz wfc2(n_bands, n_aos, MAJOR::COL);
+            for (int ib = 0; ib < n_bands; ++ib)
+            {
+                for (int iao = 0; iao < n_aos; ++iao)
+                {
+                    wfc2(ib, iao) =
+                        meanfield_ref.get_eigenvectors0()[i_spin][0][i_kpoint](ib, iao);
+                }
+            }
+
+            const Matz h_nao_k = s_nao.at(i_spin).at(i_kpoint) * transpose(wfc2)
+                                 * h_band.at(i_spin).at(i_kpoint) * conj(wfc2)
+                                 * transpose(s_nao.at(i_spin).at(i_kpoint), true);
+            const ComplexMatrix h_nao_k_ibz = matz_to_complex_matrix(h_nao_k);
+
+            if (use_export_symmetry)
+            {
+                const auto& k_ibz = kfrac_list[i_kpoint];
+                const auto& star = LIBRPA::find_abacus_kstar_for_ibz_kpoint(symmetry_ctx, k_ibz);
+                for (const auto& member : star.members)
+                {
+                    const bool use_time_reversal = member.isym >= nsym_space;
+                    const ComplexMatrix h_nao_k_bz = LIBRPA::rotate_abacus_kspace_matrix(
+                        symmetry_ctx, member, h_nao_k_ibz, atom_nw, k_ibz,
+                        symmetry_ctx.input_coord_frac, use_time_reversal, nullptr);
+                    h_nao_full_k.push_back({member.k_bz, h_nao_k_bz});
+                }
+            }
+            else
+            {
+                h_nao_full_k.push_back({kfrac_list[i_kpoint], h_nao_k_ibz});
+            }
+        }
+
+        if (static_cast<int>(h_nao_full_k.size()) != nk_export)
+        {
+            throw std::runtime_error("QSGW H(R) export produced an inconsistent full-k list");
+        }
+
+        std::map<Vector3_Order<int>, Matz> h_nao_R;
+        for (const auto& R : rlist_abacus)
+        {
+            Matz mat_R(n_aos, n_aos, MAJOR::COL);
+            for (int row = 0; row < n_aos; ++row)
+            {
+                for (int col = 0; col < n_aos; ++col)
+                {
+                    mat_R(row, col) = 0.0;
+                }
+            }
+
+            for (const auto& k_h_pair : h_nao_full_k)
+            {
+                const auto ang = -(k_h_pair.first * R) * TWO_PI;
+                const std::complex<double> kphase(std::cos(ang), std::sin(ang));
+                accumulate_complex_matrix_to_matz(mat_R, k_h_pair.second, kphase * inv_nk_export);
+            }
+            h_nao_R[R] = mat_R;
+        }
+
+        write_real_csr_from_dense_blocks(output_files[i_spin], h_nao_R, n_aos);
+        std::cout << log_label << ": exported " << output_files[i_spin]
+                  << " for PyATB" << std::endl;
+    }
+}
+
 } // namespace
 
-void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
     using LIBRPA::envs::mpi_comm_global_h;
     using LIBRPA::envs::ofs_myid;
     using LIBRPA::utils::lib_printf;
 
-    Profiler::start("qsgw_band", "QSGW quasi-particle calculation");
+    Profiler::start("qsgw_band0", "QSGW band0 fixed-basis quasi-particle calculation");
 
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
@@ -666,9 +915,23 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     std::map<int, std::map<int, Matz>> H_KS0;
     std::map<int, std::map<int, Matz>> H_KS0_band;
     std::map<int, std::map<int, Matz>> H_KS1;  // 用于混合迭代
+    std::map<int, std::map<int, Matz>> Hartree_0;
+    std::map<int, std::map<int, Matz>> Hartree_i_delta;
+    std::map<int, std::map<int, Matz>> Hartree_0_band;
+    std::map<int, std::map<int, Matz>> Hartree_i_delta_band;
+    bool hartree_reference_ready = false;
+    bool hartree_band_reference_ready = false;
     bool all_files_processed_successfully = true;
     const std::string final_banner(90, '-');
     bool export_hamiltonian_for_pyatb = false;
+    bool debug_export_ks_hamiltonian_for_pyatb = false;
+    bool debug_export_ks_hamiltonian_only = false;
+    bool debug_export_h0_cut_variants_for_pyatb = false;
+    bool qsgw_hr_export_full_mp_rgrid = false;
+    int qsgw_band0_unoccupied_keep = 10;
+    int qsgw_band0_cut_mode = 2;
+    double qsgw_band0_cut_shift_ha = 20.0;
+    bool qsgw_band0_update_hartree = false;
     {
         int flag = 0;
         if (mpi_comm_global_h.is_root())
@@ -677,12 +940,72 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             auto parser = inputf.load("librpa.in", false);
             parser.parse_bool("qsgw_export_hamiltonian_for_pyatb",
                               export_hamiltonian_for_pyatb, false, flag);
+            parser.parse_bool("qsgw_debug_export_ks_hamiltonian_for_pyatb",
+                              debug_export_ks_hamiltonian_for_pyatb, false, flag);
+            parser.parse_bool("qsgw_debug_export_ks_hamiltonian_only",
+                              debug_export_ks_hamiltonian_only, false, flag);
+            parser.parse_bool("qsgw_debug_export_h0_cut_variants_for_pyatb",
+                              debug_export_h0_cut_variants_for_pyatb, false, flag);
+            parser.parse_bool("qsgw_hr_export_full_mp_rgrid",
+                              qsgw_hr_export_full_mp_rgrid, false, flag);
+            parser.parse_int("qsgw_band0_unoccupied_keep",
+                             qsgw_band0_unoccupied_keep, qsgw_band0_unoccupied_keep, flag);
+            parser.parse_int("qsgw_band0_cut_mode",
+                             qsgw_band0_cut_mode, qsgw_band0_cut_mode, flag);
+            parser.parse_double("qsgw_band0_cut_shift_ha",
+                                qsgw_band0_cut_shift_ha, qsgw_band0_cut_shift_ha, flag);
+            parser.parse_bool("qsgw_band0_update_hartree",
+                              qsgw_band0_update_hartree, false, flag);
+            if (qsgw_band0_cut_mode < 0 || qsgw_band0_cut_mode > 2)
+            {
+                lib_printf("QSGW band0: unsupported qsgw_band0_cut_mode=%d; using shifted cut mode\n",
+                           qsgw_band0_cut_mode);
+                qsgw_band0_cut_mode = 2;
+            }
+            if (qsgw_band0_unoccupied_keep < 0)
+            {
+                lib_printf("QSGW band0: qsgw_band0_unoccupied_keep=%d is invalid; using 10\n",
+                           qsgw_band0_unoccupied_keep);
+                qsgw_band0_unoccupied_keep = 10;
+            }
+            lib_printf("QSGW band0: H0 cut mode %d, keep %d unoccupied bands, shift %.6f Ha\n",
+                       qsgw_band0_cut_mode, qsgw_band0_unoccupied_keep, qsgw_band0_cut_shift_ha);
+            if (qsgw_band0_update_hartree)
+            {
+                lib_printf("QSGW band0: Hartree update is ENABLED; Delta V_H will be added after the reference iteration\n");
+            }
+            else
+            {
+                lib_printf("QSGW band0: Hartree update is disabled; legacy head-wing behavior is preserved\n");
+            }
+            if (debug_export_ks_hamiltonian_for_pyatb)
+            {
+                export_hamiltonian_for_pyatb = true;
+                lib_printf("QSGW band0: will export input KS H(R) for PyATB self-check\n");
+            }
+            if (debug_export_h0_cut_variants_for_pyatb)
+            {
+                export_hamiltonian_for_pyatb = true;
+                lib_printf("QSGW band0: will export H0 cut-variant H(R) files for PyATB diagnostics\n");
+            }
             if (export_hamiltonian_for_pyatb)
             {
-                lib_printf("QSGW band: will export H(R) for PyATB after each iteration\n");
+                lib_printf("QSGW band0: will export H(R) for PyATB after each iteration\n");
+                if (qsgw_hr_export_full_mp_rgrid)
+                {
+                    lib_printf("QSGW band0: H(R) export will use the full Monkhorst-Pack R grid\n");
+                }
             }
         }
         mpi_comm_global_h.broadcast(export_hamiltonian_for_pyatb, 0);
+        mpi_comm_global_h.broadcast(debug_export_ks_hamiltonian_for_pyatb, 0);
+        mpi_comm_global_h.broadcast(debug_export_ks_hamiltonian_only, 0);
+        mpi_comm_global_h.broadcast(debug_export_h0_cut_variants_for_pyatb, 0);
+        mpi_comm_global_h.broadcast(qsgw_hr_export_full_mp_rgrid, 0);
+        mpi_comm_global_h.broadcast(qsgw_band0_unoccupied_keep, 0);
+        mpi_comm_global_h.broadcast(qsgw_band0_cut_mode, 0);
+        mpi_comm_global_h.broadcast(qsgw_band0_cut_shift_ha, 0);
+        mpi_comm_global_h.broadcast(qsgw_band0_update_hartree, 0);
     }
 
     // 自旋和 k 点的循环，读取初始数据
@@ -862,12 +1185,10 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 continue;
             }
 
-            // 生成 H_KS 和 H_KS0 矩阵
-            hf[ispin][ikpt] = Matz(n_aos, n_aos, MAJOR::COL);
-            hf[ispin][ikpt] = conj(wfc1) * hf_nao[ispin][ikpt] * transpose(wfc1);  // row hf,KS
-                                                                                   // basis
-
-            // 将 hf 和 vxc 在 KS 基下相加，生成最终的 vxc 矩阵
+            // ABACUS out_mat_xc writes the Vxc matrix in KS-orbital representation;
+            // the filename still contains "nao" for historical reasons.
+            hf[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
+            hf[ispin][ikpt] = conj(wfc1) * hf_nao[ispin][ikpt] * transpose(wfc1);
 
             vxc[ispin][ikpt] = vxc0[ispin][ikpt] + hf[ispin][ikpt];
             vxc0[ispin][ikpt] = vxc[ispin][ikpt];
@@ -1010,6 +1331,8 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     }
                 }
             }
+
+            // band_vxck*_nao.txt is also in KS-orbital representation despite the suffix.
         }
     }
 
@@ -1044,20 +1367,22 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             InputFile inputf;
             auto parser = inputf.load("librpa.in", false);
             parser.parse_int("max_iter", max_iterations, max_iterations, flag);
-            lib_printf("QSGW band: max_iterations = %d\n", max_iterations);
+            lib_printf("QSGW band0: max_iterations = %d\n", max_iterations);
             if (Params::qsgw_restart)
             {
-                lib_printf("QSGW band: restart enabled from %s, requested iteration = %d\n",
+                lib_printf("QSGW band0: restart enabled from %s, requested iteration = %d\n",
                            qsgw_checkpoint_load_root_band().c_str(),
                            Params::qsgw_restart_iteration);
             }
-            lib_printf("QSGW band: checkpoint interval = %d\n", Params::qsgw_checkpoint_every);
+            lib_printf("QSGW band0: checkpoint interval = %d\n", Params::qsgw_checkpoint_every);
         }
         mpi_comm_global_h.broadcast(max_iterations, 0);
     }
 
     const auto checkpoint_save_root = qsgw_checkpoint_save_root_band();
     const auto checkpoint_load_root = qsgw_checkpoint_load_root_band();
+    std::map<int, std::map<int, Matz>> restart_H0_GW_all;
+    bool have_restart_H0_GW_all = false;
     mpi_comm_global_h.barrier();
     if (mpi_comm_global_h.is_root())
     {
@@ -1068,7 +1393,22 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         {
             const auto checkpoint = load_qsgw_checkpoint_band(
                 checkpoint_load_root, Params::qsgw_restart_iteration, n_spins, n_kpoints);
-            diagonalize_and_store(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands);
+            restart_H0_GW_all = checkpoint.H0_GW_all;
+            have_restart_H0_GW_all = true;
+            if (checkpoint.has_hartree0)
+            {
+                Hartree_0 = checkpoint.Hartree_0;
+                hartree_reference_ready = true;
+                if (qsgw_band0_update_hartree)
+                {
+                    lib_printf("QSGW band0: restored Hartree reference from checkpoint\n");
+                }
+            }
+            else if (qsgw_band0_update_hartree)
+            {
+                lib_printf("QSGW band0: restart checkpoint has no Hartree reference; the first resumed Hartree update step will define a new reference and use zero Delta V_H\n");
+            }
+            diagonalize_and_store_fixed_basis(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands);
             update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
             compute_homo_lumo_ha_band(meanfield, homo, lumo);
             efermi = checkpoint.efermi_ha;
@@ -1102,18 +1442,91 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
         write_iteration_history_file_band(checkpoint_save_root + "homo_lumo_vs_iterations.dat");
     }
     mpi_comm_global_h.broadcast(iteration, 0);
+    mpi_comm_global_h.broadcast(have_restart_H0_GW_all, 0);
     meanfield.broadcast(mpi_comm_global_h, 0);
     mpi_comm_global_h.barrier();
     meanfield_band.get_efermi() = meanfield.get_efermi();
+    if (Params::qsgw_restart && iteration < max_iterations)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            restore_band_meanfield_from_qsgw_band_files(
+                meanfield_band, kfrac_band, driver_params.input_dir, iteration);
+            meanfield_band.get_efermi() = meanfield.get_efermi();
+        }
+        meanfield_band.broadcast(mpi_comm_global_h, 0);
+        mpi_comm_global_h.barrier();
+    }
 
     // 初始化完毕，开始循环
+    if (export_hamiltonian_for_pyatb && mpi_comm_global_h.is_root())
+    {
+        ensure_atom_nw_for_qsgw_hr_export();
+    }
     std::vector<Vector3_Order<int>> Rlist_abacus;
     if (export_hamiltonian_for_pyatb && mpi_comm_global_h.is_root())
     {
-        Rlist_abacus = read_csr_rlist(driver_params.input_dir + "hrs1_nao.csr");
-        lib_printf("QSGW band: H(R) export will use %zu R blocks from hrs1_nao.csr\n",
-                   Rlist_abacus.size());
+        if (qsgw_hr_export_full_mp_rgrid)
+        {
+            Rlist_abacus = construct_R_grid(period);
+            lib_printf("QSGW band0: H(R) export will use the full %zu-point MP R grid\n",
+                       Rlist_abacus.size());
+        }
+        else
+        {
+            Rlist_abacus = read_csr_rlist(driver_params.input_dir + "hrs1_nao.csr");
+            lib_printf("QSGW band0: H(R) export will use %zu R blocks from hrs1_nao.csr\n",
+                       Rlist_abacus.size());
+        }
     }
+    if (debug_export_ks_hamiltonian_for_pyatb)
+    {
+        if (mpi_comm_global_h.is_root())
+        {
+            std::vector<std::string> ks_export_files;
+            ks_export_files.reserve(static_cast<std::size_t>(n_spins));
+            for (int i_spin = 0; i_spin < n_spins; ++i_spin)
+            {
+                std::ostringstream filename;
+                filename << "hrs" << (i_spin + 1) << "_nao_ks_librpa.csr";
+                ks_export_files.push_back(filename.str());
+            }
+            export_band_basis_hamiltonian_to_abacus_csr(
+                ks_export_files, H_KS0, s_nao, meanfield, n_spins, n_kpoints,
+                n_bands, n_aos, n_soc, Rlist_abacus, "QSGW band0 KS-debug");
+        }
+        mpi_comm_global_h.barrier();
+        if (debug_export_ks_hamiltonian_only)
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                std::cout << "QSGW band0: debug-only KS H(R) export complete" << std::endl;
+            }
+            Profiler::stop("qsgw_band0");
+            return;
+        }
+    }
+    if (Params::qsgw_restart && export_hamiltonian_for_pyatb
+        && iteration >= max_iterations && mpi_comm_global_h.is_root())
+    {
+        if (!have_restart_H0_GW_all)
+        {
+            throw std::runtime_error("QSGW band0 restart H(R) export requested but no checkpoint H0 was loaded");
+        }
+        std::vector<std::string> restart_export_files;
+        restart_export_files.reserve(static_cast<std::size_t>(n_spins));
+        for (int i_spin = 0; i_spin < n_spins; ++i_spin)
+        {
+            std::ostringstream filename;
+            filename << "hrs" << (i_spin + 1) << "_nao_qsgw_restart_iter_"
+                     << std::setw(4) << std::setfill('0') << iteration << ".csr";
+            restart_export_files.push_back(filename.str());
+        }
+        export_band_basis_hamiltonian_to_abacus_csr(
+            restart_export_files, restart_H0_GW_all, s_nao, meanfield, n_spins,
+            n_kpoints, n_bands, n_aos, n_soc, Rlist_abacus, "QSGW band0 restart");
+    }
+    mpi_comm_global_h.barrier();
     while (!converged && iteration < max_iterations)
     {
         iteration++;
@@ -1192,6 +1605,118 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         true);
         }
         Profiler::cease("read_vq_cut");
+
+        if (qsgw_band0_update_hartree)
+        {
+            Profiler::start("qsgw_hartree", "Build Hartree potential");
+            auto Hartree = LIBRPA::Hartree(meanfield, kfrac_list, period);
+            {
+                Profiler::start("ft_vq_cut_hartree", "Fourier transform truncated Coulomb for Hartree");
+                const auto VR_hartree = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+                Profiler::stop("ft_vq_cut_hartree");
+
+                Profiler::start("qsgw_hartree_real_work");
+                Hartree.build(Cs_data, Rlist, VR_hartree);
+                Hartree.build_KS_kgrid0();
+                Profiler::stop("qsgw_hartree_real_work");
+            }
+
+            if (mpi_comm_global_h.is_root())
+            {
+                Hartree_i_delta.clear();
+                double max_abs_hartree_delta = 0.0;
+                for (int ispin = 0; ispin < n_spins; ++ispin)
+                {
+                    for (int ikpt = 0; ikpt < n_kpoints; ++ikpt)
+                    {
+                        const auto &hartree_now = Hartree.Hartree_is_ik_KS[ispin][ikpt];
+                        if (!hartree_reference_ready)
+                        {
+                            Hartree_0[ispin][ikpt] = hartree_now.copy();
+                        }
+
+                        Hartree_i_delta[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
+                        Hartree_i_delta[ispin][ikpt].zero_out();
+                        if (hartree_reference_ready)
+                        {
+                            for (int i = 0; i < n_bands; ++i)
+                            {
+                                for (int j = 0; j < n_bands; ++j)
+                                {
+                                    const auto delta = hartree_now(i, j) - Hartree_0[ispin][ikpt](i, j);
+                                    Hartree_i_delta[ispin][ikpt](i, j) = delta;
+                                    max_abs_hartree_delta =
+                                        std::max(max_abs_hartree_delta, std::abs(delta));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!hartree_reference_ready)
+                {
+                    hartree_reference_ready = true;
+                    lib_printf("QSGW band0: captured regular-grid Hartree reference; Delta V_H is zero for iteration %d\n",
+                               iteration);
+                }
+                else
+                {
+                    lib_printf("QSGW band0: regular-grid max |Delta V_H| = %.8e Ha at iteration %d\n",
+                               max_abs_hartree_delta, iteration);
+                }
+            }
+
+            Hartree.reset_kspace();
+            Hartree.build_KS_band(meanfield_band.get_eigenvectors0(), kfrac_band);
+            if (mpi_comm_global_h.is_root())
+            {
+                Hartree_i_delta_band.clear();
+                double max_abs_hartree_delta_band = 0.0;
+                for (int ispin = 0; ispin < meanfield_band.get_n_spins(); ++ispin)
+                {
+                    for (int ikpt = 0; ikpt < meanfield_band.get_n_kpoints(); ++ikpt)
+                    {
+                        const auto &hartree_now = Hartree.Hartree_is_ik_KS[ispin][ikpt];
+                        if (!hartree_band_reference_ready)
+                        {
+                            Hartree_0_band[ispin][ikpt] = hartree_now.copy();
+                        }
+
+                        Hartree_i_delta_band[ispin][ikpt] = Matz(n_bands, n_bands, MAJOR::COL);
+                        Hartree_i_delta_band[ispin][ikpt].zero_out();
+                        if (hartree_band_reference_ready)
+                        {
+                            for (int i = 0; i < n_bands; ++i)
+                            {
+                                for (int j = 0; j < n_bands; ++j)
+                                {
+                                    const auto delta =
+                                        hartree_now(i, j) - Hartree_0_band[ispin][ikpt](i, j);
+                                    Hartree_i_delta_band[ispin][ikpt](i, j) = delta;
+                                    max_abs_hartree_delta_band =
+                                        std::max(max_abs_hartree_delta_band, std::abs(delta));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!hartree_band_reference_ready)
+                {
+                    hartree_band_reference_ready = true;
+                    lib_printf("QSGW band0: captured band-path Hartree reference; Delta V_H is zero for iteration %d\n",
+                               iteration);
+                }
+                else
+                {
+                    lib_printf("QSGW band0: band-path max |Delta V_H| = %.8e Ha at iteration %d\n",
+                               max_abs_hartree_delta_band, iteration);
+                }
+            }
+            Profiler::stop("qsgw_hartree");
+            std::flush(ofs_myid);
+            mpi_comm_global_h.barrier();
+        }
 
         // 读取和处理介电函数
         std::vector<double> epsmac_LF_imagfreq_re;
@@ -1375,132 +1900,58 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
                         Vc_all[i_spin][i_kpoint] =
                             build_correlation_potential_spin_k(sigcmat, n_bands);
+                        if (qsgw_band0_update_hartree && iteration > 1)
+                        {
+                            Vc_all[i_spin][i_kpoint] =
+                                Vc_all[i_spin][i_kpoint] + Hartree_i_delta[i_spin][i_kpoint];
+                        }
                     }
                 }
                 Profiler::stop("qsgw_solve_qpe");
 
-                auto H0_GW_all = construct_H0_GW(meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
-                                                 n_spins, n_kpoints, n_bands);
+                auto H0_GW_all = construct_H0_GW_cut(
+                    meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                    n_spins, n_kpoints, n_bands, qsgw_band0_unoccupied_keep,
+                    qsgw_band0_cut_mode, qsgw_band0_cut_shift_ha);
 
                 if (export_hamiltonian_for_pyatb)
                 {
-                    if (n_soc != 1)
+                    std::vector<std::string> qsgw_export_files;
+                    qsgw_export_files.reserve(static_cast<std::size_t>(n_spins));
+                    for (int i_spin = 0; i_spin < n_spins; ++i_spin)
                     {
-                        std::cerr << "QSGW H(R) export is currently implemented for non-SOC "
-                                     "ABACUS cases only; skip export for n_soc="
-                                  << n_soc << std::endl;
+                        std::ostringstream filename;
+                        filename << "hrs" << (i_spin + 1) << "_nao_qsgw_iter_"
+                                 << std::setw(4) << std::setfill('0') << iteration << ".csr";
+                        qsgw_export_files.push_back(filename.str());
                     }
-                    else
+                    export_band_basis_hamiltonian_to_abacus_csr(
+                        qsgw_export_files, H0_GW_all, s_nao, meanfield, n_spins,
+                        n_kpoints, n_bands, n_aos, n_soc, Rlist_abacus, "QSGW band0");
+
+                    if (debug_export_h0_cut_variants_for_pyatb)
                     {
-                        for (int i_spin = 0; i_spin < n_spins; ++i_spin)
+                        for (int variant_mode = 0; variant_mode <= 2; ++variant_mode)
                         {
-                            const auto& symmetry_ctx = LIBRPA::abacus_symmetry_ctx;
-                            const bool use_export_symmetry =
-                                can_restore_qsgw_hr_export_with_abacus_symmetry(n_kpoints);
-                            const int nsym_space =
-                                static_cast<int>(symmetry_ctx.rspace_operations.size());
-                            const int nk_export = use_export_symmetry
-                                                      ? static_cast<int>(
-                                                            symmetry_ctx.count_kstar_members())
-                                                      : n_kpoints;
-                            const double inv_nk_export =
-                                1.0 / static_cast<double>(nk_export);
-                            if (use_export_symmetry)
+                            auto H0_GW_variant = construct_H0_GW_cut(
+                                meanfield, H_KS0, vxc0, exx.exx_is_ik_KS, Vc_all,
+                                n_spins, n_kpoints, n_bands, qsgw_band0_unoccupied_keep,
+                                variant_mode, qsgw_band0_cut_shift_ha);
+                            std::vector<std::string> variant_files;
+                            variant_files.reserve(static_cast<std::size_t>(n_spins));
+                            for (int i_spin = 0; i_spin < n_spins; ++i_spin)
                             {
-                                lib_printf("QSGW band: H(R) export restores full %d-point BZ "
-                                           "from %d ABACUS IBZ k-stars\n",
-                                           nk_export, n_kpoints);
+                                std::ostringstream filename;
+                                filename << "hrs" << (i_spin + 1) << "_nao_qsgw_iter_"
+                                         << std::setw(4) << std::setfill('0') << iteration
+                                         << "_cutmode" << variant_mode << ".csr";
+                                variant_files.push_back(filename.str());
                             }
-                            else if (Params::use_abacus_gw_symmetry)
-                            {
-                                lib_printf("QSGW band: H(R) export could not use ABACUS "
-                                           "k-star restoration; falling back to %d loaded "
-                                           "k-points\n",
-                                           n_kpoints);
-                            }
-
-                            std::vector<std::pair<Vector3_Order<double>, ComplexMatrix>>
-                                h_nao_full_k;
-                            h_nao_full_k.reserve(static_cast<std::size_t>(nk_export));
-                            for (int i_kpoint = 0; i_kpoint < n_kpoints; ++i_kpoint)
-                            {
-                                Matz wfc2(n_bands, n_aos, MAJOR::COL);
-                                for (int ib = 0; ib < n_bands; ++ib)
-                                {
-                                    for (int iao = 0; iao < n_aos; ++iao)
-                                    {
-                                        wfc2(ib, iao) =
-                                            meanfield.get_eigenvectors0()[i_spin][0][i_kpoint](
-                                                ib, iao);
-                                    }
-                                }
-
-                                const Matz h_nao_k =
-                                    s_nao[i_spin][i_kpoint] * transpose(wfc2)
-                                    * H0_GW_all[i_spin][i_kpoint] * conj(wfc2)
-                                    * transpose(s_nao[i_spin][i_kpoint], true);
-                                const ComplexMatrix h_nao_k_ibz =
-                                    matz_to_complex_matrix(h_nao_k);
-
-                                if (use_export_symmetry)
-                                {
-                                    const auto& k_ibz = kfrac_list[i_kpoint];
-                                    const auto& star =
-                                        LIBRPA::find_abacus_kstar_for_ibz_kpoint(symmetry_ctx,
-                                                                                 k_ibz);
-                                    for (const auto& member : star.members)
-                                    {
-                                        const bool use_time_reversal =
-                                            member.isym >= nsym_space;
-                                        const ComplexMatrix h_nao_k_bz =
-                                            LIBRPA::rotate_abacus_kspace_matrix(
-                                                symmetry_ctx, member, h_nao_k_ibz, atom_nw,
-                                                k_ibz, symmetry_ctx.input_coord_frac,
-                                                use_time_reversal, nullptr);
-                                        h_nao_full_k.push_back({member.k_bz, h_nao_k_bz});
-                                    }
-                                }
-                                else
-                                {
-                                    h_nao_full_k.push_back({kfrac_list[i_kpoint], h_nao_k_ibz});
-                                }
-                            }
-
-                            if (static_cast<int>(h_nao_full_k.size()) != nk_export)
-                            {
-                                throw std::runtime_error(
-                                    "QSGW H(R) export produced an inconsistent full-k list");
-                            }
-
-                            std::map<Vector3_Order<int>, Matz> h_nao_R;
-                            for (const auto& R : Rlist_abacus)
-                            {
-                                Matz mat_R(n_aos, n_aos, MAJOR::COL);
-                                for (int row = 0; row < n_aos; ++row)
-                                {
-                                    for (int col = 0; col < n_aos; ++col)
-                                    {
-                                        mat_R(row, col) = 0.0;
-                                    }
-                                }
-
-                                for (const auto& k_h_pair : h_nao_full_k)
-                                {
-                                    const auto ang = -(k_h_pair.first * R) * TWO_PI;
-                                    const std::complex<double> kphase(std::cos(ang),
-                                                                       std::sin(ang));
-                                    accumulate_complex_matrix_to_matz(
-                                        mat_R, k_h_pair.second, kphase * inv_nk_export);
-                                }
-                                h_nao_R[R] = mat_R;
-                            }
-
-                            std::ostringstream filename;
-                            filename << "hrs" << (i_spin + 1) << "_nao_qsgw_iter_"
-                                     << std::setw(4) << std::setfill('0') << iteration << ".csr";
-                            write_real_csr_from_dense_blocks(filename.str(), h_nao_R, n_aos);
-                            std::cout << "QSGW band: exported " << filename.str()
-                                      << " for PyATB" << std::endl;
+                            std::ostringstream label;
+                            label << "QSGW band0 cut-mode " << variant_mode;
+                            export_band_basis_hamiltonian_to_abacus_csr(
+                                variant_files, H0_GW_variant, s_nao, meanfield, n_spins,
+                                n_kpoints, n_bands, n_aos, n_soc, Rlist_abacus, label.str());
                         }
                     }
                 }
@@ -1516,7 +1967,7 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                 //  }
 
                 // 第三步：对 Hamiltonian 进行对角化并存储本征值
-                diagonalize_and_store(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
+                diagonalize_and_store_fixed_basis(meanfield, H0_GW_all, n_spins, n_kpoints, n_bands);
 
                 // 计算全局费米能和占据数
                 const auto &Efermi0 = meanfield.get_efermi();
@@ -1600,7 +2051,9 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                     converged || iteration == max_iterations;
                 if (should_write_checkpoint)
                 {
-                    write_qsgw_checkpoint_band(checkpoint_save_root, iteration, H0_GW_all, efermi);
+                    write_qsgw_checkpoint_band(
+                        checkpoint_save_root, iteration, H0_GW_all, efermi,
+                        qsgw_band0_update_hartree ? &Hartree_0 : nullptr);
                 }
 
                 if (converged)
@@ -1682,14 +2135,20 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
                         }
                     }
                     Vc_all[i_spin][i_kpoint] = build_correlation_potential_spin_k(sigcmat, n_bands);
+                    if (qsgw_band0_update_hartree && iteration > 1)
+                    {
+                        Vc_all[i_spin][i_kpoint] =
+                            Vc_all[i_spin][i_kpoint] + Hartree_i_delta_band[i_spin][i_kpoint];
+                    }
                 }
             }
 
             // reconstruct H0_GW_all
-            auto H0_GW_all_band = construct_H0_GW(
+            auto H0_GW_all_band = construct_H0_GW_cut(
                 meanfield_band, H_KS0_band, vxc_band, exx.exx_is_ik_KS, Vc_all,
-                meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands);
-            diagonalize_and_store(meanfield_band, H0_GW_all_band, meanfield_band.get_n_spins(),
+                meanfield_band.get_n_spins(), meanfield_band.get_n_kpoints(), n_bands,
+                qsgw_band0_unoccupied_keep, qsgw_band0_cut_mode, qsgw_band0_cut_shift_ha);
+            diagonalize_and_store_fixed_basis(meanfield_band, H0_GW_all_band, meanfield_band.get_n_spins(),
                                   meanfield_band.get_n_kpoints(), n_bands);
 
             double total_electrons_band = total_electrons;
@@ -1789,5 +2248,5 @@ void task_qsgw_band(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
         mpi_comm_global_h.barrier();
     }
-    Profiler::stop("qsgw_band");
+    Profiler::stop("qsgw_band0");
 }

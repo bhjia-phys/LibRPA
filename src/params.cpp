@@ -61,6 +61,10 @@ bool Params::output_gw_sigc_mat_rt = false;
 bool Params::output_gw_sigc_mat_rf = false;
 bool Params::output_hamgnn = false;
 int Params::nbands_G = -1;
+bool Params::qsgw_restart = false;
+std::string Params::qsgw_restart_dir = "";
+int Params::qsgw_restart_iteration = -1;
+int Params::qsgw_checkpoint_every = 1;
 /* ==========================================================
  * output options end
  * ========================================================== */
@@ -98,6 +102,8 @@ void Params::print()
         {"option_dielect_func", option_dielect_func},
         {"output_Wc_Rf_mat", output_Wc_Rf_mat},
         {"nbands_G", nbands_G},
+        {"qsgw_restart_iteration", qsgw_restart_iteration},
+        {"qsgw_checkpoint_every", qsgw_checkpoint_every},
     };
 
     const std::vector<std::pair<std::string, std::string>> str_params{
@@ -106,6 +112,7 @@ void Params::print()
         {"output_file", output_file},
         {"tfgrids_type", tfgrids_type},
         {"parallel_routing", parallel_routing},
+        {"qsgw_restart_dir", qsgw_restart_dir.empty() ? "(current-output-dir)" : qsgw_restart_dir},
     };
 
     const std::vector<std::pair<std::string, bool>> bool_params{
@@ -129,6 +136,7 @@ void Params::print()
         {"output_hamgnn", output_hamgnn},
         {"use_2d_dielectric", use_2d_dielectric},
         {"use_pyatb", use_pyatb},
+        {"qsgw_restart", qsgw_restart},
     };
 
     for (const auto &param : str_params)

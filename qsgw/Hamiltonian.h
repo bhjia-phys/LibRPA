@@ -45,6 +45,25 @@ std::map<int, std::map<int, Matz>> construct_H0_GW(
     const std::map<int, std::map<int, Matz>> & Vc_all,
     int n_spins, int n_kpoints, int n_states);
 
+std::map<int, std::map<int, Matz>> construct_H0_GW_cut(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & vxc_all,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_states,
+    int n_unoccupied_keep = 10,
+    int cut_mode = 2,
+    double cut_shift_ha = 20.0);
+
+std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & H_DFT_nao,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_states);
+
 std::map<int, std::map<int, Matz>> construct_H0_HF(
     MeanField& meanfield,
     const std::map<int, std::map<int, Matz>> & H_KS_all,
@@ -54,6 +73,9 @@ std::map<int, std::map<int, Matz>> construct_H0_HF(
 
 // 对 Hamiltonian 进行对角化并存储本征值和本征矢量
 void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
+                           int n_spins, int n_kpoints, int dimension);
+
+void diagonalize_and_store_fixed_basis(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
                            int n_spins, int n_kpoints, int dimension);
 
 std::map<int, Matz> FT_R_TO_K(

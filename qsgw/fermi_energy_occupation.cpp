@@ -1,8 +1,30 @@
 #include "fermi_energy_occupation.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include "constants.h"
+
+namespace
+{
+
+double infer_kpoint_state_weight(const MeanField& mf, const int ispin, const int ikpt)
+{
+    double state_weight = 0.0;
+    for (int ib = 0; ib < mf.get_n_bands(); ++ib)
+    {
+        state_weight = std::max(state_weight, mf.get_weight()[ispin](ikpt, ib));
+    }
+
+    if (state_weight > 1e-14)
+    {
+        return state_weight;
+    }
+
+    return 2.0 / (mf.get_n_kpoints() * mf.get_n_spins());
+}
+
+} // namespace
 
 // 费米分布
 double fermi_dirac(double energy, double mu, double temperature)
@@ -22,9 +44,10 @@ double calculate_total_occupation(const MeanField &mf, double mu, double tempera
 
     for (int ispin = 0; ispin < mf.get_n_spins(); ++ispin) {
         for (int ikpt = 0; ikpt < mf.get_n_kpoints(); ++ikpt) {
+            const double state_weight = infer_kpoint_state_weight(mf, ispin, ikpt);
             for (int ib = 0; ib < mf.get_n_bands(); ++ib) {
                 double energy = mf.get_eigenvals()[ispin](ikpt, ib);
-                double occupation = fermi_dirac(energy, mu, temperature) * 2.0 / (mf.get_n_kpoints() * mf.get_n_spins());
+                double occupation = fermi_dirac(energy, mu, temperature) * state_weight;
                 total_occupation += occupation;
             }
         }
@@ -262,15 +285,16 @@ void update_fermi_energy_and_occupations(MeanField &mf, const double temperature
     {
         for (int ikpt = 0; ikpt < mf.get_n_kpoints(); ++ikpt)
         {
+            const double state_weight = infer_kpoint_state_weight(mf, ispin, ikpt);
             for (int ib = 0; ib < mf.get_n_bands(); ++ib)
             {
                 const double energy = mf.get_eigenvals()[ispin](ikpt, ib);
-                mf.get_weight()[ispin](ikpt, ib) = fermi_dirac(energy, efermi, temperature) * 2.0 / (mf.get_n_kpoints() * mf.get_n_spins());
-                total_electrons1 += (mf.get_weight()[ispin](ikpt, ib)*mf.get_n_kpoints());  // 计算总占据数
+                mf.get_weight()[ispin](ikpt, ib) =
+                    fermi_dirac(energy, efermi, temperature) * state_weight;
+                total_electrons1 += mf.get_weight()[ispin](ikpt, ib);
             }
         }
     }
-    total_electrons1 = total_electrons1 / mf.get_n_kpoints();
     // 输出 total_electrons
     std::cout << "Total electrons: " << total_electrons1 << std::endl;
     std::cout << "efermi: " << efermi << std::endl;
