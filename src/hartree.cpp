@@ -21,6 +21,8 @@
 #endif
 #include "utils_io.h"
 
+#include <limits>
+
 namespace LIBRPA
 {
 

@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * @file Hartree.h
  * @brief utilities for computing Hartree energies, including orbital and total energies.

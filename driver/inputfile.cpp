@@ -169,12 +169,20 @@ void parse_inputfile_to_params(const std::string &fn)
     parser.parse_double("libri_chi0_threshold_C", Params::libri_chi0_threshold_C, 0.0, flag);
     parser.parse_double("libri_chi0_threshold_G", Params::libri_chi0_threshold_G, 0.0, flag);
     parser.parse_bool("use_shrink_abfs", Params::use_shrink_abfs, false, flag);
+    parser.parse_bool("use_shrink_chi", Params::use_shrink_chi, true, flag);
     parser.parse_bool("use_soc", Params::use_soc, false, flag);
+    parser.parse_bool("use_2d_dielectric", Params::use_2d_dielectric, false, flag);
+    parser.parse_bool("use_pyatb", Params::use_pyatb, true, flag);
 
     // exx related
     parser.parse_double("libri_exx_threshold_C", Params::libri_exx_threshold_C, 0.0, flag);
     parser.parse_double("libri_exx_threshold_D", Params::libri_exx_threshold_D, 0.0, flag);
     parser.parse_double("libri_exx_threshold_V", Params::libri_exx_threshold_V, 0.0, flag);
+    parser.parse_bool("use_fullcoul_exx", Params::use_fullcoul_exx, false, flag);
+    parser.parse_bool("use_abacus_exx_symmetry", Params::use_abacus_exx_symmetry, true, flag);
+    parser.parse_bool("use_abacus_gw_symmetry", Params::use_abacus_gw_symmetry, true, flag);
+    parser.parse_bool("output_abacus_gw_gf", Params::output_abacus_gw_gf, false, flag);
+    parser.parse_bool("use_fullcoul_wc", Params::use_fullcoul_wc, false, flag);
 
     // gw related
     parser.parse_double("libri_g0w0_threshold_C", Params::libri_g0w0_threshold_C, 0.0, flag);
@@ -184,10 +192,23 @@ void parse_inputfile_to_params(const std::string &fn)
     parser.parse_bool("replace_w_head", Params::replace_w_head, true, flag);
     parser.parse_int("option_dielect_func", Params::option_dielect_func, 2, flag);
 
+    parser.parse_bool("band_continue", Params::band_continue, false, flag);
+
+    parser.parse_int("output_Wc_Rf_mat", Params::output_Wc_Rf_mat, false, flag);
+    parser.parse_bool("output_energy_qp", Params::output_energy_qp, false, flag);
     parser.parse_bool("output_gw_sigc_mat", Params::output_gw_sigc_mat, false, flag);
     parser.parse_bool("output_gw_sigc_mat_rt", Params::output_gw_sigc_mat_rt, false, flag);
     parser.parse_bool("output_gw_sigc_mat_rf", Params::output_gw_sigc_mat_rf, false, flag);
+    parser.parse_bool("output_hamgnn", Params::output_hamgnn, false, flag);
     parser.parse_int("nbands_G", Params::nbands_G, -1, flag);
+    parser.parse_bool("qsgw_restart", Params::qsgw_restart, false, flag);
+    parser.parse_string("qsgw_restart_dir", Params::qsgw_restart_dir, "", flag);
+    if (!Params::qsgw_restart_dir.empty())
+    {
+        Params::qsgw_restart_dir = check_dirpath(Params::qsgw_restart_dir);
+    }
+    parser.parse_int("qsgw_restart_iteration", Params::qsgw_restart_iteration, -1, flag);
+    parser.parse_int("qsgw_checkpoint_every", Params::qsgw_checkpoint_every, 1, flag);
 }
 
 const std::string input_filename = "librpa.in";

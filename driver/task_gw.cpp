@@ -1,5 +1,6 @@
 #include "task_gw.h"
 
+#include "abacus_symmetry.h"
 #include "analycont.h"
 #include "chi0.h"
 #include "constants.h"
@@ -23,6 +24,22 @@
 #include "utils_timefreq.h"
 #include "write_aims.h"
 
+namespace
+{
+
+bool need_full_cut_coulomb_for_abacus_symmetry()
+{
+    const auto& ctx = LIBRPA::abacus_symmetry_ctx;
+    return Params::use_abacus_gw_symmetry
+           && ctx.available
+           && ctx.has_abf_shell_layout()
+           && !ctx.kstars.empty()
+           && ctx.kstars.size() == kfrac_list.size()
+           && static_cast<int>(klist.size()) < get_full_bz_kpoint_count();
+}
+
+} // namespace
+
 void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
     using LIBRPA::envs::blacs_ctxt_global_h;
@@ -35,11 +52,8 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
     auto Rlist = construct_R_grid(period);
 
-    vector<Vector3_Order<double>> qlist;
-    for (auto q_weight : irk_weight)
-    {
-        qlist.push_back(q_weight.first);
-    }
+    // Preserve the loaded IBZ q-index order instead of iterating the sorted `irk_weight` map.
+    vector<Vector3_Order<double>> qlist = klist;
 
     // Prepare time-frequency grids
     auto tfg =
@@ -47,6 +61,53 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 
     Chi0 chi0(meanfield, klist, tfg);
     chi0.gf_R_threshold = Params::gf_R_threshold;
+
+    Profiler::start("read_vq_cut", "Load truncated Coulomb");
+    if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+        || need_full_cut_coulomb_for_abacus_symmetry())
+    {
+        if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+        {
+            lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                       " switching to `read_Vq_full`\n");
+        }
+        read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
+    }
+    else
+    {
+        // NOTE: local_atpair already set in the main.cpp.
+        //       It can consists of distributed atom pairs of only upper half.
+        //       Setup of local_atpair may be better to extracted as some util function,
+        //       instead of in the main driver.
+        read_Vq_row(driver_params.input_dir, "coulomb_cut_", Params::vq_threshold, local_atpair,
+                    true);
+    }
+    Profiler::cease("read_vq_cut");
+    std::vector<double> epsmac_LF_imagfreq_re;
+
+    if (Params::replace_w_head)
+    {
+        std::vector<double> omegas_dielect;
+        std::vector<double> dielect_func;
+        if (Params::option_dielect_func != 3 && Params::option_dielect_func != 4)
+            read_dielec_func(driver_params.input_dir + "dielecfunc_out", omegas_dielect,
+                             dielect_func);
+
+        epsmac_LF_imagfreq_re = interpolate_dielec_func(Params::option_dielect_func, omegas_dielect,
+                                                        dielect_func, chi0.tfg.get_freq_nodes());
+
+        if (Params::debug)
+        {
+            if (mpi_comm_global_h.is_root())
+            {
+                lib_printf("Dielectric function parsed:\n");
+                for (int i = 0; i < chi0.tfg.get_freq_nodes().size(); i++)
+                    lib_printf("%d %f %f\n", i + 1, chi0.tfg.get_freq_nodes()[i],
+                               epsmac_LF_imagfreq_re[i]);
+            }
+            mpi_comm_global_h.barrier();
+        }
+    }
 
     chi0.set_input_dir(driver_params.input_dir);
     Profiler::start("chi0_build", "Build response function chi0");
@@ -146,14 +207,15 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
     auto exx = LIBRPA::Exx(meanfield, kfrac_list, period);
     {
         Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
-        const auto VR = FT_Vq(Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
+        const auto VR = FT_Vq(Vq_cut, get_full_bz_kpoint_count(), Rlist, true);
         Profiler::stop("ft_vq_cut");
 
         Profiler::start("g0w0_exx_real_work");
+        const auto& exx_cs = Params::use_shrink_abfs ? Cs_shrinked_data : Cs_data;
         if (Params::use_soc)
-            exx.build<std::complex<double>>(Cs_data, Rlist, VR);
+            exx.build<std::complex<double>>(exx_cs, Rlist, VR);
         else
-            exx.build<double>(Cs_data, Rlist, VR);
+            exx.build<double>(exx_cs, Rlist, VR);
         exx.build_KS_kgrid();
         Profiler::stop("g0w0_exx_real_work");
     }
@@ -399,6 +461,37 @@ void task_g0w0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
             printf("CBM: k-point %4d: (%.5f, %.5f, %.5f) \n", ik_cond + 1, k_cond.x, k_cond.y,
                    k_cond.z);
             lib_printf("Bandgap(eV): %12.7f \n", bandgap);
+
+            if (Params::output_energy_qp) {
+                std::ofstream ofs("energy_qp");
+                ofs << "  state     occ_num        e_gs(Ha)        e_qp(Ha)"<<std::endl;
+                ofs << banner << std::endl;
+                for (int i_spin = 0; i_spin < meanfield.get_n_spins(); i_spin++)
+                {
+                    for (int i_kpoint = 0; i_kpoint < meanfield.get_n_kpoints(); i_kpoint++)
+                    {
+                        const auto &k = kfrac_list[i_kpoint];
+                        ofs << " K_point " << i_kpoint + 1 << " :" << std::setw(10) << std::setprecision(7)
+                            << k.x << std::setw(10) << k.y << std::setw(10) << k.z << std::setw(10)
+                            <<" Spin " << i_spin + 1 << std::endl;
+                        ofs << banner << std::endl;
+                        for (int i_state = 0; i_state < meanfield.get_n_bands(); i_state++)
+                        {
+                            const auto &occ_state =
+                                meanfield.get_weight()[i_spin](i_kpoint, i_state) * meanfield.get_n_kpoints();
+                            const auto &eks_state =
+                                meanfield.get_eigenvals()[i_spin](i_kpoint, i_state);
+                            const auto &eqp = e_qp_all[i_spin][i_kpoint][i_state];
+                            ofs << std::setw(7) << i_state + 1 << std::setw(10) << std::setprecision(5)
+                                << occ_state << std::setw(18) << std::setprecision(10) << eks_state
+                                << std::setw(18) << std::setprecision(10) << eqp << std::endl;
+                        }
+                        ofs << banner << std::endl;
+                        ofs << std::endl;
+                    }
+                }
+                ofs.close();
+            }
         }
         Profiler::stop("g0w0_solve_qpe");
     }

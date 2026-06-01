@@ -76,6 +76,25 @@ std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
     const std::map<int, std::map<int, Matz>> & Vc_all,
     int n_spins, int n_kpoints, int n_bands) ;
 
+std::map<int, std::map<int, Matz>> construct_H0_GW_cut(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & vxc_all,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_states,
+    int n_unoccupied_keep = 10,
+    int cut_mode = 2,
+    double cut_shift_ha = 20.0);
+
+std::map<int, std::map<int, Matz>> construct_H0_GW_new_basis(
+    MeanField& meanfield,
+    const std::map<int, std::map<int, Matz>> & H_KS_all,
+    const std::map<int, std::map<int, Matz>> & H_DFT_nao,
+    const std::map<int, std::map<int, Matz>> & Hexx_all,
+    const std::map<int, std::map<int, Matz>> & Vc_all,
+    int n_spins, int n_kpoints, int n_states);
+
 std::map<int, std::map<int, Matz>> construct_H0_HF(
     MeanField& meanfield,
     const std::map<int, std::map<int, Matz>> & H_KS_all,
@@ -89,14 +108,6 @@ void diagonalize_and_store(MeanField& meanfield, const std::map<int, std::map<in
 
 void diagonalize_and_store_fixed_basis(MeanField& meanfield, const std::map<int, std::map<int, Matz>>& H0_GW_all,
                            int n_spins, int n_kpoints, int dimension);
-
-Matz get_mat_cplx_R(MeanField& meanfield,int ispin, int isoc1, int isoc2,
-                                         const std::vector<Vector3_Order<double>> &kfrac_list,
-                                         const Vector3_Order<int> &R,
-                                         const std::map<int, Matz> &mat_cplx_k) ;
-
-Matz extract_mat_cplx_R_IJblock(const Matz &mat_cplx, const atom_t &I,
-                                               const atom_t &J);
 
 std::map<int, Matz> FT_R_TO_K(
     MeanField& meanfield, 

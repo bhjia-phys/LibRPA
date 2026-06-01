@@ -5,6 +5,7 @@
 #include "matrix_m.h"
 #include "meanfield.h"
 #include "ri.h"
+#include <set>
 
 namespace LIBRPA
 {
@@ -23,11 +24,26 @@ class Exx
 
     bool is_rspace_build_;
     bool is_kspace_built_;
+    std::set<std::string> debug_dmat_dump_tags_;
+    bool debug_kstar_dumped_ = false;
 
     ComplexMatrix get_dmat_cplx_R_global(const int& ispin, const int& isoc1, const int& isoc2,
                                          const Vector3_Order<int>& R);
+    ComplexMatrix get_dmat_cplx_R_symmetry_restored(const int& ispin, const int& isoc1,
+                                                    const int& isoc2,
+                                                    const Vector3_Order<int>& R);
+    bool can_restore_dmat_from_abacus_symmetry() const;
     ComplexMatrix extract_dmat_cplx_R_IJblock(const ComplexMatrix& dmat_cplx, const atom_t& I,
                                               const atom_t& J);
+    void maybe_dump_abacus_kstar_debug();
+    void maybe_dump_full_kspace_dmat_debug(const int& ispin, const int& isoc1, const int& isoc2);
+    void maybe_dump_restored_kspace_dmat_debug(const int& ispin, const int& isoc1, const int& isoc2);
+    void maybe_dump_dmat_R_debug(const std::string& source_tag,
+                                 const int& ispin,
+                                 const int& isoc1,
+                                 const int& isoc2,
+                                 const Vector3_Order<int>& R,
+                                 const ComplexMatrix& dmat_cplx);
 
     void build_dmat_R(const Vector3_Order<int>& R);
     void build_dmat_R(const atom_t& I, const atom_t& J, const Vector3_Order<int>& R);

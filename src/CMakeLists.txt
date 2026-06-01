@@ -20,6 +20,7 @@ set_target_properties(rpa_lib PROPERTIES
 
 configure_file(envs_cmake.cpp.in envs_cmake.cpp)
 list(APPEND lib_sources
+        abacus_symmetry.cpp
         # aperiodic_chi0.cpp
         analycont.cpp
         app_rpa.cpp
@@ -38,6 +39,7 @@ list(APPEND lib_sources
         envs_blacs.cpp
         epsilon.cpp
         exx.cpp
+        hartree.cpp
         fitting.cpp
         geometry.cpp
         gw.cpp
