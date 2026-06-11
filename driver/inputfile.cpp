@@ -163,6 +163,12 @@ void parse_inputfile_to_params(const std::string& fn)
     parser.parse_string("tfgrid_type", Params::tfgrids_type, "minimax", flag);
     parser.parse_string("parallel_routing", Params::parallel_routing, "auto", flag);
     parser.parse_int("nfreq", Params::nfreq, 6, flag);
+    parser.parse_int("n_params_anacon", Params::n_params_anacon, -1, flag);
+    parser.parse_string("anacon_method", Params::anacon_method, "thiele", flag);
+    parser.parse_double("pade_ridge_lambda", Params::pade_ridge_lambda, 1e-10, flag);
+    parser.parse_double("pade_ridge_den_weight", Params::pade_ridge_den_weight, 1.0, flag);
+    parser.parse_double("pade_denominator_floor", Params::pade_denominator_floor, 1e-12, flag);
+    parser.parse_double("pade_thiele_den_cut", Params::pade_thiele_den_cut, 1e-3, flag);
     parser.parse_bool("use_scalapack_ecrpa", Params::use_scalapack_ecrpa, false, flag);
     parser.parse_bool("use_scalapack_gw_wc", Params::use_scalapack_gw_wc, false, flag);
     parser.parse_double("cs_threshold", Params::cs_threshold, 1e-6, flag);

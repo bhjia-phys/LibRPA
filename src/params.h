@@ -29,6 +29,21 @@ struct Params
     //! the number of parameters for analytic continuation
     static int n_params_anacon;
 
+    //! analytic-continuation method: thiele/pade, ridge, or ridge_guard
+    static std::string anacon_method;
+
+    //! ridge strength for regularized rational analytic continuation
+    static double pade_ridge_lambda;
+
+    //! multiplier on denominator-coefficient ridge penalty
+    static double pade_ridge_den_weight;
+
+    //! denominator magnitude floor used by regularized rational continuation
+    static double pade_denominator_floor;
+
+    //! Thiele continued-fraction denominator cut for ridge_guard analytic continuation
+    static double pade_thiele_den_cut;
+
     //! type of parallel routing
     static std::string parallel_routing;
 

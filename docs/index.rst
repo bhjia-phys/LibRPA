@@ -22,6 +22,7 @@ LibRPA
 - :doc:`Driver Usage <driver>`
 - :doc:`Compile Options <user_guide/compile_options>`
 - :doc:`Input Parameters <user_guide/input_parameters>`
+- :doc:`Regularized Pade Analytic Continuation <regularized_pade_ac>`
 
 .. toctree::
    :hidden:
@@ -39,6 +40,7 @@ LibRPA
    user_guide/compile_options
    user_guide/input_parameters
    user_guide/api_usage
+   regularized_pade_ac
 
 .. toctree::
    :hidden:
