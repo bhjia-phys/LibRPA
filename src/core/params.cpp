@@ -1,5 +1,8 @@
 #include "params.h"
 
+#include <algorithm>
+#include <cctype>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,6 +22,14 @@ std::string Params::parallel_routing = "auto";
 int Params::nfreq = 0;
 int Params::n_params_anacon = -1;
 int Params::option_dielect_func = 2;
+
+// Opt-in regularized-rational (ridge / ridge_guard) analytic continuation.
+// Defaults reproduce the legacy bare-Thiele behaviour exactly.
+std::string Params::anacon_method = "thiele";
+double Params::pade_ridge_lambda = 1e-10;
+double Params::pade_ridge_den_weight = 1.0;
+double Params::pade_denominator_floor = 1e-12;
+double Params::pade_thiele_den_cut = 1e-3;
 
 double Params::gf_R_threshold = 1e-4;
 double Params::cs_threshold = 1e-4;
@@ -63,12 +74,42 @@ int Params::nbands_G = -1;
  * output options end
  * ========================================================== */
 
+std::string Params::qsgw_mixer = "linear";
+double Params::qsgw_mixing_beta = 0.25;
+int Params::qsgw_mixing_history = 12;
+int Params::qsgw_linear_mixing_steps = 3;
+int Params::qsgw_min_iter = 1;
+int Params::qsgw_max_iter = 1;
+bool Params::qsgw_dump_iter1 = false;
+std::string Params::qsgw_dump_dir = "";
+
 void Params::check_consistency()
 {
     if (n_params_anacon < 0)
     {
         n_params_anacon = nfreq;
     }
+
+    // Normalize and validate the opt-in analytic-continuation method.
+    std::transform(anacon_method.begin(), anacon_method.end(), anacon_method.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (anacon_method == "pade")
+    {
+        anacon_method = "thiele";
+    }
+    if (anacon_method == "ridge-guard")
+    {
+        anacon_method = "ridge_guard";
+    }
+    if (anacon_method != "thiele" && anacon_method != "ridge" && anacon_method != "ridge_guard")
+    {
+        throw std::logic_error("Unknown anacon_method (" + anacon_method
+                               + "). Available values: thiele, ridge, ridge_guard.");
+    }
+    if (pade_ridge_lambda < 0.0) pade_ridge_lambda = 0.0;
+    if (pade_ridge_den_weight < 0.0) pade_ridge_den_weight = 0.0;
+    if (pade_denominator_floor < 0.0) pade_denominator_floor = 0.0;
+    if (pade_thiele_den_cut < 0.0) pade_thiele_den_cut = 0.0;
 }
 
 void Params::print()
@@ -88,6 +129,11 @@ void Params::print()
         {"libri_g0w0_threshold_Wc", libri_g0w0_threshold_Wc},
         {"minimax_min_gap", minimax_min_gap},
         {"minimax_max_transition", minimax_max_transition},
+        {"pade_ridge_lambda", pade_ridge_lambda},
+        {"pade_ridge_den_weight", pade_ridge_den_weight},
+        {"pade_denominator_floor", pade_denominator_floor},
+        {"pade_thiele_den_cut", pade_thiele_den_cut},
+        {"qsgw_mixing_beta", qsgw_mixing_beta},
     };
 
     const std::vector<std::pair<std::string, int>> int_params{
@@ -96,6 +142,10 @@ void Params::print()
         {"option_dielect_func", option_dielect_func},
         {"output_Wc_Rf_mat", output_Wc_Rf_mat},
         {"nbands_G", nbands_G},
+        {"qsgw_mixing_history", qsgw_mixing_history},
+        {"qsgw_linear_mixing_steps", qsgw_linear_mixing_steps},
+        {"qsgw_min_iter", qsgw_min_iter},
+        {"qsgw_max_iter", qsgw_max_iter},
     };
 
     const std::vector<std::pair<std::string, std::string>> str_params
@@ -104,6 +154,9 @@ void Params::print()
             {"output_file", output_file},
             {"tfgrids_type", tfgrids_type},
             {"parallel_routing", parallel_routing},
+            {"anacon_method", anacon_method},
+            {"qsgw_mixer", qsgw_mixer},
+            {"qsgw_dump_dir", qsgw_dump_dir},
         };
 
     const std::vector<std::pair<std::string, bool>> bool_params{
@@ -124,6 +177,7 @@ void Params::print()
         {"output_hamgnn", output_hamgnn},
         {"use_2d_dielectric", use_2d_dielectric},
         {"use_pyatb", use_pyatb},
+        {"qsgw_dump_iter1", qsgw_dump_iter1},
     };
 
     for (const auto &param: str_params)

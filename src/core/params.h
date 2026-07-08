@@ -29,6 +29,23 @@ struct Params
     //! the number of parameters for analytic continuation
     static int n_params_anacon;
 
+    //! analytic-continuation method: thiele/pade (default), ridge, or ridge_guard.
+    //! Opt-in regularized-rational continuation; the bare Thiele continued
+    //! fraction remains the default and is used whenever this is "thiele".
+    static std::string anacon_method;
+
+    //! ridge strength for the opt-in regularized rational analytic continuation
+    static double pade_ridge_lambda;
+
+    //! multiplier on the denominator-coefficient ridge penalty
+    static double pade_ridge_den_weight;
+
+    //! denominator magnitude floor used by the regularized rational continuation
+    static double pade_denominator_floor;
+
+    //! Thiele continued-fraction denominator cut for the ridge_guard continuation
+    static double pade_thiele_den_cut;
+
     //! type of parallel routing
     static std::string parallel_routing;
 
@@ -149,6 +166,34 @@ struct Params
 
     //! sum of nbands in Green's function. nbands < 0 meanns sum over all states.
     static int nbands_G;
+
+    /* ==========================================================
+     * QSGW driver-only options
+     */
+
+    //! QSGW Hamiltonian mixer: linear or pulay/diis.
+    static std::string qsgw_mixer;
+
+    //! QSGW Hamiltonian mixing beta.
+    static double qsgw_mixing_beta;
+
+    //! QSGW Pulay/DIIS history length.
+    static int qsgw_mixing_history;
+
+    //! Number of initial QSGW iterations forced to linear mixing before Pulay.
+    static int qsgw_linear_mixing_steps;
+
+    //! Minimum QSGW iterations before convergence is accepted.
+    static int qsgw_min_iter;
+
+    //! Maximum QSGW iterations.
+    static int qsgw_max_iter;
+
+    //! Write the iter-1 QSGW matrix dump used by regression tests.
+    static bool qsgw_dump_iter1;
+
+    //! Optional QSGW dump directory; empty means output_dir/qsgw_dump.
+    static std::string qsgw_dump_dir;
 
     static void check_consistency();
     static void print();

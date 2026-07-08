@@ -9,6 +9,7 @@
 
 #include "librpa_enums.h"
 #include "../src/utils/constants.h"
+#include "../src/core/params.h"
 #include <regex>
 #include <sstream>
 #include <limits>
@@ -210,6 +211,7 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_string(driver_params, prefix_shrink_sinvS);
     _parse_string(driver_params, prefix_coul_full);
     _parse_string(driver_params, prefix_coul_cut);
+    _parse_string(driver_params, legacy_coulomb_layout);
     _parse_string(driver_params, prefix_eigvecs_scf);
     _parse_string(driver_params, fn_stru);
     _parse_string(driver_params, fn_basis);
@@ -282,6 +284,7 @@ void parse_inputfile_to_params(const std::string &fn)
 
     _parse_int(opts, n_bands_chi0);
     _parse_int(opts, n_bands_sigc);
+    _parse_int(opts, n_bands_sigc_min);
     _parse_int(opts, option_bvk_remap);
 
     // chi0 related
@@ -320,6 +323,14 @@ void parse_inputfile_to_params(const std::string &fn)
 
     // GW specific
     _parse_int(opts, n_params_anacon);
+    // Opt-in regularized-rational (ridge / ridge_guard) analytic continuation.
+    // Parsed straight into Params so the AnalyContPade ctor default arguments
+    // pick it up with no call-site change. Default "thiele" = legacy behaviour.
+    parser.parse_string("anacon_method", librpa_int::Params::anacon_method, "thiele", flag);
+    parser.parse_double("pade_ridge_lambda", librpa_int::Params::pade_ridge_lambda, 1e-10, flag);
+    parser.parse_double("pade_ridge_den_weight", librpa_int::Params::pade_ridge_den_weight, 1.0, flag);
+    parser.parse_double("pade_denominator_floor", librpa_int::Params::pade_denominator_floor, 1e-12, flag);
+    parser.parse_double("pade_thiele_den_cut", librpa_int::Params::pade_thiele_den_cut, 1e-3, flag);
     _parse_double(opts, sqrt_coulomb_threshold);
     _parse_switch(opts, use_scalapack_gw_wc);
     _parse_switch(opts, load_sigc_from_file);
@@ -372,6 +383,23 @@ void parse_inputfile_to_params(const std::string &fn)
     if (opts.ifreq_output_wc_end >= 0 &&
         opts.ifreq_output_wc_end <= opts.ifreq_output_wc_start)
         throw std::runtime_error("ifreq_output_wc_end must be negative or greater than ifreq_output_wc_start");
+
+    // QSGW driver-specific controls.  They live in Params rather than the public
+    // LibrpaOptions C ABI because the current QSGW task is driver-only.
+    parser.parse_int("max_iter", librpa_int::Params::qsgw_max_iter, flag);
+    parser.parse_int("qsgw_max_iter", librpa_int::Params::qsgw_max_iter, flag);
+    parser.parse_int("qsgw_min_iter", librpa_int::Params::qsgw_min_iter, flag);
+    parser.parse_string("qsgw_mixer", librpa_int::Params::qsgw_mixer, flag);
+    if (flag != 0)
+        parser.parse_string("qsgw_mixer_mode", librpa_int::Params::qsgw_mixer, flag);
+    parser.parse_double("mixing_beta", librpa_int::Params::qsgw_mixing_beta, flag);
+    parser.parse_double("qsgw_mixing_beta", librpa_int::Params::qsgw_mixing_beta, flag);
+    parser.parse_int("mixing_history", librpa_int::Params::qsgw_mixing_history, flag);
+    parser.parse_int("qsgw_mixing_history", librpa_int::Params::qsgw_mixing_history, flag);
+    parser.parse_int("linear_mixing_steps", librpa_int::Params::qsgw_linear_mixing_steps, flag);
+    parser.parse_int("qsgw_linear_mixing_steps", librpa_int::Params::qsgw_linear_mixing_steps, flag);
+    parser.parse_bool("qsgw_dump_iter1", librpa_int::Params::qsgw_dump_iter1, flag);
+    parser.parse_string("qsgw_dump_dir", librpa_int::Params::qsgw_dump_dir, flag);
 
     // QPE solver
     _parse_int(opts, option_qpe_solver);
