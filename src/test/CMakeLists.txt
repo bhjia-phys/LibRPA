@@ -57,6 +57,7 @@ foreach(target
     test_profiler
     test_qpe_solver
     test_qsgw_mixing
+    test_qsgw_occupation
     test_rsh
     test_rpa_headwing
     test_symmetry
