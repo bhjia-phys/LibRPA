@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace librpa_int
@@ -54,14 +55,21 @@ OccupationResult update_qsgw_occupations(
     const OccupationSettings& settings)
 {
     validate_same_layout(live_meanfield, reference_meanfield);
+    if (&live_meanfield == &reference_meanfield)
+    {
+        throw std::invalid_argument(
+            "QSGW live and immutable reference mean fields must not alias");
+    }
     if (settings.temperature_kelvin != 0.0)
     {
         throw std::invalid_argument("Finite-temperature QSGW occupations are not implemented");
     }
-    if (!(settings.degeneracy_tolerance_ha > 0.0) ||
+    if (!std::isfinite(settings.degeneracy_tolerance_ha) ||
+        !std::isfinite(settings.electron_tolerance) ||
+        !(settings.degeneracy_tolerance_ha > 0.0) ||
         !(settings.electron_tolerance > 0.0))
     {
-        throw std::invalid_argument("QSGW occupation tolerances must be positive");
+        throw std::invalid_argument("QSGW occupation tolerances must be finite and positive");
     }
     if (kpoint_weights.size() !=
         static_cast<std::size_t>(live_meanfield.get_n_kpoints()))
@@ -78,7 +86,8 @@ OccupationResult update_qsgw_occupations(
         }
         kpoint_weight_sum += weight;
     }
-    if (std::abs(kpoint_weight_sum - 1.0) > settings.electron_tolerance)
+    if (!std::isfinite(kpoint_weight_sum) ||
+        std::abs(kpoint_weight_sum - 1.0) > settings.electron_tolerance)
     {
         throw std::invalid_argument("QSGW k-point weights must sum to one");
     }
@@ -92,7 +101,6 @@ OccupationResult update_qsgw_occupations(
 
     for (int spin = 0; spin < live_meanfield.get_n_spins(); ++spin)
     {
-        live_meanfield.get_weight()[spin].zero_out();
         for (int kpoint = 0; kpoint < live_meanfield.get_n_kpoints(); ++kpoint)
         {
             const double capacity = capacity_factor * kpoint_weights[kpoint];
@@ -107,10 +115,16 @@ OccupationResult update_qsgw_occupations(
                     throw std::invalid_argument(
                         "QSGW reference occupation exceeds its symmetry-weighted capacity");
                 }
+                const double energy =
+                    live_meanfield.get_eigenvals()[spin](kpoint, band);
+                if (!std::isfinite(energy))
+                {
+                    throw std::invalid_argument(
+                        "QSGW eigenvalues must be finite before occupation filling");
+                }
                 reference_electrons += reference_weight;
                 total_capacity += capacity;
-                states.push_back({live_meanfield.get_eigenvals()[spin](kpoint, band),
-                                  capacity, spin, kpoint, band});
+                states.push_back({energy, capacity, spin, kpoint, band});
             }
         }
     }
@@ -119,6 +133,11 @@ OccupationResult update_qsgw_occupations(
         total_electrons > total_capacity + settings.electron_tolerance)
     {
         throw std::invalid_argument("QSGW target electron count is outside state capacity");
+    }
+    if (!std::isfinite(reference_electrons) || !std::isfinite(total_capacity))
+    {
+        throw std::invalid_argument(
+            "QSGW reference electron count or state capacity is not finite");
     }
     if (std::abs(reference_electrons - total_electrons) > settings.electron_tolerance)
     {
@@ -142,6 +161,11 @@ OccupationResult update_qsgw_occupations(
         return lhs.band < rhs.band;
     });
 
+    auto updated_weights = live_meanfield.get_weight();
+    for (auto& spin_weights: updated_weights)
+    {
+        spin_weights.zero_out();
+    }
     double remaining = total_electrons;
     for (std::size_t begin = 0; begin < states.size();)
     {
@@ -164,7 +188,7 @@ OccupationResult update_qsgw_occupations(
         for (std::size_t index = begin; index < end; ++index)
         {
             const State& state = states[index];
-            live_meanfield.get_weight()[state.spin](state.kpoint, state.band) =
+            updated_weights[state.spin](state.kpoint, state.band) =
                 fraction * state.capacity;
         }
         remaining -= fraction * group_capacity;
@@ -184,8 +208,7 @@ OccupationResult update_qsgw_occupations(
     result.cbm = std::numeric_limits<double>::infinity();
     for (const State& state: states)
     {
-        const double weight =
-            live_meanfield.get_weight()[state.spin](state.kpoint, state.band);
+        const double weight = updated_weights[state.spin](state.kpoint, state.band);
         if (weight > settings.electron_tolerance)
         {
             result.vbm = std::max(result.vbm, state.energy);
@@ -220,6 +243,7 @@ OccupationResult update_qsgw_occupations(
     {
         throw std::runtime_error("QSGW updated occupations do not conserve charge");
     }
+    live_meanfield.get_weight() = std::move(updated_weights);
     live_meanfield.get_efermi() = result.chemical_potential;
     return result;
 }

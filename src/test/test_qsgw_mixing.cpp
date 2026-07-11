@@ -1,3 +1,8 @@
+// These tests intentionally use assert; keep it active in Release test builds.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include "../qsgw/mixing.h"
 
 #include <cassert>
@@ -105,7 +110,7 @@ void test_singular_pulay_history_falls_back_to_finite_linear_step()
     const auto first = mixer.mix(output1);
 
     matrix output2 = first.grid;
-    output2(0, 0) += 2.0;
+    output2(0, 0) += 1.0;
     const auto second = mixer.mix(output2);
 
     assert(second.decision.requested_mode == MixingMode::Pulay);
@@ -114,7 +119,7 @@ void test_singular_pulay_history_falls_back_to_finite_linear_step()
     assert(!second.decision.fallback_reason.empty());
     assert(std::isfinite(second.decision.reciprocal_condition));
     assert(second.decision.reciprocal_condition < options.min_reciprocal_condition);
-    assert_close(second.grid(0, 0), 0.6);
+    assert_close(second.grid(0, 0), 0.4);
     assert_close(second.grid(1, 0), 0.0);
 }
 

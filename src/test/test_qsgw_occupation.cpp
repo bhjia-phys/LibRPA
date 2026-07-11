@@ -1,8 +1,15 @@
+// These tests intentionally use assert; keep it active in Release test builds.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include "../qsgw/occupation.h"
 
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 
 using librpa_int::MeanField;
@@ -15,6 +22,21 @@ namespace
 void assert_close(const double actual, const double expected, const double tolerance = 1.0e-12)
 {
     assert(std::abs(actual - expected) < tolerance);
+}
+
+template <typename Function>
+void assert_invalid_argument(Function&& function)
+{
+    bool threw = false;
+    try
+    {
+        function();
+    }
+    catch (const std::invalid_argument&)
+    {
+        threw = true;
+    }
+    assert(threw);
 }
 
 double total_weight(const MeanField& meanfield)
@@ -87,12 +109,137 @@ void test_global_spin_filling_does_not_fill_one_electron_per_spin()
     assert(result.chemical_potential < 0.0);
 }
 
+void test_degenerate_frontier_uses_one_capacity_fraction()
+{
+    MeanField reference(1, 2, 1, 1, 1);
+    reference.get_weight()[0].zero_out();
+    reference.get_weight()[0](0, 0) = 1.0;
+
+    MeanField live = reference;
+    live.get_eigenvals()[0](0, 0) = 0.0;
+    live.get_eigenvals()[0](1, 0) = 0.0;
+
+    const auto result = update_qsgw_occupations(
+        live, reference, {0.75, 0.25}, 1.0, OccupationSettings{});
+
+    assert_close(live.get_weight()[0](0, 0), 0.75);
+    assert_close(live.get_weight()[0](1, 0), 0.25);
+    assert_close(result.electron_count, 1.0);
+    assert_close(result.chemical_potential, 0.0);
+    assert_close(result.gap, 0.0);
+    assert(result.metallic);
+}
+
+void test_spinor_capacity_is_one_electron_per_state()
+{
+    MeanField reference(1, 1, 2, 2, 2);
+    reference.get_weight()[0].zero_out();
+    reference.get_weight()[0](0, 0) = 1.0;
+
+    MeanField live = reference;
+    live.get_eigenvals()[0](0, 0) = -1.0;
+    live.get_eigenvals()[0](0, 1) = 1.0;
+
+    const auto result = update_qsgw_occupations(
+        live, reference, {1.0}, 1.0, OccupationSettings{});
+
+    assert_close(live.get_weight()[0](0, 0), 1.0);
+    assert_close(live.get_weight()[0](0, 1), 0.0);
+    assert_close(result.electron_count, 1.0);
+    assert_close(result.chemical_potential, 0.0);
+    assert(!result.metallic);
+}
+
+void test_nonfinite_energy_rejection_preserves_live_state()
+{
+    MeanField reference(1, 1, 2, 2, 1);
+    reference.get_weight()[0].zero_out();
+    reference.get_weight()[0](0, 0) = 2.0;
+
+    MeanField live = reference;
+    live.get_weight()[0](0, 0) = 0.25;
+    live.get_weight()[0](0, 1) = 0.75;
+    live.get_efermi() = 0.125;
+    live.get_eigenvals()[0](0, 0) =
+        std::numeric_limits<double>::quiet_NaN();
+    live.get_eigenvals()[0](0, 1) = 1.0;
+
+    assert_invalid_argument([&]() {
+        update_qsgw_occupations(
+            live, reference, {1.0}, 2.0, OccupationSettings{});
+    });
+    assert_close(live.get_weight()[0](0, 0), 0.25);
+    assert_close(live.get_weight()[0](0, 1), 0.75);
+    assert_close(live.get_efermi(), 0.125);
+}
+
+void test_invalid_reference_rejection_preserves_live_state()
+{
+    MeanField reference(1, 1, 2, 2, 1);
+    reference.get_weight()[0].zero_out();
+    reference.get_weight()[0](0, 0) = 2.5;
+
+    MeanField live = reference;
+    live.get_weight()[0](0, 0) = 0.5;
+    live.get_weight()[0](0, 1) = 0.25;
+    live.get_efermi() = -0.25;
+
+    assert_invalid_argument([&]() {
+        update_qsgw_occupations(
+            live, reference, {1.0}, 2.5, OccupationSettings{});
+    });
+    assert_close(live.get_weight()[0](0, 0), 0.5);
+    assert_close(live.get_weight()[0](0, 1), 0.25);
+    assert_close(live.get_efermi(), -0.25);
+}
+
+void test_live_reference_alias_is_rejected_without_mutation()
+{
+    MeanField live(1, 1, 2, 2, 1);
+    live.get_weight()[0].zero_out();
+    live.get_weight()[0](0, 0) = 2.0;
+    live.get_eigenvals()[0](0, 0) = -1.0;
+    live.get_eigenvals()[0](0, 1) = 1.0;
+    live.get_efermi() = 0.25;
+
+    assert_invalid_argument([&]() {
+        update_qsgw_occupations(
+            live, live, {1.0}, 2.0, OccupationSettings{});
+    });
+    assert_close(live.get_weight()[0](0, 0), 2.0);
+    assert_close(live.get_weight()[0](0, 1), 0.0);
+    assert_close(live.get_efermi(), 0.25);
+}
+
+void test_finite_temperature_rejection_preserves_live_state()
+{
+    MeanField reference(1, 1, 1, 1, 1);
+    reference.get_weight()[0](0, 0) = 2.0;
+    MeanField live = reference;
+    live.get_weight()[0](0, 0) = 0.5;
+    live.get_efermi() = -0.5;
+
+    OccupationSettings settings;
+    settings.temperature_kelvin = 300.0;
+    assert_invalid_argument([&]() {
+        update_qsgw_occupations(live, reference, {1.0}, 2.0, settings);
+    });
+    assert_close(live.get_weight()[0](0, 0), 0.5);
+    assert_close(live.get_efermi(), -0.5);
+}
+
 } // namespace
 
 int main()
 {
     test_global_filling_preserves_nonuniform_kpoint_weights();
     test_global_spin_filling_does_not_fill_one_electron_per_spin();
+    test_degenerate_frontier_uses_one_capacity_fraction();
+    test_spinor_capacity_is_one_electron_per_state();
+    test_nonfinite_energy_rejection_preserves_live_state();
+    test_invalid_reference_rejection_preserves_live_state();
+    test_live_reference_alias_is_rejected_without_mutation();
+    test_finite_temperature_rejection_preserves_live_state();
     std::cout << "test_qsgw_occupation: all tests passed\n";
     return 0;
 }
