@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace librpa_int
 {
@@ -20,6 +21,10 @@ struct MixingOptions
 {
     MixingMode mode = MixingMode::Linear;
     double beta = 0.2;
+    int max_history = 8;
+    double min_reciprocal_condition = 1.0e-12;
+    double max_coefficient_l1 = 20.0;
+    double max_residual_growth = 4.0;
 };
 
 struct MixingDecision
@@ -29,6 +34,8 @@ struct MixingDecision
     double beta = 0.2;
     bool fell_back = false;
     std::string fallback_reason;
+    double reciprocal_condition = 1.0;
+    std::vector<double> coefficients;
 };
 
 struct HamiltonianMixResult
@@ -36,6 +43,8 @@ struct HamiltonianMixResult
     matrix grid;
     std::optional<matrix> band;
     MixingDecision decision;
+    double residual_l2 = 0.0;
+    double residual_max = 0.0;
 };
 
 class HamiltonianMixer
@@ -52,8 +61,10 @@ public:
 private:
     MixingOptions options_;
     bool initialized_ = false;
-    matrix grid_input_;
-    std::optional<matrix> band_input_;
+    std::vector<matrix> grid_input_history_;
+    std::vector<matrix> grid_residual_history_;
+    std::vector<matrix> band_input_history_;
+    std::vector<matrix> band_residual_history_;
 
     HamiltonianMixResult mix_impl(
         const matrix& grid_output,
