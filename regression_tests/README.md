@@ -209,6 +209,41 @@ Useful `<validate>` attributes:
 - `binary_extract`: reserved for binary-output extractors. Plain-text output is
   used when this attribute is omitted.
 
+### QSGW trace comparisons
+
+QSGW regression cases should set `qsgw_write_iteration_matrices = true` and
+validate all three machine-readable traces. The QSGW comparison functions use
+the physical row keys rather than file order, reject missing or duplicate
+entries, and reject non-finite values:
+
+```xml
+<validate name="QSGW iteration summary"
+          file="librpa/qsgw_iterations.dat"
+          comparison="cmp_qsgw.iteration_summary(energy_tolerance_ev=1e-5,residual_tolerance_ha=1e-8,scalar_tolerance=1e-10,coefficient_tolerance=1e-12)"
+/>
+<validate name="QSGW fixed-basis eigenvalues"
+          file="librpa/qsgw_eigenvalues.dat"
+          comparison="cmp_qsgw.eigenvalue_trace(tolerance_ha=1e-6,coordinate_tolerance=1e-12)"
+/>
+<validate name="QSGW iteration matrices"
+          file="librpa/qsgw_matrices.dat"
+          comparison="cmp_qsgw.matrix_trace(relative_tolerance=1e-8,absolute_tolerance=1e-12,hermiticity_tolerance=1e-10,unitarity_tolerance=1e-10)"
+/>
+```
+
+For every nonzero reference matrix block, `matrix_trace` applies the relative
+Frobenius tolerance directly. The absolute tolerance is used only when the
+reference block is numerically zero. It also checks Hermiticity of static
+Hamiltonian components and unitarity of every `rotation_u` block on both the
+test and reference sides.
+
+QSGW reference traces must be generated from the pre-port QSGW source and carry
+the source snapshot, executable hash, input hashes, compiler/dependency data,
+and MPI/OMP environment needed to reproduce them. Do not generate or update a
+QSGW reference from the implementation under test. If the legacy output first
+needs a deterministic format conversion, retain the original legacy artifacts,
+the conversion command, and the converted trace together in `refs/${CASE}`.
+
 ## Reference update guidelines
 
 - Do not edit reference output by hand. Reference data should match the commit
