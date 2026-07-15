@@ -1,0 +1,21 @@
+target_sources(rpa_lib PRIVATE
+  correlation_potential.cpp
+  convergence.cpp
+  distributed_matrix.cpp
+  effective_hamiltonian.cpp
+  fixed_basis.cpp
+  hamiltonian_mixing.cpp
+  hartree_density.cpp
+  hartree_kernel.cpp
+  hartree_route.cpp
+  hartree_workflow.cpp
+  headwing_update.cpp
+  input_contract.cpp
+  iteration_trace.cpp
+  mixing.cpp
+  occupation.cpp
+  operator_fourier.cpp
+  projection_target.cpp
+  sha256.cpp
+  vxc_io.cpp
+)

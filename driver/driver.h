@@ -250,6 +250,34 @@ struct DriverParams
     //! Experimental
     int sf_state_end;
 
+    //! Provenance and semantic contract for all QSGW input files.
+    std::string qsgw_input_contract;
+
+    //! Fixed-basis Hamiltonian mixing (`none` or `linear`).
+    std::string qsgw_mixer;
+
+    //! Linear Hamiltonian mixing fraction.
+    double qsgw_mixing_beta;
+
+    //! Minimum and maximum numbers of QSGW updates.
+    int qsgw_min_iter;
+    int qsgw_max_iter;
+
+    //! Write per-iteration matrices used by numerical regression tests.
+    bool qsgw_write_iteration_matrices;
+
+    //! Maximum eigenvalue change used for convergence, in eV.
+    double qsgw_convergence_tolerance_ev;
+
+    //! Include the density-difference Hartree contribution.
+    bool qsgw_update_hartree;
+
+    //! Coulomb input used by QSGW Hartree (`full` or `truncated`).
+    std::string qsgw_hartree_coulomb;
+
+    //! QSGW Hartree k-point normalization convention.
+    std::string qsgw_hartree_normalization;
+
     std::string format();
 
     DriverParams();

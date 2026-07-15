@@ -45,7 +45,17 @@ DriverParams::DriverParams():
     sf_omega_end(1.0),
     sf_omega_step(0.1),
     sf_state_start(-1),
-    sf_state_end(-1)
+    sf_state_end(-1),
+    qsgw_input_contract("qsgw_input.contract"),
+    qsgw_mixer("linear"),
+    qsgw_mixing_beta(0.2),
+    qsgw_min_iter(1),
+    qsgw_max_iter(10),
+    qsgw_write_iteration_matrices(false),
+    qsgw_convergence_tolerance_ev(1.0e-4),
+    qsgw_update_hartree(false),
+    qsgw_hartree_coulomb("full"),
+    qsgw_hartree_normalization("weighted_occupations")
 {
 }
 
@@ -97,6 +107,24 @@ std::string DriverParams::format()
     ss << "cs_R_threshold = " << cs_threshold << std::endl;
     ss << "i_state_low = " << i_state_low << std::endl;
     ss << "i_state_high = " << i_state_high << std::endl;
+    if (task == "qsgw" || task == "qsgw_band")
+    {
+        ss << "qsgw_input_contract = " << qsgw_input_contract << std::endl;
+        ss << "qsgw_mixer = " << qsgw_mixer << std::endl;
+        ss << "qsgw_mixing_beta = " << qsgw_mixing_beta << std::endl;
+        ss << "qsgw_min_iter = " << qsgw_min_iter << std::endl;
+        ss << "qsgw_max_iter = " << qsgw_max_iter << std::endl;
+        ss << "qsgw_convergence_tolerance_ev = "
+           << qsgw_convergence_tolerance_ev << std::endl;
+        ss << "qsgw_write_iteration_matrices = " << std::boolalpha
+           << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_update_hartree = " << std::boolalpha
+           << qsgw_update_hartree << std::endl;
+        ss << "qsgw_hartree_coulomb = "
+           << qsgw_hartree_coulomb << std::endl;
+        ss << "qsgw_hartree_normalization = "
+           << qsgw_hartree_normalization << std::endl;
+    }
     if (output_gw_spec_func)
     {
         ss << "sf_omega_start = " << sf_omega_start << std::endl;
