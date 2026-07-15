@@ -1,0 +1,11 @@
+commit b484f2a9a252c8a7169c67e9781da6f9c07c310a
+Author:     Minye Zhang <minyez.physchem@gmail.com>
+AuthorDate: Mon Jul 13 00:13:20 2026 +0800
+Commit:     Minye Zhang <minyez.physchem@gmail.com>
+CommitDate: Mon Jul 13 00:13:20 2026 +0800
+
+    refactor: collect Sigc shards before writing
+    
+    This will remove duplicate (IJR) keys and hence
+    reduce disk consumption of restart files, in best
+    case a ratio of number of MPI tasks.

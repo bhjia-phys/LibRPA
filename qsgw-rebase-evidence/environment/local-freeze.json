@@ -1,0 +1,15 @@
+{
+    "captured_at_utc":  "2026-07-15T08:01:29.7618585Z",
+    "host":  "JIABOHAN",
+    "os":  "Microsoft Windows NT 10.0.26200.0",
+    "shell":  "Windows PowerShell",
+    "powershell_edition":  "Desktop",
+    "powershell_version":  "5.1.26100.8655",
+    "windows":  true,
+    "wsl":  false,
+    "repository":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714",
+    "branch":  "codex/qsgw-independent-upstream-1376-20260714",
+    "head":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+    "heavy_compute_policy":  "SSH to fish/dongfang; dongfang via sbatch only",
+    "remote_execution_status":  "not attempted in frozen local audit; prior approval transport failed and requires explicit reapproval"
+}

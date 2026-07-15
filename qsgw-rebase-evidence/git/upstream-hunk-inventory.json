@@ -1,0 +1,340 @@
+{
+  "schema_version": "1.0",
+  "upstream_old": "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
+  "upstream_new": "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+  "coverage_assertion": "complete",
+  "scope_note": "Classifications describe the complete upstream old..new range. Crystal-symmetry QSGW validation remains out of scope, but shared contracts reachable from full-BZ QSGW are still audited.",
+  "commits": [
+    {
+      "commit": "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2",
+      "change_ids": ["UP-BVK-LOG-001"]
+    },
+    {
+      "commit": "72559e92cf8ad54fad70466598657ebcd5cf265a",
+      "change_ids": ["UP-HEAD-GAMMA-VOLUME-001"]
+    },
+    {
+      "commit": "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+      "change_ids": ["UP-SYMMETRY-TEXT-TOL-001"]
+    },
+    {
+      "commit": "4c302ffaacee239105960453f0c59331ce082f32",
+      "change_ids": ["UP-HEADWING-SYMMETRY-ROUTE-001"]
+    },
+    {
+      "commit": "0aaf08f7e24bd6b9e13efc1b12f29d56474935a2",
+      "change_ids": ["UP-REGRESSION-DEBUG-001"]
+    },
+    {
+      "commit": "cfc6b188176752771890f38e001ed950f6ad5115",
+      "change_ids": ["UP-REGRESSION-CASE-001"]
+    },
+    {
+      "commit": "84a62bfcca0b3cbdeee1eb22344f79f0b96fa904",
+      "change_ids": ["UP-REGRESSION-STABILITY-001"]
+    },
+    {
+      "commit": "35043ae5251a86ad6d13112db77b8361eb95f73d",
+      "change_ids": ["UP-REGRESSION-PHASE-001"]
+    },
+    {
+      "commit": "133a606143e8c9b765277051204c1bc0f59144fe",
+      "change_ids": ["UP-HEADWING-DIAGNOSTICS-001", "UP-REGRESSION-DIAGNOSTICS-001"]
+    },
+    {
+      "commit": "318e3e426a3dfac4810d8a5c060021f8713d84dc",
+      "change_ids": ["UP-KBLACS-MF-OWNERSHIP-001"]
+    },
+    {
+      "commit": "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+      "change_ids": [
+        "UP-KPARA-HEADWING-CONTRACT-001",
+        "U3-HEAD-MATRIX-GETTER-001"
+      ]
+    },
+    {
+      "commit": "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
+      "change_ids": ["UP-ATOM-BASIS-MAP-001"]
+    },
+    {
+      "commit": "14704c11c735069afd8c23e95a5f087731c3ce56",
+      "change_ids": ["UP-COMMUNICATOR-OWNERSHIP-001"]
+    },
+    {
+      "commit": "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+      "change_ids": ["UP-REGRESSION-KPARA-001"]
+    }
+  ],
+  "changes": [
+    {
+      "id": "UP-BVK-LOG-001",
+      "commit": "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2",
+      "classification": "U1",
+      "paths": ["src/api/compute_helper.cpp"],
+      "symbols": ["librpa_int::api::build_band_bvk_remap"],
+      "semantic_impact": {
+        "api": "unchanged",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "unchanged",
+        "symmetry": "unchanged"
+      },
+      "qsgw_reachability": "qsgw_band calls build_band_bvk_remap; only verbosity changes",
+      "resolution": "accept upstream unchanged; observe build and qsgw_band logs"
+    },
+    {
+      "id": "UP-HEAD-GAMMA-VOLUME-001",
+      "commit": "72559e92cf8ad54fad70466598657ebcd5cf265a",
+      "classification": "U1",
+      "paths": ["src/core/dielecmodel.cpp", "src/core/dielecmodel.h", "src/test/test_rpa_headwing.cpp"],
+      "symbols": ["diele_func::cal_eps", "diele_func::compute_rpa_trace_log_average", "rpa_headwing_gamma_cell_volume"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "changed",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "changed",
+        "occupations": "unchanged",
+        "call_ordering": "unchanged",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "QSGW full-BZ head/head-wing calls the same dielectric head path; the BvK-cell normalization is inherited",
+      "resolution": "accept upstream numerical normalization; compare against upstream G0W0 and structural invariants rather than forcing legacy head equality"
+    },
+    {
+      "id": "UP-SYMMETRY-TEXT-TOL-001",
+      "commit": "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+      "classification": "U1",
+      "paths": ["src/core/symmetry_context.cpp", "src/test/test_symmetry_context.cpp"],
+      "symbols": ["find_symmetry_atom_target"],
+      "semantic_impact": {
+        "api": "unchanged",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "unchanged",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "not executed by the required no-crystal-symmetry path; remains protected shared code",
+      "resolution": "accept upstream unchanged; do not run or claim crystal-symmetry QSGW validation"
+    },
+    {
+      "id": "UP-HEADWING-SYMMETRY-ROUTE-001",
+      "commit": "4c302ffaacee239105960453f0c59331ce082f32",
+      "classification": "U1",
+      "paths": ["driver/read_data.cpp", "src/api/dataset_helper.cpp", "src/core/dielecmodel.cpp"],
+      "symbols": ["read_headwing_input", "initialize_ds_headwing", "diele_func::cal_head_symmetric", "diele_func::cal_wing_symmetric"],
+      "semantic_impact": {
+        "api": "unchanged",
+        "matrix_layout": "unchanged",
+        "basis": "changed",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "changed",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "head-wing setup is shared, while the changed restoration branch is disabled by the current no-symmetry contract",
+      "resolution": "accept upstream unchanged; full-BZ head/head-wing tests remain required"
+    },
+    {
+      "id": "UP-REGRESSION-DEBUG-001",
+      "commit": "0aaf08f7e24bd6b9e13efc1b12f29d56474935a2",
+      "classification": "U0",
+      "paths": ["regression_tests/testcases/g0w0_band_abacus_BN_headwing_libri/librpa/librpa.in"],
+      "symbols": [],
+      "semantic_impact": "regression input verbosity only",
+      "qsgw_reachability": "outside src and outside the QSGW dependency graph",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    },
+    {
+      "id": "UP-REGRESSION-CASE-001",
+      "commit": "cfc6b188176752771890f38e001ed950f6ad5115",
+      "classification": "U0",
+      "paths": ["regression_tests/refs/rpa_abacus_BN_headwing_sym_shrink_v1_libri", "regression_tests/testcases/rpa_abacus_BN_headwing_sym_shrink_v1_libri", "regression_tests/testsuite.xml"],
+      "symbols": [],
+      "semantic_impact": "new upstream regression data and registration",
+      "qsgw_reachability": "outside src and not a QSGW source/interface path",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    },
+    {
+      "id": "UP-REGRESSION-STABILITY-001",
+      "commit": "84a62bfcca0b3cbdeee1eb22344f79f0b96fa904",
+      "classification": "U0",
+      "paths": ["regression_tests/testsuite.xml"],
+      "symbols": [],
+      "semantic_impact": "regression validation expression only",
+      "qsgw_reachability": "outside src and outside the QSGW dependency graph",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    },
+    {
+      "id": "UP-REGRESSION-PHASE-001",
+      "commit": "35043ae5251a86ad6d13112db77b8361eb95f73d",
+      "classification": "U0",
+      "paths": ["regression_tests/testsuite.xml"],
+      "symbols": [],
+      "semantic_impact": "phase-invariant regression comparison only",
+      "qsgw_reachability": "outside src and outside the QSGW dependency graph",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    },
+    {
+      "id": "UP-HEADWING-DIAGNOSTICS-001",
+      "commit": "133a606143e8c9b765277051204c1bc0f59144fe",
+      "classification": "U1",
+      "paths": ["src/core/dielecmodel.cpp"],
+      "symbols": ["diele_func::cal_head", "diele_func::cal_wing", "diele_func::test_head", "diele_func::test_wing", "diele_func::wing_mu_to_lambda"],
+      "semantic_impact": {
+        "api": "unchanged",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "changed",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "changed",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "QSGW calls cal_head/cal_wing; numerical accumulation is unchanged but debug collectives and logging are reachable",
+      "resolution": "accept upstream unchanged; exercise full-BZ head/head-wing and MPI observers"
+    },
+    {
+      "id": "UP-REGRESSION-DIAGNOSTICS-001",
+      "commit": "133a606143e8c9b765277051204c1bc0f59144fe",
+      "classification": "U0",
+      "paths": ["regression_tests/refs/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.out", "regression_tests/testcases/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.in", "regression_tests/testsuite.xml"],
+      "symbols": [],
+      "semantic_impact": "regression output and validation metadata",
+      "qsgw_reachability": "outside src and outside the QSGW dependency graph",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    },
+    {
+      "id": "UP-KBLACS-MF-OWNERSHIP-001",
+      "commit": "318e3e426a3dfac4810d8a5c060021f8713d84dc",
+      "classification": "U2",
+      "paths": ["src/core/chi0.cpp", "src/core/epsilon.cpp", "src/core/exx.cpp", "src/core/gw.cpp", "src/core/meanfield_mpi.cpp", "src/core/meanfield_mpi.h", "src/core/symmetry_context.cpp", "src/core/symmetry_context.h", "src/test"],
+      "symbols": ["get_dmat_cplx_Rs_kblacs_para", "get_gf_cplx_imagtimes_Rs_kblacs_para", "Chi0::build_chi0_q_space_time_LibRI_routing", "Exx::build", "G0W0::build_spacetime", "restore_symmetry_dense_wq_map"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "changed",
+        "basis": "changed",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "changed",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "changed",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "each QSGW iteration calls upstream chi0/EXX/GW and consumes kBLACS-owned fixed-basis matrices",
+      "resolution": "accept upstream; adapt only QSGW collection/projection ownership and test MPI 1/2/4"
+    },
+    {
+      "id": "UP-KPARA-HEADWING-CONTRACT-001",
+      "commit": "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+      "classification": "U2",
+      "paths": ["driver/read_data.cpp", "src/core/chi0.cpp", "src/core/chi0.h", "src/core/dielecmodel.cpp", "src/core/dielecmodel.h", "src/core/exx.cpp", "src/core/gw.cpp", "src/core/meanfield_mpi.cpp", "src/core/symmetry_context.cpp", "src/core/symmetry_context.h", "src/test"],
+      "symbols": ["read_headwing_input", "headwing_local_kpoints", "diele_func::init", "diele_func::cal_head_full_bz", "diele_func::cal_wing_full_bz", "Exx::build", "G0W0::build_spacetime"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "changed",
+        "basis": "changed",
+        "units": "unchanged",
+        "normalization": "changed",
+        "mpi_ownership": "changed",
+        "k_point_weights": "changed",
+        "occupations": "unchanged",
+        "call_ordering": "changed",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "the full-BZ QSGW head/head-wing and upstream GW/EXX paths use the changed active-k mapping and distributed ownership contract even with crystal symmetry disabled",
+      "resolution": "accept upstream; bind live mean-field and velocity in the QSGW adapter and observe head-only/head-wing plus MPI"
+    },
+    {
+      "id": "U3-HEAD-MATRIX-GETTER-001",
+      "commit": "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+      "classification": "U3",
+      "paths": ["src/core/dielecmodel.h"],
+      "symbols": ["diele_func::head", "diele_func::get_head_matrices"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "unchanged",
+        "symmetry": "unchanged"
+      },
+      "qsgw_reachability": "the new full-BZ QSGW trace adapter needs a const view of the full head tensor after upstream cal_head; upstream exposes only a scalar derived vector",
+      "resolution": "approved by APPROVAL-U3-HEAD-MATRIX-GETTER-001 for the exact five-line read-only interface hunk and its evidence-linked observers only"
+    },
+    {
+      "id": "UP-ATOM-BASIS-MAP-001",
+      "commit": "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
+      "classification": "U1",
+      "paths": ["src/core/chi0.cpp", "src/core/exx.cpp", "src/core/gw.cpp"],
+      "symbols": ["build_gf_Rt_libri_kblacs_para", "build_dmat_libri_kblacs_para", "build_gf_libri_kblacs_para", "AtomicBasis::get_atom_nb_map"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "unchanged",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "unchanged",
+        "symmetry": "unchanged"
+      },
+      "qsgw_reachability": "every QSGW iteration calls these upstream GW/EXX/chi0 builders",
+      "resolution": "accept upstream unchanged; protect with G0W0 A/B and QSGW iteration-zero observer"
+    },
+    {
+      "id": "UP-COMMUNICATOR-OWNERSHIP-001",
+      "commit": "14704c11c735069afd8c23e95a5f087731c3ce56",
+      "classification": "U2",
+      "paths": ["src/api/compute_exx.cpp", "src/api/compute_g0w0.cpp", "src/core/coulmat.cpp", "src/core/coulmat.h", "src/core/epsilon.cpp"],
+      "symbols": ["FT_Vq", "gather_symmetry_ibz_blocks_collective", "accumulate_symmetry_full_wr_from_ibz_q", "librpa_build_exx", "librpa_build_g0w0_sigma"],
+      "semantic_impact": {
+        "api": "changed",
+        "matrix_layout": "unchanged",
+        "basis": "unchanged",
+        "units": "unchanged",
+        "normalization": "unchanged",
+        "mpi_ownership": "changed",
+        "k_point_weights": "unchanged",
+        "occupations": "unchanged",
+        "call_ordering": "changed",
+        "symmetry": "changed"
+      },
+      "qsgw_reachability": "QSGW uses Dataset::comm_h and upstream G0W0/EXX APIs; the communicator must remain consistent with QSGW collectives",
+      "resolution": "accept upstream; use Dataset::comm_h at adapter boundaries and test MPI 1/2/4"
+    },
+    {
+      "id": "UP-REGRESSION-KPARA-001",
+      "commit": "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+      "classification": "U0",
+      "paths": ["regression_tests/testcases/g0w0_band_abacus_BN_headwing_libri/librpa/librpa.in"],
+      "symbols": [],
+      "semantic_impact": "upstream regression parameter only",
+      "qsgw_reachability": "outside src and outside the QSGW dependency graph",
+      "resolution": "accept upstream unchanged; retain upstream regression observer"
+    }
+  ]
+}

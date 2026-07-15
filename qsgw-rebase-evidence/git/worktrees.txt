@@ -1,0 +1,16 @@
+worktree F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-upstream-port-20260711-local
+HEAD 9dcdd29c01f9c65eb0b2a9fd68e55c4ce1538860
+branch refs/heads/codex/qsgw-upstream-port-20260711
+
+worktree F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-20260713
+HEAD b484f2a9a252c8a7169c67e9781da6f9c07c310a
+branch refs/heads/codex/qsgw-independent-upstream-20260713
+
+worktree F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714
+HEAD 1376ee4f45a7611a55c5b92c4ba41409d515bcea
+branch refs/heads/codex/qsgw-independent-upstream-1376-20260714
+
+worktree F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-symmetry-output-prereq-20260713
+HEAD b484f2a9a252c8a7169c67e9781da6f9c07c310a
+branch refs/heads/codex/symmetry-output-prereq-20260713
+

@@ -1,0 +1,73 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 3bdde8eabbf6712ac8cdd94b47590cd6875558c8..4c779f65d8da9fab1c21bb7b4fca1db487dbd4dc 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -169,6 +169,7 @@ endif()
+ 
+ # source must be PRIVATE to avoid recompilation when linking driver to this library
+ target_sources(rpa_lib PRIVATE ${lib_sources})
++add_subdirectory(qsgw)
+ target_link_libraries(rpa_lib PRIVATE ${math_libs} ${parallel_libs})
+ 
+ install(TARGETS rpa_lib
+diff --git a/src/core/dielecmodel.h b/src/core/dielecmodel.h
+index 82f7cb0ee01b6a34103d8c2efb3844634f945276..7a02545ffbe6ba46ad6e8c0477abb5a392f6146b 100644
+--- a/src/core/dielecmodel.h
++++ b/src/core/dielecmodel.h
+@@ -246,6 +246,11 @@ public:
+     double cal_factor(std::string name);
+     void test_head();
+     std::vector<double> get_head_vec();
++    const std::vector<matrix_m<std::complex<double>>>&
++    get_head_matrices() const noexcept
++    {
++        return head;
++    }
+     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+ 
+     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
+diff --git a/src/test/CMakeLists.txt b/src/test/CMakeLists.txt
+index 715778ad513d7f677e1b67aa6f747a45708e6d40..d8784c07597b27a1195510ed468b6bd7cd71fc86 100644
+--- a/src/test/CMakeLists.txt
++++ b/src/test/CMakeLists.txt
+@@ -42,6 +42,9 @@ foreach(target
+     test_base_utility
+     test_blas_lapack
+     test_complexmatrix
++    test_qsgw_correlation_potential
++    test_qsgw_convergence
++    test_qsgw_effective_hamiltonian
+     test_fitting
+     test_io
+     test_symmetry_context
+@@ -55,6 +58,21 @@ foreach(target
+     test_meanfield
+     test_pbc
+     test_profiler
++    test_qsgw_fixed_basis
++    test_qsgw_hamiltonian_mixing
++    test_qsgw_hartree_density
++    test_qsgw_hartree_kernel
++    test_qsgw_hartree_route
++    test_qsgw_hartree_workflow
++    test_qsgw_headwing_update
++    test_qsgw_input_contract
++    test_qsgw_iteration_trace
++    test_qsgw_mixing
++    test_qsgw_occupation
++    test_qsgw_operator_fourier
++    test_qsgw_projection_target
++    test_qsgw_sha256
++    test_qsgw_vxc_io
+     test_qpe_solver
+     test_rsh
+     test_rpa_headwing
+@@ -72,6 +90,8 @@ foreach(target
+   test_base_mpi
+   test_blacs
+   test_dataset
++  test_qsgw_distributed_matrix
++  test_qsgw_fixed_basis_mpi
+   test_matrix_m_mpi
+   test_meanfield_mpi
+   test_kpoint_blacs_parallel_context

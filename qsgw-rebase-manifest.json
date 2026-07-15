@@ -1,0 +1,2046 @@
+{
+    "schema_version":  "1.0",
+    "repository":  {
+                       "path":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714",
+                       "worktree":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714",
+                       "branch":  "codex/qsgw-independent-upstream-1376-20260714",
+                       "status_snapshot":  "qsgw-rebase-evidence/git/status.txt",
+                       "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
+                       "commits":  {
+                                       "branch_head":  {
+                                                           "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                       },
+                                       "upstream_old":  {
+                                                            "hash":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
+                                                            "reference":  "qsgw-rebase-evidence/git/upstream-old.txt"
+                                                        },
+                                       "upstream_new":  {
+                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                        },
+                                       "qsgw_old":  {
+                                                        "hash":  "cb2940201b1f44b1c38b90169048b7d060e44732",
+                                                        "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
+                                                    },
+                                       "rebase_head":  {
+                                                           "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                       }
+                                   }
+                   },
+    "provenance":  {
+                       "source":  {
+                                      "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                      "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                  },
+                       "executable":  {
+                                          "path":  null,
+                                          "sha256":  null,
+                                          "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                          "reference":  "pending: clean remote Gate-0 build has not been created"
+                                      },
+                       "dataset":  {
+                                       "id":  null,
+                                       "path":  null,
+                                       "sha256":  null,
+                                       "reference":  "pending: immutable Si-k444 no-symmetry dataset manifest"
+                                   },
+                       "inputs":  [
+                                      {
+                                          "id":  "librpa-input",
+                                          "path":  null,
+                                          "sha256":  null,
+                                          "reference":  "pending: clean Si-k444 no-symmetry librpa.in"
+                                      }
+                                  ],
+                       "environment":  {
+                                           "host":  "pending remote fish/dongfang compute host",
+                                           "os":  "pending remote Linux capture",
+                                           "compiler":  {
+                                                            "name":  null,
+                                                            "version":  null,
+                                                            "reference":  "pending: Gate-0 compiler capture"
+                                                        },
+                                           "libraries":  [
+                                                             {
+                                                                 "name":  "LibRI",
+                                                                 "version":  null,
+                                                                 "reference":  "pending: exact LibRI commit and dirty-diff capture"
+                                                             }
+                                                         ],
+                                           "mpi":  {
+                                                       "implementation":  null,
+                                                       "version":  null,
+                                                       "ranks":  1
+                                                   },
+                                           "omp_threads":  1,
+                                           "variables":  {
+                                                             "OMP_PROC_BIND":  "close",
+                                                             "OMP_PLACES":  "cores",
+                                                             "LIBRI_DETERMINISTIC_REDUCTION":  "1"
+                                                         },
+                                           "random_seed":  null,
+                                           "capture":  {
+                                                           "path":  "qsgw-rebase-evidence/environment/local-freeze.json",
+                                                           "sha256":  "52804ab429c97eb7514f4a8b2328c042902d954b3e737fa0c3667d03109eff78",
+                                                           "reference":  "local freeze only; remote environment remains pending"
+                                                       }
+                                       },
+                       "parameters":  {
+                                          "mix_mode":  "disabled",
+                                          "head":  false,
+                                          "wing":  false,
+                                          "hartree":  false,
+                                          "band":  false,
+                                          "use_symmetry_gw":  false,
+                                          "use_symmetry_exx":  false,
+                                          "max_iter":  1
+                                      },
+                       "comparator":  {
+                                          "name":  "cmp_qsgw trace comparator",
+                                          "version":  "contract-v5 candidate 7d69a18c",
+                                          "sha256":  "7cb36796e97e88c3a3f4b02a1d9f2dcca4b50ccf6f99689eaeb997352178be9e",
+                                          "reference":  "regression_tests/backend/comparisons/cmp_qsgw.py",
+                                          "tolerances":  {
+                                                             "eigenvalue_Ha":  1E-06,
+                                                             "gap_eV":  1E-05,
+                                                             "matrix_relative_frobenius":  1E-08,
+                                                             "hermiticity":  1E-10,
+                                                             "orthogonality":  1E-10
+                                                         }
+                                      }
+                   },
+    "upstream_inventory":  {
+                               "old_commit":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
+                               "new_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                               "commit_list":  {
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-commit-list.txt",
+                                                   "sha256":  "e324b6388cb0dc839f96f05ccffda6914e2189949f45d414bdda7010da8074e3",
+                                                   "reference":  "git rev-list --reverse upstream_old..upstream_new"
+                                               },
+                               "name_status":  {
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-name-status.txt",
+                                                   "sha256":  "9af7c32b5c4b248189b4e28622b78176ec4e0dd5b00ca23999f5f9d9089c6bb4",
+                                                   "reference":  "git diff --name-status upstream_old..upstream_new"
+                                               },
+                               "hunk_inventory":  {
+                                                      "path":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                                      "sha256":  "ebf25af84bf20f40271847b41da0e96d76d90527839769dcb47e51565b6547ea",
+                                                      "reference":  "reviewed semantic hunk inventory with exact commit/change coverage"
+                                                  },
+                               "commit_hashes":  [
+                                                     "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2",
+                                                     "72559e92cf8ad54fad70466598657ebcd5cf265a",
+                                                     "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+                                                     "4c302ffaacee239105960453f0c59331ce082f32",
+                                                     "0aaf08f7e24bd6b9e13efc1b12f29d56474935a2",
+                                                     "cfc6b188176752771890f38e001ed950f6ad5115",
+                                                     "84a62bfcca0b3cbdeee1eb22344f79f0b96fa904",
+                                                     "35043ae5251a86ad6d13112db77b8361eb95f73d",
+                                                     "133a606143e8c9b765277051204c1bc0f59144fe",
+                                                     "318e3e426a3dfac4810d8a5c060021f8713d84dc",
+                                                     "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+                                                     "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
+                                                     "14704c11c735069afd8c23e95a5f087731c3ce56",
+                                                     "1376ee4f45a7611a55c5b92c4ba41409d515bcea"
+                                                 ],
+                               "commit_change_map":  [
+                                                         {
+                                                             "commit":  "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2",
+                                                             "change_ids":  [
+                                                                                "UP-BVK-LOG-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "72559e92cf8ad54fad70466598657ebcd5cf265a",
+                                                             "change_ids":  [
+                                                                                "UP-HEAD-GAMMA-VOLUME-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+                                                             "change_ids":  [
+                                                                                "UP-SYMMETRY-TEXT-TOL-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "4c302ffaacee239105960453f0c59331ce082f32",
+                                                             "change_ids":  [
+                                                                                "UP-HEADWING-SYMMETRY-ROUTE-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "0aaf08f7e24bd6b9e13efc1b12f29d56474935a2",
+                                                             "change_ids":  [
+                                                                                "UP-REGRESSION-DEBUG-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "cfc6b188176752771890f38e001ed950f6ad5115",
+                                                             "change_ids":  [
+                                                                                "UP-REGRESSION-CASE-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "84a62bfcca0b3cbdeee1eb22344f79f0b96fa904",
+                                                             "change_ids":  [
+                                                                                "UP-REGRESSION-STABILITY-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "35043ae5251a86ad6d13112db77b8361eb95f73d",
+                                                             "change_ids":  [
+                                                                                "UP-REGRESSION-PHASE-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "133a606143e8c9b765277051204c1bc0f59144fe",
+                                                             "change_ids":  [
+                                                                                "UP-HEADWING-DIAGNOSTICS-001",
+                                                                                "UP-REGRESSION-DIAGNOSTICS-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "318e3e426a3dfac4810d8a5c060021f8713d84dc",
+                                                             "change_ids":  [
+                                                                                "UP-KBLACS-MF-OWNERSHIP-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+                                                             "change_ids":  [
+                                                                                "UP-KPARA-HEADWING-CONTRACT-001",
+                                                                                "U3-HEAD-MATRIX-GETTER-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
+                                                             "change_ids":  [
+                                                                                "UP-ATOM-BASIS-MAP-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "14704c11c735069afd8c23e95a5f087731c3ce56",
+                                                             "change_ids":  [
+                                                                                "UP-COMMUNICATOR-OWNERSHIP-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                             "change_ids":  [
+                                                                                "UP-REGRESSION-KPARA-001"
+                                                                            ]
+                                                         }
+                                                     ],
+                               "classified_change_ids":  [
+                                                             "UP-BVK-LOG-001",
+                                                             "UP-HEAD-GAMMA-VOLUME-001",
+                                                             "UP-SYMMETRY-TEXT-TOL-001",
+                                                             "UP-HEADWING-SYMMETRY-ROUTE-001",
+                                                             "UP-REGRESSION-DEBUG-001",
+                                                             "UP-REGRESSION-CASE-001",
+                                                             "UP-REGRESSION-STABILITY-001",
+                                                             "UP-REGRESSION-PHASE-001",
+                                                             "UP-HEADWING-DIAGNOSTICS-001",
+                                                             "UP-REGRESSION-DIAGNOSTICS-001",
+                                                             "UP-KBLACS-MF-OWNERSHIP-001",
+                                                             "UP-KPARA-HEADWING-CONTRACT-001",
+                                                             "U3-HEAD-MATRIX-GETTER-001",
+                                                             "UP-ATOM-BASIS-MAP-001",
+                                                             "UP-COMMUNICATOR-OWNERSHIP-001",
+                                                             "UP-REGRESSION-KPARA-001"
+                                                         ],
+                               "coverage_assertion":  "complete"
+                           },
+    "protected_shared_paths":  [
+                                   "src/",
+                                   "src/api/",
+                                   "src/core/",
+                                   "src/gw/",
+                                   "src/app_gw/",
+                                   "src/exx/",
+                                   "src/chi0/",
+                                   "src/epsilon/",
+                                   "src/libri/",
+                                   "src/symmetry/",
+                                   "src/matrix_m/",
+                                   "src/parallel_mpi/",
+                                   "src/distributed_matrix/"
+                               ],
+    "upstream_changes":  [
+                             {
+                                 "id":  "UP-BVK-LOG-001",
+                                 "commit":  "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/api/compute_helper.cpp"
+                                                   ],
+                                 "summary":  "qsgw_band calls build_band_bvk_remap; only verbosity changes",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEAD-GAMMA-VOLUME-001",
+                                 "commit":  "72559e92cf8ad54fad70466598657ebcd5cf265a",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/dielecmodel.h",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "QSGW full-BZ head/head-wing calls the same dielectric head path; the BvK-cell normalization is inherited",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "changed",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "changed",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-SYMMETRY-TEXT-TOL-001",
+                                 "commit":  "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/symmetry_context.cpp",
+                                                       "src/test/test_symmetry_context.cpp"
+                                                   ],
+                                 "summary":  "not executed by the required no-crystal-symmetry path; remains protected shared code",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEADWING-SYMMETRY-ROUTE-001",
+                                 "commit":  "4c302ffaacee239105960453f0c59331ce082f32",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "driver/read_data.cpp",
+                                                       "src/api/dataset_helper.cpp",
+                                                       "src/core/dielecmodel.cpp"
+                                                   ],
+                                 "summary":  "head-wing setup is shared, while the changed restoration branch is disabled by the current no-symmetry contract",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "changed",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-DEBUG-001",
+                                 "commit":  "0aaf08f7e24bd6b9e13efc1b12f29d56474935a2",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/testcases/g0w0_band_abacus_BN_headwing_libri/librpa/librpa.in"
+                                                   ],
+                                 "summary":  "outside src and outside the QSGW dependency graph",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-CASE-001",
+                                 "commit":  "cfc6b188176752771890f38e001ed950f6ad5115",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/refs/rpa_abacus_BN_headwing_sym_shrink_v1_libri",
+                                                       "regression_tests/testcases/rpa_abacus_BN_headwing_sym_shrink_v1_libri",
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "outside src and not a QSGW source/interface path",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-STABILITY-001",
+                                 "commit":  "84a62bfcca0b3cbdeee1eb22344f79f0b96fa904",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "outside src and outside the QSGW dependency graph",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-PHASE-001",
+                                 "commit":  "35043ae5251a86ad6d13112db77b8361eb95f73d",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "outside src and outside the QSGW dependency graph",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEADWING-DIAGNOSTICS-001",
+                                 "commit":  "133a606143e8c9b765277051204c1bc0f59144fe",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp"
+                                                   ],
+                                 "summary":  "QSGW calls cal_head/cal_wing; numerical accumulation is unchanged but debug collectives and logging are reachable",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-DIAGNOSTICS-001",
+                                 "commit":  "133a606143e8c9b765277051204c1bc0f59144fe",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/refs/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.out",
+                                                       "regression_tests/testcases/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.in",
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "outside src and outside the QSGW dependency graph",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-KBLACS-MF-OWNERSHIP-001",
+                                 "commit":  "318e3e426a3dfac4810d8a5c060021f8713d84dc",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "src/core/chi0.cpp",
+                                                       "src/core/epsilon.cpp",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/gw.cpp",
+                                                       "src/core/meanfield_mpi.cpp",
+                                                       "src/core/meanfield_mpi.h",
+                                                       "src/core/symmetry_context.cpp",
+                                                       "src/core/symmetry_context.h",
+                                                       "src/test"
+                                                   ],
+                                 "summary":  "each QSGW iteration calls upstream chi0/EXX/GW and consumes kBLACS-owned fixed-basis matrices",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "changed",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-KPARA-HEADWING-CONTRACT-001",
+                                 "commit":  "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/read_data.cpp",
+                                                       "src/core/chi0.cpp",
+                                                       "src/core/chi0.h",
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/dielecmodel.h",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/gw.cpp",
+                                                       "src/core/meanfield_mpi.cpp",
+                                                       "src/core/symmetry_context.cpp",
+                                                       "src/core/symmetry_context.h",
+                                                       "src/test"
+                                                   ],
+                                 "summary":  "the full-BZ QSGW head/head-wing and upstream GW/EXX paths use the changed active-k mapping and distributed ownership contract even with crystal symmetry disabled",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "changed",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "changed",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "changed",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "U3-HEAD-MATRIX-GETTER-001",
+                                 "commit":  "a033ec4caec7cec4785b74d1998ec484deedf0b3",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U3",
+                                 "effect_domain":  "shared_conflict",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.h"
+                                                   ],
+                                 "summary":  "the new full-BZ QSGW trace adapter needs a const view of the full head tensor after upstream cal_head; upstream exposes only a scalar derived vector",
+                                 "disposition":  "approved_shared_interface",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+                                                      "APPROVAL-U3-HEAD-MATRIX-GETTER-001"
+                                                  ],
+                                 "u3_impact_report":  {
+                                                          "formula_mapping":  "qsgw-rebase-evidence/impact/formula-to-code.md#f-head-tensor-read",
+                                                          "call_chain":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#call-chain",
+                                                          "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
+                                                          "affected_scope":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#numerical-and-abi-impact",
+                                                          "benchmark_design":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#required-observers"
+                                                      }
+                             },
+                             {
+                                 "id":  "UP-ATOM-BASIS-MAP-001",
+                                 "commit":  "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/chi0.cpp",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/gw.cpp"
+                                                   ],
+                                 "summary":  "every QSGW iteration calls these upstream GW/EXX/chi0 builders",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-COMMUNICATOR-OWNERSHIP-001",
+                                 "commit":  "14704c11c735069afd8c23e95a5f087731c3ce56",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "src/api/compute_exx.cpp",
+                                                       "src/api/compute_g0w0.cpp",
+                                                       "src/core/coulmat.cpp",
+                                                       "src/core/coulmat.h",
+                                                       "src/core/epsilon.cpp"
+                                                   ],
+                                 "summary":  "QSGW uses Dataset::comm_h and upstream G0W0/EXX APIs; the communicator must remain consistent with QSGW collectives",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REGRESSION-KPARA-001",
+                                 "commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/testcases/g0w0_band_abacus_BN_headwing_libri/librpa/librpa.in"
+                                                   ],
+                                 "summary":  "outside src and outside the QSGW dependency graph",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             }
+                         ],
+    "formula_code_impacts":  [
+                                 {
+                                     "formula_id":  "F-BVK-REMAP-LOG",
+                                     "formula":  "The BvK remap is invariant under verbosity changes.",
+                                     "upstream_symbols":  [
+                                                              "api::build_band_bvk_remap"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-BVK-LOG-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "bb0e27624bc5c4dcb923a2ddd353d6e087d0c0e2"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "upstream fixed basis",
+                                                             "shape":  "upstream-defined",
+                                                             "units":  "Hartree",
+                                                             "ownership":  "Dataset communicator",
+                                                             "normalization":  "upstream-defined"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "upstream fixed basis",
+                                                            "shape":  "upstream-defined",
+                                                            "units":  "Hartree",
+                                                            "ownership":  "Dataset communicator",
+                                                            "normalization":  "upstream-defined"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-HEAD-GAMMA-VOLUME",
+                                     "formula":  "Omega_Gamma = Omega_reciprocal / N_BvK.",
+                                     "upstream_symbols":  [
+                                                              "rpa_headwing_gamma_cell_volume",
+                                                              "diele_func::cal_eps"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "refresh_headwing"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-HEAD-GAMMA-VOLUME-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "72559e92cf8ad54fad70466598657ebcd5cf265a"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "head Cartesian tensor",
+                                                             "shape":  "3x3 per frequency",
+                                                             "units":  "Hartree-derived dielectric units",
+                                                             "ownership":  "shared dielectric object",
+                                                             "normalization":  "active k-count"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "head Cartesian tensor",
+                                                            "shape":  "3x3 per frequency",
+                                                            "units":  "Hartree-derived dielectric units",
+                                                            "ownership":  "shared dielectric object",
+                                                            "normalization":  "complete BvK-cell count"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "head-only"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-NOSYM-SYMMETRY-BYPASS",
+                                     "formula":  "Full-grid inputs with all symmetry switches false bypass crystal k-star restoration.",
+                                     "upstream_symbols":  [
+                                                              "find_symmetry_atom_target",
+                                                              "read_headwing_input",
+                                                              "diele_func::cal_head",
+                                                              "diele_func::cal_wing"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "validate_stage_one_contract",
+                                                          "refresh_headwing"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-SYMMETRY-TEXT-TOL-001",
+                                                                 "UP-HEADWING-SYMMETRY-ROUTE-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "a209b9e5abbbfe303819d20f7ebb8889bfb7aa60",
+                                                              "4c302ffaacee239105960453f0c59331ce082f32"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "full-BZ direct basis",
+                                                             "shape":  "full k/q grid",
+                                                             "units":  "unchanged",
+                                                             "ownership":  "full-grid owner",
+                                                             "normalization":  "explicit full-grid weights"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "full-BZ direct basis",
+                                                            "shape":  "full k/q grid",
+                                                            "units":  "unchanged",
+                                                            "ownership":  "full-grid owner",
+                                                            "normalization":  "explicit full-grid weights"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "head-only"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-HEADWING-DIAGNOSTIC-COLLECTIVES",
+                                     "formula":  "Diagnostic collectives do not modify head or wing tensors.",
+                                     "upstream_symbols":  [
+                                                              "diele_func::cal_head",
+                                                              "diele_func::cal_wing",
+                                                              "diele_func::test_head",
+                                                              "diele_func::test_wing"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "refresh_headwing"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-HEADWING-DIAGNOSTICS-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "133a606143e8c9b765277051204c1bc0f59144fe"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "head/wing tensor",
+                                                             "shape":  "upstream-defined",
+                                                             "units":  "unchanged",
+                                                             "ownership":  "global diagnostic collectives",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "head/wing tensor",
+                                                            "shape":  "upstream-defined",
+                                                            "units":  "unchanged",
+                                                            "ownership":  "Dataset communicator diagnostic collectives",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "head-only",
+                                                           "head-plus-wing"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-KBLACS-DM-GF",
+                                     "formula":  "Distributed D(R) and G(R,tau) equal the serial full-grid transform with single ownership.",
+                                     "upstream_symbols":  [
+                                                              "get_dmat_cplx_Rs_kblacs_para",
+                                                              "get_gf_cplx_imagtimes_Rs_kblacs_para",
+                                                              "G0W0::build_spacetime",
+                                                              "Exx::build"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw",
+                                                          "collect_sigma_root",
+                                                          "copy_exx_root"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-KBLACS-MF-OWNERSHIP-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "318e3e426a3dfac4810d8a5c060021f8713d84dc"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "KS/AO transforms",
+                                                             "shape":  "distributed blocks",
+                                                             "units":  "Hartree",
+                                                             "ownership":  "replicated/restored intermediates",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "KS/AO transforms",
+                                                            "shape":  "distributed blocks",
+                                                            "units":  "Hartree",
+                                                            "ownership":  "explicit kBLACS ownership",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "mpi-omp"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-FULLBZ-HEADWING-LIVE",
+                                     "formula":  "C_n=C0 U_n and v_n=U_n^dagger v0 U_n feed the full-BZ head/wing at iteration n.",
+                                     "upstream_symbols":  [
+                                                              "headwing_local_kpoints",
+                                                              "diele_func::init",
+                                                              "diele_func::cal_head_full_bz",
+                                                              "diele_func::cal_wing_full_bz"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "refresh_headwing",
+                                                          "diagonalize_in_reference_basis",
+                                                          "update_independent_headwing_state"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-KPARA-HEADWING-CONTRACT-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "a033ec4caec7cec4785b74d1998ec484deedf0b3"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "KS/head-wing basis",
+                                                             "shape":  "active k blocks",
+                                                             "units":  "Hartree",
+                                                             "ownership":  "legacy local-k binding",
+                                                             "normalization":  "legacy k weights"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "KS/head-wing basis",
+                                                            "shape":  "active k blocks",
+                                                            "units":  "Hartree",
+                                                            "ownership":  "explicit k-parallel ownership",
+                                                            "normalization":  "full-grid weights"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "head-only",
+                                                           "head-plus-wing"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-ATOM-BASIS-MAP",
+                                     "formula":  "Atom AO counts are authoritative AtomicBasis metadata and match WFC columns.",
+                                     "upstream_symbols":  [
+                                                              "AtomicBasis::get_atom_nb_map",
+                                                              "build_gf_Rt_libri_kblacs_para",
+                                                              "build_dmat_libri_kblacs_para",
+                                                              "build_gf_libri_kblacs_para"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "validate_stage_one_contract"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-ATOM-BASIS-MAP-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "e238a7615235e604fa5fdc40e0ed7bde8f86be75"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "AO basis",
+                                                             "shape":  "atom AO map",
+                                                             "units":  "dimensionless count",
+                                                             "ownership":  "helper reconstructed",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "AO basis",
+                                                            "shape":  "atom AO map",
+                                                            "units":  "dimensionless count",
+                                                            "ownership":  "AtomicBasis authoritative",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-COMM-OWNERSHIP",
+                                     "formula":  "All collectives for a Dataset operation use Dataset::comm_h.",
+                                     "upstream_symbols":  [
+                                                              "FT_Vq",
+                                                              "gather_symmetry_ibz_blocks_collective",
+                                                              "librpa_build_exx",
+                                                              "librpa_build_g0w0_sigma"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw",
+                                                          "collective_root_stage"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-COMMUNICATOR-OWNERSHIP-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "14704c11c735069afd8c23e95a5f087731c3ce56"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "shared operator basis",
+                                                             "shape":  "distributed blocks",
+                                                             "units":  "Hartree",
+                                                             "ownership":  "implicit global communicator",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "shared operator basis",
+                                                            "shape":  "distributed blocks",
+                                                            "units":  "Hartree",
+                                                            "ownership":  "explicit Dataset communicator",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "mpi-omp"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/formula-to-code.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-HEAD-TENSOR-READ",
+                                     "formula":  "A const view reads the already-computed head tensor without changing numerical state or call order.",
+                                     "upstream_symbols":  [
+                                                              "diele_func::head",
+                                                              "diele_func::get_head_matrices"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "copy_head_tensor"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "U3-HEAD-MATRIX-GETTER-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "a033ec4caec7cec4785b74d1998ec484deedf0b3"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "private head Cartesian tensor",
+                                                             "shape":  "3x3 per frequency",
+                                                             "units":  "upstream dielectric units",
+                                                             "ownership":  "diele_func private",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "const head Cartesian tensor view",
+                                                            "shape":  "3x3 per frequency",
+                                                            "units":  "upstream dielectric units",
+                                                            "ownership":  "read-only QSGW observer",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U3",
+                                     "required_change":  "approved_shared_change",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md"
+                                                  ]
+                                 }
+                             ],
+    "shared_core_hunks":  [
+                              {
+                                  "id":  "SHARED-HEAD-GETTER-001",
+                                  "path":  "src/core/dielecmodel.h",
+                                  "symbols":  [
+                                                  "diele_func::head",
+                                                  "diele_func::get_head_matrices"
+                                              ],
+                                  "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
+                                  "upstream_change_id":  "U3-HEAD-MATRIX-GETTER-001",
+                                  "classification":  "U3",
+                                  "restores_old_implementation":  false,
+                                  "formula_map_ids":  [
+                                                          "F-HEAD-TENSOR-READ"
+                                                      ],
+                                  "benchmark_observer_ids":  [
+                                                                 "g0w0-upstream-vs-rebased",
+                                                                 "qsgw-iter0-vs-upstream"
+                                                             ],
+                                  "approval_ids":  [
+                                                       "APPROVAL-U3-HEAD-MATRIX-GETTER-001"
+                                                   ],
+                                  "status":  "approved"
+                              }
+                          ],
+    "gate_sequence":  [
+                          "build-unit-upstream-regressions",
+                          "g0w0-upstream-vs-rebased",
+                          "qsgw-iter0-vs-upstream-g0w0",
+                          "solid-qsgw-no-mixing-old-vs-new",
+                          "head-only",
+                          "head-plus-wing",
+                          "mixing",
+                          "hartree",
+                          "qsgw-band",
+                          "fhi-aims",
+                          "abacus",
+                          "mpi-omp"
+                      ],
+    "benchmarks":  [
+                       {
+                           "id":  "build-upstream-regressions",
+                           "gate":  "build-unit-upstream-regressions",
+                           "description":  "Configure, build, unit, and unchanged upstream regressions",
+                           "observer_types":  [
+                                                  "build_regression"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "build-log",
+                                                      "unit-results",
+                                                      "upstream-regression-results"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "g0w0-upstream-vs-rebased",
+                           "gate":  "g0w0-upstream-vs-rebased",
+                           "description":  "New-upstream G0W0 versus rebased-branch G0W0",
+                           "observer_types":  [
+                                                  "g0w0_upstream_vs_rebased"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment",
+                                              "side_a":  {
+                                                             "label":  "new-upstream-g0w0",
+                                                             "source":  {
+                                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                                "reference":  "evidence/build/new-upstream-executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         },
+                                              "side_b":  {
+                                                             "label":  "rebased-g0w0",
+                                                             "source":  {
+                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         }
+                                          },
+                           "required_artifacts":  [
+                                                      "upstream-g0w0-log",
+                                                      "rebased-g0w0-log",
+                                                      "g0w0-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "qsgw-iter0-vs-upstream",
+                           "gate":  "qsgw-iter0-vs-upstream-g0w0",
+                           "description":  "Rebased QSGW iteration zero versus new-upstream G0W0",
+                           "observer_types":  [
+                                                  "qsgw_iter0_vs_upstream_g0w0",
+                                                  "qsgw_adapter_contract"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment",
+                                              "side_a":  {
+                                                             "label":  "new-upstream-g0w0",
+                                                             "source":  {
+                                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                                "reference":  "evidence/build/new-upstream-executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         },
+                                              "side_b":  {
+                                                             "label":  "rebased-qsgw-iter0",
+                                                             "source":  {
+                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         }
+                                          },
+                           "required_artifacts":  [
+                                                      "upstream-g0w0-tensor",
+                                                      "qsgw-iter0-tensor",
+                                                      "iteration-zero-comparison",
+                                                      "adapter-contract-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "solid-qsgw-no-mixing",
+                           "gate":  "solid-qsgw-no-mixing-old-vs-new",
+                           "description":  "Solid QSGW no-mixing old/new iterative comparison",
+                           "observer_types":  [
+                                                  "qsgw_no_mixing_iterative"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment",
+                                              "side_a":  {
+                                                             "label":  "old-qsgw-no-mixing",
+                                                             "source":  {
+                                                                            "hash":  "cb2940201b1f44b1c38b90169048b7d060e44732",
+                                                                            "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "cb2940201b1f44b1c38b90169048b7d060e44732",
+                                                                                "reference":  "evidence/build/old-qsgw-executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         },
+                                              "side_b":  {
+                                                             "label":  "rebased-qsgw-no-mixing",
+                                                             "source":  {
+                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                        },
+                                                             "executable":  {
+                                                                                "path":  null,
+                                                                                "sha256":  null,
+                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                            },
+                                                             "dataset_ref":  "provenance.dataset",
+                                                             "input_refs":  [
+                                                                                "provenance.inputs:librpa-input"
+                                                                            ],
+                                                             "environment_ref":  "provenance.environment"
+                                                         }
+                                          },
+                           "required_artifacts":  [
+                                                      "iteration-history",
+                                                      "per-iteration-replay",
+                                                      "iterative-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "head-only",
+                           "gate":  "head-only",
+                           "description":  "Head-only gate",
+                           "observer_types":  [
+                                                  "head_only"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "head-only-result",
+                                                      "g0w0-limit",
+                                                      "structural-invariants",
+                                                      "per-iteration-replay",
+                                                      "independent-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "head",
+                           "depends_on":  [
+
+                                          ],
+                           "oracle_reliability":  "unreliable",
+                           "oracle_reference":  "evidence/oracle/head-wing-assessment.md",
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "head-plus-wing",
+                           "gate":  "head-plus-wing",
+                           "description":  "Head-plus-wing gate",
+                           "observer_types":  [
+                                                  "head_plus_wing"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "head-wing-result",
+                                                      "g0w0-limit",
+                                                      "structural-invariants",
+                                                      "per-iteration-replay",
+                                                      "independent-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "wing",
+                           "depends_on":  [
+
+                                          ],
+                           "oracle_reliability":  "unreliable",
+                           "oracle_reference":  "evidence/oracle/head-wing-assessment.md",
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "mixing",
+                           "gate":  "mixing",
+                           "description":  "Declared mixing feature gate",
+                           "observer_types":  [
+                                                  "mixing"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "mixing-history",
+                                                      "mixing-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+                                                    "mix-disabled-vs-linear"
+                                                ],
+                           "control_factor_role":  "mixing",
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "hartree",
+                           "gate":  "hartree",
+                           "description":  "Declared Hartree feature gate",
+                           "observer_types":  [
+                                                  "hartree"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "hartree-result",
+                                                      "hartree-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "hartree",
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "qsgw-band",
+                           "gate":  "qsgw-band",
+                           "description":  "Declared qsgw_band feature gate",
+                           "observer_types":  [
+                                                  "qsgw_band"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "band-data",
+                                                      "band-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "qsgw_band",
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "fhi-aims",
+                           "gate":  "fhi-aims",
+                           "description":  "FHI-aims handoff feature gate",
+                           "observer_types":  [
+                                                  "fhi_aims_handoff"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "fhi-aims-inputs",
+                                                      "fhi-aims-log",
+                                                      "fhi-aims-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "abacus",
+                           "gate":  "abacus",
+                           "description":  "ABACUS handoff feature gate",
+                           "observer_types":  [
+                                                  "abacus_handoff"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "abacus-inputs",
+                                                      "abacus-log",
+                                                      "abacus-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  null,
+                           "depends_on":  [
+
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "symmetry",
+                           "gate":  "mpi-omp",
+                           "description":  "Declared symmetry feature subgate before parallel variation",
+                           "observer_types":  [
+                                                  "symmetry"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "symmetry-result",
+                                                      "symmetry-invariants"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "symmetry",
+                           "depends_on":  [
+                                              "abacus"
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       },
+                       {
+                           "id":  "mpi-omp",
+                           "gate":  "mpi-omp",
+                           "description":  "Declared MPI/OMP feature gate",
+                           "observer_types":  [
+                                                  "mpi_omp"
+                                              ],
+                           "definition":  {
+                                              "executable_ref":  "provenance.executable",
+                                              "dataset_ref":  "provenance.dataset",
+                                              "input_refs":  [
+                                                                 "provenance.inputs:librpa-input"
+                                                             ],
+                                              "environment_ref":  "provenance.environment"
+                                          },
+                           "required_artifacts":  [
+                                                      "parallel-environments",
+                                                      "parallel-logs",
+                                                      "parallel-comparison"
+                                                  ],
+                           "control_pair_ids":  [
+
+                                                ],
+                           "control_factor_role":  "mpi_omp",
+                           "depends_on":  [
+                                              "symmetry"
+                                          ],
+                           "status":  "planned",
+                           "artifacts":  [
+
+                                         ]
+                       }
+                   ],
+    "control_pairs":  [
+                          {
+                              "id":  "mix-disabled-vs-linear",
+                              "changed_factor":  "parameters.mix_mode",
+                              "factor_role":  "mixing",
+                              "factor_role_reference":  "LibRPA input reference for mix_mode",
+                              "experiment_type":  "single_factor",
+                              "default_experiment":  null,
+                              "a":  {
+                                        "source":  {
+                                                       "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                       "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                   },
+                                        "executable":  {
+                                                           "path":  null,
+                                                           "sha256":  null,
+                                                           "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "reference":  "evidence/build/executable.sha256"
+                                                       },
+                                        "dataset":  {
+                                                        "id":  null,
+                                                        "path":  null,
+                                                        "sha256":  null,
+                                                        "reference":  null
+                                                    },
+                                        "inputs":  [
+                                                       {
+                                                           "id":  "librpa-input",
+                                                           "path":  "inputs/librpa.in",
+                                                           "sha256":  null,
+                                                           "reference":  "evidence/inputs/librpa.in.sha256"
+                                                       }
+                                                   ],
+                                        "environment":  {
+                                                            "host":  null,
+                                                            "os":  null,
+                                                            "compiler":  {
+                                                                             "name":  null,
+                                                                             "version":  null,
+                                                                             "reference":  "evidence/environment/compiler.txt"
+                                                                         },
+                                                            "libraries":  [
+                                                                              {
+                                                                                  "name":  "LibRI",
+                                                                                  "version":  null,
+                                                                                  "reference":  "evidence/environment/libraries.txt"
+                                                                              }
+                                                                          ],
+                                                            "mpi":  {
+                                                                        "implementation":  null,
+                                                                        "version":  null,
+                                                                        "ranks":  1
+                                                                    },
+                                                            "omp_threads":  1,
+                                                            "variables":  {
+                                                                              "OMP_PROC_BIND":  "close",
+                                                                              "OMP_PLACES":  "cores"
+                                                                          },
+                                                            "random_seed":  null,
+                                                            "capture":  {
+                                                                            "path":  "evidence/environment/environment.json",
+                                                                            "sha256":  null,
+                                                                            "reference":  null
+                                                                        }
+                                                        },
+                                        "parameters":  {
+                                                           "mix_mode":  "disabled",
+                                                           "head":  false,
+                                                           "wing":  false,
+                                                           "max_iter":  6
+                                                       },
+                                        "comparator":  {
+                                                           "name":  null,
+                                                           "version":  null,
+                                                           "sha256":  null,
+                                                           "reference":  "evidence/comparator/version.txt",
+                                                           "tolerances":  {
+                                                                              "absolute":  1E-10,
+                                                                              "relative":  1E-08
+                                                                          }
+                                                       }
+                                    },
+                              "b":  {
+                                        "source":  {
+                                                       "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                       "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                   },
+                                        "executable":  {
+                                                           "path":  null,
+                                                           "sha256":  null,
+                                                           "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "reference":  "evidence/build/executable.sha256"
+                                                       },
+                                        "dataset":  {
+                                                        "id":  null,
+                                                        "path":  null,
+                                                        "sha256":  null,
+                                                        "reference":  null
+                                                    },
+                                        "inputs":  [
+                                                       {
+                                                           "id":  "librpa-input",
+                                                           "path":  "inputs/librpa.in",
+                                                           "sha256":  null,
+                                                           "reference":  "evidence/inputs/librpa.in.sha256"
+                                                       }
+                                                   ],
+                                        "environment":  {
+                                                            "host":  null,
+                                                            "os":  null,
+                                                            "compiler":  {
+                                                                             "name":  null,
+                                                                             "version":  null,
+                                                                             "reference":  "evidence/environment/compiler.txt"
+                                                                         },
+                                                            "libraries":  [
+                                                                              {
+                                                                                  "name":  "LibRI",
+                                                                                  "version":  null,
+                                                                                  "reference":  "evidence/environment/libraries.txt"
+                                                                              }
+                                                                          ],
+                                                            "mpi":  {
+                                                                        "implementation":  null,
+                                                                        "version":  null,
+                                                                        "ranks":  1
+                                                                    },
+                                                            "omp_threads":  1,
+                                                            "variables":  {
+                                                                              "OMP_PROC_BIND":  "close",
+                                                                              "OMP_PLACES":  "cores"
+                                                                          },
+                                                            "random_seed":  null,
+                                                            "capture":  {
+                                                                            "path":  "evidence/environment/environment.json",
+                                                                            "sha256":  null,
+                                                                            "reference":  null
+                                                                        }
+                                                        },
+                                        "parameters":  {
+                                                           "mix_mode":  "linear",
+                                                           "head":  false,
+                                                           "wing":  false,
+                                                           "max_iter":  6
+                                                       },
+                                        "comparator":  {
+                                                           "name":  null,
+                                                           "version":  null,
+                                                           "sha256":  null,
+                                                           "reference":  "evidence/comparator/version.txt",
+                                                           "tolerances":  {
+                                                                              "absolute":  1E-10,
+                                                                              "relative":  1E-08
+                                                                          }
+                                                       }
+                                    }
+                          }
+                      ],
+    "approvals":  [
+                      {
+                          "id":  "APPROVAL-U3-HEAD-MATRIX-GETTER-001",
+                          "type":  "user",
+                          "approved":  true,
+                          "scope":  "Only the exact five-line read-only diele_func::get_head_matrices getter in the U3 impact packet and the listed regression observers.",
+                          "approved_by":  "workspace user",
+                          "approved_at":  "2026-07-15T16:40:50+08:00",
+                          "evidence_reference":  "qsgw-rebase-evidence/impact/APPROVAL-U3-HEAD-MATRIX-GETTER-001.md",
+                          "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
+                          "change_ids":  [
+                                             "U3-HEAD-MATRIX-GETTER-001"
+                                         ],
+                          "shared_core_hunk_ids":  [
+                                                       "SHARED-HEAD-GETTER-001"
+                                                   ],
+                          "formula_map_ids":  [
+                                                  "F-HEAD-TENSOR-READ"
+                                              ],
+                          "benchmark_ids":  [
+                                                "g0w0-upstream-vs-rebased",
+                                                "qsgw-iter0-vs-upstream"
+                                            ]
+                      }
+                  ],
+    "current_gate":  "build-unit-upstream-regressions",
+    "verified_evidence":  [
+                              "qsgw-rebase-evidence/git/status.txt",
+                              "qsgw-rebase-evidence/git/protected-src-inventory.json",
+                              "qsgw-rebase-evidence/git/candidate-source.txt",
+                              "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
+                              "qsgw-rebase-evidence/impact/formula-to-code.md",
+                              "qsgw-rebase-evidence/impact/qsgw-source-lane-audit.md",
+                              "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md",
+                              "qsgw-rebase-evidence/impact/APPROVAL-U3-HEAD-MATRIX-GETTER-001.md",
+                              "qsgw-rebase-evidence/validation/local-precommit-checks.md"
+                          ],
+    "open_issues":  [
+                        {
+                            "id":  "ISSUE-GATE0-PROVENANCE",
+                            "class_or_gate":  "build-unit-upstream-regressions",
+                            "blocker":  "No clean candidate executable, remote compiler/library capture, or accepted Si-k444 input manifest exists yet.",
+                            "required":  "Build immutable upstream and candidate commits on the approved remote compute surface."
+                        }
+                    ],
+    "next_actions":  [
+                         {
+                             "id":  "next-gate0",
+                             "action":  "Build and test immutable upstream and candidate commits on fish, then record exact executable and environment provenance.",
+                             "gate":  "build-unit-upstream-regressions",
+                             "owner":  "rebase operator",
+                             "status":  "ready"
+                         }
+                     ],
+    "planning_state":  {
+                           "frozen_dirty_source":  false,
+                           "clean_candidate_available":  true,
+                           "u3_head_matrix_getter":  "approved_exact_five_line_readonly_getter",
+                           "provenance_policy":  "null means missing and must fail validation; no placeholder or synthetic hash is permitted",
+                           "crystal_symmetry_qsgw":  "out_of_scope_not_tested"
+                       }
+}

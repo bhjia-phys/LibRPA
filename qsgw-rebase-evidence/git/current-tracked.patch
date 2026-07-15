@@ -1,0 +1,387 @@
+diff --git a/driver/CMakeLists.txt b/driver/CMakeLists.txt
+index 544037b055c6845b1318fa8f778de7998fd6cc58..eb7b8219d54721287b180d8d89a8eaabe3258df6 100644
+--- a/driver/CMakeLists.txt
++++ b/driver/CMakeLists.txt
+@@ -25,6 +25,7 @@ list(APPEND exe_sources
+   tasks/g0w0_band.cpp
+   tasks/rpa.cpp
+   tasks/print_minimax.cpp
++  tasks/qsgw.cpp
+   # tasks/test.cpp
+   # task_qsgw.cpp
+   # task_qsgwA.cpp
+diff --git a/driver/driver.cpp b/driver/driver.cpp
+index f3d17c16eda2c315d9788be708b401c14cd8c5da..4efc5e5071450f58ff0a9736a6da62ebaeb4594c 100644
+--- a/driver/driver.cpp
++++ b/driver/driver.cpp
+@@ -45,7 +45,17 @@ DriverParams::DriverParams():
+     sf_omega_end(1.0),
+     sf_omega_step(0.1),
+     sf_state_start(-1),
+-    sf_state_end(-1)
++    sf_state_end(-1),
++    qsgw_input_contract("qsgw_input.contract"),
++    qsgw_mixer("linear"),
++    qsgw_mixing_beta(0.2),
++    qsgw_min_iter(1),
++    qsgw_max_iter(10),
++    qsgw_write_iteration_matrices(false),
++    qsgw_convergence_tolerance_ev(1.0e-4),
++    qsgw_update_hartree(false),
++    qsgw_hartree_coulomb("full"),
++    qsgw_hartree_normalization("weighted_occupations")
+ {
+ }
+ 
+@@ -97,6 +107,24 @@ std::string DriverParams::format()
+     ss << "cs_R_threshold = " << cs_threshold << std::endl;
+     ss << "i_state_low = " << i_state_low << std::endl;
+     ss << "i_state_high = " << i_state_high << std::endl;
++    if (task == "qsgw" || task == "qsgw_band")
++    {
++        ss << "qsgw_input_contract = " << qsgw_input_contract << std::endl;
++        ss << "qsgw_mixer = " << qsgw_mixer << std::endl;
++        ss << "qsgw_mixing_beta = " << qsgw_mixing_beta << std::endl;
++        ss << "qsgw_min_iter = " << qsgw_min_iter << std::endl;
++        ss << "qsgw_max_iter = " << qsgw_max_iter << std::endl;
++        ss << "qsgw_convergence_tolerance_ev = "
++           << qsgw_convergence_tolerance_ev << std::endl;
++        ss << "qsgw_write_iteration_matrices = " << std::boolalpha
++           << qsgw_write_iteration_matrices << std::endl;
++        ss << "qsgw_update_hartree = " << std::boolalpha
++           << qsgw_update_hartree << std::endl;
++        ss << "qsgw_hartree_coulomb = "
++           << qsgw_hartree_coulomb << std::endl;
++        ss << "qsgw_hartree_normalization = "
++           << qsgw_hartree_normalization << std::endl;
++    }
+     if (output_gw_spec_func)
+     {
+         ss << "sf_omega_start = " << sf_omega_start << std::endl;
+diff --git a/driver/driver.h b/driver/driver.h
+index eb83b0a64d8746082589a7be53436049d2ef6a87..e27ee1d30dce453d99f21db13f47edb716661005 100644
+--- a/driver/driver.h
++++ b/driver/driver.h
+@@ -250,6 +250,34 @@ struct DriverParams
+     //! Experimental
+     int sf_state_end;
+ 
++    //! Provenance and semantic contract for all QSGW input files.
++    std::string qsgw_input_contract;
++
++    //! Fixed-basis Hamiltonian mixing (`none` or `linear`).
++    std::string qsgw_mixer;
++
++    //! Linear Hamiltonian mixing fraction.
++    double qsgw_mixing_beta;
++
++    //! Minimum and maximum numbers of QSGW updates.
++    int qsgw_min_iter;
++    int qsgw_max_iter;
++
++    //! Write per-iteration matrices used by numerical regression tests.
++    bool qsgw_write_iteration_matrices;
++
++    //! Maximum eigenvalue change used for convergence, in eV.
++    double qsgw_convergence_tolerance_ev;
++
++    //! Include the density-difference Hartree contribution.
++    bool qsgw_update_hartree;
++
++    //! Coulomb input used by QSGW Hartree (`full` or `truncated`).
++    std::string qsgw_hartree_coulomb;
++
++    //! QSGW Hartree k-point normalization convention.
++    std::string qsgw_hartree_normalization;
++
+     std::string format();
+ 
+     DriverParams();
+diff --git a/driver/inputfile.cpp b/driver/inputfile.cpp
+index afdb07e1e757a0b6525cfc8b984e124a38de95b5..cbb376774f896e7ae5e4d93e7959339744dd3129 100644
+--- a/driver/inputfile.cpp
++++ b/driver/inputfile.cpp
+@@ -7,6 +7,9 @@
+ #include <regex>
+ #include <sstream>
+ #include <limits>
++#include <algorithm>
++#include <cctype>
++#include <cmath>
+ 
+ #include "driver.h"
+ 
+@@ -70,6 +73,11 @@ static std::string check_dirpath(const std::string &dirpath)
+ static void validate_input_parameters()
+ {
+     const auto &params = driver::driver_params;
++    std::string task = params.task;
++    std::transform(task.begin(), task.end(), task.begin(),
++                   [](const unsigned char ch) {
++                       return static_cast<char>(std::tolower(ch));
++                   });
+     if (params.output_gw_spec_func)
+     {
+         if (params.sf_omega_step <= 0.0)
+@@ -80,6 +88,55 @@ static void validate_input_parameters()
+             && params.sf_state_end <= params.sf_state_start)
+             throw std::runtime_error("sf_state_end must be greater than sf_state_start");
+     }
++    if (task == "qsgw" || task == "qsgw_band")
++    {
++        if (params.qsgw_input_contract.empty())
++            throw std::runtime_error("qsgw_input_contract must not be empty");
++        if (params.qsgw_mixer != "none" && params.qsgw_mixer != "linear")
++            throw std::runtime_error("qsgw_mixer must be none or linear");
++        if (!(params.qsgw_mixing_beta > 0.0 &&
++              params.qsgw_mixing_beta <= 1.0) ||
++            !std::isfinite(params.qsgw_mixing_beta))
++            throw std::runtime_error("qsgw_mixing_beta must be in (0, 1]");
++        if (params.qsgw_min_iter < 1 ||
++            params.qsgw_max_iter < params.qsgw_min_iter)
++            throw std::runtime_error(
++                "qsgw iteration bounds must satisfy 1 <= min <= max");
++        if (!(params.qsgw_convergence_tolerance_ev > 0.0) ||
++            !std::isfinite(params.qsgw_convergence_tolerance_ev))
++            throw std::runtime_error(
++                "qsgw_convergence_tolerance_ev must be finite and positive");
++        if (params.qsgw_hartree_coulomb != "full" &&
++            params.qsgw_hartree_coulomb != "truncated")
++            throw std::runtime_error(
++                "qsgw_hartree_coulomb must be full or truncated");
++        if (params.qsgw_hartree_normalization !=
++                "weighted_occupations" &&
++            params.qsgw_hartree_normalization !=
++                "legacy_extra_inverse_nk")
++            throw std::runtime_error(
++                "qsgw_hartree_normalization must be weighted_occupations or legacy_extra_inverse_nk");
++        const bool analytic_headwing =
++            driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
++            (driver::opts.option_dielect_func == 3 ||
++             driver::opts.option_dielect_func == 4);
++        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
++            !analytic_headwing)
++            throw std::runtime_error(
++                "QSGW replace_w_head requires analytic option_dielect_func = 3 or 4");
++        if (params.use_pyatb && !analytic_headwing)
++            throw std::runtime_error(
++                "QSGW use_pyatb requires analytic head/wing option_dielect_func = 3 or 4");
++        const bool use_symmetry_exx =
++            driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
++        const bool use_symmetry_gw =
++            driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
++        const bool use_symmetry_rpa =
++            driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
++        if (use_symmetry_exx || use_symmetry_gw || use_symmetry_rpa)
++            throw std::runtime_error(
++                "QSGW currently supports full-BZ no-symmetry inputs only; use_symmetry_exx, use_symmetry_gw, and use_symmetry_rpa must be false");
++    }
+ }
+ 
+ void parse_inputfile_to_params(const std::string &fn)
+@@ -134,6 +191,42 @@ void parse_inputfile_to_params(const std::string &fn)
+     _parse_string(driver_params, fn_dielfunc);
+     _parse_string(driver_params, fn_vxc_scf);
+     _parse_string(driver_params, fn_band_kpath_info);
++    std::string task_normalized = driver_params.task;
++    std::transform(task_normalized.begin(), task_normalized.end(),
++                   task_normalized.begin(), [](const unsigned char ch) {
++                       return static_cast<char>(std::tolower(ch));
++                   });
++    if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
++    {
++        _parse_string(driver_params, qsgw_input_contract);
++        _parse_string(driver_params, qsgw_mixer);
++        std::transform(driver_params.qsgw_mixer.begin(),
++                       driver_params.qsgw_mixer.end(),
++                       driver_params.qsgw_mixer.begin(),
++                       [](const unsigned char ch) {
++                           return static_cast<char>(std::tolower(ch));
++                       });
++        _parse_double(driver_params, qsgw_mixing_beta);
++        _parse_int(driver_params, qsgw_min_iter);
++        _parse_int(driver_params, qsgw_max_iter);
++        _parse_bool(driver_params, qsgw_write_iteration_matrices);
++        _parse_double(driver_params, qsgw_convergence_tolerance_ev);
++        _parse_bool(driver_params, qsgw_update_hartree);
++        _parse_string(driver_params, qsgw_hartree_coulomb);
++        _parse_string(driver_params, qsgw_hartree_normalization);
++        std::transform(driver_params.qsgw_hartree_coulomb.begin(),
++                       driver_params.qsgw_hartree_coulomb.end(),
++                       driver_params.qsgw_hartree_coulomb.begin(),
++                       [](const unsigned char ch) {
++                           return static_cast<char>(std::tolower(ch));
++                       });
++        std::transform(driver_params.qsgw_hartree_normalization.begin(),
++                       driver_params.qsgw_hartree_normalization.end(),
++                       driver_params.qsgw_hartree_normalization.begin(),
++                       [](const unsigned char ch) {
++                           return static_cast<char>(std::tolower(ch));
++                       });
++    }
+     _parse_int(driver_params, version_coul_reader);
+     _parse_int(driver_params, version_lri_reader);
+ 
+diff --git a/driver/task.cpp b/driver/task.cpp
+index 5d04142ec6ca95f4f8734b0751c9413d2923d6a9..214135aced9a7d093cf30b9be33fa6fc62667e68 100644
+--- a/driver/task.cpp
++++ b/driver/task.cpp
+@@ -71,6 +71,8 @@ static std::map<task_t, std::function<void(void)>> map_task_func_impl{
+     {task_t::RPA, task_rpa},
+     {task_t::EXX, task_exx},
+     {task_t::EXX_band, task_exx_band},
++    {task_t::QSGW, task_qsgw},
++    {task_t::QSGW_band, task_qsgw_band},
+ };
+ 
+ void run_task(const task_t &task)
+diff --git a/driver/task.h b/driver/task.h
+index 35ed820932a4f8a53639e062b0587483fd074657..88c06268779543263647271ec808a492c6366470 100644
+--- a/driver/task.h
++++ b/driver/task.h
+@@ -32,6 +32,8 @@ void task_exx();
+ void task_exx_band();
+ void task_screened_coulomb_real_freq();
+ void task_print_minimax();
++void task_qsgw();
++void task_qsgw_band();
+ void task_test();
+ 
+ void run_task(const task_t &task);
+diff --git a/driver/test/CMakeLists.txt b/driver/test/CMakeLists.txt
+index c8b7b03ec34203c0864d4e53cb8c4c9183ef3537..17f143383db35a3f6a100596e7a4bcd439b73715 100644
+--- a/driver/test/CMakeLists.txt
++++ b/driver/test/CMakeLists.txt
+@@ -4,3 +4,13 @@ add_executable(
+   ../input_parser.cpp
+ )
+ add_test(NAME test_input_parser COMMAND $<TARGET_FILE:test_input_parser>)
++
++add_executable(
++  test_qsgw_inputfile
++  test_qsgw_inputfile.cpp
++  ../driver.cpp
++  ../input_parser.cpp
++  ../inputfile.cpp
++)
++target_link_libraries(test_qsgw_inputfile PRIVATE rpa_lib)
++add_test(NAME test_qsgw_inputfile COMMAND $<TARGET_FILE:test_qsgw_inputfile>)
+diff --git a/regression_tests/README.md b/regression_tests/README.md
+index 324ee6251e6cad56cfbc533d4660cf48fc0a25c2..c8534799ff41dc4d07c90ea99ff670c8e2a91d18 100644
+--- a/regression_tests/README.md
++++ b/regression_tests/README.md
+@@ -209,6 +209,41 @@ Useful `<validate>` attributes:
+ - `binary_extract`: reserved for binary-output extractors. Plain-text output is
+   used when this attribute is omitted.
+ 
++### QSGW trace comparisons
++
++QSGW regression cases should set `qsgw_write_iteration_matrices = true` and
++validate all three machine-readable traces. The QSGW comparison functions use
++the physical row keys rather than file order, reject missing or duplicate
++entries, and reject non-finite values:
++
++```xml
++<validate name="QSGW iteration summary"
++          file="librpa/qsgw_iterations.dat"
++          comparison="cmp_qsgw.iteration_summary(energy_tolerance_ev=1e-5,residual_tolerance_ha=1e-8,scalar_tolerance=1e-10,coefficient_tolerance=1e-12)"
++/>
++<validate name="QSGW fixed-basis eigenvalues"
++          file="librpa/qsgw_eigenvalues.dat"
++          comparison="cmp_qsgw.eigenvalue_trace(tolerance_ha=1e-6,coordinate_tolerance=1e-12)"
++/>
++<validate name="QSGW iteration matrices"
++          file="librpa/qsgw_matrices.dat"
++          comparison="cmp_qsgw.matrix_trace(relative_tolerance=1e-8,absolute_tolerance=1e-12,hermiticity_tolerance=1e-10,unitarity_tolerance=1e-10)"
++/>
++```
++
++For every nonzero reference matrix block, `matrix_trace` applies the relative
++Frobenius tolerance directly. The absolute tolerance is used only when the
++reference block is numerically zero. It also checks Hermiticity of static
++Hamiltonian components and unitarity of every `rotation_u` block on both the
++test and reference sides.
++
++QSGW reference traces must be generated from the pre-port QSGW source and carry
++the source snapshot, executable hash, input hashes, compiler/dependency data,
++and MPI/OMP environment needed to reproduce them. Do not generate or update a
++QSGW reference from the implementation under test. If the legacy output first
++needs a deterministic format conversion, retain the original legacy artifacts,
++the conversion command, and the converted trace together in `refs/${CASE}`.
++
+ ## Reference update guidelines
+ 
+ - Do not edit reference output by hand. Reference data should match the commit
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 3bdde8eabbf6712ac8cdd94b47590cd6875558c8..4c779f65d8da9fab1c21bb7b4fca1db487dbd4dc 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -169,6 +169,7 @@ endif()
+ 
+ # source must be PRIVATE to avoid recompilation when linking driver to this library
+ target_sources(rpa_lib PRIVATE ${lib_sources})
++add_subdirectory(qsgw)
+ target_link_libraries(rpa_lib PRIVATE ${math_libs} ${parallel_libs})
+ 
+ install(TARGETS rpa_lib
+diff --git a/src/core/dielecmodel.h b/src/core/dielecmodel.h
+index 82f7cb0ee01b6a34103d8c2efb3844634f945276..7a02545ffbe6ba46ad6e8c0477abb5a392f6146b 100644
+--- a/src/core/dielecmodel.h
++++ b/src/core/dielecmodel.h
+@@ -246,6 +246,11 @@ public:
+     double cal_factor(std::string name);
+     void test_head();
+     std::vector<double> get_head_vec();
++    const std::vector<matrix_m<std::complex<double>>>&
++    get_head_matrices() const noexcept
++    {
++        return head;
++    }
+     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+ 
+     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
+diff --git a/src/test/CMakeLists.txt b/src/test/CMakeLists.txt
+index 715778ad513d7f677e1b67aa6f747a45708e6d40..d8784c07597b27a1195510ed468b6bd7cd71fc86 100644
+--- a/src/test/CMakeLists.txt
++++ b/src/test/CMakeLists.txt
+@@ -42,6 +42,9 @@ foreach(target
+     test_base_utility
+     test_blas_lapack
+     test_complexmatrix
++    test_qsgw_correlation_potential
++    test_qsgw_convergence
++    test_qsgw_effective_hamiltonian
+     test_fitting
+     test_io
+     test_symmetry_context
+@@ -55,6 +58,21 @@ foreach(target
+     test_meanfield
+     test_pbc
+     test_profiler
++    test_qsgw_fixed_basis
++    test_qsgw_hamiltonian_mixing
++    test_qsgw_hartree_density
++    test_qsgw_hartree_kernel
++    test_qsgw_hartree_route
++    test_qsgw_hartree_workflow
++    test_qsgw_headwing_update
++    test_qsgw_input_contract
++    test_qsgw_iteration_trace
++    test_qsgw_mixing
++    test_qsgw_occupation
++    test_qsgw_operator_fourier
++    test_qsgw_projection_target
++    test_qsgw_sha256
++    test_qsgw_vxc_io
+     test_qpe_solver
+     test_rsh
+     test_rpa_headwing
+@@ -72,6 +90,8 @@ foreach(target
+   test_base_mpi
+   test_blacs
+   test_dataset
++  test_qsgw_distributed_matrix
++  test_qsgw_fixed_basis_mpi
+   test_matrix_m_mpi
+   test_meanfield_mpi
+   test_kpoint_blacs_parallel_context
