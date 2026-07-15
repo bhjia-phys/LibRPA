@@ -1,0 +1,16 @@
+diff --git a/src/core/dielecmodel.h b/src/core/dielecmodel.h
+index 82f7cb0ee01b6a34103d8c2efb3844634f945276..7a02545ffbe6ba46ad6e8c0477abb5a392f6146b 100644
+--- a/src/core/dielecmodel.h
++++ b/src/core/dielecmodel.h
+@@ -246,6 +246,11 @@ public:
+     double cal_factor(std::string name);
+     void test_head();
+     std::vector<double> get_head_vec();
++    const std::vector<matrix_m<std::complex<double>>>&
++    get_head_matrices() const noexcept
++    {
++        return head;
++    }
+     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+ 
+     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,

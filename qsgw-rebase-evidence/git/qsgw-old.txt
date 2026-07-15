@@ -1,0 +1,7 @@
+commit cb2940201b1f44b1c38b90169048b7d060e44732
+Author:     userchba <1075002153@qq.com>
+AuthorDate: Sat Jul 11 14:34:17 2026 +0800
+Commit:     Minye Zhang <minyez.physchem@gmail.com>
+CommitDate: Sat Jul 11 21:53:30 2026 +0800
+
+    always use opt 128 blocksize to implement the function pgemm_wfc_scaled_wfc_h

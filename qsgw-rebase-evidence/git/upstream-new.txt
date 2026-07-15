@@ -1,0 +1,7 @@
+commit 1376ee4f45a7611a55c5b92c4ba41409d515bcea
+Author:     Minye Zhang <minyez.physchem@gmail.com>
+AuthorDate: Tue Jul 14 15:49:50 2026 +0800
+Commit:     Minye Zhang <minyez.physchem@gmail.com>
+CommitDate: Tue Jul 14 15:49:50 2026 +0800
+
+    test: switch on kpara in abacus_BN_headwing_libri

@@ -1,0 +1,2018 @@
+{
+    "schema_version":  "1.0",
+    "generated_at_utc":  "2026-07-15T08:01:57.7283562Z",
+    "comparison_base":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+    "protected_prefix":  "src/",
+    "file_count":  251,
+    "ownership_rule":  "src/qsgw and test_qsgw are QSGW-owned; all remaining src files are protected shared or build interfaces",
+    "files":  [
+                  {
+                      "path":  "src/api/compute_exx.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  11048,
+                      "sha256":  "dd06f7dd6ef87669eeadaa5ed5a81d197662938fc52f2db8b09f96629170e2b7"
+                  },
+                  {
+                      "path":  "src/api/compute_g0w0.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  59178,
+                      "sha256":  "6391cc3bd88e4633139610f48713aa8c248b5b2c6be406e71cdde4bd7c593c6a"
+                  },
+                  {
+                      "path":  "src/api/compute_helper.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3832,
+                      "sha256":  "d293e92ad311c7daf5af9d05cc99fb0620979d249e5db80ab41c9e60264bd2e1"
+                  },
+                  {
+                      "path":  "src/api/compute_helper.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  829,
+                      "sha256":  "c150be9636d28a252e8680acfd5bdc0e9921e1d093fae703ee3ad16b74b32fdf"
+                  },
+                  {
+                      "path":  "src/api/compute_rpa.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7657,
+                      "sha256":  "d955bf335a456e73ef27425409483d531fd3cbb13e4b0267b9e880b89064986c"
+                  },
+                  {
+                      "path":  "src/api/dataset.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  24749,
+                      "sha256":  "e20906b3df680c3203fca4d2128006171d543490fe26eca63e90b0860e2c57ef"
+                  },
+                  {
+                      "path":  "src/api/dataset.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6315,
+                      "sha256":  "753909b8df725ea3139ee01e2ffad7ae8f10908ce3d6d1d58e2b3421ffaec2c5"
+                  },
+                  {
+                      "path":  "src/api/dataset_helper.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  15322,
+                      "sha256":  "25e0f4c1b19ec59550216e6bf5ac4b03a5b26fd65cb8c93c7006ad596f356232"
+                  },
+                  {
+                      "path":  "src/api/dataset_helper.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1241,
+                      "sha256":  "15c64119cbabd459250af0b5c4f4abfe70584f14b78988f32820507ed79cd5d4"
+                  },
+                  {
+                      "path":  "src/api/global.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5418,
+                      "sha256":  "a40f67ff940b8387d1f603abaacdd758e13323fe06bd4306eece98196468bc98"
+                  },
+                  {
+                      "path":  "src/api/global.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  621,
+                      "sha256":  "433a9f4b715303bbc93fbd03f3b5b84ad32300198d412a9d9f9dae2b573551f6"
+                  },
+                  {
+                      "path":  "src/api/handler.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  724,
+                      "sha256":  "82ae0967cb79489cbeea41196471179c29182ff2d4e354014976ef6253eca866"
+                  },
+                  {
+                      "path":  "src/api/handler.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  285,
+                      "sha256":  "cf5024fa26ede2efcc9a33ddb592266221798f7842307c93b9d07f79005b8b1f"
+                  },
+                  {
+                      "path":  "src/api/input.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  52893,
+                      "sha256":  "686961c351e91c6dabda249492de343aed948540a07e1f4e31b8d1527b302111"
+                  },
+                  {
+                      "path":  "src/api/instance_manager.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1854,
+                      "sha256":  "baddb28bc33519f1fbea1f021cc0a0f0f093ce7f204e9225cc83285182f34706"
+                  },
+                  {
+                      "path":  "src/api/instance_manager.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  794,
+                      "sha256":  "3aa7e7045f0689767907b8edbb0df7c97d16a915542cc9f9257dc5bbdb7f906f"
+                  },
+                  {
+                      "path":  "src/api/librpa.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  24523,
+                      "sha256":  "c11b2dcf809526a32f0a6f3d55451def47d2796885458e7868b2a41be5816b55"
+                  },
+                  {
+                      "path":  "src/api/options.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5258,
+                      "sha256":  "0ccd1c41cdd6d3728c18bdca1f83caea295bc389c7f3e4f3dd3fd85b9171d6e6"
+                  },
+                  {
+                      "path":  "src/CMakeLists.txt",
+                      "owner":  "shared_build_interface",
+                      "protected":  true,
+                      "git_status":  " M",
+                      "size_bytes":  5559,
+                      "sha256":  "82b258ac1e3685730fdfe5e1687ff15d2ee3a3d70cf401cda1b02808e5e16091"
+                  },
+                  {
+                      "path":  "src/core/analycont.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3610,
+                      "sha256":  "d56d7173057d4adf163126726e1357083aebd742f18d9e135961712ce7899074"
+                  },
+                  {
+                      "path":  "src/core/analycont.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2141,
+                      "sha256":  "440b233f246acca3074b9ad3eeeda797d4e1db7a4ed6e8639bd4b0aabcb12e63"
+                  },
+                  {
+                      "path":  "src/core/atom.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4261,
+                      "sha256":  "1789a62268f5dee7c429227156927e5fc45b1a9df3474732efe73f48ba70080f"
+                  },
+                  {
+                      "path":  "src/core/atomic_basis.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  10316,
+                      "sha256":  "192b6aebc236772d832419ff2b7f71965ceeefd3dfde41ec1f43b18cf98d6035"
+                  },
+                  {
+                      "path":  "src/core/atomic_basis.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  13852,
+                      "sha256":  "3b1f90fcb805b6d1bbccef36b1559fb75465f7d696176304aada412cbc76d652"
+                  },
+                  {
+                      "path":  "src/core/chi0.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  165774,
+                      "sha256":  "5c22fe7f0823e1f81a134243ef80fb460a20e7f77f6567f0a92c8b5656fc5ce1"
+                  },
+                  {
+                      "path":  "src/core/chi0.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7375,
+                      "sha256":  "e9303754fd2f954174b75895b4038cb1efee03d20eeddae37562906743c86c8d"
+                  },
+                  {
+                      "path":  "src/core/coulmat.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  22105,
+                      "sha256":  "fd1108a2ab12c2330b48e12c661b7e43d60e61ca9318ef8e7b0354b45e683ed7"
+                  },
+                  {
+                      "path":  "src/core/coulmat.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1183,
+                      "sha256":  "2be99434cbb6b87dee9140719cc87634e071700d263ef9ed686a11fa0e792a72"
+                  },
+                  {
+                      "path":  "src/core/dielecmodel.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  141189,
+                      "sha256":  "faeaadd7e503e580e1d8aba747b698ce277ce268e765687b7a379f7978ca21d5"
+                  },
+                  {
+                      "path":  "src/core/dielecmodel.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  " M",
+                      "size_bytes":  17545,
+                      "sha256":  "135b700c26b0665f4af9f4bc6445712caed0c217a0eb90f26a7c5d0b59079df4"
+                  },
+                  {
+                      "path":  "src/core/epsilon.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  209211,
+                      "sha256":  "783deb69861f97fb099bb0a913dd92a03c6c1aefb77760e514720005a3e35121"
+                  },
+                  {
+                      "path":  "src/core/epsilon.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7972,
+                      "sha256":  "496d6be68cf3e898255d34f6c72d796b888ab7b65b7655562b2433f7d0e86e83"
+                  },
+                  {
+                      "path":  "src/core/exx.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  90750,
+                      "sha256":  "41c1675e52bae1a8370a04571683fc1b26cef2174ed43c80b9b1b71e5ace934d"
+                  },
+                  {
+                      "path":  "src/core/exx.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4455,
+                      "sha256":  "2d33f6a281076224c3dba1ede6f99b1690a51079865ce01fa370b882fa3b30be"
+                  },
+                  {
+                      "path":  "src/core/geometry.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3674,
+                      "sha256":  "b1766851c33c14a60c1207f0af991d07c64457c4ca7af7b95582d92d3624ecec"
+                  },
+                  {
+                      "path":  "src/core/geometry.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1847,
+                      "sha256":  "32edb6de9ac4ea3f1906445c7af2adcc57a046a03af8c31a6d33a46c681aadbe"
+                  },
+                  {
+                      "path":  "src/core/gw.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  140011,
+                      "sha256":  "ca1192acf983a9c4a2f2a1d1c5d1ae1143a3a63c96cd0fbc42d9a59f51de00f2"
+                  },
+                  {
+                      "path":  "src/core/gw.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7064,
+                      "sha256":  "25a205dcc11ef86e7c52f0c164358f4766fe8f62b6c4db7052139cb166ecd0a9"
+                  },
+                  {
+                      "path":  "src/core/meanfield.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  34495,
+                      "sha256":  "c575b53ac5336d03d4f57a96dace30610d72185c3c384a3b1fc2eafc1e50ba62"
+                  },
+                  {
+                      "path":  "src/core/meanfield.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8133,
+                      "sha256":  "56161fd427468968ec1f216dbaf5b77f8b84cda7e07ce75285f9410fd34fb2ba"
+                  },
+                  {
+                      "path":  "src/core/meanfield_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  70051,
+                      "sha256":  "39ea91f711009dbe9e7906b9e0560c4f1a2327f62265400720267f2e378ea1c5"
+                  },
+                  {
+                      "path":  "src/core/meanfield_mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5090,
+                      "sha256":  "c8dc43a4e8961f5c5a418b0dbd21b9498b001d4ec032db68298cc533b1462820"
+                  },
+                  {
+                      "path":  "src/core/minimax.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  974,
+                      "sha256":  "3744c9109c9e712a4da8f1f657c246fbf6e8240ed4a18ce4af8f45b4b6a3f10b"
+                  },
+                  {
+                      "path":  "src/core/minimax_gx.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2117,
+                      "sha256":  "a197c3b8cc0db0b31520eebe27c1e0e98adc36d8c0882dc9e2d6cca3faa327cf"
+                  },
+                  {
+                      "path":  "src/core/pbc.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  23381,
+                      "sha256":  "1930e4c5ad226c1245f90d6061ba41dc6ceea8b251e8afcd6e522186a576d7a0"
+                  },
+                  {
+                      "path":  "src/core/pbc.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  9950,
+                      "sha256":  "73aac0ecb1cb077a6c88e79f80ca676c86a8b4d01b35cd379d34d291760eb9f6"
+                  },
+                  {
+                      "path":  "src/core/qpe_solver.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  14687,
+                      "sha256":  "9becd214a5b2e43f08eb5211896c7ba502ae192a31044d61054a4e682f061081"
+                  },
+                  {
+                      "path":  "src/core/qpe_solver.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5112,
+                      "sha256":  "259044f6d9fb95cf9bdda510f9f2dc0f1568998999b6d112092764790e0bfb2d"
+                  },
+                  {
+                      "path":  "src/core/qpoint_view.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6605,
+                      "sha256":  "535d84bb8e885106087e6384060c1818598c35dd50709c8dec9a0d60c4f8bb7d"
+                  },
+                  {
+                      "path":  "src/core/qpoint_view.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  867,
+                      "sha256":  "1980eedd322fc2b240744300ab3b1764fd3d89d5e086a372aabbdd3f0f9cc833"
+                  },
+                  {
+                      "path":  "src/core/ri.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  11717,
+                      "sha256":  "597a97ebbb2d41021e314373b926f4aad82d924771a51bad5ba472696931197a"
+                  },
+                  {
+                      "path":  "src/core/ri.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4345,
+                      "sha256":  "a44dbefc2fee584b1b27d6d51fe9a3a6209424ddc7153af09624de51946b4372"
+                  },
+                  {
+                      "path":  "src/core/symmetry_context.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  92310,
+                      "sha256":  "c640f74212499f9f3b5b286e98e95adaa1035a5848e86cf29fb4a8fc158346e0"
+                  },
+                  {
+                      "path":  "src/core/symmetry_context.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  10746,
+                      "sha256":  "12695881d287e9ad36ea958487b7d22e0d58fcb8fc04f51e6b5b54445c233694"
+                  },
+                  {
+                      "path":  "src/core/symmetry_types.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2801,
+                      "sha256":  "889d3add426d2aa78fb753bd3e3666e9d8389a0517ba57b562dd1545e80850a0"
+                  },
+                  {
+                      "path":  "src/core/timefreq.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  12685,
+                      "sha256":  "2757b697d6e1eb2fd07488fc8734d9410111486c1bbe72d830afcadc05e38cb8"
+                  },
+                  {
+                      "path":  "src/core/timefreq.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5017,
+                      "sha256":  "20f041530d26a3b0bac27509a4dd6133f504ebb085a5007c8507c957c2fb7b55"
+                  },
+                  {
+                      "path":  "src/core/utils_atomic_basis_blacs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  43946,
+                      "sha256":  "0668adbc9a1603c2925f8926648354aacdb1de8b4c43b11b202707237cf48711"
+                  },
+                  {
+                      "path":  "src/core/utils_atomic_basis_blacs.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  13740,
+                      "sha256":  "c8a848c21178be1954b694586cb7f1ea37f0abbcf23891dbc27f05a5d699440e"
+                  },
+                  {
+                      "path":  "src/core/utils_complexmatrix.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  820,
+                      "sha256":  "445ec815564b6825f2266ec17e477e82c4cc04dc426f10e2ba5acff6c06143e3"
+                  },
+                  {
+                      "path":  "src/core/utils_complexmatrix.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  346,
+                      "sha256":  "441c864bce08715befb73bcc140ef95421419de24f5a9870dc1aef630d6ea107"
+                  },
+                  {
+                      "path":  "src/elpa/elpa_connector.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  14534,
+                      "sha256":  "fcbae4f3692eea44ae78d9a8b34e3c4f4b794341c693153bdf08a4a9887069cb"
+                  },
+                  {
+                      "path":  "src/elpa/elpa_connector.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1768,
+                      "sha256":  "638a66b465c3239244c31f901c86fe0054a94d5782c4481f893b1951fc4960aa"
+                  },
+                  {
+                      "path":  "src/gpu/device_connector.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1040,
+                      "sha256":  "1d7435bfdde52eae11da5d6cd19b84ca4529e4fef9e5650b353ab5e981f4db4a"
+                  },
+                  {
+                      "path":  "src/gpu/device_connector.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  518,
+                      "sha256":  "4060780d99a565699067d10e90cdbe7a7f73da11ea77012d8117aa8bd976ab82"
+                  },
+                  {
+                      "path":  "src/gpu/la_connector.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8513,
+                      "sha256":  "166a725548175dd09fce8bb6da45db9d4eb18af9c1cb32884d6d2d5d4d449ab2"
+                  },
+                  {
+                      "path":  "src/gw_old.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  68651,
+                      "sha256":  "19775464cd4a8587fb389cd798ba391dab8e0dc6c1343e118ffbfff41c25f82d"
+                  },
+                  {
+                      "path":  "src/gw_old.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3213,
+                      "sha256":  "f47e77ec5d6d2681d41689b8751f80cfc2652e48ddff526c6e676c393318e47f"
+                  },
+                  {
+                      "path":  "src/interface/blacs_scalapack.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  20003,
+                      "sha256":  "184fbf7a78b383b1f1b0be2556ececfddb4a632e340ae1d2362b4724f5ee949c"
+                  },
+                  {
+                      "path":  "src/interface/blas_lapack.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  20429,
+                      "sha256":  "9029d4132d2dc3773ebf92f074d84f88d3d3a2afe377e4872e8bba967e8f6e63"
+                  },
+                  {
+                      "path":  "src/interface/gx_minimax_wrp.f90",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8540,
+                      "sha256":  "13580b5caf8f1559ddddbefadb553cad6509cd360feabca984e1a9a4698e89eb"
+                  },
+                  {
+                      "path":  "src/interface/gx_minimax_wrp.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  887,
+                      "sha256":  "e229eb6bd042e3d08309a72e580f3770549b6d55552810179aa5017115db1897"
+                  },
+                  {
+                      "path":  "src/interface/mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1708,
+                      "sha256":  "636435c94be377218f194fd9588eb01d0042e101ce284f1e1740c4d18b4d77e0"
+                  },
+                  {
+                      "path":  "src/io/aux_basis_summary.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2893,
+                      "sha256":  "96b6367f420264a4682d960f36455a99a729fe785d65d96794b69645dfc88d61"
+                  },
+                  {
+                      "path":  "src/io/aux_basis_summary.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  433,
+                      "sha256":  "632d0a2b6ad98e65a2e3d865aa489b249d0d8ee368804ac9b39e630cbf0cfe6b"
+                  },
+                  {
+                      "path":  "src/io/fs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4911,
+                      "sha256":  "30c69956a7c08f8eb58c0ee9e8d435973bbceee7dd8655b5642d16bcc2620db5"
+                  },
+                  {
+                      "path":  "src/io/fs.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1729,
+                      "sha256":  "c053765e337e5bdebe1320473aeef8b5c24e30d019731dadcf19a4b98000cee1"
+                  },
+                  {
+                      "path":  "src/io/global_io.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3928,
+                      "sha256":  "6062930d9aa349fbd9db20e63dedcdb3adfa1df3b03d83845d57a0da1b94f95f"
+                  },
+                  {
+                      "path":  "src/io/global_io.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5637,
+                      "sha256":  "64d95d6a03c2b079afbd75c1640146f5fa56e40a68e8357771a0b6ea7f389c2a"
+                  },
+                  {
+                      "path":  "src/io/input_elsi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5511,
+                      "sha256":  "95ff7ed4af5521ca3307cade0451506b4b4a4921a2f86f09dc111109393a9cf1"
+                  },
+                  {
+                      "path":  "src/io/input_elsi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1488,
+                      "sha256":  "8ea3202a3e42c34724eef4d07d1eebe25be1aacb53d4a0211b7e60c89b2a2c95"
+                  },
+                  {
+                      "path":  "src/io/output_gw.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5377,
+                      "sha256":  "59493a54026801b3e0d1a7deef972dcc61f9c5ae6fa717afcf08526c79cadece"
+                  },
+                  {
+                      "path":  "src/io/output_gw.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  543,
+                      "sha256":  "3ae3a0138b4eeda790c5ae1537541a7fc469c6c22802e8bd2b0e1bd54af3b12e"
+                  },
+                  {
+                      "path":  "src/io/stl_io_helper.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2285,
+                      "sha256":  "db259b1a06b577a902c09c1f421076ee64228d694cb7af9d96f549c4a9de1c6c"
+                  },
+                  {
+                      "path":  "src/io/stl_io_helper.hpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4708,
+                      "sha256":  "065031bf15e37537ba6531ce8744c15263b1b10ee2abac4defb52d0ecfa50803"
+                  },
+                  {
+                      "path":  "src/math/arbitrary_float.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  23139,
+                      "sha256":  "63ec85b450d2b8a06221c4c9f779d53dc9f7d5df9eb884e29d82a8640a3b5b70"
+                  },
+                  {
+                      "path":  "src/math/complexmatrix.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  21830,
+                      "sha256":  "9199352d813b266f5c85e4073a5bb2a04b6ee55bcce58ab50dc3b8dea6bdc8bf"
+                  },
+                  {
+                      "path":  "src/math/complexmatrix.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6404,
+                      "sha256":  "090cfe5857f775ab64f262d9daff2067e60fb26aaa28aaddc8f406aed1621300"
+                  },
+                  {
+                      "path":  "src/math/fitting.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6828,
+                      "sha256":  "e2db117c79035256de5942a5b2844baf7d2e86d140f569f4e6f02636b3b23f0c"
+                  },
+                  {
+                      "path":  "src/math/fitting.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2123,
+                      "sha256":  "412fe59c492bd2ebe54bf8b4584c1700ce5cd9cb6d2c87d755b435bdeeeee1fd"
+                  },
+                  {
+                      "path":  "src/math/interpolate.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4506,
+                      "sha256":  "7f4f88532fc2ca6220c06989ca3e8d8e2be81417f4f4a33f0bcdeaaa73c78b4f"
+                  },
+                  {
+                      "path":  "src/math/interpolate.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1918,
+                      "sha256":  "7c48ea84b3e110c6682afbb9d18b1a0aae594a08a70978b6ca93cac3671fec75"
+                  },
+                  {
+                      "path":  "src/math/lapack_connector.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  33316,
+                      "sha256":  "22f3bc4c424c11c1899c080578c53e19f3149ffbc2495febdd23aec99495495b"
+                  },
+                  {
+                      "path":  "src/math/lebedev_laikov.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  97604,
+                      "sha256":  "5db11691ae69940b1a99fb1c75ef757b54928b111ccbbfafa60556600ef906a4"
+                  },
+                  {
+                      "path":  "src/math/lebedev_laikov.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  366,
+                      "sha256":  "adb2c9c341d63b43ac2af2ea75779afdff58cbdcc2d0552bf25f6683a3d4c744"
+                  },
+                  {
+                      "path":  "src/math/mathtools.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4429,
+                      "sha256":  "5e457d645109dcac0347cd459ccc4db9a68070eec3bc6b677dc781f9705f544f"
+                  },
+                  {
+                      "path":  "src/math/mathtools.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2819,
+                      "sha256":  "d1312e23463f9f247db20b446777fc7d3ae522efd1f5ebf7444206b656864dee"
+                  },
+                  {
+                      "path":  "src/math/matrix.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  14347,
+                      "sha256":  "00b73f0b128a335262038a2faa7f0fcda92ae2363ba168aa493804fd5591fedc"
+                  },
+                  {
+                      "path":  "src/math/matrix.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4306,
+                      "sha256":  "5e852b26e77bdf2fd6add62642c700586aea050dce07e3dd849188735871cde7"
+                  },
+                  {
+                      "path":  "src/math/matrix_m.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  43527,
+                      "sha256":  "ae8d6a897c71b13066c7d42dd6d25ec744e617ad7ad70e7576bfb952dfab173b"
+                  },
+                  {
+                      "path":  "src/math/matrix3.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5411,
+                      "sha256":  "96c83efdaf9fe4c55f0e0e0201e586f0f424c1724922bd8450f3740645df8c8f"
+                  },
+                  {
+                      "path":  "src/math/matrix3.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3728,
+                      "sha256":  "438a0aec110d0c687cbd6e8d9de36afe1a85400f2823a8902ce8c8b7dfc312de"
+                  },
+                  {
+                      "path":  "src/math/rsh.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8249,
+                      "sha256":  "93d00ec96d4078c7df02d48952bb2819ad4d121d1f4d81a266975105e972b40e"
+                  },
+                  {
+                      "path":  "src/math/rsh.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2027,
+                      "sha256":  "ad49786207adc404f592144ad4a3ba94010b0aec26f5e2d5251afe9675f6f8f0"
+                  },
+                  {
+                      "path":  "src/math/scalapack_connector.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  24523,
+                      "sha256":  "5cd9e03d598e2ddc6605888583324647a5a7d9e01c9bcc4d3bd09e6f5131b296"
+                  },
+                  {
+                      "path":  "src/math/symmetry.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  18683,
+                      "sha256":  "b85d966f70430816f04144dc2fb95ada6d95913896b2d346ebafdec933781570"
+                  },
+                  {
+                      "path":  "src/math/symmetry.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  10557,
+                      "sha256":  "704a9e771ad3e5ff8a46ffe261ee70c92dc82a8b65952e9aebbc19bd1f6b6d34"
+                  },
+                  {
+                      "path":  "src/math/utils_matrix_m.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1988,
+                      "sha256":  "5c4465d52f0a6cc1782cf01a52ad33d0604bf85002d666ed66cc09563e9ed565"
+                  },
+                  {
+                      "path":  "src/math/utils_matrix_m_mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  79529,
+                      "sha256":  "b8e8d91b6dbfb6d0f226514a11966e3e817be603baf352eff707af8e3ebb9902"
+                  },
+                  {
+                      "path":  "src/math/utils_matrix_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2368,
+                      "sha256":  "580fc120cddcaf1140664d97b4ad1a0aab152228489a026992b024e75d6e8118"
+                  },
+                  {
+                      "path":  "src/math/utils_matrix_mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  727,
+                      "sha256":  "dcf66ff230a2c869a888c13f17022baa902475fc54fa5d03f9f9a59299e97f34"
+                  },
+                  {
+                      "path":  "src/math/vec.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6801,
+                      "sha256":  "70e786bad43e542cdfa319e70e8dde846cf021a2ada03e38ef529fa8d448495f"
+                  },
+                  {
+                      "path":  "src/math/vector3.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  6361,
+                      "sha256":  "4e3cdf207d0c03f17fdf746c156bea332b469fcc9fc7613eba292fcc8dd6b114"
+                  },
+                  {
+                      "path":  "src/math/vector3_order.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2155,
+                      "sha256":  "ef84fe8c2a401249d444aa4c616f12f54981cdb8cfa28ea131cef5823b852132"
+                  },
+                  {
+                      "path":  "src/math/vector3_order.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2752,
+                      "sha256":  "c6ad401f282bfc466003745f560bb620abda26a26eb115f930a4852d9433066a"
+                  },
+                  {
+                      "path":  "src/math/wigner_rotation.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5242,
+                      "sha256":  "5e5506dcf87ceec861aea82097f701005f8ee52293120ac942d5852e9300a3c1"
+                  },
+                  {
+                      "path":  "src/math/wigner_rotation.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2043,
+                      "sha256":  "cfb80eaf775fd2ff2a38b423f874bf276e5a0a10601b03581fd6b2f96cafbe6c"
+                  },
+                  {
+                      "path":  "src/meanfield_old.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  12965,
+                      "sha256":  "0d5b3f243b7d693bc5fcba391ab1469a9141f7fd2dea93651cd4c3cb30238ede"
+                  },
+                  {
+                      "path":  "src/meanfield_old.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4445,
+                      "sha256":  "5da6d2fca79f8b3a035429ceda325e4093ed139710bb47f516c1e81eed971748"
+                  },
+                  {
+                      "path":  "src/mpi/base_blacs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  20181,
+                      "sha256":  "0c3ff2f882803edd8d1b6dff645ad14643ff12527f52ec0451dcda978d7255bb"
+                  },
+                  {
+                      "path":  "src/mpi/base_blacs.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  15547,
+                      "sha256":  "d97ea07514dead79c5bee70f0cbb602ae66d1a763dfa084d1a9f453e5e56c7c0"
+                  },
+                  {
+                      "path":  "src/mpi/base_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  17593,
+                      "sha256":  "b88eb552526fa1b172b14f3b7366747fcb1753f7b8a47755229500ba19210f7d"
+                  },
+                  {
+                      "path":  "src/mpi/base_mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7317,
+                      "sha256":  "7ef4b6e7ce4d2aaa06f62f92f5757130b709f65bcf68a7e319b2527cdb61f2b4"
+                  },
+                  {
+                      "path":  "src/mpi/global_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3188,
+                      "sha256":  "ae17096a0460c6319fa58c8c21032f58a53023f9ff28e28f4c59ca238eae0b30"
+                  },
+                  {
+                      "path":  "src/mpi/global_mpi.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1209,
+                      "sha256":  "6fec37703cc6cf2432c8a55ec7de1fca83c7a45acfd20f08bec16806e340b489"
+                  },
+                  {
+                      "path":  "src/mpi/kpoint_blacs_parallel_context.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  16271,
+                      "sha256":  "8d4a4d53f16e3a1170c6dc772f2da37aacb2dd06715ba657c4c812a0e05fe406"
+                  },
+                  {
+                      "path":  "src/mpi/kpoint_blacs_parallel_context.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7797,
+                      "sha256":  "53e4077ed1891e6696b6d321c8f7068ee491e4d04ac0fa93a498c3f7d0409342"
+                  },
+                  {
+                      "path":  "src/mpi/mpi_shm.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5197,
+                      "sha256":  "908f6042c6325530cbc682618249f2f88b3c52c8744efc538a955c52b5b01f4e"
+                  },
+                  {
+                      "path":  "src/mpi/two_level_parallel_context.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  9725,
+                      "sha256":  "87e8f1c3f3020a4b19625b75e60c8dd22b2f06287e098ca963cef17c2165404f"
+                  },
+                  {
+                      "path":  "src/mpi/two_level_parallel_context.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3558,
+                      "sha256":  "980099bfc6f4ed4fddca51cf0ef9e1ab97b091df4eccea3970dbaf680e4da610"
+                  },
+                  {
+                      "path":  "src/mpi/utils_blacs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  525,
+                      "sha256":  "268f632c4a68ed05589c5783c32fc3a1246f1c7df9101f45d7a10553b5bb8d77"
+                  },
+                  {
+                      "path":  "src/mpi/utils_blacs.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  448,
+                      "sha256":  "d9303a44794a519b4e089002f5cbb825837aebec72a88f3dfd541b2331f78994"
+                  },
+                  {
+                      "path":  "src/qsgw/CMakeLists.txt",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  440,
+                      "sha256":  "74d5ef6958971aeb382d27414705786dff209a5a2ab687094a0e4e5fea8ee786"
+                  },
+                  {
+                      "path":  "src/qsgw/convergence.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2903,
+                      "sha256":  "145bd8de411ba05c388e42a90b0ae789d320c1b95cdbc4b08248c856d8c453d9"
+                  },
+                  {
+                      "path":  "src/qsgw/convergence.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  602,
+                      "sha256":  "30717c38e28159729a59f1c2c3faee28f92b10b089ce55f923f29ee3fa186f47"
+                  },
+                  {
+                      "path":  "src/qsgw/correlation_potential.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  9533,
+                      "sha256":  "63d556f6fbc005363e7267dece02a029fd766619eeaf7d74aa129d325afbb228"
+                  },
+                  {
+                      "path":  "src/qsgw/correlation_potential.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  787,
+                      "sha256":  "ac083826b3ded05a44f898a41da377a444c1aa7a1cfb2394350b187ee66f8524"
+                  },
+                  {
+                      "path":  "src/qsgw/distributed_matrix.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  6081,
+                      "sha256":  "0cbee60ddbe055a89d1a178b1f3989e4e473ada3e5c62ce01c916febccaa6f28"
+                  },
+                  {
+                      "path":  "src/qsgw/distributed_matrix.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  534,
+                      "sha256":  "c13c8d45742292587501c7633da74eaa6b4198ea19a6af10a12a84be5ab17984"
+                  },
+                  {
+                      "path":  "src/qsgw/effective_hamiltonian.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  6615,
+                      "sha256":  "fabd384ef0c1d9b3cbea35dc8729865ed9073f5fd0b1eaae820492a767a99924"
+                  },
+                  {
+                      "path":  "src/qsgw/effective_hamiltonian.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  518,
+                      "sha256":  "da4c3d2c4c8bc1952f4c4a8b8e41d66dfa1845280186e7573ab77c0c638e4a3d"
+                  },
+                  {
+                      "path":  "src/qsgw/fermi_energy_occupation.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  11630,
+                      "sha256":  "8653d68fc428d0d4cd758b1bbb8ed9bef244ac6b45158b35f3181595d038d3a1"
+                  },
+                  {
+                      "path":  "src/qsgw/fermi_energy_occupation.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  675,
+                      "sha256":  "911750afcbe3865b4268b9d7aa7d2b39a89bea1353e37b2645ad629ad20ab8bf"
+                  },
+                  {
+                      "path":  "src/qsgw/fixed_basis.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  25932,
+                      "sha256":  "b0cc0d2985d42f27e0ded6d670caa44c3b9dd09115c39702c0faf4c6c3cd2a43"
+                  },
+                  {
+                      "path":  "src/qsgw/fixed_basis.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2370,
+                      "sha256":  "97543eabe7efc998cd8e3dd8b1664e1438b4f13373a1d6a8b9abcb8dd4b8edf4"
+                  },
+                  {
+                      "path":  "src/qsgw/Hamiltonian.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  21803,
+                      "sha256":  "0d3e63bde425bd7018f45f342e92b5b5ad35fc3840be80d060aab17c85fe4c48"
+                  },
+                  {
+                      "path":  "src/qsgw/Hamiltonian.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3027,
+                      "sha256":  "88b3e2106c0f1bcb9514ae65a857e60171572ff273471ae78d1ac18b85276f77"
+                  },
+                  {
+                      "path":  "src/qsgw/hamiltonian_mixing.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  9057,
+                      "sha256":  "05a57a17bcf2349cc4fa6d04e95d8080b2e644f186b40b91fae97e36220bb164"
+                  },
+                  {
+                      "path":  "src/qsgw/hamiltonian_mixing.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  1796,
+                      "sha256":  "9b2aac69b633a5929ed6a21d41b295afcd08d0ee27bf6fb258ced5e8bcb52d76"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_density.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  22263,
+                      "sha256":  "626af460f6cb9870d5dd7a8691d7bf9a088b764bf4c83865c38cccbe70a83702"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_density.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2234,
+                      "sha256":  "02a9e85fc3706d0acc080eed716b5e122d6ff959c2b8f40118cb07e2612d7bee"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_kernel.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  10801,
+                      "sha256":  "e192d4c90a36e1ccf82984df90b61bd257a704457fec0c117f32727a63b26a61"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_kernel.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  836,
+                      "sha256":  "1424e48cd216328892341b478a6965175e8a45b46fb380347671bfb0ad737af2"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_route.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2565,
+                      "sha256":  "a0b32cf2c51180944cebf45618f8f905421cad6f1e2ada82a560fdf92bf02a73"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_route.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  631,
+                      "sha256":  "6ed14f3c8f6db45b9ea44573f7966c5b49b0983d9f7ea35f12a228259c8015f8"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_workflow.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  23753,
+                      "sha256":  "f3823c8f0ab41eed80f6f8c8e84ea2b78ec5d56690c4777b09e30315f8bdc70e"
+                  },
+                  {
+                      "path":  "src/qsgw/hartree_workflow.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2884,
+                      "sha256":  "a2b3b3745645204c5d55b38b217456a89850a2a123e020db91f7f41f60ec70db"
+                  },
+                  {
+                      "path":  "src/qsgw/headwing_update.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2999,
+                      "sha256":  "11411cbd13ccd9572714b85b413c640198ad66e4be0f553479485c8c42222a4a"
+                  },
+                  {
+                      "path":  "src/qsgw/headwing_update.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  1410,
+                      "sha256":  "ad5c0e3aa6fb49229dc2634a6b56b67fa7daadb677cde71c646a70f5dd55d033"
+                  },
+                  {
+                      "path":  "src/qsgw/input_contract.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  26574,
+                      "sha256":  "f0b84799cdcbc37ebc08418d631f52d7607b60c4d129a384da8bfa906a176e81"
+                  },
+                  {
+                      "path":  "src/qsgw/input_contract.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  4072,
+                      "sha256":  "4532c3dd62f5c474a3fefd30adebe88e1c72a3812398b3f3e36744a0b944be13"
+                  },
+                  {
+                      "path":  "src/qsgw/iteration_trace.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  17097,
+                      "sha256":  "639c68fe8c5db962c9d77d1c378f323dc6cc9f9e380b6d07a0d0331f1d802aeb"
+                  },
+                  {
+                      "path":  "src/qsgw/iteration_trace.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2463,
+                      "sha256":  "0c81da9defa9e4672469e619828a9160d5e0afecc5398570b293e2a92612302a"
+                  },
+                  {
+                      "path":  "src/qsgw/matrix_map.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  315,
+                      "sha256":  "7aff3b9b5451ae93dba1308f77528ef73528083f41c14c334ca22ee766261a5c"
+                  },
+                  {
+                      "path":  "src/qsgw/mixing.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  14430,
+                      "sha256":  "ca879e63f19d9812a61f5db8a8904061e417745cb7435886276877824d63fafc"
+                  },
+                  {
+                      "path":  "src/qsgw/mixing.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  1753,
+                      "sha256":  "1c492951fa77bb6dda2acd51deeb9c2f1e10944037eb96d471a83b55550489e5"
+                  },
+                  {
+                      "path":  "src/qsgw/occupation.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  10969,
+                      "sha256":  "3bd1fff699f14714c415ff2240b28168180784cf7aac81c7ea0467a62a7a13bb"
+                  },
+                  {
+                      "path":  "src/qsgw/occupation.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  925,
+                      "sha256":  "ed9227688e181dfed70ec24a7199e117e341d2df5d9e5e8d29c5f07c19c34cdb"
+                  },
+                  {
+                      "path":  "src/qsgw/operator_fourier.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  20757,
+                      "sha256":  "f50cf4d89dae089c57b89a37712c9fca31b208120ae4f565294352cd1a8f18c2"
+                  },
+                  {
+                      "path":  "src/qsgw/operator_fourier.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  1635,
+                      "sha256":  "7148ddfdd76e08be50a26f96c0228f8b45b75a06dbe9bd281ff6f607fdeb7b5a"
+                  },
+                  {
+                      "path":  "src/qsgw/projection_target.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2981,
+                      "sha256":  "e5ca03b0b1342f65e623b6c241c6462f339d637a7521c2dc203935bb3fd4579d"
+                  },
+                  {
+                      "path":  "src/qsgw/projection_target.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  626,
+                      "sha256":  "cc3288aff8797c10ce4928ae07e1c30ff86d0b47dd64d85cc16e456908d89821"
+                  },
+                  {
+                      "path":  "src/qsgw/sha256.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  6819,
+                      "sha256":  "48a5ba39ff9ef795cd22af6b3d4524e2e4bdb571fb4469915e7af2456bb4a5f3"
+                  },
+                  {
+                      "path":  "src/qsgw/sha256.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  299,
+                      "sha256":  "da191736f211d5f7bc442d695a3982868a1983379225d5af38fc766fee709f9a"
+                  },
+                  {
+                      "path":  "src/qsgw/vxc_io.cpp",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  23326,
+                      "sha256":  "fe8cf91f6e89ad79df0ffade9ea4e940a92f529c120828096e8d814ef81a9013"
+                  },
+                  {
+                      "path":  "src/qsgw/vxc_io.h",
+                      "owner":  "qsgw_only",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2454,
+                      "sha256":  "f2fac333068b5d09b919aa1a91fcd6a022f7bfe9945f33f77215f1f2efa65117"
+                  },
+                  {
+                      "path":  "src/test/CMakeLists.txt",
+                      "owner":  "shared_build_interface",
+                      "protected":  true,
+                      "git_status":  " M",
+                      "size_bytes":  2739,
+                      "sha256":  "01784012b69f7127f96259b39ea57fb124d9b6296d80b8634a8056e213a2a3a9"
+                  },
+                  {
+                      "path":  "src/test/test_analycont.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4714,
+                      "sha256":  "fb250467546010b71c1f40d2ff81dcb78cfa25b1883e5819d268401d957ac39a"
+                  },
+                  {
+                      "path":  "src/test/test_arbitrary_float.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1857,
+                      "sha256":  "757001b9947af6d9669d678f13890aa16047d76e18da6d19207672f874f8d6b0"
+                  },
+                  {
+                      "path":  "src/test/test_atom.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  570,
+                      "sha256":  "8e4f2b77ab13bbab3250cef87eb48f5b4f5becab6836e939bfbc2e600115d3d7"
+                  },
+                  {
+                      "path":  "src/test/test_atomic_basis.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7088,
+                      "sha256":  "d38ed7c1235b00a8ee261d8210dfe52e4b775e9a83a1b22c6d205f9046da1377"
+                  },
+                  {
+                      "path":  "src/test/test_atomic_basis_blacs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  44824,
+                      "sha256":  "3d0c7644867f096b517f675733aae2eb58db2098ed3794d4edfa2e61b04846f6"
+                  },
+                  {
+                      "path":  "src/test/test_base_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  10352,
+                      "sha256":  "58869418a3365127f406d802bc4e9f53f7f59098a371fe46add389a7aeb402ac"
+                  },
+                  {
+                      "path":  "src/test/test_base_utility.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  596,
+                      "sha256":  "af6f6f3fc11133cf64c87a574928262e3cb57ae88012102bbdeeff4da7a1a9b0"
+                  },
+                  {
+                      "path":  "src/test/test_blacs.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4061,
+                      "sha256":  "f8bc8045580ad412e90d9fd643260d844f8cbdf62a2a973ab118b1db57c59d9b"
+                  },
+                  {
+                      "path":  "src/test/test_blas_lapack.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4128,
+                      "sha256":  "b5c7dfb0e1ba36f7aa85821067b90dd4e05f5fea0f0518159f7df070db90364b"
+                  },
+                  {
+                      "path":  "src/test/test_complexmatrix.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2368,
+                      "sha256":  "ee7762ec448ceabfae8730a8c78e52a63cac96f9f199fa171aca4fc446f3ceba"
+                  },
+                  {
+                      "path":  "src/test/test_dataset.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  14429,
+                      "sha256":  "3b509922299e96a299c5235780a71714e0cc2f8cd0809beff84839b520804d0d"
+                  },
+                  {
+                      "path":  "src/test/test_fitting.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1193,
+                      "sha256":  "e62c48d71e9b01c1374d44d95b434894b2b08836a632f8af3c475756ea76ec7a"
+                  },
+                  {
+                      "path":  "src/test/test_geometry.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2663,
+                      "sha256":  "aebdbd65733695cdafb6db90c46e0fa7f685063e4854d0ad887ebcecd254a3ed"
+                  },
+                  {
+                      "path":  "src/test/test_io.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5323,
+                      "sha256":  "4a522cb0a7e05dc4e14489253a7a489863de79f1baca006f9478f54be50e1f86"
+                  },
+                  {
+                      "path":  "src/test/test_kpoint_blacs_parallel_context.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  15821,
+                      "sha256":  "bb38023ca2392620a10694fe9754c2744c7f84d763dbbf9b640a9117386fd21b"
+                  },
+                  {
+                      "path":  "src/test/test_lebedev_laikov.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3028,
+                      "sha256":  "882f8efb03cf04e8a2c447df4af80aa4921d344fcf645180cc80a8c0bdfa7dfd"
+                  },
+                  {
+                      "path":  "src/test/test_libri_utils.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2752,
+                      "sha256":  "571e8106e6db6aad6ffa1c94cec62a31397838e6c6e58ceac005db822e3af82d"
+                  },
+                  {
+                      "path":  "src/test/test_librpa.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  402,
+                      "sha256":  "16050e35dd2057cec8c212e526abc2b6605474afd0d4ccbe8f6f593de9cbf188"
+                  },
+                  {
+                      "path":  "src/test/test_matrix.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1407,
+                      "sha256":  "16d7d773b56e2a37e757420f7ace6b0b8b17118130e1f10af3debfe5b3f225bc"
+                  },
+                  {
+                      "path":  "src/test/test_matrix_m.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  2853,
+                      "sha256":  "f33b365c64a9c869c16be8babf7911ae928adb6754119a745c33ceee7dc710ce"
+                  },
+                  {
+                      "path":  "src/test/test_matrix_m_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  44518,
+                      "sha256":  "70bb8c25aeb346237f42268e1d119749e2cd81ed1f84c7bea2892d2335e360ce"
+                  },
+                  {
+                      "path":  "src/test/test_meanfield.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  16576,
+                      "sha256":  "1b26d6d145ba8a54f67752673a193adaf8a5a878f708b096fb30265aaa7d0eea"
+                  },
+                  {
+                      "path":  "src/test/test_meanfield_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  46963,
+                      "sha256":  "44dad60b5aebd3ccc52ca409f8edbd49a042693419ed0deeece8ba8dfbf02b7f"
+                  },
+                  {
+                      "path":  "src/test/test_pbc.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  9080,
+                      "sha256":  "3335deb7ec3c2449756e53eed5eead3f11637993ff9e7cb82c4dee7f8188088c"
+                  },
+                  {
+                      "path":  "src/test/test_profiler.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1079,
+                      "sha256":  "f8d23ec419468a367beefdf32610cd104e115b306ccd99a0ab4a44a308151fef"
+                  },
+                  {
+                      "path":  "src/test/test_qpe_solver.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8678,
+                      "sha256":  "fa12711a7c12740d5565436535e42897e52cdea89e2981daafbab41957433f32"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_convergence.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2060,
+                      "sha256":  "c60ac9caf293b6527fe622a3e6a379acf17d503dffc8134d6b3a94f1940dd4b0"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_correlation_potential.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  11620,
+                      "sha256":  "6b1afda8d117593f730a505e78e0606df6cb678972fbd225e3a47530cfa53585"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_distributed_matrix.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  4948,
+                      "sha256":  "bb371d00db08221234b12af9319c904144f45d372e08294dfba1547e603fb6c9"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_effective_hamiltonian.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  6577,
+                      "sha256":  "bd218c931f1fb56184c5045cac3abb60bcfc320b6849068ddfc347526ca92891"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_fixed_basis.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  22681,
+                      "sha256":  "4a497df3f6e04740f6317007297ada7c3fa720198bf9a8dde977b4e0e5be29ec"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_fixed_basis_mpi.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  6169,
+                      "sha256":  "025b70e01cdaa31d5ed78d8e42556ce6213e42f7bd760ec3655d98a9fc91690c"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_hamiltonian_mixing.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  12857,
+                      "sha256":  "07fce11732717aaf5aad1f2693a9ad48170076139b2dd736e8ccf69972f30079"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_hartree_density.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  17524,
+                      "sha256":  "18e31399d69db21c81e565220837b1f7690598ab826af9dba0aa6e827b6acbce"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_hartree_kernel.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  10385,
+                      "sha256":  "5fb8957aa3052167353de52176a7f82855ae5106669b994d0b3811c0bd85bc87"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_hartree_route.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  2745,
+                      "sha256":  "0c5c70cbf73b505edafda8fc329657e43007cc288a922c74f147be786e6e7306"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_hartree_workflow.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  14860,
+                      "sha256":  "cc31f09ea0a16830e313e4aef1e0cbe3debe9058d7964f9bea077a3cd58efcd2"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_headwing_update.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  7359,
+                      "sha256":  "7d0112fd62022c27427ad4b4f03ee7fd2775d7f3dbbe1adbe56eab5afadeb782"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_input_contract.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  21051,
+                      "sha256":  "0cf14c9cce2c509ea4993024f9588045c47500b7c3afb2facde9764bc3280e68"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_iteration_trace.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  14959,
+                      "sha256":  "e426da84f3efbe4ae631387d8b669ea179c4069af6a9862d272c6676ef8a2d3f"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_mixing.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  11271,
+                      "sha256":  "ae5486606dbf429ccb643057c01cd9bf8a2da4f0a5a869cbfd4444e0b9bbaae0"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_occupation.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  9136,
+                      "sha256":  "11340f75e60a79999e36c081b4690989b3a6f5c02ac136ec0d5c6116459bec14"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_operator_fourier.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  9426,
+                      "sha256":  "2aeaf62e71c0e80678326391acedce66121bd7e65bf8b51a25c99b88f2a32721"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_projection_target.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  3800,
+                      "sha256":  "653fbb6083c4545d877d09e5ed10e267892ea2c30c6acea3a4e750e2a2e71930"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_sha256.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  1613,
+                      "sha256":  "e29348f8fbdbabf5625654e4b06c26eb7471b81e92ede6922f6c162290d03967"
+                  },
+                  {
+                      "path":  "src/test/test_qsgw_vxc_io.cpp",
+                      "owner":  "qsgw_test",
+                      "protected":  true,
+                      "git_status":  "??",
+                      "size_bytes":  16667,
+                      "sha256":  "e5bff4b5344fcb1fbc4acf35a504ea8ee163fc028a6c507a84c76eecb99dc3db"
+                  },
+                  {
+                      "path":  "src/test/test_rpa_headwing.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  50955,
+                      "sha256":  "fa032b5da72fb0a1c82e60e10e13de019b4925fb94e26098ba1793c35ac4a63a"
+                  },
+                  {
+                      "path":  "src/test/test_rsh.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7520,
+                      "sha256":  "48d53403eaf8d681f9098f9795ff58d66517c94a8469591998901dda8df214b1"
+                  },
+                  {
+                      "path":  "src/test/test_shared_memory_mpi.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3331,
+                      "sha256":  "152c3f1645df24bf9195671ca558f5d1d89a5c9792a340256d7dfd2ce2ba967c"
+                  },
+                  {
+                      "path":  "src/test/test_symmetry.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  25628,
+                      "sha256":  "fff00d1af6c74b374695621b0861e1cccf194d23e5b53ffc249ae8fe172f5a0f"
+                  },
+                  {
+                      "path":  "src/test/test_symmetry_context.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  60237,
+                      "sha256":  "7c0a06bbda5e92bb27c2f658cb1d1c5d9d3dcbef10357c925a060c0642f3afb1"
+                  },
+                  {
+                      "path":  "src/test/test_timefreq.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  8787,
+                      "sha256":  "9c6233767263ceebf758df4c9b44d69106d69ca9ba7c7df19df04e87b0d12522"
+                  },
+                  {
+                      "path":  "src/test/test_vector3.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1132,
+                      "sha256":  "13212b0bf3262e6026dfce49c1b5ca87f84327246cc2fb302241e1881e8221d7"
+                  },
+                  {
+                      "path":  "src/test/test_wigner_rotation.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  3513,
+                      "sha256":  "ff2224ac582d3529c6e63425be4bfbb5d41b69bed78d3f91db9d2708157b4de7"
+                  },
+                  {
+                      "path":  "src/test/testutils.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  9475,
+                      "sha256":  "f910cdbb07f9c0d02a9d59936dbc39b31d139d3745d40300a86df68b406656b7"
+                  },
+                  {
+                      "path":  "src/utils/base_utility.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4910,
+                      "sha256":  "83da1dd9430151f5d2df8c77f283408adc9955195e5e1608e3b430429ed5947c"
+                  },
+                  {
+                      "path":  "src/utils/constants.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  814,
+                      "sha256":  "83f959226072b49407bbb7d6a1d48afe3c7982d486a6802f9c2d9163bd2d338e"
+                  },
+                  {
+                      "path":  "src/utils/constants.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  795,
+                      "sha256":  "1b2084ed4da00f85bda815b34f38469177b7f88674456a2a6140f61da449522d"
+                  },
+                  {
+                      "path":  "src/utils/dev_options.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  259,
+                      "sha256":  "5720ac841d4b885bb8fbfb1285399b1babd8638a02b7a26e10190a65855f6f70"
+                  },
+                  {
+                      "path":  "src/utils/dev_options.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  401,
+                      "sha256":  "b27ebad713ef69d171037cd4db59688bc144a5c31062ab80369b337a2d5550db"
+                  },
+                  {
+                      "path":  "src/utils/elpa_stub.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  24,
+                      "sha256":  "2b6bf4a87adbdc48a8af33a906cc063c47f4dba3ff4387d152a2fbad2575a73b"
+                  },
+                  {
+                      "path":  "src/utils/elpa_stub.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  14,
+                      "sha256":  "aecb9819eb04bf5ad6cd2535cfac9b1bed5ef7946e551eff2224759862e16294"
+                  },
+                  {
+                      "path":  "src/utils/envs_cmake.cpp.in",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1260,
+                      "sha256":  "5e006742548074925301d7a00e424fea7a23fa1ec61cfc97d71db975c0c23cdc"
+                  },
+                  {
+                      "path":  "src/utils/envs_cmake.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1188,
+                      "sha256":  "c7cbbad4a78f179c30ec52d9f1d3f9cf078fb7207d9bee2d4855c3d483cb07c0"
+                  },
+                  {
+                      "path":  "src/utils/error.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  395,
+                      "sha256":  "3e63779f69f179b768d0c9a7b4865f120f274faf9d3a0b20c189f9bcbba7c288"
+                  },
+                  {
+                      "path":  "src/utils/libri_stub.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4390,
+                      "sha256":  "a22411e7bb02909ad20be87987713d7f2f77d99b2085788f72aadb17d36321f8"
+                  },
+                  {
+                      "path":  "src/utils/libri_utils.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  7052,
+                      "sha256":  "767d8770083155db51e670cdb20c421ac36051c50a780a5889413708d2fd0529"
+                  },
+                  {
+                      "path":  "src/utils/profiler.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  9206,
+                      "sha256":  "33baa75cef50e3af37732bc3c27cef9017add632bced1d775ab0ce60756d03fe"
+                  },
+                  {
+                      "path":  "src/utils/profiler.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  4619,
+                      "sha256":  "68db8c14f40cd00b14ec0df26441359519ffa74ad2c327ea5bf2cd0083daed54"
+                  },
+                  {
+                      "path":  "src/utils/utils_cmake.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1773,
+                      "sha256":  "cef6646518c2d9c160e58b68bbe0f41e521ec458ecb1ea7563a94c2aaef2d83a"
+                  },
+                  {
+                      "path":  "src/utils/utils_cmake.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  362,
+                      "sha256":  "904ec383bff2acee8cfa162f8c26c2247b7e01f44f58e054d324ec82bcbee04e"
+                  },
+                  {
+                      "path":  "src/utils/utils_mem.cpp",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  5648,
+                      "sha256":  "83a751f2a289149efc00e01349787cda2ff06552830eddad26a12c7726e62724"
+                  },
+                  {
+                      "path":  "src/utils/utils_mem.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  1178,
+                      "sha256":  "00ff3e88b3a877bc8d6298fd34e0026df8bea8412b8077c4c9b0f5581072e7c7"
+                  },
+                  {
+                      "path":  "src/version.h",
+                      "owner":  "shared_core",
+                      "protected":  true,
+                      "git_status":  "  ",
+                      "size_bytes":  112,
+                      "sha256":  "2eec255cf6303744381730b1572a6fe001956edc4f4fb80d5c2031a51bf24363"
+                  }
+              ]
+}

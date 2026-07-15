@@ -1,0 +1,6 @@
+fish-test	bhj@100.96.1.64:/tmp/librpa-qsgw-cb294020-84e6b0a/repo.git (fetch)
+fish-test	bhj@100.96.1.64:/tmp/librpa-qsgw-cb294020-84e6b0a/repo.git (push)
+origin	F:/AI_Workspace/Theoretical-Physics/.sisyphus\drafts\_scratch\qsgw-upstream-port-20260711.bundle (fetch)
+origin	F:/AI_Workspace/Theoretical-Physics/.sisyphus\drafts\_scratch\qsgw-upstream-port-20260711.bundle (push)
+upstream-ssh	git@github.com:minyez/LibRPA.git (fetch)
+upstream-ssh	git@github.com:minyez/LibRPA.git (push)

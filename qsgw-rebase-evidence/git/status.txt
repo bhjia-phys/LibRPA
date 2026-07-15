@@ -1,0 +1,82 @@
+# branch.oid 1376ee4f45a7611a55c5b92c4ba41409d515bcea
+# branch.head codex/qsgw-independent-upstream-1376-20260714
+# branch.upstream upstream-ssh/master
+# branch.ab +0 -0
+1 .M N... 100644 100644 100644 544037b055c6845b1318fa8f778de7998fd6cc58 544037b055c6845b1318fa8f778de7998fd6cc58 driver/CMakeLists.txt
+1 .M N... 100644 100644 100644 f3d17c16eda2c315d9788be708b401c14cd8c5da f3d17c16eda2c315d9788be708b401c14cd8c5da driver/driver.cpp
+1 .M N... 100644 100644 100644 eb83b0a64d8746082589a7be53436049d2ef6a87 eb83b0a64d8746082589a7be53436049d2ef6a87 driver/driver.h
+1 .M N... 100644 100644 100644 afdb07e1e757a0b6525cfc8b984e124a38de95b5 afdb07e1e757a0b6525cfc8b984e124a38de95b5 driver/inputfile.cpp
+1 .M N... 100644 100644 100644 5d04142ec6ca95f4f8734b0751c9413d2923d6a9 5d04142ec6ca95f4f8734b0751c9413d2923d6a9 driver/task.cpp
+1 .M N... 100644 100644 100644 35ed820932a4f8a53639e062b0587483fd074657 35ed820932a4f8a53639e062b0587483fd074657 driver/task.h
+1 .M N... 100644 100644 100644 c8b7b03ec34203c0864d4e53cb8c4c9183ef3537 c8b7b03ec34203c0864d4e53cb8c4c9183ef3537 driver/test/CMakeLists.txt
+1 .M N... 100644 100644 100644 324ee6251e6cad56cfbc533d4660cf48fc0a25c2 324ee6251e6cad56cfbc533d4660cf48fc0a25c2 regression_tests/README.md
+1 .M N... 100644 100644 100644 3bdde8eabbf6712ac8cdd94b47590cd6875558c8 3bdde8eabbf6712ac8cdd94b47590cd6875558c8 src/CMakeLists.txt
+1 .M N... 100644 100644 100644 82f7cb0ee01b6a34103d8c2efb3844634f945276 82f7cb0ee01b6a34103d8c2efb3844634f945276 src/core/dielecmodel.h
+1 .M N... 100644 100644 100644 715778ad513d7f677e1b67aa6f747a45708e6d40 715778ad513d7f677e1b67aa6f747a45708e6d40 src/test/CMakeLists.txt
+? QSGW_REBASE_PLAN.md
+? driver/tasks/qsgw.cpp
+? driver/test/test_qsgw_inputfile.cpp
+? qsgw-rebase-evidence/
+? qsgw-rebase-manifest.json
+? regression_tests/backend/comparisons/cmp_qsgw.py
+? regression_tests/backend/comparisons/test_cmp_qsgw.py
+? src/qsgw/CMakeLists.txt
+? src/qsgw/convergence.cpp
+? src/qsgw/convergence.h
+? src/qsgw/correlation_potential.cpp
+? src/qsgw/correlation_potential.h
+? src/qsgw/distributed_matrix.cpp
+? src/qsgw/distributed_matrix.h
+? src/qsgw/effective_hamiltonian.cpp
+? src/qsgw/effective_hamiltonian.h
+? src/qsgw/fixed_basis.cpp
+? src/qsgw/fixed_basis.h
+? src/qsgw/hamiltonian_mixing.cpp
+? src/qsgw/hamiltonian_mixing.h
+? src/qsgw/hartree_density.cpp
+? src/qsgw/hartree_density.h
+? src/qsgw/hartree_kernel.cpp
+? src/qsgw/hartree_kernel.h
+? src/qsgw/hartree_route.cpp
+? src/qsgw/hartree_route.h
+? src/qsgw/hartree_workflow.cpp
+? src/qsgw/hartree_workflow.h
+? src/qsgw/headwing_update.cpp
+? src/qsgw/headwing_update.h
+? src/qsgw/input_contract.cpp
+? src/qsgw/input_contract.h
+? src/qsgw/iteration_trace.cpp
+? src/qsgw/iteration_trace.h
+? src/qsgw/matrix_map.h
+? src/qsgw/mixing.cpp
+? src/qsgw/mixing.h
+? src/qsgw/occupation.cpp
+? src/qsgw/occupation.h
+? src/qsgw/operator_fourier.cpp
+? src/qsgw/operator_fourier.h
+? src/qsgw/projection_target.cpp
+? src/qsgw/projection_target.h
+? src/qsgw/sha256.cpp
+? src/qsgw/sha256.h
+? src/qsgw/vxc_io.cpp
+? src/qsgw/vxc_io.h
+? src/test/test_qsgw_convergence.cpp
+? src/test/test_qsgw_correlation_potential.cpp
+? src/test/test_qsgw_distributed_matrix.cpp
+? src/test/test_qsgw_effective_hamiltonian.cpp
+? src/test/test_qsgw_fixed_basis.cpp
+? src/test/test_qsgw_fixed_basis_mpi.cpp
+? src/test/test_qsgw_hamiltonian_mixing.cpp
+? src/test/test_qsgw_hartree_density.cpp
+? src/test/test_qsgw_hartree_kernel.cpp
+? src/test/test_qsgw_hartree_route.cpp
+? src/test/test_qsgw_hartree_workflow.cpp
+? src/test/test_qsgw_headwing_update.cpp
+? src/test/test_qsgw_input_contract.cpp
+? src/test/test_qsgw_iteration_trace.cpp
+? src/test/test_qsgw_mixing.cpp
+? src/test/test_qsgw_occupation.cpp
+? src/test/test_qsgw_operator_fourier.cpp
+? src/test/test_qsgw_projection_target.cpp
+? src/test/test_qsgw_sha256.cpp
+? src/test/test_qsgw_vxc_io.cpp
