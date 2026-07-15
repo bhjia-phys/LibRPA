@@ -7,6 +7,9 @@
 #include <regex>
 #include <sstream>
 #include <limits>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 
 #include "driver.h"
 
@@ -70,6 +73,11 @@ static std::string check_dirpath(const std::string &dirpath)
 static void validate_input_parameters()
 {
     const auto &params = driver::driver_params;
+    std::string task = params.task;
+    std::transform(task.begin(), task.end(), task.begin(),
+                   [](const unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
     if (params.output_gw_spec_func)
     {
         if (params.sf_omega_step <= 0.0)
@@ -79,6 +87,55 @@ static void validate_input_parameters()
         if (params.sf_state_start >= 0 && params.sf_state_end >= 0
             && params.sf_state_end <= params.sf_state_start)
             throw std::runtime_error("sf_state_end must be greater than sf_state_start");
+    }
+    if (task == "qsgw" || task == "qsgw_band")
+    {
+        if (params.qsgw_input_contract.empty())
+            throw std::runtime_error("qsgw_input_contract must not be empty");
+        if (params.qsgw_mixer != "none" && params.qsgw_mixer != "linear")
+            throw std::runtime_error("qsgw_mixer must be none or linear");
+        if (!(params.qsgw_mixing_beta > 0.0 &&
+              params.qsgw_mixing_beta <= 1.0) ||
+            !std::isfinite(params.qsgw_mixing_beta))
+            throw std::runtime_error("qsgw_mixing_beta must be in (0, 1]");
+        if (params.qsgw_min_iter < 1 ||
+            params.qsgw_max_iter < params.qsgw_min_iter)
+            throw std::runtime_error(
+                "qsgw iteration bounds must satisfy 1 <= min <= max");
+        if (!(params.qsgw_convergence_tolerance_ev > 0.0) ||
+            !std::isfinite(params.qsgw_convergence_tolerance_ev))
+            throw std::runtime_error(
+                "qsgw_convergence_tolerance_ev must be finite and positive");
+        if (params.qsgw_hartree_coulomb != "full" &&
+            params.qsgw_hartree_coulomb != "truncated")
+            throw std::runtime_error(
+                "qsgw_hartree_coulomb must be full or truncated");
+        if (params.qsgw_hartree_normalization !=
+                "weighted_occupations" &&
+            params.qsgw_hartree_normalization !=
+                "legacy_extra_inverse_nk")
+            throw std::runtime_error(
+                "qsgw_hartree_normalization must be weighted_occupations or legacy_extra_inverse_nk");
+        const bool analytic_headwing =
+            driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
+            (driver::opts.option_dielect_func == 3 ||
+             driver::opts.option_dielect_func == 4);
+        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
+            !analytic_headwing)
+            throw std::runtime_error(
+                "QSGW replace_w_head requires analytic option_dielect_func = 3 or 4");
+        if (params.use_pyatb && !analytic_headwing)
+            throw std::runtime_error(
+                "QSGW use_pyatb requires analytic head/wing option_dielect_func = 3 or 4");
+        const bool use_symmetry_exx =
+            driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
+        const bool use_symmetry_gw =
+            driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
+        const bool use_symmetry_rpa =
+            driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
+        if (use_symmetry_exx || use_symmetry_gw || use_symmetry_rpa)
+            throw std::runtime_error(
+                "QSGW currently supports full-BZ no-symmetry inputs only; use_symmetry_exx, use_symmetry_gw, and use_symmetry_rpa must be false");
     }
 }
 
@@ -134,6 +191,42 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_string(driver_params, fn_dielfunc);
     _parse_string(driver_params, fn_vxc_scf);
     _parse_string(driver_params, fn_band_kpath_info);
+    std::string task_normalized = driver_params.task;
+    std::transform(task_normalized.begin(), task_normalized.end(),
+                   task_normalized.begin(), [](const unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
+    {
+        _parse_string(driver_params, qsgw_input_contract);
+        _parse_string(driver_params, qsgw_mixer);
+        std::transform(driver_params.qsgw_mixer.begin(),
+                       driver_params.qsgw_mixer.end(),
+                       driver_params.qsgw_mixer.begin(),
+                       [](const unsigned char ch) {
+                           return static_cast<char>(std::tolower(ch));
+                       });
+        _parse_double(driver_params, qsgw_mixing_beta);
+        _parse_int(driver_params, qsgw_min_iter);
+        _parse_int(driver_params, qsgw_max_iter);
+        _parse_bool(driver_params, qsgw_write_iteration_matrices);
+        _parse_double(driver_params, qsgw_convergence_tolerance_ev);
+        _parse_bool(driver_params, qsgw_update_hartree);
+        _parse_string(driver_params, qsgw_hartree_coulomb);
+        _parse_string(driver_params, qsgw_hartree_normalization);
+        std::transform(driver_params.qsgw_hartree_coulomb.begin(),
+                       driver_params.qsgw_hartree_coulomb.end(),
+                       driver_params.qsgw_hartree_coulomb.begin(),
+                       [](const unsigned char ch) {
+                           return static_cast<char>(std::tolower(ch));
+                       });
+        std::transform(driver_params.qsgw_hartree_normalization.begin(),
+                       driver_params.qsgw_hartree_normalization.end(),
+                       driver_params.qsgw_hartree_normalization.begin(),
+                       [](const unsigned char ch) {
+                           return static_cast<char>(std::tolower(ch));
+                       });
+    }
     _parse_int(driver_params, version_coul_reader);
     _parse_int(driver_params, version_lri_reader);
 

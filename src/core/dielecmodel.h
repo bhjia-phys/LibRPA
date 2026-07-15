@@ -317,6 +317,11 @@ public:
     double cal_factor(std::string name);
     void test_head();
     std::vector<double> get_head_vec();
+    const std::vector<matrix_m<std::complex<double>>>&
+    get_head_matrices() const noexcept
+    {
+        return head;
+    }
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
 
     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
