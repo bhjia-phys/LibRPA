@@ -14,6 +14,7 @@
 
 using librpa_int::MeanField;
 using librpa_int::qsgw::OccupationSettings;
+using librpa_int::qsgw::analyze_qsgw_occupations;
 using librpa_int::qsgw::physical_electron_count;
 using librpa_int::qsgw::update_qsgw_occupations;
 
@@ -54,6 +55,26 @@ double stored_total_weight(const MeanField& meanfield)
         }
     }
     return result;
+}
+
+void test_analysis_preserves_input_meanfield()
+{
+    MeanField meanfield(1, 1, 2, 2, 1);
+    meanfield.get_weight()[0].zero_out();
+    meanfield.get_weight()[0](0, 0) = 2.0;
+    meanfield.get_eigenvals()[0](0, 0) = -1.0;
+    meanfield.get_eigenvals()[0](0, 1) = 2.0;
+    meanfield.get_efermi() = 0.25;
+
+    const auto result = analyze_qsgw_occupations(
+        meanfield, {1.0}, 2.0, OccupationSettings{});
+
+    assert_close(meanfield.get_weight()[0](0, 0), 2.0);
+    assert_close(meanfield.get_weight()[0](0, 1), 0.0);
+    assert_close(meanfield.get_efermi(), 0.25);
+    assert_close(result.chemical_potential, 0.5);
+    assert_close(result.electron_count, 2.0);
+    assert_close(result.gap, 3.0);
 }
 
 void test_global_filling_preserves_nonuniform_kpoint_weights()
@@ -264,6 +285,7 @@ void test_finite_temperature_rejection_preserves_live_state()
 
 int main()
 {
+    test_analysis_preserves_input_meanfield();
     test_global_filling_preserves_nonuniform_kpoint_weights();
     test_physical_electron_count_uses_stored_geometric_weights_once();
     test_global_spin_filling_does_not_fill_one_electron_per_spin();

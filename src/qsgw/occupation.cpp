@@ -119,6 +119,17 @@ double physical_electron_count(
     return result;
 }
 
+OccupationResult analyze_qsgw_occupations(
+    const MeanField& meanfield,
+    const std::vector<double>& kpoint_weights,
+    const double total_electrons,
+    const OccupationSettings& settings)
+{
+    MeanField probe = meanfield;
+    return update_qsgw_occupations(
+        probe, meanfield, kpoint_weights, total_electrons, settings);
+}
+
 OccupationResult update_qsgw_occupations(
     MeanField& live_meanfield,
     const MeanField& reference_meanfield,

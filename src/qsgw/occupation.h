@@ -31,6 +31,12 @@ double physical_electron_count(
     const std::vector<double>& kpoint_weights,
     double tolerance = 1.0e-12);
 
+OccupationResult analyze_qsgw_occupations(
+    const MeanField& meanfield,
+    const std::vector<double>& kpoint_weights,
+    double total_electrons,
+    const OccupationSettings& settings = {});
+
 OccupationResult update_qsgw_occupations(
     MeanField& live_meanfield,
     const MeanField& reference_meanfield,

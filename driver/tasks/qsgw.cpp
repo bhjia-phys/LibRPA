@@ -535,8 +535,8 @@ load_independent_headwing_state(
     state->weights.assign(
         static_cast<std::size_t>(expected_n_kpoints),
         1.0 / static_cast<double>(expected_n_kpoints));
-    state->initial_occupations = update_qsgw_occupations(
-        state->live, state->reference, state->weights, electron_count);
+    state->initial_occupations = analyze_qsgw_occupations(
+        state->reference, state->weights, electron_count);
     state->reference_hamiltonian =
         build_reference_hamiltonian(state->reference);
 
@@ -1018,8 +1018,8 @@ void run_qsgw_stage_one(const bool compute_band)
     const MeanField reference = dataset->mf;
     const double electron_count = physical_electron_count(
         reference, dataset->pbc.weight_k);
-    const OccupationResult initial_occupations = update_qsgw_occupations(
-        dataset->mf, reference, dataset->pbc.weight_k, electron_count);
+    const OccupationResult initial_occupations = analyze_qsgw_occupations(
+        reference, dataset->pbc.weight_k, electron_count);
     const SpinKMatrixMap reference_hamiltonian =
         build_reference_hamiltonian(reference);
 
@@ -1063,8 +1063,7 @@ void run_qsgw_stage_one(const bool compute_band)
     SpinKMatrixMap band_reference_hamiltonian;
     if (compute_band)
     {
-        dataset->mf_band.get_efermi() =
-            initial_occupations.chemical_potential;
+        dataset->mf_band.get_efermi() = reference.get_efermi();
         band_reference = dataset->mf_band;
         band_reference_hamiltonian =
             build_reference_hamiltonian(*band_reference);
@@ -1206,8 +1205,7 @@ void run_qsgw_stage_one(const bool compute_band)
         }
         IterationSummary summary;
         summary.iteration = 0;
-        summary.fermi_energy_ev =
-            initial_occupations.chemical_potential * HA2EV;
+        summary.fermi_energy_ev = reference.get_efermi() * HA2EV;
         summary.gap_ev = initial_occupations.gap * HA2EV;
         summary.electron_count = initial_occupations.electron_count;
         summary.has_mixing_decision = false;
