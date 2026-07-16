@@ -81,12 +81,14 @@ void write_wavefunction_trace(
     std::ostream& output,
     int iteration,
     IterationChannel channel,
-    const MeanField& meanfield);
+    const MeanField& meanfield,
+    const std::string& component_prefix = "wfc");
 void write_velocity_trace(
     std::ostream& output,
     int iteration,
     IterationChannel channel,
-    const std::vector<std::vector<std::vector<ComplexMatrix>>>& velocity);
+    const std::vector<std::vector<std::vector<ComplexMatrix>>>& velocity,
+    const std::string& component_prefix = "velocity");
 
 } // namespace qsgw
 } // namespace librpa_int

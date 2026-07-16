@@ -1024,21 +1024,27 @@ void run_qsgw_stage_one(const bool compute_band)
         build_reference_hamiltonian(reference);
 
     std::unique_ptr<IndependentHeadwingState> independent_headwing;
+    std::optional<MeanField> scf_headwing_reader_meanfield;
+    VelocityMatrix scf_headwing_reader_velocity;
+    VelocityMatrix reference_velocity;
     if (compute_headwing)
     {
         if (headwing_grid == HeadwingGridMode::ScfGrid)
         {
             read_headwing_input(
                 driver_params.input_dir, opts.option_dielect_func == 3);
+            scf_headwing_reader_meanfield =
+                dataset->p_headwing->get_meanfield_df();
+            scf_headwing_reader_velocity = dataset->velocity_matrix;
+            reference_velocity = scf_headwing_reader_velocity;
             if (contract_producer == static_cast<int>(QsgwProducer::FhiAims))
             {
                 prepare_fhi_aims_interband_velocity(
-                    dataset->velocity_matrix, reference);
+                    reference_velocity, reference);
             }
             align_distributed_velocity_to_reference_wfc(
                 dataset->p_headwing->get_meanfield_df(), reference,
-                dataset->velocity_matrix, dataset->comm_h);
-            refresh_headwing(*dataset, opts, dataset->mf);
+                reference_velocity, dataset->comm_h);
         }
         else
         {
@@ -1053,11 +1059,6 @@ void run_qsgw_stage_one(const bool compute_band)
                 *dataset, opts, independent_headwing->live);
         }
     }
-
-    const VelocityMatrix reference_velocity =
-        headwing_grid == HeadwingGridMode::ScfGrid
-            ? dataset->velocity_matrix
-            : VelocityMatrix{};
 
     std::optional<MeanField> band_reference;
     SpinKMatrixMap band_reference_hamiltonian;
@@ -1191,6 +1192,17 @@ void run_qsgw_stage_one(const bool compute_band)
                         matrix_trace, 0, IterationChannel::Headwing,
                         independent_headwing->live);
                 }
+                else
+                {
+                    write_wavefunction_trace(
+                        matrix_trace, 0, headwing_channel,
+                        *scf_headwing_reader_meanfield,
+                        "headwing_reader_wfc");
+                    write_velocity_trace(
+                        matrix_trace, 0, headwing_channel,
+                        scf_headwing_reader_velocity,
+                        "headwing_reader_velocity");
+                }
                 write_velocity_trace(
                     matrix_trace, 0, headwing_channel,
                     independent_headwing
@@ -1241,11 +1253,17 @@ void run_qsgw_stage_one(const bool compute_band)
             independent_headwing_update;
         if (compute_headwing)
         {
-            refresh_headwing(
-                *dataset, opts,
-                independent_headwing
-                    ? independent_headwing->live
-                    : dataset->mf);
+            const bool replay_scf_reader_headwing =
+                headwing_grid == HeadwingGridMode::ScfGrid &&
+                iteration == 1;
+            if (!replay_scf_reader_headwing)
+            {
+                refresh_headwing(
+                    *dataset, opts,
+                    independent_headwing
+                        ? independent_headwing->live
+                        : dataset->mf);
+            }
             collective_root_stage(
                 dataset->comm_h, "QSGW head-tensor trace", [&] {
                     head_tensor = copy_head_tensor(
@@ -1458,6 +1476,12 @@ void run_qsgw_stage_one(const bool compute_band)
         {
             broadcast_spin_k_matrix_map(
                 mixed_band_hamiltonian, 0, dataset->comm_h);
+        }
+        if (headwing_grid == HeadwingGridMode::ScfGrid && iteration == 1)
+        {
+            // The reader-computed head/wing is replayed for iteration one.
+            // Switch to the aligned fixed-basis velocity before rotating v0.
+            dataset->velocity_matrix = reference_velocity;
         }
         const FixedBasisDiagonalizationResult diagonalization =
             diagonalize_in_reference_basis(
