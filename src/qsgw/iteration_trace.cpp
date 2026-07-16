@@ -398,8 +398,14 @@ void write_wavefunction_trace(
     std::ostream& output,
     const int iteration,
     const IterationChannel channel,
-    const MeanField& meanfield)
+    const MeanField& meanfield,
+    const std::string& component_prefix)
 {
+    if (component_prefix.empty())
+    {
+        throw std::invalid_argument(
+            "QSGW wavefunction trace component prefix is empty");
+    }
     if (!meanfield.initialized())
     {
         throw std::invalid_argument(
@@ -434,7 +440,7 @@ void write_wavefunction_trace(
         }
         write_matrix_component_trace(
             output, iteration, channel,
-            "wfc_spinor" + std::to_string(spinor), matrices);
+            component_prefix + "_spinor" + std::to_string(spinor), matrices);
     }
 }
 
@@ -442,10 +448,15 @@ void write_velocity_trace(
     std::ostream& output,
     const int iteration,
     const IterationChannel channel,
-    const std::vector<std::vector<std::vector<ComplexMatrix>>>& velocity)
+    const std::vector<std::vector<std::vector<ComplexMatrix>>>& velocity,
+    const std::string& component_prefix)
 {
-    static const char* component_names[3] = {
-        "velocity_x", "velocity_y", "velocity_z"};
+    static const char* component_suffixes[3] = {"_x", "_y", "_z"};
+    if (component_prefix.empty())
+    {
+        throw std::invalid_argument(
+            "QSGW velocity trace component prefix is empty");
+    }
     if (velocity.empty())
     {
         throw std::invalid_argument("QSGW velocity trace input is empty");
@@ -493,7 +504,8 @@ void write_velocity_trace(
             }
         }
         write_matrix_component_trace(
-            output, iteration, channel, component_names[direction], matrices);
+            output, iteration, channel,
+            component_prefix + component_suffixes[direction], matrices);
     }
 }
 

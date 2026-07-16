@@ -443,6 +443,22 @@ void test_wavefunction_and_velocity_components_are_explicit()
     assert(wfc_rows == 6);
     assert(velocity_rows == 12);
 
+    std::ostringstream provenance_output;
+    write_wavefunction_trace(
+        provenance_output, 0, IterationChannel::Headwing, meanfield,
+        "headwing_reader_wfc");
+    write_velocity_trace(
+        provenance_output, 0, IterationChannel::Headwing, velocity,
+        "headwing_reader_velocity");
+    assert(provenance_output.str().find(
+               "headwing_reader_wfc_spinor0") != std::string::npos);
+    assert(provenance_output.str().find(
+               "headwing_reader_velocity_x") != std::string::npos);
+    assert(provenance_output.str().find(
+               "headwing_reader_velocity_y") != std::string::npos);
+    assert(provenance_output.str().find(
+               "headwing_reader_velocity_z") != std::string::npos);
+
     velocity[0][0].pop_back();
     assert_throws([&] {
         write_velocity_trace(
