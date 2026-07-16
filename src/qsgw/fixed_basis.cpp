@@ -421,6 +421,82 @@ void diagonalize_hermitian(const Matz& matrix,
     }
 }
 
+double relative_reconstruction_residual(const Matz& source,
+                                        const Matz& transform,
+                                        const Matz& reference)
+{
+    const Matz reconstructed = transform * reference;
+    double residual_squared = 0.0;
+    double source_norm_squared = 0.0;
+    double reconstructed_norm_squared = 0.0;
+    for (int row = 0; row < source.nr(); ++row)
+    {
+        for (int column = 0; column < source.nc(); ++column)
+        {
+            residual_squared += std::norm(
+                source(row, column) - reconstructed(row, column));
+            source_norm_squared += std::norm(source(row, column));
+            reconstructed_norm_squared +=
+                std::norm(reconstructed(row, column));
+        }
+    }
+    return std::sqrt(
+        residual_squared /
+        std::max(source_norm_squared, reconstructed_norm_squared));
+}
+
+double maximum_unitarity_residual(const Matz& transform)
+{
+    const Matz product = transform * transpose(transform, true);
+    double result = 0.0;
+    for (int row = 0; row < transform.nr(); ++row)
+    {
+        for (int column = 0; column < transform.nc(); ++column)
+        {
+            const cplxdb expected = row == column ? 1.0 : 0.0;
+            result = std::max(
+                result, std::abs(product(row, column) - expected));
+        }
+    }
+    return result;
+}
+
+Matz project_to_nearest_unitary(const Matz& transform)
+{
+    const int dimension = transform.nr();
+    const Matz gram = transpose(transform, true) * transform;
+    std::vector<double> eigenvalues;
+    Matz eigenvectors;
+    diagonalize_hermitian(gram, eigenvalues, eigenvectors);
+    for (const double eigenvalue : eigenvalues)
+    {
+        if (!(eigenvalue > 0.0) || !std::isfinite(eigenvalue))
+        {
+            throw std::invalid_argument(
+                "QSGW velocity WFC basis transform has a non-positive singular value");
+        }
+    }
+
+    Matz inverse_sqrt(dimension, dimension, transform.major());
+    for (int row = 0; row < dimension; ++row)
+    {
+        for (int column = 0; column < dimension; ++column)
+        {
+            cplxdb value = 0.0;
+            for (int state = 0; state < dimension; ++state)
+            {
+                value += eigenvectors(row, state) *
+                         (1.0 / std::sqrt(eigenvalues[state])) *
+                         std::conj(eigenvectors(column, state));
+            }
+            inverse_sqrt(row, column) = value;
+        }
+    }
+    Matz result = transform * inverse_sqrt;
+    require_finite_matrix(result, "projected velocity WFC basis transform");
+    return result;
+}
+
 } // namespace
 
 ScopedReferenceEigenvectors::ScopedReferenceEigenvectors(
@@ -514,31 +590,40 @@ VelocityBasisAlignmentResult align_velocity_to_reference_wfc(
                 reference, spin, kpoint, MAJOR::ROW);
             const Matz reference_inverse = invert_complete_wfc_basis(
                 reference_rows, relative_tolerance, result);
-            const Matz transform = source_rows * reference_inverse;
-            require_finite_matrix(transform, "velocity WFC basis transform");
+            const Matz raw_transform = source_rows * reference_inverse;
+            require_finite_matrix(
+                raw_transform, "raw velocity WFC basis transform");
 
-            const Matz reconstructed = transform * reference_rows;
-            double residual_squared = 0.0;
-            double source_norm_squared = 0.0;
-            double reconstructed_norm_squared = 0.0;
-            for (int row = 0; row < dimension; ++row)
+            const double raw_relative_residual =
+                relative_reconstruction_residual(
+                    source_rows, raw_transform, reference_rows);
+            result.maximum_raw_relative_wfc_residual = std::max(
+                result.maximum_raw_relative_wfc_residual,
+                raw_relative_residual);
+            if (!std::isfinite(raw_relative_residual) ||
+                raw_relative_residual > relative_tolerance)
             {
-                for (int column = 0;
-                     column < coefficient_dimension; ++column)
-                {
-                    residual_squared += std::norm(
-                        source_rows(row, column) -
-                        reconstructed(row, column));
-                    source_norm_squared +=
-                        std::norm(source_rows(row, column));
-                    reconstructed_norm_squared +=
-                        std::norm(reconstructed(row, column));
-                }
+                throw std::invalid_argument(
+                    "QSGW raw velocity WFC basis transform does not reconstruct the source basis");
             }
-            const double relative_residual = std::sqrt(
-                residual_squared /
-                std::max(source_norm_squared,
-                         reconstructed_norm_squared));
+
+            const double raw_unitarity_residual =
+                maximum_unitarity_residual(raw_transform);
+            result.maximum_raw_unitarity_residual = std::max(
+                result.maximum_raw_unitarity_residual,
+                raw_unitarity_residual);
+            if (!std::isfinite(raw_unitarity_residual) ||
+                raw_unitarity_residual > relative_tolerance)
+            {
+                throw std::invalid_argument(
+                    "QSGW raw velocity WFC basis transform is not unitary within input precision");
+            }
+
+            const Matz transform =
+                project_to_nearest_unitary(raw_transform);
+            const double relative_residual =
+                relative_reconstruction_residual(
+                    source_rows, transform, reference_rows);
             result.maximum_relative_wfc_residual = std::max(
                 result.maximum_relative_wfc_residual,
                 relative_residual);
@@ -546,37 +631,38 @@ VelocityBasisAlignmentResult align_velocity_to_reference_wfc(
                 relative_residual > relative_tolerance)
             {
                 throw std::invalid_argument(
-                    "QSGW velocity WFC basis transform does not reconstruct the source basis");
+                    "QSGW projected velocity WFC basis transform does not reconstruct the source basis");
             }
 
-            const Matz transform_unitarity =
-                transform * transpose(transform, true);
-            double maximum_unitarity_residual = 0.0;
+            const double unitary_residual =
+                maximum_unitarity_residual(transform);
+            result.maximum_unitarity_residual = std::max(
+                result.maximum_unitarity_residual,
+                unitary_residual);
+            if (!std::isfinite(unitary_residual) ||
+                unitary_residual > relative_tolerance)
+            {
+                throw std::invalid_argument(
+                    "QSGW projected velocity WFC basis transform is not unitary");
+            }
+
             for (int row = 0; row < dimension; ++row)
             {
                 for (int column = 0; column < dimension; ++column)
                 {
                     const cplxdb expected = row == column ? 1.0 : 0.0;
-                    maximum_unitarity_residual = std::max(
-                        maximum_unitarity_residual,
-                        std::abs(
-                            transform_unitarity(row, column) - expected));
+                    result.maximum_unitary_projection_correction =
+                        std::max(
+                            result.maximum_unitary_projection_correction,
+                            std::abs(
+                                transform(row, column) -
+                                raw_transform(row, column)));
                     result.maximum_transform_deviation_from_identity =
                         std::max(
                             result.maximum_transform_deviation_from_identity,
                             std::abs(transform(row, column) - expected));
                 }
             }
-            result.maximum_unitarity_residual = std::max(
-                result.maximum_unitarity_residual,
-                maximum_unitarity_residual);
-            if (!std::isfinite(maximum_unitarity_residual) ||
-                maximum_unitarity_residual > relative_tolerance)
-            {
-                throw std::invalid_argument(
-                    "QSGW velocity WFC basis transform is not unitary");
-            }
-
             const ComplexMatrix transform_matrix =
                 to_complex_matrix(transform);
             const ComplexMatrix transform_transpose =
