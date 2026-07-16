@@ -51,6 +51,9 @@ struct VelocityBasisAlignmentResult
 {
     double maximum_relative_wfc_residual = 0.0;
     double maximum_unitarity_residual = 0.0;
+    double maximum_raw_relative_wfc_residual = 0.0;
+    double maximum_raw_unitarity_residual = 0.0;
+    double maximum_unitary_projection_correction = 0.0;
     double maximum_basis_inverse_residual = 0.0;
     double maximum_basis_condition_estimate = 0.0;
     double maximum_transform_deviation_from_identity = 0.0;

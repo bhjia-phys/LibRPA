@@ -573,6 +573,19 @@ void test_velocity_basis_unitary_is_aligned_before_qsgw_rotation()
     assert(mixed_alignment.maximum_transform_deviation_from_identity > 0.7);
     assert_velocity_equal(mixed_velocity, reference_velocity);
 
+    MeanField rounded_basis = reference;
+    rounded_basis.get_eigenvectors()[0][0][0](0, 0) = 1.0 + 2.0e-10;
+    rounded_basis.get_eigenvectors()[0][0][0](1, 1) = 1.0 - 1.0e-10;
+    VelocityMatrix rounded_velocity = reference_velocity;
+    const auto rounded_alignment = align_velocity_to_reference_wfc(
+        rounded_basis, reference, rounded_velocity);
+    assert(rounded_alignment.maximum_relative_wfc_residual > 1.0e-11);
+    assert(rounded_alignment.maximum_relative_wfc_residual < 1.0e-8);
+    assert(rounded_alignment.maximum_unitarity_residual < 1.0e-14);
+    assert(rounded_alignment.maximum_raw_unitarity_residual > 1.0e-10);
+    assert(rounded_alignment.maximum_unitary_projection_correction > 1.0e-11);
+    assert_velocity_equal(rounded_velocity, reference_velocity);
+
     MeanField nonunitary_basis = reference;
     nonunitary_basis.get_eigenvectors()[0][0][0](0, 0) = 2.0;
     VelocityMatrix rejected_velocity = reference_velocity;
