@@ -50,7 +50,10 @@ struct FixedBasisDiagonalizationResult
 struct VelocityBasisAlignmentResult
 {
     double maximum_relative_wfc_residual = 0.0;
-    double maximum_phase_deviation_from_identity = 0.0;
+    double maximum_unitarity_residual = 0.0;
+    double maximum_basis_inverse_residual = 0.0;
+    double maximum_basis_condition_estimate = 0.0;
+    double maximum_transform_deviation_from_identity = 0.0;
 };
 
 void prepare_fhi_aims_interband_velocity(

@@ -270,6 +270,121 @@ ComplexMatrix to_complex_matrix(const Matz& input)
     return output;
 }
 
+double frobenius_norm(const Matz& matrix)
+{
+    double norm_squared = 0.0;
+    for (int row = 0; row < matrix.nr(); ++row)
+    {
+        for (int column = 0; column < matrix.nc(); ++column)
+        {
+            norm_squared += std::norm(matrix(row, column));
+        }
+    }
+    return std::sqrt(norm_squared);
+}
+
+void require_finite_matrix(const Matz& matrix, const char* label)
+{
+    for (int row = 0; row < matrix.nr(); ++row)
+    {
+        for (int column = 0; column < matrix.nc(); ++column)
+        {
+            const cplxdb value = matrix(row, column);
+            if (!std::isfinite(value.real()) ||
+                !std::isfinite(value.imag()))
+            {
+                throw std::invalid_argument(
+                    std::string("QSGW ") + label +
+                    " contains non-finite data");
+            }
+        }
+    }
+}
+
+Matz invert_complete_wfc_basis(
+    const Matz& matrix,
+    const double relative_tolerance,
+    VelocityBasisAlignmentResult& diagnostics)
+{
+    if (matrix.nr() != matrix.nc())
+    {
+        throw std::invalid_argument(
+            "QSGW velocity alignment requires a complete square WFC basis");
+    }
+    const int dimension = matrix.nr();
+    Matz result = matrix.copy();
+    std::vector<int> pivots(static_cast<std::size_t>(dimension));
+    std::vector<cplxdb> work(
+        static_cast<std::size_t>(std::max(1, dimension)));
+    int info = 0;
+    if (result.is_row_major())
+    {
+        LapackConnector::getrf(
+            dimension, dimension, result.ptr(), dimension,
+            pivots.data(), info);
+    }
+    else
+    {
+        LapackConnector::getrf_f(
+            dimension, dimension, result.ptr(), dimension,
+            pivots.data(), info);
+    }
+    if (info != 0)
+    {
+        throw std::invalid_argument(
+            "QSGW velocity reference WFC basis is singular");
+    }
+    if (result.is_row_major())
+    {
+        LapackConnector::getri(
+            dimension, result.ptr(), dimension, pivots.data(),
+            work.data(), static_cast<int>(work.size()), info);
+    }
+    else
+    {
+        LapackConnector::getri_f(
+            dimension, result.ptr(), dimension, pivots.data(),
+            work.data(), static_cast<int>(work.size()), info);
+    }
+    if (info != 0)
+    {
+        throw std::invalid_argument(
+            "QSGW velocity reference WFC basis inversion failed");
+    }
+    require_finite_matrix(result, "velocity reference WFC inverse");
+
+    const Matz product = matrix * result;
+    double residual_squared = 0.0;
+    for (int row = 0; row < dimension; ++row)
+    {
+        for (int column = 0; column < dimension; ++column)
+        {
+            const cplxdb expected = row == column ? 1.0 : 0.0;
+            residual_squared +=
+                std::norm(product(row, column) - expected);
+        }
+    }
+    const double inverse_residual = std::sqrt(
+        residual_squared / std::max(1, dimension));
+    const double condition_estimate =
+        frobenius_norm(matrix) * frobenius_norm(result);
+    diagnostics.maximum_basis_inverse_residual = std::max(
+        diagnostics.maximum_basis_inverse_residual,
+        inverse_residual);
+    diagnostics.maximum_basis_condition_estimate = std::max(
+        diagnostics.maximum_basis_condition_estimate,
+        condition_estimate);
+    if (!std::isfinite(inverse_residual) ||
+        inverse_residual > relative_tolerance ||
+        !std::isfinite(condition_estimate) ||
+        condition_estimate > 1.0 / relative_tolerance)
+    {
+        throw std::invalid_argument(
+            "QSGW velocity reference WFC basis is ill-conditioned");
+    }
+    return result;
+}
+
 void diagonalize_hermitian(const Matz& matrix,
                            std::vector<double>& eigenvalues,
                            Matz& unitary)
@@ -382,90 +497,98 @@ VelocityBasisAlignmentResult align_velocity_to_reference_wfc(
     VelocityMatrix aligned = velocity;
     VelocityBasisAlignmentResult result;
     const int dimension = reference.get_n_bands();
+    const int coefficient_dimension =
+        reference.get_n_aos() * reference.get_n_spinor();
+    if (dimension != coefficient_dimension)
+    {
+        throw std::invalid_argument(
+            "QSGW velocity alignment requires a complete square WFC basis");
+    }
     for (int spin = 0; spin < reference.get_n_spins(); ++spin)
     {
         for (int kpoint = 0; kpoint < reference.get_n_kpoints(); ++kpoint)
         {
-            std::vector<cplxdb> source_phase(
-                static_cast<std::size_t>(dimension), 1.0);
-            for (int band = 0; band < dimension; ++band)
+            const Matz source_rows = collect_reference_wfc_rows(
+                velocity_basis, spin, kpoint, MAJOR::ROW);
+            const Matz reference_rows = collect_reference_wfc_rows(
+                reference, spin, kpoint, MAJOR::ROW);
+            const Matz reference_inverse = invert_complete_wfc_basis(
+                reference_rows, relative_tolerance, result);
+            const Matz transform = source_rows * reference_inverse;
+            require_finite_matrix(transform, "velocity WFC basis transform");
+
+            const Matz reconstructed = transform * reference_rows;
+            double residual_squared = 0.0;
+            double source_norm_squared = 0.0;
+            double reconstructed_norm_squared = 0.0;
+            for (int row = 0; row < dimension; ++row)
             {
-                cplxdb overlap = 0.0;
-                double source_norm = 0.0;
-                double reference_norm = 0.0;
-                for (int spinor = 0;
-                     spinor < reference.get_n_spinor(); ++spinor)
+                for (int column = 0;
+                     column < coefficient_dimension; ++column)
                 {
-                    const ComplexMatrix& source_block =
-                        velocity_basis.get_eigenvectors().at(spin).at(
-                            spinor).at(kpoint);
-                    const ComplexMatrix& reference_block =
-                        reference.get_eigenvectors().at(spin).at(
-                            spinor).at(kpoint);
-                    for (int ao = 0; ao < reference.get_n_aos(); ++ao)
-                    {
-                        const cplxdb source = source_block(band, ao);
-                        const cplxdb target = reference_block(band, ao);
-                        overlap += std::conj(target) * source;
-                        source_norm += std::norm(source);
-                        reference_norm += std::norm(target);
-                    }
+                    residual_squared += std::norm(
+                        source_rows(row, column) -
+                        reconstructed(row, column));
+                    source_norm_squared +=
+                        std::norm(source_rows(row, column));
+                    reconstructed_norm_squared +=
+                        std::norm(reconstructed(row, column));
                 }
-                const double overlap_magnitude = std::abs(overlap);
-                if (!(source_norm > 0.0) || !(reference_norm > 0.0) ||
-                    !(overlap_magnitude > 0.0))
-                {
-                    throw std::invalid_argument(
-                        "QSGW head/wing velocity basis contains an empty or orthogonal state");
-                }
-                const cplxdb phase = overlap / overlap_magnitude;
-                double residual_norm = 0.0;
-                for (int spinor = 0;
-                     spinor < reference.get_n_spinor(); ++spinor)
-                {
-                    const ComplexMatrix& source_block =
-                        velocity_basis.get_eigenvectors().at(spin).at(
-                            spinor).at(kpoint);
-                    const ComplexMatrix& reference_block =
-                        reference.get_eigenvectors().at(spin).at(
-                            spinor).at(kpoint);
-                    for (int ao = 0; ao < reference.get_n_aos(); ++ao)
-                    {
-                        residual_norm += std::norm(
-                            source_block(band, ao) -
-                            phase * reference_block(band, ao));
-                    }
-                }
-                const double relative_residual = std::sqrt(
-                    residual_norm / std::max(source_norm, reference_norm));
-                if (!std::isfinite(relative_residual) ||
-                    relative_residual > relative_tolerance)
-                {
-                    throw std::invalid_argument(
-                        "QSGW head/wing velocity WFC basis is not phase-equivalent to the fixed reference");
-                }
-                source_phase[static_cast<std::size_t>(band)] = phase;
-                result.maximum_relative_wfc_residual = std::max(
-                    result.maximum_relative_wfc_residual,
-                    relative_residual);
-                result.maximum_phase_deviation_from_identity = std::max(
-                    result.maximum_phase_deviation_from_identity,
-                    std::abs(phase - cplxdb(1.0, 0.0)));
+            }
+            const double relative_residual = std::sqrt(
+                residual_squared /
+                std::max(source_norm_squared,
+                         reconstructed_norm_squared));
+            result.maximum_relative_wfc_residual = std::max(
+                result.maximum_relative_wfc_residual,
+                relative_residual);
+            if (!std::isfinite(relative_residual) ||
+                relative_residual > relative_tolerance)
+            {
+                throw std::invalid_argument(
+                    "QSGW velocity WFC basis transform does not reconstruct the source basis");
             }
 
+            const Matz transform_unitarity =
+                transform * transpose(transform, true);
+            double maximum_unitarity_residual = 0.0;
+            for (int row = 0; row < dimension; ++row)
+            {
+                for (int column = 0; column < dimension; ++column)
+                {
+                    const cplxdb expected = row == column ? 1.0 : 0.0;
+                    maximum_unitarity_residual = std::max(
+                        maximum_unitarity_residual,
+                        std::abs(
+                            transform_unitarity(row, column) - expected));
+                    result.maximum_transform_deviation_from_identity =
+                        std::max(
+                            result.maximum_transform_deviation_from_identity,
+                            std::abs(transform(row, column) - expected));
+                }
+            }
+            result.maximum_unitarity_residual = std::max(
+                result.maximum_unitarity_residual,
+                maximum_unitarity_residual);
+            if (!std::isfinite(maximum_unitarity_residual) ||
+                maximum_unitarity_residual > relative_tolerance)
+            {
+                throw std::invalid_argument(
+                    "QSGW velocity WFC basis transform is not unitary");
+            }
+
+            const ComplexMatrix transform_matrix =
+                to_complex_matrix(transform);
+            const ComplexMatrix transform_transpose =
+                transpose(transform_matrix, false);
+            const ComplexMatrix transform_conjugate =
+                librpa_int::conj(transform_matrix);
             for (int direction = 0; direction < 3; ++direction)
             {
-                for (int row = 0; row < dimension; ++row)
-                {
-                    for (int column = 0; column < dimension; ++column)
-                    {
-                        aligned[spin][kpoint][direction](row, column) =
-                            source_phase[static_cast<std::size_t>(row)] *
-                            velocity[spin][kpoint][direction](row, column) *
-                            std::conj(source_phase[
-                                static_cast<std::size_t>(column)]);
-                    }
-                }
+                aligned[spin][kpoint][direction] =
+                    transform_transpose *
+                    velocity[spin][kpoint][direction] *
+                    transform_conjugate;
             }
         }
     }

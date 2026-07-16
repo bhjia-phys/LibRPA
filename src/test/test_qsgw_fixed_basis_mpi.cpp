@@ -153,7 +153,8 @@ void test_distributed_velocity_basis_alignment()
         distributed_basis, reference, source_velocity,
         mpi_comm_global_h);
     assert(alignment.maximum_relative_wfc_residual < 1.0e-14);
-    assert(alignment.maximum_phase_deviation_from_identity > 0.1);
+    assert(alignment.maximum_unitarity_residual < 1.0e-14);
+    assert(alignment.maximum_transform_deviation_from_identity > 0.1);
     assert_velocity_equal(source_velocity, expected_velocity);
 
     MeanField missing_basis = distributed_basis;

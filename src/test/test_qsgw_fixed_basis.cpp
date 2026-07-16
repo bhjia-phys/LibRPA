@@ -496,7 +496,7 @@ void test_invalid_matrix_data_does_not_mutate_live_state()
     assert_rejected_without_mutation(nonfinite);
 }
 
-void test_velocity_basis_phase_is_aligned_before_qsgw_rotation()
+void test_velocity_basis_unitary_is_aligned_before_qsgw_rotation()
 {
     MeanField reference(1, 1, 2, 2, 1);
     initialize_identity_wfc(reference);
@@ -541,21 +541,47 @@ void test_velocity_basis_phase_is_aligned_before_qsgw_rotation()
     const auto alignment = align_velocity_to_reference_wfc(
         source_basis, reference, source_velocity);
     assert(alignment.maximum_relative_wfc_residual < 1.0e-14);
-    assert(alignment.maximum_phase_deviation_from_identity > 1.0);
+    assert(alignment.maximum_unitarity_residual < 1.0e-14);
+    assert(alignment.maximum_basis_inverse_residual < 1.0e-14);
+    assert(alignment.maximum_transform_deviation_from_identity > 1.0);
     assert_velocity_equal(source_velocity, reference_velocity);
 
-    MeanField mixed_basis = source_basis;
+    MeanField mixed_basis = reference;
     const double inverse_sqrt_two = 1.0 / std::sqrt(2.0);
     mixed_basis.get_eigenvectors()[0][0][0](0, 0) = inverse_sqrt_two;
     mixed_basis.get_eigenvectors()[0][0][0](0, 1) = inverse_sqrt_two;
     mixed_basis.get_eigenvectors()[0][0][0](1, 0) = -inverse_sqrt_two;
     mixed_basis.get_eigenvectors()[0][0][0](1, 1) = inverse_sqrt_two;
-    const VelocityMatrix before_rejection = source_velocity;
+
+    ComplexMatrix transform(2, 2);
+    transform(0, 0) = inverse_sqrt_two;
+    transform(0, 1) = inverse_sqrt_two;
+    transform(1, 0) = -inverse_sqrt_two;
+    transform(1, 1) = inverse_sqrt_two;
+    VelocityMatrix mixed_velocity = reference_velocity;
+    for (int direction = 0; direction < 3; ++direction)
+    {
+        mixed_velocity[0][0][direction] =
+            librpa_int::conj(transform) *
+            reference_velocity[0][0][direction] *
+            transpose(transform, false);
+    }
+    const auto mixed_alignment = align_velocity_to_reference_wfc(
+        mixed_basis, reference, mixed_velocity);
+    assert(mixed_alignment.maximum_relative_wfc_residual < 1.0e-14);
+    assert(mixed_alignment.maximum_unitarity_residual < 1.0e-14);
+    assert(mixed_alignment.maximum_transform_deviation_from_identity > 0.7);
+    assert_velocity_equal(mixed_velocity, reference_velocity);
+
+    MeanField nonunitary_basis = reference;
+    nonunitary_basis.get_eigenvectors()[0][0][0](0, 0) = 2.0;
+    VelocityMatrix rejected_velocity = reference_velocity;
+    const VelocityMatrix before_rejection = rejected_velocity;
     assert_throws([&] {
         (void)align_velocity_to_reference_wfc(
-            mixed_basis, reference, source_velocity);
+            nonunitary_basis, reference, rejected_velocity);
     });
-    assert_velocity_equal(source_velocity, before_rejection);
+    assert_velocity_equal(rejected_velocity, before_rejection);
 }
 
 void test_fhi_aims_interband_velocity_is_prepared_in_qsgw_only()
@@ -604,7 +630,7 @@ int main()
     test_fixed_reference_updates_live_wfc_and_velocity_with_same_unitary();
     test_invalid_late_kpoint_does_not_partially_update_live_state();
     test_invalid_matrix_data_does_not_mutate_live_state();
-    test_velocity_basis_phase_is_aligned_before_qsgw_rotation();
+    test_velocity_basis_unitary_is_aligned_before_qsgw_rotation();
     test_fhi_aims_interband_velocity_is_prepared_in_qsgw_only();
     std::cout << "test_qsgw_fixed_basis: all tests passed\n";
     return 0;
