@@ -61,6 +61,7 @@ foreach(target
     test_qsgw_fixed_basis
     test_qsgw_hamiltonian_mixing
     test_qsgw_hartree_density
+    test_qsgw_hartree_dump
     test_qsgw_hartree_kernel
     test_qsgw_hartree_route
     test_qsgw_hartree_workflow

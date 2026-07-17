@@ -6,6 +6,7 @@ target_sources(rpa_lib PRIVATE
   fixed_basis.cpp
   hamiltonian_mixing.cpp
   hartree_density.cpp
+  hartree_dump.cpp
   hartree_kernel.cpp
   hartree_route.cpp
   hartree_workflow.cpp
