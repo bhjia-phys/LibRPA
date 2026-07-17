@@ -1,5 +1,7 @@
 #include "hartree_workflow.h"
 
+#include "hartree_dump.h"
+
 #include "../utils/constants.h"
 
 #include <cmath>
@@ -596,9 +598,12 @@ PeriodicOperatorRMap build_hartree_delta_periodic_operator(
         static_data.c_k, static_data.v_q0, density_blocks,
         static_data.atom_ao_sizes, kpoint_indices,
         static_data.normalization);
-    return inverse_fourier_hartree_operator(
+    PeriodicOperatorRMap hartree_r = inverse_fourier_hartree_operator(
         hartree_k, static_data.full_kpoints,
         static_data.translations, &static_data.bvk_remap);
+    maybe_dump_hartree_pipeline(
+        static_data, density_delta_k, hartree_k, hartree_r);
+    return hartree_r;
 }
 
 SpinKMatrixMap build_hartree_delta_fixed_basis(
