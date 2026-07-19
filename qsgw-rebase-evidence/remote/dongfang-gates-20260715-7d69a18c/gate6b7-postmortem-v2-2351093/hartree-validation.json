@@ -1,0 +1,38 @@
+{
+  "channel": 0,
+  "charge_tolerance": 1e-10,
+  "current_delta_vh_hermiticity_max_abs_ha": 0.0,
+  "current_initial_delta_vh_max_abs_ha": 0.0,
+  "current_occupation_electron_counts": {
+    "0": 0.125,
+    "1": 0.125,
+    "2": 0.125
+  },
+  "current_summary_electron_counts": {
+    "0": 8.0,
+    "1": 8.0,
+    "2": 8.0
+  },
+  "delta_vh_max_abs_difference_ha": 0.34559862795684754,
+  "delta_vh_relative_frobenius": 0.8667511752205416,
+  "hermiticity_tolerance_ha": 1e-10,
+  "initial_delta_tolerance_ha": 1e-10,
+  "iterations": [
+    0,
+    1,
+    2
+  ],
+  "legacy_delta_vh_hermiticity_max_abs_ha": 1.2628786905111156e-15,
+  "legacy_initial_delta_vh_max_abs_ha": 0.0,
+  "legacy_occupation_electron_counts": {
+    "0": 0.125,
+    "1": 0.125,
+    "2": 0.125
+  },
+  "matrix_max_abs_tolerance_ha": 1e-08,
+  "matrix_relative_tolerance": 1e-08,
+  "max_charge_drift": 7.875,
+  "max_old_current_electron_count_difference": 0.0,
+  "passed": false,
+  "reference_electron_count": 0.125
+}

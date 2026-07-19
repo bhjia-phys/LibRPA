@@ -1,0 +1,10 @@
+{
+  "gate": "gate4a-head-only-g0w0-limit-live-update",
+  "passed": true,
+  "max_abs_difference_ha": 7.017534962512885e-13,
+  "max_abs_tolerance_ha": 1e-10,
+  "relative_frobenius_difference": 5.407528165878914e-14,
+  "relative_frobenius_tolerance": 1e-10,
+  "head_initial_replay_passed": true,
+  "head_live_update_passed": true
+}

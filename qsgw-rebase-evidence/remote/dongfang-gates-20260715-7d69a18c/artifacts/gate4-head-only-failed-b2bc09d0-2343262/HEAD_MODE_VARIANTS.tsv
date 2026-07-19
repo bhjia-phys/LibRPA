@@ -1,0 +1,3 @@
+head_mode	replace_w_head	option_dielect_func	qsgw_input_contract
+disabled	false	0	qsgw_input.disabled.contract
+head_only	true	4	qsgw_input.head-only.contract

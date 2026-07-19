@@ -1,0 +1,2178 @@
+{
+  "complete_basis_transform": {
+    "degeneracy_block_leakage_maxima": {
+      "1e-05": {
+        "maximum_absolute": 4.32608238289291e-08,
+        "relative_frobenius": 1.8641022357567668e-08
+      },
+      "1e-06": {
+        "maximum_absolute": 1.0000000000034588,
+        "relative_frobenius": 0.39223227027666724
+      },
+      "1e-07": {
+        "maximum_absolute": 1.0000000000034588,
+        "relative_frobenius": 0.9198662110078252
+      },
+      "1e-08": {
+        "maximum_absolute": 1.0000000000034588,
+        "relative_frobenius": 1.0000000000000002
+      }
+    },
+    "maximum_direct_vs_metric_relative_frobenius": 1.3521328114819222e-12,
+    "maximum_offdiagonal_amplitude": 0.9982628921626995,
+    "maximum_overlap_condition_number": 2538.8217960777724,
+    "maximum_reconstruction_relative_frobenius": 4.978246336329871e-12,
+    "maximum_reference_condition_number": 50.38672241866017,
+    "maximum_reference_orthonormality_error": 6.7761352084971804e-12,
+    "maximum_source_orthonormality_error": 2.2326585025211898e-13,
+    "maximum_unitarity_error": 6.917577621834425e-12,
+    "maximum_unitarity_relative_frobenius": 1.3768749395636428e-12
+  },
+  "current_phase_only_check": {
+    "maximum_relative_wfc_residual": 1.371920641609829,
+    "passes_candidate_threshold": false,
+    "threshold_in_candidate": 1e-08,
+    "worst_band": 2,
+    "worst_kpoint": 32
+  },
+  "dataset": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-headwing-scf-v1-2343259/dataset",
+  "dimensions": {
+    "n_aos": 26,
+    "n_bands": 26,
+    "n_kpoints": 64,
+    "n_spins": 1
+  },
+  "eigenvalues": {
+    "maximum_absolute_difference_ha": 2.1026311207705817e-06,
+    "occupation_maximum_absolute_difference": 0.0,
+    "relative_frobenius": 3.635583135123198e-07
+  },
+  "per_kpoint": [
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.341136541990254e-09,
+          "relative_frobenius": 2.2954999271535533e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000009146,
+          "relative_frobenius": 0.3922322702764402
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000009146,
+          "relative_frobenius": 0.9198662110078053
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000009146,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.6559330697774044e-06,
+      "kpoint": 0,
+      "overlap_condition_number": 1201.0788838397175,
+      "phase_residual_band": 9,
+      "phase_residual_maximum": 1.2345681456180153,
+      "reference_condition_number": 34.656584999712315,
+      "reference_orthonormality_max_abs": 2.0670132272471164e-12,
+      "source_orthonormality_max_abs": 2.2326585025211898e-13,
+      "transform_direct_vs_metric_relative_frobenius": 4.1281826107256365e-13,
+      "transform_offdiagonal_max_abs": 0.9712845711677545,
+      "transform_reconstruction_relative_frobenius": 9.744044976913205e-13,
+      "transform_unitarity_max_abs": 1.829203455372408e-12,
+      "transform_unitarity_relative_frobenius": 3.6680122794799674e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853156697796228e-09,
+          "relative_frobenius": 5.681888626871791e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011247,
+          "relative_frobenius": 0.3922322702765543
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011247,
+          "relative_frobenius": 0.9198662110078145
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011247,
+          "relative_frobenius": 1.0000000000000002
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102630609179812e-06,
+      "kpoint": 1,
+      "overlap_condition_number": 2392.4507163569,
+      "phase_residual_band": 14,
+      "phase_residual_maximum": 1.3169652525538944,
+      "reference_condition_number": 48.91268461621377,
+      "reference_orthonormality_max_abs": 2.239394099365479e-12,
+      "source_orthonormality_max_abs": 3.545856989469088e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.879958450205007e-13,
+      "transform_offdiagonal_max_abs": 0.9911426865912106,
+      "transform_reconstruction_relative_frobenius": 2.4535891293282013e-12,
+      "transform_unitarity_max_abs": 2.249533892495492e-12,
+      "transform_unitarity_relative_frobenius": 7.925155863330581e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 5.064298045996392e-09,
+          "relative_frobenius": 3.7246649515571176e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000034588,
+          "relative_frobenius": 0.2773500981131152
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000034588,
+          "relative_frobenius": 0.919866211007825
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000034588,
+          "relative_frobenius": 0.9805806756909261
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.996870804710227e-06,
+      "kpoint": 2,
+      "overlap_condition_number": 2538.8217960772254,
+      "phase_residual_band": 18,
+      "phase_residual_maximum": 1.296363277837999,
+      "reference_condition_number": 50.386722418654976,
+      "reference_orthonormality_max_abs": 6.7761352084971804e-12,
+      "source_orthonormality_max_abs": 1.1457501614131615e-13,
+      "transform_direct_vs_metric_relative_frobenius": 1.3521328114819222e-12,
+      "transform_offdiagonal_max_abs": 0.9871621762975975,
+      "transform_reconstruction_relative_frobenius": 4.978246336329871e-12,
+      "transform_unitarity_max_abs": 6.917577621834425e-12,
+      "transform_unitarity_relative_frobenius": 1.3768749395636428e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853170194460626e-09,
+          "relative_frobenius": 5.681897896587147e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011566,
+          "relative_frobenius": 0.39223227027655605
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011566,
+          "relative_frobenius": 0.9198662110078144
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011566,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102630564770891e-06,
+      "kpoint": 3,
+      "overlap_condition_number": 2392.4507163567796,
+      "phase_residual_band": 14,
+      "phase_residual_maximum": 1.2877000373696383,
+      "reference_condition_number": 48.91268461621511,
+      "reference_orthonormality_max_abs": 2.257206033514303e-12,
+      "source_orthonormality_max_abs": 4.5113846086218614e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.970391507920868e-13,
+      "transform_offdiagonal_max_abs": 0.9852858976413004,
+      "transform_reconstruction_relative_frobenius": 2.4826848626349953e-12,
+      "transform_unitarity_max_abs": 2.313482738713901e-12,
+      "transform_unitarity_relative_frobenius": 8.044634845862557e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853178521413696e-09,
+          "relative_frobenius": 5.68190042850868e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.00000000000118,
+          "relative_frobenius": 0.39223227027656077
+        },
+        "1e-07": {
+          "maximum_absolute": 1.00000000000118,
+          "relative_frobenius": 0.919866211007815
+        },
+        "1e-08": {
+          "maximum_absolute": 1.00000000000118,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102630632272451e-06,
+      "kpoint": 4,
+      "overlap_condition_number": 2392.4507163568132,
+      "phase_residual_band": 13,
+      "phase_residual_maximum": 1.3092807573578193,
+      "reference_condition_number": 48.91268461621302,
+      "reference_orthonormality_max_abs": 2.317744341390767e-12,
+      "source_orthonormality_max_abs": 6.485405068909637e-14,
+      "transform_direct_vs_metric_relative_frobenius": 8.052482406768308e-13,
+      "transform_offdiagonal_max_abs": 0.9897382943355681,
+      "transform_reconstruction_relative_frobenius": 2.502269531027046e-12,
+      "transform_unitarity_max_abs": 2.3601121057481578e-12,
+      "transform_unitarity_relative_frobenius": 8.198838466219556e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.340607179244394e-09,
+          "relative_frobenius": 3.12372845173727e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000016966,
+          "relative_frobenius": 0.3922322702765346
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000016966,
+          "relative_frobenius": 0.9198662110078127
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000016966,
+          "relative_frobenius": 0.9999999999999998
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.6989743381046196e-06,
+      "kpoint": 5,
+      "overlap_condition_number": 1660.00493373356,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 0.823889283422081,
+      "reference_condition_number": 40.74315812181667,
+      "reference_orthonormality_max_abs": 3.4261486587245457e-12,
+      "source_orthonormality_max_abs": 3.2106807212575164e-14,
+      "transform_direct_vs_metric_relative_frobenius": 6.935731097075482e-13,
+      "transform_offdiagonal_max_abs": 0.7507352263404163,
+      "transform_reconstruction_relative_frobenius": 1.9407744994698336e-12,
+      "transform_unitarity_max_abs": 3.3932856524643285e-12,
+      "transform_unitarity_relative_frobenius": 6.872173573108045e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326065827030231e-08,
+          "relative_frobenius": 1.3390164974761375e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002534,
+          "relative_frobenius": 0.3922322702766562
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002534,
+          "relative_frobenius": 0.919866211007822
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002534,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698477803307355e-06,
+      "kpoint": 6,
+      "overlap_condition_number": 1649.208014171988,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8285113761969096e-08,
+      "reference_condition_number": 40.610442181545395,
+      "reference_orthonormality_max_abs": 5.0950543949234976e-12,
+      "source_orthonormality_max_abs": 2.8664378009729326e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0878885894327036e-12,
+      "transform_offdiagonal_max_abs": 4.326065827030231e-08,
+      "transform_reconstruction_relative_frobenius": 3.5365034893623678e-12,
+      "transform_unitarity_max_abs": 5.069722419648315e-12,
+      "transform_unitarity_relative_frobenius": 1.0842351534611307e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.5666478109537705e-08,
+          "relative_frobenius": 9.420970469066492e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023685,
+          "relative_frobenius": 0.3922322702766445
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023685,
+          "relative_frobenius": 0.9198662110078211
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023685,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9290176620501143e-06,
+      "kpoint": 7,
+      "overlap_condition_number": 2045.5735640507799,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 3.9546842546980564e-08,
+      "reference_condition_number": 45.22801746773242,
+      "reference_orthonormality_max_abs": 4.71689354242244e-12,
+      "source_orthonormality_max_abs": 3.530509218307998e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0735650886339853e-12,
+      "transform_offdiagonal_max_abs": 2.5666478109537705e-08,
+      "transform_reconstruction_relative_frobenius": 3.5589594677034884e-12,
+      "transform_unitarity_max_abs": 4.737765735285393e-12,
+      "transform_unitarity_relative_frobenius": 1.0778635372964468e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 5.0643096515732075e-09,
+          "relative_frobenius": 3.7246669538758097e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000003353,
+          "relative_frobenius": 0.27735009811310657
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000003353,
+          "relative_frobenius": 0.9198662110078243
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000003353,
+          "relative_frobenius": 0.9805806756909259
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9968702602568555e-06,
+      "kpoint": 8,
+      "overlap_condition_number": 2538.821796077625,
+      "phase_residual_band": 18,
+      "phase_residual_maximum": 1.1404917297780623,
+      "reference_condition_number": 50.386722418659026,
+      "reference_orthonormality_max_abs": 6.724620860154573e-12,
+      "source_orthonormality_max_abs": 8.293365993949919e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.3433675371291231e-12,
+      "transform_offdiagonal_max_abs": 0.936884387500361,
+      "transform_reconstruction_relative_frobenius": 4.942692129827238e-12,
+      "transform_unitarity_max_abs": 6.7061911579457956e-12,
+      "transform_unitarity_relative_frobenius": 1.3375978502600347e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.32608238289291e-08,
+          "relative_frobenius": 1.3390214314561608e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025997,
+          "relative_frobenius": 0.392232270276663
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025997,
+          "relative_frobenius": 0.9198662110078226
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025997,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.76984756983245e-06,
+      "kpoint": 9,
+      "overlap_condition_number": 1649.2080141721672,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8285347965483004e-08,
+      "reference_condition_number": 40.61044218154602,
+      "reference_orthonormality_max_abs": 5.184965682439125e-12,
+      "source_orthonormality_max_abs": 3.243591467851183e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.1030380767244078e-12,
+      "transform_offdiagonal_max_abs": 4.32608238289291e-08,
+      "transform_reconstruction_relative_frobenius": 3.591242984179852e-12,
+      "transform_unitarity_max_abs": 5.201172825763933e-12,
+      "transform_unitarity_relative_frobenius": 1.10627041763633e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.316414118989606e-09,
+          "relative_frobenius": 2.2938294177839575e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000018467,
+          "relative_frobenius": 0.39223227027666696
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000018467,
+          "relative_frobenius": 0.9198662110078232
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000018467,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.8125060252671688e-06,
+      "kpoint": 10,
+      "overlap_condition_number": 754.8054008717055,
+      "phase_residual_band": 7,
+      "phase_residual_maximum": 0.9775610119206704,
+      "reference_condition_number": 27.473722006209876,
+      "reference_orthonormality_max_abs": 3.690825423064825e-12,
+      "source_orthonormality_max_abs": 6.095124405192122e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0366987816690123e-12,
+      "transform_offdiagonal_max_abs": 0.8528308723565687,
+      "transform_reconstruction_relative_frobenius": 2.9674373156898485e-12,
+      "transform_unitarity_max_abs": 3.694600181347596e-12,
+      "transform_unitarity_relative_frobenius": 1.0381959666646472e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326070571120412e-08,
+          "relative_frobenius": 1.3390175953869574e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002606,
+          "relative_frobenius": 0.39223227027666485
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002606,
+          "relative_frobenius": 0.9198662110078228
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002606,
+          "relative_frobenius": 0.9805806756909257
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.769847775001665e-06,
+      "kpoint": 11,
+      "overlap_condition_number": 1649.2080141720176,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.828517610455802e-08,
+      "reference_condition_number": 40.61044218154555,
+      "reference_orthonormality_max_abs": 5.170991568386885e-12,
+      "source_orthonormality_max_abs": 6.734987225947281e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.101789159099719e-12,
+      "transform_offdiagonal_max_abs": 4.326070571120412e-08,
+      "transform_reconstruction_relative_frobenius": 3.5854246214830923e-12,
+      "transform_unitarity_max_abs": 5.213607323639735e-12,
+      "transform_unitarity_relative_frobenius": 1.1107875778307356e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853163847406123e-09,
+          "relative_frobenius": 5.681903939204516e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011375,
+          "relative_frobenius": 0.3922322702765568
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011375,
+          "relative_frobenius": 0.9198662110078147
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011375,
+          "relative_frobenius": 1.0000000000000002
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102631066591698e-06,
+      "kpoint": 12,
+      "overlap_condition_number": 2392.450716356799,
+      "phase_residual_band": 13,
+      "phase_residual_maximum": 1.281156259858836,
+      "reference_condition_number": 48.91268461621207,
+      "reference_orthonormality_max_abs": 2.2571259417508595e-12,
+      "source_orthonormality_max_abs": 8.396593893265058e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.842137214462011e-13,
+      "transform_offdiagonal_max_abs": 0.9837909241155932,
+      "transform_reconstruction_relative_frobenius": 2.4369362244683036e-12,
+      "transform_unitarity_max_abs": 2.275291066666796e-12,
+      "transform_unitarity_relative_frobenius": 7.918919212462972e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.5666464981150945e-08,
+          "relative_frobenius": 9.420967167687101e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002357,
+          "relative_frobenius": 0.3922322702766438
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002357,
+          "relative_frobenius": 0.9198662110078211
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002357,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.92901763629294e-06,
+      "kpoint": 13,
+      "overlap_condition_number": 2045.5735640507341,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 3.954682038100213e-08,
+      "reference_condition_number": 45.22801746773243,
+      "reference_orthonormality_max_abs": 4.708011758225439e-12,
+      "source_orthonormality_max_abs": 4.263256414560601e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0722107634080625e-12,
+      "transform_offdiagonal_max_abs": 2.5666464981150945e-08,
+      "transform_reconstruction_relative_frobenius": 3.5545667499546565e-12,
+      "transform_unitarity_max_abs": 4.71467309637319e-12,
+      "transform_unitarity_relative_frobenius": 1.0746361622561115e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326070133589972e-08,
+          "relative_frobenius": 1.3390175296466467e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025338,
+          "relative_frobenius": 0.3922322702766574
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025338,
+          "relative_frobenius": 0.9198662110078223
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025338,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698476977301425e-06,
+      "kpoint": 14,
+      "overlap_condition_number": 1649.2080141721608,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8285187185041844e-08,
+      "reference_condition_number": 40.61044218154515,
+      "reference_orthonormality_max_abs": 5.103475653850939e-12,
+      "source_orthonormality_max_abs": 2.623134620012038e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0891336906557974e-12,
+      "transform_offdiagonal_max_abs": 4.326070133589972e-08,
+      "transform_reconstruction_relative_frobenius": 3.54166476013466e-12,
+      "transform_unitarity_max_abs": 5.069278330438465e-12,
+      "transform_unitarity_relative_frobenius": 1.08373263870994e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.340605846978469e-09,
+          "relative_frobenius": 3.1237287598237905e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017624,
+          "relative_frobenius": 0.3922322702765415
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017624,
+          "relative_frobenius": 0.9198662110078133
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017624,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.6989744695550257e-06,
+      "kpoint": 15,
+      "overlap_condition_number": 1660.004933733533,
+      "phase_residual_band": 3,
+      "phase_residual_maximum": 1.1571980918276417,
+      "reference_condition_number": 40.743158121816336,
+      "reference_orthonormality_max_abs": 3.466026761546516e-12,
+      "source_orthonormality_max_abs": 4.972981986810518e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.011455690694033e-13,
+      "transform_offdiagonal_max_abs": 0.9438247987427881,
+      "transform_reconstruction_relative_frobenius": 1.960608561222329e-12,
+      "transform_unitarity_max_abs": 3.524736058579947e-12,
+      "transform_unitarity_relative_frobenius": 7.132013568826135e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853129989267302e-09,
+          "relative_frobenius": 5.681891103976336e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011493,
+          "relative_frobenius": 0.3922322702765574
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011493,
+          "relative_frobenius": 0.9198662110078146
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011493,
+          "relative_frobenius": 1.0000000000000002
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102630742406575e-06,
+      "kpoint": 16,
+      "overlap_condition_number": 2392.4507163568014,
+      "phase_residual_band": 6,
+      "phase_residual_maximum": 1.2929135955308075,
+      "reference_condition_number": 48.912684616212466,
+      "reference_orthonormality_max_abs": 2.2890669091297393e-12,
+      "source_orthonormality_max_abs": 3.590028443083502e-14,
+      "transform_direct_vs_metric_relative_frobenius": 8.018617934407731e-13,
+      "transform_offdiagonal_max_abs": 0.9864291956268656,
+      "transform_reconstruction_relative_frobenius": 2.4961335748412854e-12,
+      "transform_unitarity_max_abs": 2.298827794788849e-12,
+      "transform_unitarity_relative_frobenius": 8.125148014577358e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.660266260365923e-09,
+          "relative_frobenius": 3.682678971216583e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017208,
+          "relative_frobenius": 0.39223227027653573
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017208,
+          "relative_frobenius": 0.9198662110078129
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017208,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.698974544162013e-06,
+      "kpoint": 17,
+      "overlap_condition_number": 1660.004933733524,
+      "phase_residual_band": 17,
+      "phase_residual_maximum": 0.9608150610666912,
+      "reference_condition_number": 40.74315812181592,
+      "reference_orthonormality_max_abs": 3.4217765538098727e-12,
+      "source_orthonormality_max_abs": 5.597518642119787e-14,
+      "transform_direct_vs_metric_relative_frobenius": 6.929091957574335e-13,
+      "transform_offdiagonal_max_abs": 0.8426784145701868,
+      "transform_reconstruction_relative_frobenius": 1.9373060331792306e-12,
+      "transform_unitarity_max_abs": 3.4416913763379853e-12,
+      "transform_unitarity_relative_frobenius": 6.979905602404659e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302064413190466e-08,
+          "relative_frobenius": 1.3342632727202535e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025895,
+          "relative_frobenius": 0.39223227027666047
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025895,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025895,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684468529566288e-06,
+      "kpoint": 18,
+      "overlap_condition_number": 1649.2080141720821,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7978972994835786e-08,
+      "reference_condition_number": 40.610442181546404,
+      "reference_orthonormality_max_abs": 5.165653869776849e-12,
+      "source_orthonormality_max_abs": 2.7060291867564348e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0983611422017419e-12,
+      "transform_offdiagonal_max_abs": 4.302064413190466e-08,
+      "transform_reconstruction_relative_frobenius": 3.576822963734746e-12,
+      "transform_unitarity_max_abs": 5.1809667667157555e-12,
+      "transform_unitarity_relative_frobenius": 1.1000392201053994e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.6056652474571783e-08,
+          "relative_frobenius": 8.509989750024632e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002419,
+          "relative_frobenius": 0.3922322702766478
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002419,
+          "relative_frobenius": 0.9198662110078215
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002419,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286584418409802e-06,
+      "kpoint": 19,
+      "overlap_condition_number": 2045.5735640508217,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010632364067119e-08,
+      "reference_condition_number": 45.228017467732904,
+      "reference_orthonormality_max_abs": 4.7628567756419216e-12,
+      "source_orthonormality_max_abs": 6.17284001691587e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0800755423736525e-12,
+      "transform_offdiagonal_max_abs": 2.6056652474571783e-08,
+      "transform_reconstruction_relative_frobenius": 3.5819024306935226e-12,
+      "transform_unitarity_max_abs": 4.838573985921357e-12,
+      "transform_unitarity_relative_frobenius": 1.092682799032999e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.660272643682929e-09,
+          "relative_frobenius": 3.6826797084362346e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017266,
+          "relative_frobenius": 0.3922322702765372
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017266,
+          "relative_frobenius": 0.9198662110078131
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017266,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.698974455344171e-06,
+      "kpoint": 20,
+      "overlap_condition_number": 1660.004933733535,
+      "phase_residual_band": 7,
+      "phase_residual_maximum": 0.5611824121966501,
+      "reference_condition_number": 40.74315812181592,
+      "reference_orthonormality_max_abs": 3.419043780181382e-12,
+      "source_orthonormality_max_abs": 5.0742933189975215e-14,
+      "transform_direct_vs_metric_relative_frobenius": 6.918066698143886e-13,
+      "transform_offdiagonal_max_abs": 0.5386382400477537,
+      "transform_reconstruction_relative_frobenius": 1.9346059798981594e-12,
+      "transform_unitarity_max_abs": 3.453237695794087e-12,
+      "transform_unitarity_relative_frobenius": 6.991538262553391e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853080730312832e-09,
+          "relative_frobenius": 5.6818927555965474e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011717,
+          "relative_frobenius": 0.39223227027655316
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011717,
+          "relative_frobenius": 0.9198662110078144
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011717,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102631072808947e-06,
+      "kpoint": 21,
+      "overlap_condition_number": 2392.4507163567505,
+      "phase_residual_band": 6,
+      "phase_residual_maximum": 1.2262707742916754,
+      "reference_condition_number": 48.9126846162126,
+      "reference_orthonormality_max_abs": 2.3170376477207453e-12,
+      "source_orthonormality_max_abs": 6.436631483922918e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.868547703659855e-13,
+      "transform_offdiagonal_max_abs": 0.9687267449829189,
+      "transform_reconstruction_relative_frobenius": 2.436123381262892e-12,
+      "transform_unitarity_max_abs": 2.3436808049837055e-12,
+      "transform_unitarity_relative_frobenius": 7.919920120717343e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.6056683808687353e-08,
+          "relative_frobenius": 8.50999372906695e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023954,
+          "relative_frobenius": 0.39223227027664737
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023954,
+          "relative_frobenius": 0.9198662110078214
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023954,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286580048571977e-06,
+      "kpoint": 22,
+      "overlap_condition_number": 2045.5735640508708,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010632808201458e-08,
+      "reference_condition_number": 45.22801746773396,
+      "reference_orthonormality_max_abs": 4.756861571308946e-12,
+      "source_orthonormality_max_abs": 5.67323965583455e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0845801181853437e-12,
+      "transform_offdiagonal_max_abs": 2.6056683808687353e-08,
+      "transform_reconstruction_relative_frobenius": 3.596555368565164e-12,
+      "transform_unitarity_max_abs": 4.791500529677251e-12,
+      "transform_unitarity_relative_frobenius": 1.0950441338800524e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302066320052428e-08,
+          "relative_frobenius": 1.3342643495946934e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025877,
+          "relative_frobenius": 0.39223227027666074
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025877,
+          "relative_frobenius": 0.9198662110078223
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025877,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684470963175158e-06,
+      "kpoint": 23,
+      "overlap_condition_number": 1649.2080141720285,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7978963123435746e-08,
+      "reference_condition_number": 40.610442181545054,
+      "reference_orthonormality_max_abs": 5.14655302901906e-12,
+      "source_orthonormality_max_abs": 4.0984139277481715e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0973554588446409e-12,
+      "transform_offdiagonal_max_abs": 4.302066320052428e-08,
+      "transform_reconstruction_relative_frobenius": 3.5703039308416053e-12,
+      "transform_unitarity_max_abs": 5.177414053036955e-12,
+      "transform_unitarity_relative_frobenius": 1.1029020840183238e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020766152631575e-08,
+          "relative_frobenius": 1.3342663413566833e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025786,
+          "relative_frobenius": 0.39223227027666047
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025786,
+          "relative_frobenius": 0.9198662110078223
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025786,
+          "relative_frobenius": 0.9805806756909256
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684473290202618e-06,
+      "kpoint": 24,
+      "overlap_condition_number": 1649.2080141720387,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797915037085359e-08,
+      "reference_condition_number": 40.61044218154509,
+      "reference_orthonormality_max_abs": 5.107914829752832e-12,
+      "source_orthonormality_max_abs": 5.1545052236073763e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.087173294274855e-12,
+      "transform_offdiagonal_max_abs": 4.3020766152631575e-08,
+      "transform_reconstruction_relative_frobenius": 3.5379006836301386e-12,
+      "transform_unitarity_max_abs": 5.1592063954331024e-12,
+      "transform_unitarity_relative_frobenius": 1.0963242072100997e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.6056657548748174e-08,
+          "relative_frobenius": 8.50999047634569e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023617,
+          "relative_frobenius": 0.39223227027664787
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023617,
+          "relative_frobenius": 0.9198662110078213
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023617,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286581798283464e-06,
+      "kpoint": 25,
+      "overlap_condition_number": 2045.5735640508105,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010630256096058e-08,
+      "reference_condition_number": 45.228017467732634,
+      "reference_orthonormality_max_abs": 4.7126746949288645e-12,
+      "source_orthonormality_max_abs": 4.241051954068098e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0762982589632624e-12,
+      "transform_offdiagonal_max_abs": 2.6056657548748174e-08,
+      "transform_reconstruction_relative_frobenius": 3.5670719456419872e-12,
+      "transform_unitarity_max_abs": 4.723998969780041e-12,
+      "transform_unitarity_relative_frobenius": 1.0812099337131302e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326060173393066e-08,
+          "relative_frobenius": 1.3390154648710745e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025258,
+          "relative_frobenius": 0.39223227027665675
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025258,
+          "relative_frobenius": 0.919866211007822
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025258,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698479055638927e-06,
+      "kpoint": 26,
+      "overlap_condition_number": 1649.208014172139,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8285017918018336e-08,
+      "reference_condition_number": 40.610442181544634,
+      "reference_orthonormality_max_abs": 5.063508018201147e-12,
+      "source_orthonormality_max_abs": 4.037536495640569e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0813049556770386e-12,
+      "transform_offdiagonal_max_abs": 4.326060173393066e-08,
+      "transform_reconstruction_relative_frobenius": 3.5159976738792816e-12,
+      "transform_unitarity_max_abs": 5.0532911188838625e-12,
+      "transform_unitarity_relative_frobenius": 1.0801582254794165e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.253507305811475e-08,
+          "relative_frobenius": 1.8641022357567668e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000001726,
+          "relative_frobenius": 0.3922322702766579
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000001726,
+          "relative_frobenius": 0.919866211007822
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000001726,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7127333817867907e-06,
+      "kpoint": 27,
+      "overlap_condition_number": 586.9560196830028,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 9.87446382084279e-07,
+      "reference_condition_number": 24.22717523123622,
+      "reference_orthonormality_max_abs": 3.420153104169519e-12,
+      "source_orthonormality_max_abs": 4.47701150691196e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.511130058544276e-13,
+      "transform_offdiagonal_max_abs": 9.874300209267952e-07,
+      "transform_reconstruction_relative_frobenius": 2.6289737338931177e-12,
+      "transform_unitarity_max_abs": 3.452571561979312e-12,
+      "transform_unitarity_relative_frobenius": 9.576694799567681e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.605674162548948e-08,
+          "relative_frobenius": 8.510009244412658e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002391,
+          "relative_frobenius": 0.3922322702766472
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002391,
+          "relative_frobenius": 0.9198662110078212
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002391,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286582313426948e-06,
+      "kpoint": 28,
+      "overlap_condition_number": 2045.5735640507125,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010639411098959e-08,
+      "reference_condition_number": 45.22801746773262,
+      "reference_orthonormality_max_abs": 4.757083615913871e-12,
+      "source_orthonormality_max_abs": 4.5630166312093934e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0836913707809182e-12,
+      "transform_offdiagonal_max_abs": 2.605674162548948e-08,
+      "transform_reconstruction_relative_frobenius": 3.5944775786643023e-12,
+      "transform_unitarity_max_abs": 4.782618745480249e-12,
+      "transform_unitarity_relative_frobenius": 1.088692337924407e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302053621625179e-08,
+          "relative_frobenius": 1.3342606742559132e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002594,
+          "relative_frobenius": 0.3922322702766628
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002594,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002594,
+          "relative_frobenius": 0.9805806756909257
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.768447128291939e-06,
+      "kpoint": 29,
+      "overlap_condition_number": 1649.2080141720407,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797881293408862e-08,
+      "reference_condition_number": 40.61044218154507,
+      "reference_orthonormality_max_abs": 5.152997296947069e-12,
+      "source_orthonormality_max_abs": 3.357951452627041e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0989608923728526e-12,
+      "transform_offdiagonal_max_abs": 4.302053621625179e-08,
+      "transform_reconstruction_relative_frobenius": 3.574293913238621e-12,
+      "transform_unitarity_max_abs": 5.189848550912757e-12,
+      "transform_unitarity_relative_frobenius": 1.105419810944614e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.253497720725461e-08,
+          "relative_frobenius": 1.829093967664099e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017122,
+          "relative_frobenius": 0.3922322702766517
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017122,
+          "relative_frobenius": 0.9198662110078216
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017122,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7127333054034466e-06,
+      "kpoint": 30,
+      "overlap_condition_number": 586.9560196830272,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 2.674404345700607e-07,
+      "reference_condition_number": 24.227175231236192,
+      "reference_orthonormality_max_abs": 3.399728220351372e-12,
+      "source_orthonormality_max_abs": 4.298276376634372e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.475092394382254e-13,
+      "transform_offdiagonal_max_abs": 2.673801559789468e-07,
+      "transform_reconstruction_relative_frobenius": 2.6189956965981264e-12,
+      "transform_unitarity_max_abs": 3.424371897153833e-12,
+      "transform_unitarity_relative_frobenius": 9.467786148182568e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326046502835674e-08,
+          "relative_frobenius": 1.3390115545938302e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025797,
+          "relative_frobenius": 0.3922322702766593
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025797,
+          "relative_frobenius": 0.9198662110078221
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025797,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698481906691654e-06,
+      "kpoint": 31,
+      "overlap_condition_number": 1649.2080141720692,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8284876985569595e-08,
+      "reference_condition_number": 40.61044218154477,
+      "reference_orthonormality_max_abs": 5.114602364540203e-12,
+      "source_orthonormality_max_abs": 5.4343353275057724e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.089477212105569e-12,
+      "transform_offdiagonal_max_abs": 4.326046502835674e-08,
+      "transform_reconstruction_relative_frobenius": 3.54448965173736e-12,
+      "transform_unitarity_max_abs": 5.161204796877428e-12,
+      "transform_unitarity_relative_frobenius": 1.0982307285904854e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 5.064342973709025e-09,
+          "relative_frobenius": 3.7246724107334308e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000033702,
+          "relative_frobenius": 0.2773500981131135
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000033702,
+          "relative_frobenius": 0.9198662110078246
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000033702,
+          "relative_frobenius": 0.9805806756909259
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.996870267362283e-06,
+      "kpoint": 32,
+      "overlap_condition_number": 2538.8217960777724,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 1.371920641609829,
+      "reference_condition_number": 50.38672241866017,
+      "reference_orthonormality_max_abs": 6.744382829992901e-12,
+      "source_orthonormality_max_abs": 6.505906924303417e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.3491870439017201e-12,
+      "transform_offdiagonal_max_abs": 0.9982628921626995,
+      "transform_reconstruction_relative_frobenius": 4.960604047596642e-12,
+      "transform_unitarity_max_abs": 6.74038602710425e-12,
+      "transform_unitarity_relative_frobenius": 1.3464639061873598e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020715862163275e-08,
+          "relative_frobenius": 1.3342655146021044e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000026106,
+          "relative_frobenius": 0.3922322702766642
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000026106,
+          "relative_frobenius": 0.9198662110078228
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000026106,
+          "relative_frobenius": 0.9805806756909257
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684470270395991e-06,
+      "kpoint": 33,
+      "overlap_condition_number": 1649.2080141721751,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7979066743032634e-08,
+      "reference_condition_number": 40.61044218154559,
+      "reference_orthonormality_max_abs": 5.176312950827655e-12,
+      "source_orthonormality_max_abs": 4.9476872103097843e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.1000328217190684e-12,
+      "transform_offdiagonal_max_abs": 4.3020715862163275e-08,
+      "transform_reconstruction_relative_frobenius": 3.582659303029285e-12,
+      "transform_unitarity_max_abs": 5.2231552416515115e-12,
+      "transform_unitarity_relative_frobenius": 1.1098128288286888e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 7.051123674450504e-09,
+          "relative_frobenius": 4.424693046002997e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000018183,
+          "relative_frobenius": 0.3922322702766625
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000018183,
+          "relative_frobenius": 0.9198662110078227
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000018183,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.82056964881383e-06,
+      "kpoint": 34,
+      "overlap_condition_number": 754.8054008717179,
+      "phase_residual_band": 9,
+      "phase_residual_maximum": 0.8213815646953384,
+      "reference_condition_number": 27.47372200620988,
+      "reference_orthonormality_max_abs": 3.6606273584737775e-12,
+      "source_orthonormality_max_abs": 5.784261958297066e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0223612047127264e-12,
+      "transform_offdiagonal_max_abs": 0.7489149199057528,
+      "transform_reconstruction_relative_frobenius": 2.9261745240125544e-12,
+      "transform_unitarity_max_abs": 3.6375347178818645e-12,
+      "transform_unitarity_relative_frobenius": 1.0126937911671647e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302062920472092e-08,
+          "relative_frobenius": 1.3342637567779839e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000026275,
+          "relative_frobenius": 0.39223227027666724
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000026275,
+          "relative_frobenius": 0.9198662110078227
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000026275,
+          "relative_frobenius": 0.9805806756909256
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684472126688888e-06,
+      "kpoint": 35,
+      "overlap_condition_number": 1649.2080141720696,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797894490398614e-08,
+      "reference_condition_number": 40.61044218154502,
+      "reference_orthonormality_max_abs": 5.1738664429162094e-12,
+      "source_orthonormality_max_abs": 6.577608456711699e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.1009220202907708e-12,
+      "transform_offdiagonal_max_abs": 4.302062920472092e-08,
+      "transform_reconstruction_relative_frobenius": 3.58409956771831e-12,
+      "transform_unitarity_max_abs": 5.256906021600116e-12,
+      "transform_unitarity_relative_frobenius": 1.1175899910903907e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020594415595175e-08,
+          "relative_frobenius": 1.3342642692738904e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025866,
+          "relative_frobenius": 0.3922322702766577
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025866,
+          "relative_frobenius": 0.9198662110078218
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025866,
+          "relative_frobenius": 0.9805806756909252
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684470643430927e-06,
+      "kpoint": 36,
+      "overlap_condition_number": 1649.2080141721776,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797889887797808e-08,
+      "reference_condition_number": 40.61044218154538,
+      "reference_orthonormality_max_abs": 5.145459569418272e-12,
+      "source_orthonormality_max_abs": 2.374605816886664e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0940431086740005e-12,
+      "transform_offdiagonal_max_abs": 4.3020594415595175e-08,
+      "transform_reconstruction_relative_frobenius": 3.562100570095655e-12,
+      "transform_unitarity_max_abs": 5.175193606987705e-12,
+      "transform_unitarity_relative_frobenius": 1.097728864330022e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.5666521940044583e-08,
+          "relative_frobenius": 9.420975613835591e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023668,
+          "relative_frobenius": 0.3922322702766473
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023668,
+          "relative_frobenius": 0.9198662110078213
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023668,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9290175563568823e-06,
+      "kpoint": 37,
+      "overlap_condition_number": 2045.5735640507332,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 3.9546856593737965e-08,
+      "reference_condition_number": 45.22801746773381,
+      "reference_orthonormality_max_abs": 4.707567669015589e-12,
+      "source_orthonormality_max_abs": 2.425370527447018e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0759109741441328e-12,
+      "transform_offdiagonal_max_abs": 2.5666521940044583e-08,
+      "transform_reconstruction_relative_frobenius": 3.5668279705892146e-12,
+      "transform_unitarity_max_abs": 4.7342130216065925e-12,
+      "transform_unitarity_relative_frobenius": 1.0816168885152025e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302063389456611e-08,
+          "relative_frobenius": 1.33426776082377e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002567,
+          "relative_frobenius": 0.39223227027666074
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002567,
+          "relative_frobenius": 0.9198662110078223
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002567,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.768446923122724e-06,
+      "kpoint": 38,
+      "overlap_condition_number": 1649.2080141720862,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7978930422989e-08,
+      "reference_condition_number": 40.61044218154493,
+      "reference_orthonormality_max_abs": 5.125239681036457e-12,
+      "source_orthonormality_max_abs": 4.0955505511236195e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0933544185703698e-12,
+      "transform_offdiagonal_max_abs": 4.302063389456611e-08,
+      "transform_reconstruction_relative_frobenius": 3.5559602712960713e-12,
+      "transform_unitarity_max_abs": 5.136113756520899e-12,
+      "transform_unitarity_relative_frobenius": 1.0975985633529406e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.56080250335315e-08,
+          "relative_frobenius": 7.586376321400979e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017104,
+          "relative_frobenius": 0.392232270276647
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017104,
+          "relative_frobenius": 0.9198662110078212
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017104,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7125978288845545e-06,
+      "kpoint": 39,
+      "overlap_condition_number": 586.956019683028,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 6.911459666533884e-07,
+      "reference_condition_number": 24.227175231236338,
+      "reference_orthonormality_max_abs": 3.408164109784548e-12,
+      "source_orthonormality_max_abs": 2.869415224573196e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.432769225193244e-13,
+      "transform_offdiagonal_max_abs": 6.911229683362185e-07,
+      "transform_reconstruction_relative_frobenius": 2.6074098733997694e-12,
+      "transform_unitarity_max_abs": 3.4214853172898074e-12,
+      "transform_unitarity_relative_frobenius": 9.38727126339983e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 7.051144630424747e-09,
+          "relative_frobenius": 4.42469607395398e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000001817,
+          "relative_frobenius": 0.39223227027666047
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000001817,
+          "relative_frobenius": 0.9198662110078227
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000001817,
+          "relative_frobenius": 1.0000000000000002
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.8205695564432745e-06,
+      "kpoint": 40,
+      "overlap_condition_number": 754.8054008716886,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 1.050483778760167,
+      "reference_condition_number": 27.47372200620958,
+      "reference_orthonormality_max_abs": 3.662403713633466e-12,
+      "source_orthonormality_max_abs": 6.072919944699615e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0275970436735608e-12,
+      "transform_offdiagonal_max_abs": 0.8939122918265134,
+      "transform_reconstruction_relative_frobenius": 2.941525931240455e-12,
+      "transform_unitarity_max_abs": 3.6339820042030624e-12,
+      "transform_unitarity_relative_frobenius": 1.0164484910755776e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020457238117215e-08,
+          "relative_frobenius": 1.3342596435858233e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025555,
+          "relative_frobenius": 0.392232270276659
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025555,
+          "relative_frobenius": 0.9198662110078221
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025555,
+          "relative_frobenius": 0.9805806756909252
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684467481515753e-06,
+      "kpoint": 41,
+      "overlap_condition_number": 1649.2080141722124,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797871125172574e-08,
+      "reference_condition_number": 40.61044218154515,
+      "reference_orthonormality_max_abs": 5.132116984853791e-12,
+      "source_orthonormality_max_abs": 7.050271999428734e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.094756073805199e-12,
+      "transform_offdiagonal_max_abs": 4.3020457238117215e-08,
+      "transform_reconstruction_relative_frobenius": 3.560486074736091e-12,
+      "transform_unitarity_max_abs": 5.113021117608696e-12,
+      "transform_unitarity_relative_frobenius": 1.093653417554428e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 5.064387071022463e-09,
+          "relative_frobenius": 3.7246751862104894e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000033835,
+          "relative_frobenius": 0.2773500981131232
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000033835,
+          "relative_frobenius": 0.9198662110078252
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000033835,
+          "relative_frobenius": 0.980580675690926
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9968701900907604e-06,
+      "kpoint": 42,
+      "overlap_condition_number": 2538.8217960777456,
+      "phase_residual_band": 12,
+      "phase_residual_maximum": 1.335899950955645,
+      "reference_condition_number": 50.38672241865882,
+      "reference_orthonormality_max_abs": 6.738387625659925e-12,
+      "source_orthonormality_max_abs": 5.3474557871683486e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.3492608084711069e-12,
+      "transform_offdiagonal_max_abs": 0.9941849927114145,
+      "transform_reconstruction_relative_frobenius": 4.957942391383928e-12,
+      "transform_unitarity_max_abs": 6.767031379695254e-12,
+      "transform_unitarity_relative_frobenius": 1.355865798129189e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302060431242677e-08,
+          "relative_frobenius": 1.3342629866179644e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002559,
+          "relative_frobenius": 0.39223227027665925
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002559,
+          "relative_frobenius": 0.9198662110078222
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002559,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684468014422805e-06,
+      "kpoint": 43,
+      "overlap_condition_number": 1649.2080141720903,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797886921191669e-08,
+      "reference_condition_number": 40.61044218154535,
+      "reference_orthonormality_max_abs": 5.1294573096896546e-12,
+      "source_orthonormality_max_abs": 4.555536667158617e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.094965870079822e-12,
+      "transform_offdiagonal_max_abs": 4.302060431242677e-08,
+      "transform_reconstruction_relative_frobenius": 3.560827038785862e-12,
+      "transform_unitarity_max_abs": 5.120126544966297e-12,
+      "transform_unitarity_relative_frobenius": 1.0946408315331582e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020731973979035e-08,
+          "relative_frobenius": 1.3342672029578283e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025953,
+          "relative_frobenius": 0.3922322702766598
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025953,
+          "relative_frobenius": 0.9198662110078222
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025953,
+          "relative_frobenius": 0.9805806756909252
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684466433465218e-06,
+      "kpoint": 44,
+      "overlap_condition_number": 1649.2080141720844,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797906771428495e-08,
+      "reference_condition_number": 40.610442181545885,
+      "reference_orthonormality_max_abs": 5.197858443664727e-12,
+      "source_orthonormality_max_abs": 3.541055113696548e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.1050463725011923e-12,
+      "transform_offdiagonal_max_abs": 4.3020731973979035e-08,
+      "transform_reconstruction_relative_frobenius": 3.598657062998816e-12,
+      "transform_unitarity_max_abs": 5.192513086171857e-12,
+      "transform_unitarity_relative_frobenius": 1.1021122235995559e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.0035881870617015e-08,
+          "relative_frobenius": 6.911655574349612e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017397,
+          "relative_frobenius": 0.3922322702766569
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017397,
+          "relative_frobenius": 0.9198662110078217
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017397,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7125978981624712e-06,
+      "kpoint": 45,
+      "overlap_condition_number": 586.9560196830338,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 1.7847279592330303e-07,
+      "reference_condition_number": 24.227175231236256,
+      "reference_orthonormality_max_abs": 3.4268163463263266e-12,
+      "source_orthonormality_max_abs": 4.841288504636642e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.514887654725082e-13,
+      "transform_offdiagonal_max_abs": 1.7838381576590022e-07,
+      "transform_reconstruction_relative_frobenius": 2.6302114673771304e-12,
+      "transform_unitarity_max_abs": 3.4796610037801656e-12,
+      "transform_unitarity_relative_frobenius": 9.611941489207446e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3020592532670454e-08,
+          "relative_frobenius": 1.3342663819447616e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025735,
+          "relative_frobenius": 0.39223227027666163
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025735,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025735,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684470421386322e-06,
+      "kpoint": 46,
+      "overlap_condition_number": 1649.2080141720808,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797885970146297e-08,
+      "reference_condition_number": 40.610442181544634,
+      "reference_orthonormality_max_abs": 5.11662377581287e-12,
+      "source_orthonormality_max_abs": 7.121978712514172e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.092808006025989e-12,
+      "transform_offdiagonal_max_abs": 4.3020592532670454e-08,
+      "transform_reconstruction_relative_frobenius": 3.552464307401795e-12,
+      "transform_unitarity_max_abs": 5.148992343606551e-12,
+      "transform_unitarity_relative_frobenius": 1.1015302514276814e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.5666487444699718e-08,
+          "relative_frobenius": 9.420966280225284e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002328,
+          "relative_frobenius": 0.3922322702766444
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002328,
+          "relative_frobenius": 0.919866211007821
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002328,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.929017494184393e-06,
+      "kpoint": 47,
+      "overlap_condition_number": 2045.5735640508133,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 3.954681838554556e-08,
+      "reference_condition_number": 45.22801746773362,
+      "reference_orthonormality_max_abs": 4.675815290511309e-12,
+      "source_orthonormality_max_abs": 4.929390229335695e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0706091387998385e-12,
+      "transform_offdiagonal_max_abs": 2.5666487444699718e-08,
+      "transform_reconstruction_relative_frobenius": 3.5461948239274947e-12,
+      "transform_unitarity_max_abs": 4.6564974098828316e-12,
+      "transform_unitarity_relative_frobenius": 1.0687526086089234e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853137470952914e-09,
+          "relative_frobenius": 5.681895764202681e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011706,
+          "relative_frobenius": 0.39223227027655677
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011706,
+          "relative_frobenius": 0.9198662110078144
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011706,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.102630721090293e-06,
+      "kpoint": 48,
+      "overlap_condition_number": 2392.4507163566595,
+      "phase_residual_band": 6,
+      "phase_residual_maximum": 1.2758334949019565,
+      "reference_condition_number": 48.91268461621224,
+      "reference_orthonormality_max_abs": 2.3132768021264675e-12,
+      "source_orthonormality_max_abs": 2.4606928880586073e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.994814301106732e-13,
+      "transform_offdiagonal_max_abs": 0.9825261781164404,
+      "transform_reconstruction_relative_frobenius": 2.4825557531264986e-12,
+      "transform_unitarity_max_abs": 2.341460358934455e-12,
+      "transform_unitarity_relative_frobenius": 8.068868374746572e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.6056646423857407e-08,
+          "relative_frobenius": 8.509986742716421e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023888,
+          "relative_frobenius": 0.3922322702766451
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023888,
+          "relative_frobenius": 0.9198662110078211
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023888,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286583086142173e-06,
+      "kpoint": 49,
+      "overlap_condition_number": 2045.5735640508763,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010630588566764e-08,
+      "reference_condition_number": 45.22801746773294,
+      "reference_orthonormality_max_abs": 4.745537296457769e-12,
+      "source_orthonormality_max_abs": 3.985700658404312e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.078289758908051e-12,
+      "transform_offdiagonal_max_abs": 2.6056646423857407e-08,
+      "transform_reconstruction_relative_frobenius": 3.5747587769654774e-12,
+      "transform_unitarity_max_abs": 4.778177853381749e-12,
+      "transform_unitarity_relative_frobenius": 1.0847244246939484e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302080600132074e-08,
+          "relative_frobenius": 1.3342671397423627e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025744,
+          "relative_frobenius": 0.3922322702766612
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025744,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025744,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684467943368531e-06,
+      "kpoint": 50,
+      "overlap_condition_number": 1649.2080141721462,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7979168066904234e-08,
+      "reference_condition_number": 40.61044218154598,
+      "reference_orthonormality_max_abs": 5.158778547667286e-12,
+      "source_orthonormality_max_abs": 2.6914404096407e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.1000507804588932e-12,
+      "transform_offdiagonal_max_abs": 4.302080600132074e-08,
+      "transform_reconstruction_relative_frobenius": 3.5788060666661593e-12,
+      "transform_unitarity_max_abs": 5.150768700445951e-12,
+      "transform_unitarity_relative_frobenius": 1.0991610646613169e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.660271666976819e-09,
+          "relative_frobenius": 3.682678698223371e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017697,
+          "relative_frobenius": 0.3922322702765386
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017697,
+          "relative_frobenius": 0.9198662110078131
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017697,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.698974482877702e-06,
+      "kpoint": 51,
+      "overlap_condition_number": 1660.0049337334947,
+      "phase_residual_band": 17,
+      "phase_residual_maximum": 0.9874380501674709,
+      "reference_condition_number": 40.74315812181574,
+      "reference_orthonormality_max_abs": 3.466117727111744e-12,
+      "source_orthonormality_max_abs": 5.325761951707414e-14,
+      "transform_direct_vs_metric_relative_frobenius": 7.008605455958037e-13,
+      "transform_offdiagonal_max_abs": 0.8586973427970283,
+      "transform_reconstruction_relative_frobenius": 1.960632615356288e-12,
+      "transform_unitarity_max_abs": 3.539391002504999e-12,
+      "transform_unitarity_relative_frobenius": 7.153874470815868e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.605674145895361e-08,
+          "relative_frobenius": 8.51000616452063e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000023843,
+          "relative_frobenius": 0.3922322702766465
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000023843,
+          "relative_frobenius": 0.9198662110078211
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000023843,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.928658313943288e-06,
+      "kpoint": 52,
+      "overlap_condition_number": 2045.5735640506953,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010639962895346e-08,
+      "reference_condition_number": 45.22801746773261,
+      "reference_orthonormality_max_abs": 4.744205028828219e-12,
+      "source_orthonormality_max_abs": 4.907185768843192e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0826558180158307e-12,
+      "transform_offdiagonal_max_abs": 2.605674145895361e-08,
+      "transform_reconstruction_relative_frobenius": 3.5912744537380926e-12,
+      "transform_unitarity_max_abs": 4.7692960691847475e-12,
+      "transform_unitarity_relative_frobenius": 1.0883520928758378e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.3260556640230935e-08,
+          "relative_frobenius": 1.3390137706234892e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025582,
+          "relative_frobenius": 0.39223227027665875
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025582,
+          "relative_frobenius": 0.9198662110078223
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025582,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698480982986098e-06,
+      "kpoint": 53,
+      "overlap_condition_number": 1649.2080141720555,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.828497357696651e-08,
+      "reference_condition_number": 40.61044218154491,
+      "reference_orthonormality_max_abs": 5.1010316614856806e-12,
+      "source_orthonormality_max_abs": 3.333201385731621e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0879851099654866e-12,
+      "transform_offdiagonal_max_abs": 4.3260556640230935e-08,
+      "transform_reconstruction_relative_frobenius": 3.5386158347084744e-12,
+      "transform_unitarity_max_abs": 5.118128143521972e-12,
+      "transform_unitarity_relative_frobenius": 1.0908247125080629e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.253506748855298e-08,
+          "relative_frobenius": 1.8413473023439423e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017102,
+          "relative_frobenius": 0.39223227027665114
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017102,
+          "relative_frobenius": 0.9198662110078214
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017102,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7127333284960855e-06,
+      "kpoint": 54,
+      "overlap_condition_number": 586.9560196830536,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 7.354328122644858e-07,
+      "reference_condition_number": 24.22717523123645,
+      "reference_orthonormality_max_abs": 3.395507471136507e-12,
+      "source_orthonormality_max_abs": 6.024116677114301e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.47186003029786e-13,
+      "transform_offdiagonal_max_abs": 7.354108684076134e-07,
+      "transform_reconstruction_relative_frobenius": 2.618054001252613e-12,
+      "transform_unitarity_max_abs": 3.4205971388701073e-12,
+      "transform_unitarity_relative_frobenius": 9.441162842347543e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302045048950435e-08,
+          "relative_frobenius": 1.3342597943764775e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025655,
+          "relative_frobenius": 0.39223227027666213
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025655,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025655,
+          "relative_frobenius": 0.9805806756909257
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684471380619016e-06,
+      "kpoint": 55,
+      "overlap_condition_number": 1649.2080141720462,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.797871131474971e-08,
+      "reference_condition_number": 40.61044218154501,
+      "reference_orthonormality_max_abs": 5.123548788721606e-12,
+      "source_orthonormality_max_abs": 6.202074961689763e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.09311045141435e-12,
+      "transform_offdiagonal_max_abs": 4.302045048950435e-08,
+      "transform_reconstruction_relative_frobenius": 3.5553488829594662e-12,
+      "transform_unitarity_max_abs": 5.133005132051949e-12,
+      "transform_unitarity_relative_frobenius": 1.0972585070445244e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302075906407797e-08,
+          "relative_frobenius": 1.3342654556312327e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025804,
+          "relative_frobenius": 0.392232270276661
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025804,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025804,
+          "relative_frobenius": 0.9805806756909257
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684471762535736e-06,
+      "kpoint": 56,
+      "overlap_condition_number": 1649.2080141721603,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.7979136382775674e-08,
+      "reference_condition_number": 40.61044218154499,
+      "reference_orthonormality_max_abs": 5.126133404916663e-12,
+      "source_orthonormality_max_abs": 3.015833881079065e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0908531139279873e-12,
+      "transform_offdiagonal_max_abs": 4.302075906407797e-08,
+      "transform_reconstruction_relative_frobenius": 3.5500755524785655e-12,
+      "transform_unitarity_max_abs": 5.162759109111903e-12,
+      "transform_unitarity_relative_frobenius": 1.0969860562280901e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.253509949565244e-08,
+          "relative_frobenius": 1.860296469087905e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000001718,
+          "relative_frobenius": 0.39223227027665564
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000001718,
+          "relative_frobenius": 0.9198662110078217
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000001718,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.712733261882704e-06,
+      "kpoint": 57,
+      "overlap_condition_number": 586.9560196830442,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 1.8869268989191248e-07,
+      "reference_condition_number": 24.22717523123617,
+      "reference_orthonormality_max_abs": 3.4003916215085477e-12,
+      "source_orthonormality_max_abs": 4.178523886122496e-14,
+      "transform_direct_vs_metric_relative_frobenius": 9.482353787612346e-13,
+      "transform_offdiagonal_max_abs": 1.8860725291272883e-07,
+      "transform_reconstruction_relative_frobenius": 2.6213239762410757e-12,
+      "transform_unitarity_max_abs": 3.4365843504247096e-12,
+      "transform_unitarity_relative_frobenius": 9.543287620168572e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.326054506790386e-08,
+          "relative_frobenius": 1.339013912204239e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000025682,
+          "relative_frobenius": 0.392232270276662
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000025682,
+          "relative_frobenius": 0.9198662110078224
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000025682,
+          "relative_frobenius": 0.9805806756909254
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7698477341454577e-06,
+      "kpoint": 58,
+      "overlap_condition_number": 1649.208014172127,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.8284963189788135e-08,
+      "reference_condition_number": 40.610442181545174,
+      "reference_orthonormality_max_abs": 5.121500432745631e-12,
+      "source_orthonormality_max_abs": 4.26536429173139e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0943192196793333e-12,
+      "transform_offdiagonal_max_abs": 4.326054506790386e-08,
+      "transform_reconstruction_relative_frobenius": 3.5572589040446748e-12,
+      "transform_unitarity_max_abs": 5.1381121579652245e-12,
+      "transform_unitarity_relative_frobenius": 1.097616438117003e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.605669205884033e-08,
+          "relative_frobenius": 8.509998796532639e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000024167,
+          "relative_frobenius": 0.3922322702766503
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000024167,
+          "relative_frobenius": 0.9198662110078216
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000024167,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286581949273796e-06,
+      "kpoint": 59,
+      "overlap_condition_number": 2045.5735640507262,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.0106348477860056e-08,
+      "reference_condition_number": 45.22801746773347,
+      "reference_orthonormality_max_abs": 4.765743355505947e-12,
+      "source_orthonormality_max_abs": 6.084022174945858e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0845705315267719e-12,
+      "transform_offdiagonal_max_abs": 2.605669205884033e-08,
+      "transform_reconstruction_relative_frobenius": 3.5973185301737237e-12,
+      "transform_unitarity_max_abs": 4.834133093822857e-12,
+      "transform_unitarity_relative_frobenius": 1.0961882065923518e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.6602687468699e-09,
+          "relative_frobenius": 3.682679216422356e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000017377,
+          "relative_frobenius": 0.3922322702765355
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000017377,
+          "relative_frobenius": 0.9198662110078129
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000017377,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.6989744739959178e-06,
+      "kpoint": 60,
+      "overlap_condition_number": 1660.0049337334979,
+      "phase_residual_band": 12,
+      "phase_residual_maximum": 0.4561802874372415,
+      "reference_condition_number": 40.74315812181525,
+      "reference_orthonormality_max_abs": 3.41952507098811e-12,
+      "source_orthonormality_max_abs": 4.532458568840069e-14,
+      "transform_direct_vs_metric_relative_frobenius": 6.915923329277387e-13,
+      "transform_offdiagonal_max_abs": 0.4441553849433032,
+      "transform_reconstruction_relative_frobenius": 1.9350550969835135e-12,
+      "transform_unitarity_max_abs": 3.47544215628659e-12,
+      "transform_unitarity_relative_frobenius": 7.024364752615113e-13
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 4.302070872768291e-08,
+          "relative_frobenius": 1.334265311761212e-08
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002595,
+          "relative_frobenius": 0.392232270276661
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002595,
+          "relative_frobenius": 0.9198662110078222
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002595,
+          "relative_frobenius": 0.9805806756909253
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.7684472402024198e-06,
+      "kpoint": 61,
+      "overlap_condition_number": 1649.2080141721365,
+      "phase_residual_band": 24,
+      "phase_residual_maximum": 5.79790422014018e-08,
+      "reference_condition_number": 40.610442181545345,
+      "reference_orthonormality_max_abs": 5.139666481457106e-12,
+      "source_orthonormality_max_abs": 4.162882100076459e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0953361014274236e-12,
+      "transform_offdiagonal_max_abs": 4.302070872768291e-08,
+      "transform_reconstruction_relative_frobenius": 3.563696017559599e-12,
+      "transform_unitarity_max_abs": 5.192068996962007e-12,
+      "transform_unitarity_relative_frobenius": 1.1040352335616116e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 2.605663903336251e-08,
+          "relative_frobenius": 8.509988215877579e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.000000000002365,
+          "relative_frobenius": 0.3922322702766424
+        },
+        "1e-07": {
+          "maximum_absolute": 1.000000000002365,
+          "relative_frobenius": 0.9198662110078208
+        },
+        "1e-08": {
+          "maximum_absolute": 1.000000000002365,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 1.9286578387678333e-06,
+      "kpoint": 62,
+      "overlap_condition_number": 2045.5735640508817,
+      "phase_residual_band": 23,
+      "phase_residual_maximum": 4.010629586723921e-08,
+      "reference_condition_number": 45.22801746773417,
+      "reference_orthonormality_max_abs": 4.742872761198669e-12,
+      "source_orthonormality_max_abs": 7.682743330406083e-14,
+      "transform_direct_vs_metric_relative_frobenius": 1.0774898685096328e-12,
+      "transform_offdiagonal_max_abs": 2.605663903336251e-08,
+      "transform_reconstruction_relative_frobenius": 3.573524326733488e-12,
+      "transform_unitarity_max_abs": 4.730660307927792e-12,
+      "transform_unitarity_relative_frobenius": 1.0763043980454807e-12
+    },
+    {
+      "degeneracy_block_leakage": {
+        "1e-05": {
+          "maximum_absolute": 9.853055642599855e-09,
+          "relative_frobenius": 5.6818893789597855e-09
+        },
+        "1e-06": {
+          "maximum_absolute": 1.0000000000011429,
+          "relative_frobenius": 0.3922322702765558
+        },
+        "1e-07": {
+          "maximum_absolute": 1.0000000000011429,
+          "relative_frobenius": 0.9198662110078145
+        },
+        "1e-08": {
+          "maximum_absolute": 1.0000000000011429,
+          "relative_frobenius": 1.0
+        }
+      },
+      "eigenvalue_max_abs_difference_ha": 2.1026311207705817e-06,
+      "kpoint": 63,
+      "overlap_condition_number": 2392.450716356621,
+      "phase_residual_band": 2,
+      "phase_residual_maximum": 1.124397917476254,
+      "reference_condition_number": 48.91268461621163,
+      "reference_orthonormality_max_abs": 2.2644108825766486e-12,
+      "source_orthonormality_max_abs": 1.0783310359348755e-13,
+      "transform_direct_vs_metric_relative_frobenius": 7.873396930653244e-13,
+      "transform_offdiagonal_max_abs": 0.9298793424172158,
+      "transform_reconstruction_relative_frobenius": 2.448150677088146e-12,
+      "transform_unitarity_max_abs": 2.2859492077031973e-12,
+      "transform_unitarity_relative_frobenius": 7.954844061783081e-13
+    }
+  ],
+  "schema": "qsgw-headwing-basis-diagnostic-v1",
+  "velocity": {
+    "source_hermiticity": {
+      "maximum_absolute": 7.005274456661332e-11,
+      "relative_frobenius": 9.751776285074758e-14
+    },
+    "top_level_vs_pyatb_maximum_absolute": 0.0,
+    "top_level_vs_pyatb_relative_frobenius": 0.0,
+    "transformed_hermiticity": {
+      "maximum_absolute": 7.00527445667614e-11,
+      "relative_frobenius": 9.751776621087509e-14
+    },
+    "transformed_maximum_absolute": 124.81861845240633
+  }
+}

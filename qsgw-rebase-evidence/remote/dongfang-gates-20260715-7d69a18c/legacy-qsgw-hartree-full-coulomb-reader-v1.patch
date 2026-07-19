@@ -1,0 +1,18 @@
+diff --git a/driver/task_qsgw.cpp b/driver/task_qsgw.cpp
+index dbe2912..4ea6f45 100644
+--- a/driver/task_qsgw.cpp
++++ b/driver/task_qsgw.cpp
+@@ -1197,11 +1197,12 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+     std::flush(ofs_myid);
+ 
+     // 读取库伦相互作用
+     Profiler::start("read_vq_cut", "Load truncated Coulomb");
+     if (LIBRPA::parallel_routing == LIBRPA::ParallelRouting::R_TAU
+-        || need_full_cut_coulomb_for_abacus_symmetry())
++        || need_full_cut_coulomb_for_abacus_symmetry()
++        || oracle_env_bool("QSGW_ORACLE_UPDATE_HARTREE", false))
+     {
+         if (need_full_cut_coulomb_for_abacus_symmetry() && mpi_comm_global_h.is_root())
+         {
+             lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+                        " switching to `read_Vq_full`\n");

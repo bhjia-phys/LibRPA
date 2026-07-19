@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/build-oneapi-v2
+Test project /home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/build-oneapi-v2
+    Start 28: test_qsgw_fixed_basis
+1/1 Test #28: test_qsgw_fixed_basis ............   Passed    0.06 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.06 sec

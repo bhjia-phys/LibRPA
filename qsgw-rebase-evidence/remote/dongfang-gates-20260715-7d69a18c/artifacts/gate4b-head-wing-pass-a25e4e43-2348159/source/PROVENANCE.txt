@@ -1,0 +1,24 @@
+gate=gate4b-head-plus-wing-g0w0-limit-live-update
+acceptance_gate=true
+candidate_commit=a25e4e4398d96bccdf44df00bfaad31c5e6035d6
+candidate_executable_sha256=2072fc09a44a5f246513be152a06832dccf777da04b3dd8911b70e0f9a31591e
+gate4a_source_job=2347926
+gate4a_output_manifest_sha256=1d53d67c15786aae74e2f4bf190ca579827971ee81c5ea8395e5db92938a4334
+controlled_factor=parameters.head_mode
+side_a=head_only
+side_b=head_plus_wing
+crystal_symmetry=off
+time_reversal_reduction=off_full_64_kpoint_input
+hartree=off
+band=off
+mixing=none
+qsgw_iterations=0:2
+mpi_ranks=4
+omp_threads=12
+LIBRI_DETERMINISTIC_REDUCTION=1
+slurm_job_id=2348059
+slurm_node_list=c2v100m3-3
+slurm_partition=v100m3
+slurm_job_gpus=0,1,2,3,4,5,6,7
+started_utc=2026-07-16T15:47:32Z
+      4 c2v100m3-3.hpc2

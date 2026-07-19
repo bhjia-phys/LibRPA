@@ -1,0 +1,11 @@
+--- /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate4-head-only-limit-live-a25e4e43-2347926/head-only/librpa.in	2026-07-16 23:08:30.102206209 +0800
++++ /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate4b-head-wing-limit-live-a25e4e43-2348059/head-plus-wing/librpa.in	2026-07-16 23:47:28.784126775 +0800
+@@ -16,7 +16,7 @@
+ use_shrink_chi = false
+ use_pyatb = false
+ replace_w_head = true
+-option_dielect_func = 4
++option_dielect_func = 3
+ use_fullcoul_exx = false
+ use_fullcoul_eps = true
+ use_fullcoul_wc = false

@@ -1,0 +1,25 @@
+{
+  "block_count": 384,
+  "exact_block_count": 0,
+  "frequency_count": 6,
+  "kpoint_count": 64,
+  "left_manifest_sha256": "a8098ffcc7f262645041a68343d2d5c8762f1b78cac4f315f895a4ee3c24a251",
+  "matrix_dimensions": [
+    26
+  ],
+  "max_abs_difference_ha": 4.381358689973899e-13,
+  "max_abs_location": [
+    0,
+    32,
+    0,
+    25,
+    25
+  ],
+  "max_abs_tolerance_ha": 1e-12,
+  "passed": true,
+  "relative_frobenius_difference": 3.187872791216779e-14,
+  "relative_frobenius_tolerance": 1e-12,
+  "right_manifest_sha256": "5bd275e6bc92aef3c5779b7196889440f4882ad5064406dff911f2c8d38fffdb",
+  "source": "kgrid",
+  "spin_count": 1
+}

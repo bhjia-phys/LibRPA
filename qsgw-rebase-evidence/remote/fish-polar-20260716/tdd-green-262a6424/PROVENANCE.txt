@@ -1,0 +1,14 @@
+analysis=qsgw_velocity_polar_tdd_green
+acceptance_gate=false
+candidate_parent_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+patch_sha256=262a6424d4128248bbedd65976a734105bb757d095f501e508bc1789688b226e
+changed_files=src/qsgw/fixed_basis.cpp,src/qsgw/fixed_basis.h,src/test/test_qsgw_fixed_basis.cpp
+protected_shared_numerical_files_changed=false
+serial_fixed_basis_test=PASS
+mpi4_fixed_basis_test=PASS
+omp_threads=1
+compiler_environment=oneapi
+cxx_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiicpx
+fortran_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiifx
+execution_surface=fish_direct_small_build_test
+completed_utc=2026-07-16T11:00:55Z

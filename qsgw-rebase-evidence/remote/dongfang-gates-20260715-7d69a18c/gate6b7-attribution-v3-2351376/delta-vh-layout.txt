@@ -1,0 +1,3 @@
+old_off_delta_vh_rows_iter0_1=0
+old_on_delta_vh_rows_and_maxabs_iter0_1=43264 0.00000000000000000e+00
+transform=appended 43264 identically_zero oracle delta_vh rows (iterations 0:1) to hartree-off copy

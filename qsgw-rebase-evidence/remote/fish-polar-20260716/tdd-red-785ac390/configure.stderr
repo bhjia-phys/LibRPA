@@ -1,0 +1,8 @@
+-- Python 3 interpreter version: 3.13.5
+CMake Warning at thirdparty/greenX/cmake/python3.cmake:73 (message):
+  pygreenx was not found.
+Call Stack (most recent call first):
+  thirdparty/greenX/CMakeLists.txt:81 (find_python_module)
+
+
+-- pygreenx is required for application testing. To install it, cd <PROJECTROOT>/python and run `pip install -e .`

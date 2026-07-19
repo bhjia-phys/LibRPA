@@ -1,0 +1,39 @@
+{
+  "schema": "librpa-g0w0-clean-head-comparison-v1",
+  "candidate": "/home/bhj/ai-runs/librpa-qsgw-gate0-20260716T0500-b2bc09d0/g0w0/upstream/librpa/runner.stdout",
+  "candidate_sha256": "b639e901c467676c0d3516931c9fd1848f53d515b592d60ee069be73a6f5ffef",
+  "extractor": {
+    "implementation": "/home/bhj/ai-runs/librpa-qsgw-gate0-20260716T0500-b2bc09d0/source-upstream/regression_tests/backend/validate.py",
+    "sha256": "5aa3e1c5140f16471d1c9a11e659acd076a3a5365b834a83defd70ba8af070a3",
+    "regex": "State\\s+occ\\s+e_mf\\s+v_xc\\s+v_exx\\s+ReSigc\\s+ImSigc\\s+e_qp",
+    "headers": 2,
+    "rows_per_table": 18
+  },
+  "comparator": {
+    "implementation": "/home/bhj/ai-runs/librpa-qsgw-gate0-20260716T0500-b2bc09d0/source-upstream/regression_tests/backend/comparisons/cmp_table.py",
+    "sha256": "c4e56b04da8d03b13593a18658603b15798be955f9a1bb9c777371fd7b1cb628",
+    "function": "cmp_table.abs_diff",
+    "absolute_tolerance": 0.0
+  },
+  "results": [
+    {
+      "comparison": "candidate-vs-upstream",
+      "passed": true,
+      "maximum_absolute_difference": 0.0,
+      "table_rows": 486,
+      "message": "max abs diff = 0.0000000000000000E+00 (tol = 0.0000000000000000E+00) over 486 table rows",
+      "reference": "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/evidence/g0w0-official-reference.stdout",
+      "reference_sha256": "b3723d92576a5a6ece4ea7943226a1f719ed956e84d4e290c232c699fc2fa4ef"
+    },
+    {
+      "comparison": "candidate-vs-official-reference",
+      "passed": true,
+      "maximum_absolute_difference": 0.0,
+      "table_rows": 486,
+      "message": "max abs diff = 0.0000000000000000E+00 (tol = 0.0000000000000000E+00) over 486 table rows",
+      "reference": "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/evidence/g0w0-official-reference.stdout",
+      "reference_sha256": "b3723d92576a5a6ece4ea7943226a1f719ed956e84d4e290c232c699fc2fa4ef"
+    }
+  ],
+  "passed": true
+}

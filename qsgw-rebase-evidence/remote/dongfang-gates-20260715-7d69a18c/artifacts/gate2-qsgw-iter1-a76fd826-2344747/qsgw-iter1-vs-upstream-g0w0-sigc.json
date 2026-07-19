@@ -1,0 +1,37 @@
+{
+  "block_count": 384,
+  "channel": 0,
+  "exact_block_count": 0,
+  "frequency_count": 6,
+  "frequency_ha": [
+    0.015402107469462372,
+    0.05765830780832941,
+    0.1483091124626021,
+    0.3895799247895522,
+    1.1396193777587351,
+    4.099849629288618
+  ],
+  "g0w0_sigc_manifest_sha256": "34f0cc25bec1c170206b554915e0b4cb3cf146a179f38dc20025b805eb2f5660",
+  "iteration": 1,
+  "kpoint_count": 64,
+  "matrix_dimensions": [
+    26
+  ],
+  "max_abs_difference_ha": 3.2849583836077224e-13,
+  "max_abs_location": [
+    0,
+    18,
+    4,
+    25,
+    25
+  ],
+  "max_abs_tolerance_ha": 1e-10,
+  "passed": true,
+  "qsgw_input_contract_actual_sha256": "25422eee1d5f8cd4db678c05d979bbd29cb516c8088157829d6c315da19ec12b",
+  "qsgw_input_contract_expected_sha256": "25422eee1d5f8cd4db678c05d979bbd29cb516c8088157829d6c315da19ec12b",
+  "qsgw_trace_sha256": "7b472d45e458f0d5539ee826b4e26b3d1803d77dd36fb23ce048bff7a6cb6a7f",
+  "relative_frobenius_difference": 2.7893976960719837e-14,
+  "relative_frobenius_tolerance": 1e-10,
+  "source": "kgrid",
+  "spin_count": 1
+}

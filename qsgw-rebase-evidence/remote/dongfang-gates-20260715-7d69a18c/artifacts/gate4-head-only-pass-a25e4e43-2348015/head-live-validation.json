@@ -1,0 +1,25 @@
+{
+  "channel": 0,
+  "head_block_count": 18,
+  "head_frequency_count": 6,
+  "head_hermiticity_max_abs": 1.2461535086406054e-16,
+  "head_initial_replay_passed": true,
+  "head_initial_replay_tolerance": 1e-10,
+  "head_iteration0_to1_max_abs_change": 0.0,
+  "head_live_change_minimum": 1e-12,
+  "head_live_change_passed": true,
+  "head_post_update_max_abs_change": 18.832766684679886,
+  "input_contract_sha256": "dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d",
+  "invariant_tolerance": 1e-10,
+  "iterations": [
+    0,
+    1,
+    2
+  ],
+  "passed": true,
+  "rotation_unitarity_max_abs": 3.9968028886505635e-15,
+  "velocity_block_count": 576,
+  "velocity_hermiticity_max_abs": 4.864893703022066e-12,
+  "velocity_rotation_formula": "U_dagger_v0_U",
+  "velocity_rotation_relative_residual": 2.0965105601348375e-16
+}

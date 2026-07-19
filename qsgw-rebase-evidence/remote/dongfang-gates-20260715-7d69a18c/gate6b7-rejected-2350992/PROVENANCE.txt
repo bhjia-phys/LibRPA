@@ -1,0 +1,46 @@
+gate=gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2
+final_acceptance=false_pending_observers
+result=PENDING
+old_commit=e08f4a130df7661e9ac355b9be45fb2bf9c3ed01
+old_executable=/data/home/df_iopcas_bhj/qsgw-builds/legacy-hartree-full-reader-oracle-v40-20260717/build/chi0_main.exe
+old_executable_sha256=413cbc964bd81e0245fde4d40b09c5d5edc257bd805972db4fe5929f22189e4e
+old_hartree_build=legacy_v40_full_reader_adapter
+old_oracle_job=2348987
+old_oracle_output_manifest_sha256=11758525d80a1025eac9dbe35a6794d52444960899bff90482a2f344c327e78f
+old_oracle_recheck_job=2349011
+old_oracle_recheck_manifest_sha256=2d0649f62192d3c30f2c4f7fc311b7f6057e06aa99c9559709f80a7c260e0bc7
+current_commit=a25e4e4398d96bccdf44df00bfaad31c5e6035d6
+current_executable=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/chi0_main.exe
+current_executable_sha256=2072fc09a44a5f246513be152a06832dccf777da04b3dd8911b70e0f9a31591e
+gate5b_job=2348654
+gate5b_output_manifest_sha256=822a6ff869f222ac4596585cbc49c2ff2bbfb6bd84fb8c064404223bba725d77
+gate6a2_job=2348804
+gate6a2_output_manifest_sha256=5f877cb8729ee6dfe94f832de3406961b59031494a9b6c2937773901be871768
+input=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset
+input_dataset_manifest_sha256=6e183ba7e91eb03311836bf5d2e6f0bf2c209338679fae1fc9c9cc627423bba1
+off_contract_sha256=3ae9f9d514f47a4d2b87fd8709d77c10e690348763b44446be5b7074e00c0e17
+hartree_contract_sha256=ea2d80953e1e03524f2c63f484a0cf333cbb59a2ed5c00f78eed141c8988edf6
+target_iteration=2
+mixing=legacy_linear_beta_0.2,current_linear_beta_0.2
+use_shrink_abfs=false
+crystal_symmetry=off
+time_reversal_reduction=off_full_64_kpoint_input
+headwing=off
+hartree=delta_density
+hartree_coulomb=truncated
+hartree_normalization=legacy_extra_inverse_nk
+band=off
+mpi_ranks=4
+omp_threads=12
+LIBRI_DETERMINISTIC_REDUCTION=1
+python=Python 3.11.14
+numpy=2.2.6
+slurm_job_id=2350992
+slurm_node_list=c2v100m3-3
+started_utc=2026-07-17T06:55:56Z
+306e0b1dfae86b39b373d12cc497589090ca4393d7d0fcf3768707738a02bdb8  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b6-legacy-full-reader-hartree-on-mpi4-omp12-miniter2-2348987/old/librpa.in
+3456e3e2c7e15a7b86cc44066ccf6a2463010aaf1c8da16baa6e16648888220e  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/librpa.in
+f63409ef843dee38d65e3b8d21cc407f9f59eb0a47b9e74d45cdd15ae7bbb56b  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset/band_out
+ee4b350c6f7aa3f0b505726ce81c14cd7336373a664d5d45c6a56b41e6b501dd  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset/stru_out
+3ae9f9d514f47a4d2b87fd8709d77c10e690348763b44446be5b7074e00c0e17  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset/qsgw_input.off.contract
+ea2d80953e1e03524f2c63f484a0cf333cbb59a2ed5c00f78eed141c8988edf6  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset/qsgw_input.hartree.contract

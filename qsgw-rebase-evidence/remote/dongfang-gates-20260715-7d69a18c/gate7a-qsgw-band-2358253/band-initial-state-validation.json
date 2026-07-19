@@ -1,0 +1,59 @@
+{
+  "channel": 1,
+  "eigenvalue_max_abs_diff_ha": 8.881784197001252e-16,
+  "expected_key_count": 5226,
+  "ha_to_ev": 27.211386245988,
+  "input_occupation_convention": "per-state",
+  "iterations": [
+    0
+  ],
+  "key_count": 5226,
+  "n_band_kpoints": 201,
+  "n_bands": 26,
+  "n_spins": 1,
+  "occupation_check": "trace_occupation",
+  "occupation_max_abs_diff": 0.0,
+  "passed": true,
+  "task": "qsgw_band",
+  "tolerances": {
+    "eigenvalue_ha": 1e-12,
+    "occupation": 1e-12
+  },
+  "worst": [
+    {
+      "abs_diff": 8.881784197001252e-16,
+      "band": 25,
+      "check": "eigenvalue",
+      "kpoint": 198,
+      "spin": 0
+    },
+    {
+      "abs_diff": 8.881784197001252e-16,
+      "band": 25,
+      "check": "eigenvalue",
+      "kpoint": 197,
+      "spin": 0
+    },
+    {
+      "abs_diff": 8.881784197001252e-16,
+      "band": 25,
+      "check": "eigenvalue",
+      "kpoint": 194,
+      "spin": 0
+    },
+    {
+      "abs_diff": 8.881784197001252e-16,
+      "band": 25,
+      "check": "eigenvalue",
+      "kpoint": 191,
+      "spin": 0
+    },
+    {
+      "abs_diff": 8.881784197001252e-16,
+      "band": 25,
+      "check": "eigenvalue",
+      "kpoint": 176,
+      "spin": 0
+    }
+  ]
+}

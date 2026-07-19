@@ -1,0 +1,9 @@
+/home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/source/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8:
+
+  628 |     if (max_error_tmp > max_error) then
+      |        ^
+Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/source/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/source/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/source/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/home/bhj/ai-runs/librpa-qsgw-polar-tdd-green-20260716-262a6424/source/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]

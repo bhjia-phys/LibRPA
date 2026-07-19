@@ -1,0 +1,139 @@
+{
+  "block_count": 384,
+  "block_max_abs_difference_quantiles_ha": {
+    "q000": 7.682379612703543e-14,
+    "q050": 4.169852958630849e-13,
+    "q090": 6.20061700755649e-13,
+    "q099": 7.972381248796585e-13,
+    "q100": 8.666802285185398e-13
+  },
+  "byte_identical_manifest": false,
+  "candidate_directory": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/diagnostics/gate4-g0w0-repeatability-a76fd826-2346116/g0w0-repeat",
+  "candidate_manifest_sha256": "b6ea9015db0ddcf3a107974f5f937033cd71871d1a7d2cd7b86755ebb24e4d21",
+  "candidate_value_at_max": {
+    "imag": -2.2330791094480436,
+    "real": -7.112234197973809
+  },
+  "checks": {
+    "max_abs_within_tolerance": true,
+    "relative_frobenius_within_tolerance": true
+  },
+  "element_abs_difference_quantiles_ha": {
+    "q000": 0.0,
+    "q050": 6.861417670515899e-16,
+    "q090": 8.527059881893088e-15,
+    "q099": 7.269978772306547e-14,
+    "q100": 8.666802285185398e-13
+  },
+  "element_count": 259584,
+  "exact_block_count": 0,
+  "exact_element_count": 38,
+  "frequency_count": 6,
+  "frequency_max_abs_difference_ha": {
+    "0": 7.812906286611164e-13,
+    "1": 7.573502384495654e-13,
+    "2": 8.355167613992195e-13,
+    "3": 8.666802285185398e-13,
+    "4": 7.91215503053167e-13,
+    "5": 8.388505458926426e-13
+  },
+  "kpoint_count": 64,
+  "matrix_dimensions": [
+    26
+  ],
+  "max_abs_difference_ha": 8.666802285185398e-13,
+  "max_abs_location": [
+    0,
+    42,
+    3,
+    25,
+    25
+  ],
+  "passed": true,
+  "reference_directory": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate4-head-only-limit-live-a76fd826-2345990/g0w0-head-only",
+  "reference_manifest_sha256": "0489ef13d60ab7db841de38a84bc0eafe7a56d710cda80cf1f5d2098e000a2bc",
+  "reference_value_at_max": {
+    "imag": -2.2330791094478983,
+    "real": -7.112234197972954
+  },
+  "relative_frobenius_difference": 6.32408956296786e-14,
+  "schema": "g0w0-sigc-directory-comparison-v1",
+  "source": "kgrid",
+  "spin_count": 1,
+  "thresholds": {
+    "max_abs_tolerance_ha": 1e-10,
+    "relative_frobenius_tolerance": 1e-10
+  },
+  "worst_blocks": [
+    {
+      "frequency": 3,
+      "kpoint": 42,
+      "max_abs_difference_ha": 8.666802285185398e-13,
+      "relative_frobenius_difference": 8.38258477766389e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 5,
+      "kpoint": 42,
+      "max_abs_difference_ha": 8.388505458926426e-13,
+      "relative_frobenius_difference": 7.191354811211709e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 2,
+      "kpoint": 42,
+      "max_abs_difference_ha": 8.355167613992195e-13,
+      "relative_frobenius_difference": 7.86947377229315e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 2,
+      "kpoint": 8,
+      "max_abs_difference_ha": 8.266426902678194e-13,
+      "relative_frobenius_difference": 8.67605049800727e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 4,
+      "kpoint": 8,
+      "max_abs_difference_ha": 7.91215503053167e-13,
+      "relative_frobenius_difference": 8.33083574613963e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 3,
+      "kpoint": 8,
+      "max_abs_difference_ha": 7.897161140420093e-13,
+      "relative_frobenius_difference": 8.200977122974633e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 4,
+      "kpoint": 42,
+      "max_abs_difference_ha": 7.888042318247391e-13,
+      "relative_frobenius_difference": 7.72679457406561e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 0,
+      "kpoint": 8,
+      "max_abs_difference_ha": 7.812906286611164e-13,
+      "relative_frobenius_difference": 8.33208053266176e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 5,
+      "kpoint": 8,
+      "max_abs_difference_ha": 7.644332422607792e-13,
+      "relative_frobenius_difference": 6.937450049377628e-14,
+      "spin": 0
+    },
+    {
+      "frequency": 1,
+      "kpoint": 8,
+      "max_abs_difference_ha": 7.573502384495654e-13,
+      "relative_frobenius_difference": 8.102592298375555e-14,
+      "spin": 0
+    }
+  ]
+}

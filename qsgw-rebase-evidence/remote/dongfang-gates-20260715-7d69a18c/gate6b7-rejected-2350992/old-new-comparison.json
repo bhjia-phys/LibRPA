@@ -1,0 +1,8 @@
+{
+  "current_eigenvalue_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_eigenvalues.dat",
+  "current_iteration_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_iterations.dat",
+  "error": "frequency differs for matrix block (2, 'sigma_c_iw', 0, 0, 0)",
+  "new_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_matrices.dat",
+  "old_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b6-legacy-full-reader-hartree-on-mpi4-omp12-miniter2-2348987/old/qsgw_oracle_matrices.dat",
+  "passed": false
+}

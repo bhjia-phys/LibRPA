@@ -1,0 +1,13 @@
+gate=gate7a2-band-closure-replay-v1
+final_acceptance=false_pending_observers
+result=PENDING
+gate7a_job=2358253
+gate7a_trace_sha256=202fee60b1be7bf6d336cf6e0fa8378e75076b18e028019b12584e5ad02743a7
+closure_observer_v5_sha256=1cf1fcd6a409d4b7b84df2d03e36d2109d1fd37ad8afd9082d8353b1c4bbd7b6
+band_contract_sha256=94c1832de2c73fc3d8f44c93bf206a39f80b9e2233d40398af075b19dd40cdd3
+slurm_job_id=2358298
+slurm_node_list=c2v100m3-5
+started_utc=2026-07-18T11:46:18Z
+final_acceptance=true
+result=PASS
+completed_utc=2026-07-18T11:59:48Z

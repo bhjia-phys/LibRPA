@@ -1,0 +1,41 @@
+diff --git a/driver/tasks/qsgw.cpp b/driver/tasks/qsgw.cpp
+index 79f02c6..5c9fca3 100644
+--- a/driver/tasks/qsgw.cpp
++++ b/driver/tasks/qsgw.cpp
+@@ -1030,15 +1030,6 @@ void task_qsgw()
+         {
+             read_headwing_input(
+                 driver_params.input_dir, opts.option_dielect_func == 3);
+-            if (contract_producer == static_cast<int>(QsgwProducer::FhiAims))
+-            {
+-                prepare_fhi_aims_interband_velocity(
+-                    dataset->velocity_matrix, reference);
+-            }
+-            align_distributed_velocity_to_reference_wfc(
+-                dataset->p_headwing->get_meanfield_df(), reference,
+-                dataset->velocity_matrix, dataset->comm_h);
+-            refresh_headwing(*dataset, opts, dataset->mf);
+         }
+         else
+         {
+@@ -1240,12 +1231,15 @@ void task_qsgw()
+         std::optional<IndependentHeadwingUpdateResult>
+             independent_headwing_update;
+         if (compute_headwing)
+         {
+-            refresh_headwing(
+-                *dataset, opts,
+-                independent_headwing
+-                    ? independent_headwing->live
+-                    : dataset->mf);
++            if (headwing_grid != HeadwingGridMode::ScfGrid || iteration != 1)
++            {
++                refresh_headwing(
++                    *dataset, opts,
++                    independent_headwing
++                        ? independent_headwing->live
++                        : dataset->mf);
++            }
+             collective_root_stage(
+                 dataset->comm_h, "QSGW head-tensor trace", [&] {
+                     head_tensor = copy_head_tensor(

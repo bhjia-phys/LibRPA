@@ -1,0 +1,15 @@
+overall_passed= False
+contract_passed= None
+component=delta_vh max_abs=0.000000e+00 rel_frobenius=0.000000e+00 blocks=64 passed=True
+component=electron_count max_abs=0.000000e+00 rel_frobenius=0.000000e+00 blocks=2 passed=True
+component=exx max_abs=2.395447e+01 rel_frobenius=3.555570e+00 blocks=64 passed=False
+component=fermi_energy_ha max_abs=3.142455e-02 rel_frobenius=1.196306e-01 blocks=2 passed=False
+component=gap_ha max_abs=2.018535e-02 rel_frobenius=3.142984e-01 blocks=2 passed=False
+component=h0 max_abs=0.000000e+00 rel_frobenius=0.000000e+00 blocks=64 passed=True
+component=mixed_h max_abs=4.778995e+00 rel_frobenius=1.384696e-01 blocks=64 passed=False
+component=occupation max_abs=0.000000e+00 rel_frobenius=0.000000e+00 blocks=128 passed=True
+component=raw_h max_abs=2.389497e+01 rel_frobenius=1.630700e-01 blocks=64 passed=False
+component=sigma_c_iw max_abs=1.997880e+00 rel_frobenius=1.596551e-01 blocks=384 passed=False
+component=vc max_abs=3.957145e-01 rel_frobenius=1.952065e-01 blocks=64 passed=False
+component=vxc_dft max_abs=0.000000e+00 rel_frobenius=0.000000e+00 blocks=64 passed=True
+state_passed= None

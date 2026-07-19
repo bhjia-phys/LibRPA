@@ -1,0 +1,149 @@
+{
+  "channel": 0,
+  "components": {
+    "exx": {
+      "block_count": 320,
+      "element_count": 216320,
+      "max_abs_diff_ha": 9.457224397540348e-13,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 3.3176279513793333e-13,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "h0": {
+      "block_count": 64,
+      "element_count": 43264,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "mixed_h": {
+      "block_count": 320,
+      "element_count": 216320,
+      "max_abs_diff_ha": 1.0338396805309458e-10,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 6.298869678877051e-13,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "occupation": {
+      "block_count": 384,
+      "element_count": 9984,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-12,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "raw_h": {
+      "block_count": 320,
+      "element_count": 216320,
+      "max_abs_diff_ha": 1.0338396805309458e-10,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 6.298869678877051e-13,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "sigma_c_iw": {
+      "block_count": 1920,
+      "element_count": 1297920,
+      "max_abs_diff_ha": 6.970998933909155e-11,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 3.709033080667723e-12,
+      "max_relative_frobenius": 5.7077551700177865e-12,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "vc": {
+      "block_count": 320,
+      "element_count": 216320,
+      "max_abs_diff_ha": 1.0339551437255068e-10,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 1.5246434046671e-11,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "vxc_dft": {
+      "block_count": 64,
+      "element_count": 43264,
+      "max_abs_diff_ha": 3.410605131648481e-13,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 2.0494367870234722e-15,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    }
+  },
+  "contract": {
+    "current_input_contract": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate3-common-v3-2342408/dataset/qsgw_input.contract",
+    "current_input_contract_sha256": "0dd83763717853fb64960f56354a2d7b7acd9c6759adcdff49dac9936635f110",
+    "current_version": 5,
+    "declared_final_iteration": 10,
+    "direct_update_mapping": "legacy_linear_beta_1_to_current_none",
+    "fixed_basis_mapping": "immutable_reference_to_immutable_mf0",
+    "iteration_selection_mode": "prefix",
+    "legacy_declared_use_fullcoul_exx": false,
+    "legacy_effective_hamiltonian_semantics": "upper_triangle_authoritative",
+    "old_version": 4,
+    "passed": true,
+    "selected_final_iteration": 5
+  },
+  "contract_mode": "legacy_v4_to_current_v5",
+  "current_eigenvalue_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate3-old-new-direct-miniter10-a76fd826-2344833/current/qsgw_eigenvalues.dat",
+  "current_iteration_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate3-old-new-direct-miniter10-a76fd826-2344833/current/qsgw_iterations.dat",
+  "eigenvalues": {
+    "count": 9984,
+    "max_current_matrix_vs_trace_abs_diff_ha": 2.2737367544323206e-13,
+    "max_old_matrix_vs_current_matrix_abs_diff_ha": 1.0196288258157438e-10,
+    "max_old_vs_current_abs_diff_ha": 1.0189182830799837e-10,
+    "passed": true,
+    "tolerance_ha": 1e-06
+  },
+  "ignored_legacy_components": [
+    "velocity_x",
+    "velocity_y",
+    "velocity_z",
+    "fermi_energy_ha",
+    "electron_count",
+    "gap_ha"
+  ],
+  "iterations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "new_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate3-old-new-direct-miniter10-a76fd826-2344833/current/qsgw_matrices.dat",
+  "old_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate3-old-new-direct-miniter10-a76fd826-2344833/old/qsgw_oracle_matrices.dat",
+  "passed": true,
+  "scalars": {
+    "electron_count_tolerance": 1e-10,
+    "fermi_tolerance_ha": 1e-06,
+    "gap_tolerance_ev": 1e-05,
+    "max_electron_count_abs_diff": 0.0,
+    "max_fermi_abs_diff_ha": 1.0824674490095276e-14,
+    "max_gap_abs_diff_ev": 4.689582056016661e-13,
+    "passed": true
+  },
+  "state": {
+    "block_count": 384,
+    "eigenvalue_tolerance_ha": 1e-06,
+    "max_alignment_unitarity_residual": 2.463363718453367e-16,
+    "max_eigenvalue_abs_diff_ha": 1.0196288258157438e-10,
+    "max_rotation_relative_residual": 3.1411002025351193e-12,
+    "max_velocity_relative_residual": 0.0,
+    "max_wfc_relative_residual": 2.0898583889138015e-12,
+    "passed": true,
+    "state_tolerance": 1e-10
+  }
+}

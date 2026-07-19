@@ -1,0 +1,159 @@
+{
+  "channel": 0,
+  "components": {
+    "delta_vh": {
+      "block_count": 128,
+      "element_count": 86528,
+      "max_abs_diff_ha": 0.34559862795684754,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 1.0622219911522441,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "exx": {
+      "block_count": 128,
+      "element_count": 86528,
+      "max_abs_diff_ha": 27.839752362767626,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.7936525643048815,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "h0": {
+      "block_count": 64,
+      "element_count": 43264,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "mixed_h": {
+      "block_count": 128,
+      "element_count": 86528,
+      "max_abs_diff_ha": 9.325732898730003,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.16413803457711362,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "occupation": {
+      "block_count": 192,
+      "element_count": 4992,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-12,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "raw_h": {
+      "block_count": 128,
+      "element_count": 86528,
+      "max_abs_diff_ha": 27.51268637080014,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.18740537911429597,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "sigma_c_iw": {
+      "block_count": 768,
+      "element_count": 519168,
+      "max_abs_diff_ha": 1.9978797879138186,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.857940218137756,
+      "max_relative_frobenius": 0.20738946903051866,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "vc": {
+      "block_count": 128,
+      "element_count": 86528,
+      "max_abs_diff_ha": 2.3893340311640734,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 0.5755282527550604,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08
+    },
+    "vxc_dft": {
+      "block_count": 64,
+      "element_count": 43264,
+      "max_abs_diff_ha": 3.410605131648481e-13,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_frequency_abs_diff_ha": 0.0,
+      "max_relative_frobenius": 2.0494367870234722e-15,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08
+    }
+  },
+  "contract": {
+    "current_input_contract": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate6b1-mpi1-full-abfs-hartree-contracts-2348832/dataset/qsgw_input.hartree.contract",
+    "current_input_contract_sha256": "ea2d80953e1e03524f2c63f484a0cf333cbb59a2ed5c00f78eed141c8988edf6",
+    "current_version": 5,
+    "declared_final_iteration": 2,
+    "direct_update_mapping": "legacy_linear_beta_0.2_to_current_linear_beta_0.2",
+    "fixed_basis_mapping": "immutable_reference_to_immutable_mf0",
+    "hartree_enabled": true,
+    "iteration_selection_mode": "exact",
+    "legacy_declared_use_fullcoul_exx": false,
+    "legacy_effective_hamiltonian_semantics": "upper_triangle_authoritative",
+    "legacy_use_shrink_abfs": false,
+    "mixing_beta": 0.2,
+    "old_version": 4,
+    "passed": true,
+    "selected_final_iteration": 2
+  },
+  "contract_mode": "legacy_v4_to_current_v5",
+  "current_eigenvalue_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_eigenvalues.dat",
+  "current_iteration_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_iterations.dat",
+  "eigenvalues": {
+    "count": 4992,
+    "max_current_matrix_vs_trace_abs_diff_ha": 7.105427357601002e-14,
+    "max_old_matrix_vs_current_matrix_abs_diff_ha": 9.206823125275463,
+    "max_old_vs_current_abs_diff_ha": 9.206823125275434,
+    "passed": false,
+    "tolerance_ha": 1e-06
+  },
+  "ignored_legacy_components": [
+    "velocity_x",
+    "velocity_y",
+    "velocity_z",
+    "fermi_energy_ha",
+    "electron_count",
+    "gap_ha"
+  ],
+  "iterations": [
+    0,
+    1,
+    2
+  ],
+  "new_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b7-hartree-on-oracle-v40-vs-a25e4e43-mpi4-omp12-miniter2-2350992/current/qsgw_matrices.dat",
+  "old_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b6-legacy-full-reader-hartree-on-mpi4-omp12-miniter2-2348987/old/qsgw_oracle_matrices.dat",
+  "passed": false,
+  "scalars": {
+    "electron_count_tolerance": 1e-10,
+    "fermi_tolerance_ha": 1e-06,
+    "gap_tolerance_ev": 1e-05,
+    "max_electron_count_abs_diff": 0.0,
+    "max_fermi_abs_diff_ha": 0.08238728803423565,
+    "max_gap_abs_diff_ev": 1.9705001233463744,
+    "passed": false
+  },
+  "state": {
+    "block_count": 192,
+    "eigenvalue_tolerance_ha": 1e-06,
+    "max_alignment_unitarity_residual": 3.5378301418627883e-16,
+    "max_eigenvalue_abs_diff_ha": 9.206823125275463,
+    "max_rotation_relative_residual": 0.8308698280321797,
+    "max_velocity_relative_residual": 0.0,
+    "max_wfc_relative_residual": 0.9464327865116943,
+    "passed": false,
+    "state_tolerance": 1e-10
+  }
+}

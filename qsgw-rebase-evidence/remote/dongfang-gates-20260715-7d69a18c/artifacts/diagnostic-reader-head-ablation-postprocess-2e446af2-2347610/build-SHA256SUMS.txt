@@ -1,0 +1,13 @@
+3a0dff70b6b588f356205e2ff71048c2cb42c4de9575ad4911bc41649c5f06ac  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/CMakeCache.txt
+7e4d660883fe0c8acbd48ddd93ae5933284e8432c529bafc135f013acb564158  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/configure.log
+97db647bfc67dd33fc3008c4095596173025828cadab92cd2230e57d7da98849  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/build.log
+a656dcfac74e44500634161cf41c38703de57c6136c2d7cd1345b61bfdfd703b  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/build-provenance.txt
+d9700e517159aca2f521719b137ff1d3885423a52644170bb21b91bf8d249b92  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/resume-build-diagnostic-reader-head-2e446af2-v5.slurm
+ac06b195fa4985b4059a80dcd3ebae17813450ef4cf465f6f4044f64e7aa50e7  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/diagnostic-gate4-preserve-reader-head-2e446af2.patch
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/compiler-vars.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/mpi-vars.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/mkl-vars.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/tbb-vars.log
+a2230d8a1387b8abfad94ccba52ccee748911b6b446e4fa1131f2146a245886e  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/source-files.sha256
+e654b032b2b0b23254dfdd3bedbd483b927e3553a0497b2ceeb4f728c605b8d3  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-diagnostic-reader-head-2e446af2-v5/chi0_main.exe
+ac06b195fa4985b4059a80dcd3ebae17813450ef4cf465f6f4044f64e7aa50e7  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/jobs/diagnostic-gate4-preserve-reader-head-2e446af2.patch

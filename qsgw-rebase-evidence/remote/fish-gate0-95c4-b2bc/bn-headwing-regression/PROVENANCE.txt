@@ -1,0 +1,13 @@
+gate=fish-upstream-bn-symmetry-kpara-headwing-regression
+candidate_commit=b2bc09d00ab49a2ff39c46c72d83ab89bc5ddac6
+candidate_executable=/home/bhj/ai-runs/librpa-qsgw-gate0-20260716T0500-b2bc09d0/build-candidate-oneapi/chi0_main.exe
+candidate_executable_sha256=955586f0b653e5ff53c1553e08b1d24db6954b86cebec87f4350cd6c9dddc0d6
+parent_gate0_manifest_sha256=b94e92356bbfb6d7e4ed544de2d2d4b4b509bcc6fbfdd02f714011de9fb1d17d
+case=g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri
+mpi_ranks=4
+omp_threads=1
+mkl_threads=1
+i_mpi_fabrics=shm
+source_status=clean_detached_checkout
+result=PASS
+completed_utc=2026-07-15T21:10:07Z

@@ -1,0 +1,14 @@
+analysis=qsgw_velocity_polar_tdd_red
+acceptance_gate=false
+expected_failure_confirmed=true
+candidate_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+test_file_sha256=785ac390524e051dc7c47552ccf4cf6eea68b8993c6d4bfa678ea66d8475a5f1
+product_source_changed=false
+test_only_change=true
+target=test_qsgw_fixed_basis
+ctest_exit_status=8
+compiler_environment=oneapi
+cxx_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiicpx
+fortran_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiifx
+execution_surface=fish_direct_small_build_test
+completed_utc=2026-07-16T10:55:35Z

@@ -1,0 +1,12 @@
+cb5534fde9035edc42d0d75eb93c62693b9eb5ebbd845a22e37e6bd552fd34fa  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/CMakeCache.txt
+ac7606d6de17e28d9526a4b54b1f8c39853c85c95ab94bea156a1748e20ff600  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/configure.log
+9585a28a4e243fb777a36ae881dc643dd77f7d6668ff7405294b613a9976c4f9  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/build.log
+3489aeae4e1632ab24483b1241252fbe43187b63946df75e15e9e5be4d77cb8c  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/build-provenance.txt
+65efd9c1638356b8988cf2dd3061a5975e71c402585693f5ce6824b9989f976f  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/source-files.sha256
+a898ef66390d0207158c0f24d1b311fabde1bb11f4a1cd89b6082aee75e54998  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-b2bc09d0-v1/chi0_main.exe
+2629705f202f09c74314efc12ed30441f18352e1b3e634bd4a63b47e992aed08  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/source-archives/librpa-b2bc09d0-build-source.tar.gz
+b94e92356bbfb6d7e4ed544de2d2d4b4b509bcc6fbfdd02f714011de9fb1d17d  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/external/fish-gate0-b2bc09d0/SHA256SUMS.txt
+57dedf7092e1e8c07cc97d7bd77652583d0a48a435b424d3668a9bb2d6681101  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/external/fish-gate0-b2bc09d0/PROVENANCE.txt
+5006f8a3c93c10503561de2d2dcd2252606f9897bbefee785b52e2e9c0cf2cee  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/external/fish-gate0-b2bc09d0/g0w0-comparison.json
+b547ef991e5c2aa924e770b31bda1e08b61ae857973b8de38a5f43fdf0a705a9  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/external/fish-bn-headwing-b2bc09d0/OUTPUT_SHA256SUMS.txt
+bbb343219fe17fc8ca6c6e7135236f0be335c581731ad0727fad48d7c69bdb1e  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/external/fish-bn-headwing-b2bc09d0/PROVENANCE.txt

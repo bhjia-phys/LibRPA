@@ -1,0 +1,21 @@
+{
+  "changed_factor": "parameters.head_mode",
+  "disabled_contract_sha256": "0dd83763717853fb64960f56354a2d7b7acd9c6759adcdff49dac9936635f110",
+  "exx_tolerance": 1e-10,
+  "factor_role": "head_mode",
+  "head_effect_minimum": 1e-12,
+  "head_only_contract_sha256": "dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d",
+  "initial_block_count": 128,
+  "initial_max_abs": 0.0,
+  "initial_relative_frobenius": 0.0,
+  "initial_tolerance": 1e-10,
+  "iteration1_exx_block_count": 64,
+  "iteration1_exx_max_abs": 1.5987211554602254e-14,
+  "iteration1_exx_relative_frobenius": 2.0733120340368906e-15,
+  "iteration1_sigc_block_count": 384,
+  "iteration1_sigc_max_abs_change": 4.242972576942323,
+  "iteration1_sigc_relative_frobenius_change": 0.26153794820693754,
+  "passed": true,
+  "side_a": "disabled",
+  "side_b": "head_only"
+}

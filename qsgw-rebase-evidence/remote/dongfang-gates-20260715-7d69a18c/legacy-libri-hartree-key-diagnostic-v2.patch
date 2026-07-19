@@ -1,0 +1,62 @@
+diff --git a/thirdparty/LibRI/include/RI/ri/LRI-cal_hartree.hpp b/thirdparty/LibRI/include/RI/ri/LRI-cal_hartree.hpp
+index d734909..1111111 100644
+--- a/thirdparty/LibRI/include/RI/ri/LRI-cal_hartree.hpp
++++ b/thirdparty/LibRI/include/RI/ri/LRI-cal_hartree.hpp
+@@ -6,6 +6,8 @@
+ #include "../global/Array_Operator.h"
+ #include "../global/Tensor_Multiply.h"
+ #include <omp.h>
++#include <sstream>
++#include <stdexcept>
+ #include <malloc.h>
+ #ifdef __MKL_RI
+ #include <mkl_service.h>
+@@ -37,6 +39,48 @@ LRI<TA, Tcell, Ndim, Tdata>::cal_cvcd_k_hartree(
+ 	const std::map<TA, std::map<TAC, Tensor<Tdata>>>& Vs = this->data_pool.at("Vs_").Ds_ab;
+     const std::map<TA, std::map<TAC, Tensor<Tdata>>>& Cs = this->data_pool.at("Cs_").Ds_ab;
+ 
++	const auto key_string = [](const TA& key) {
++		std::ostringstream output;
++		output << key;
++		return output.str();
++	};
++	const auto outer_keys = [&key_string](const auto& blocks) {
++		std::ostringstream output;
++		bool first = true;
++		for (const auto& item : blocks)
++		{
++			if (!first) output << ',';
++			output << key_string(item.first);
++			first = false;
++		}
++		return output.str();
++	};
++	for (const TA mu : list_I)
++	{
++		if (Vs.find(mu) == Vs.end())
++			throw std::out_of_range(
++				"cal_cvcd_k_hartree phase1 missing Vs outer key mu=" +
++				key_string(mu) + " available=" + outer_keys(Vs));
++	}
++	for (const TA mu : list_IJ)
++	{
++		if (Cs.find(mu) == Cs.end())
++			throw std::out_of_range(
++				"cal_cvcd_k_hartree phase2 missing Cs outer key mu=" +
++				key_string(mu) + " available=" + outer_keys(Cs));
++	}
++	for (const int k : list_k_index)
++	{
++		if (k < 0 || static_cast<std::size_t>(k) >= kindex_map.size())
++			throw std::out_of_range(
++				"cal_cvcd_k_hartree phase2 invalid k index=" +
++				std::to_string(k) + " nk=" +
++				std::to_string(kindex_map.size()));
++	}
++	std::cerr << "HARTREE_KEY_DIAGNOSTIC preflight_pass Vs_outer="
++	          << outer_keys(Vs) << " Cs_outer=" << outer_keys(Cs)
++	          << " local_k_count=" << list_k_index.size() << std::endl;
++
+ 	// add thread lock for the TA key of Vq
+ 	std::map<TA, omp_lock_t> lock_vq_result_add_map = LRI_Cal_Aux::init_lock_result(Vq, list_IJ);
+ 	const std::vector<TAC> list_IJR = Divide_Atoms::traversal_atom_period(list_IJ, this->period);

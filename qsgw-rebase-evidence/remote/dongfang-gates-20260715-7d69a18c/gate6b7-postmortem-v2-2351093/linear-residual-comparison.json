@@ -1,0 +1,71 @@
+{
+  "absolute_tolerance_ha": 1e-08,
+  "iterations": [
+    0,
+    1,
+    2
+  ],
+  "max_current_reported_l2_abs_diff_ha": 1.0231815394945443e-12,
+  "max_current_reported_l2_relative_diff": 1.1674241495869268e-15,
+  "max_current_reported_max_abs_diff_ha": 0.0,
+  "max_current_reported_max_relative_diff": 0.0,
+  "max_old_current_l2_abs_diff_ha": 123.94559474818584,
+  "max_old_current_l2_relative_diff": 0.14141877561183094,
+  "max_old_current_max_abs_diff_ha": 20.80442649793055,
+  "max_old_current_max_relative_diff": 0.17515260629220647,
+  "passed": false,
+  "relative_tolerance": 1e-08,
+  "trajectory": [
+    {
+      "applied_mode": -1,
+      "beta": 0.2,
+      "efermi_ev": 6.9774595823490815,
+      "electron_count": 8.0,
+      "fallback": 0,
+      "gap_ev": 1.0898738659485803,
+      "iteration": 0,
+      "max_delta_ev": 0.0,
+      "old_residual_l2_ha": 0.0,
+      "old_residual_max_ha": 0.0,
+      "reported_residual_l2_ha": 0.0,
+      "reported_residual_max_ha": 0.0,
+      "requested_mode": -1,
+      "residual_l2_ha": 0.0,
+      "residual_max_ha": 0.0
+    },
+    {
+      "applied_mode": 0,
+      "beta": 0.2,
+      "efermi_ev": 7.147881066930719,
+      "electron_count": 8.0,
+      "fallback": 0,
+      "gap_ev": 1.7476110886378076,
+      "iteration": 1,
+      "max_delta_ev": 814.3247744568971,
+      "old_residual_l2_ha": 955.6931200714248,
+      "old_residual_max_ha": 127.47067120693137,
+      "reported_residual_l2_ha": 1075.0117941808423,
+      "reported_residual_max_ha": 148.23709149008207,
+      "requested_mode": 0,
+      "residual_l2_ha": 1075.0117941808421,
+      "residual_max_ha": 148.23709149008207
+    },
+    {
+      "applied_mode": 0,
+      "beta": 0.2,
+      "efermi_ev": 7.509727429888713,
+      "electron_count": 8.0,
+      "fallback": 0,
+      "gap_ev": 2.1675358680528394,
+      "iteration": 2,
+      "max_delta_ev": 653.4510393281231,
+      "old_residual_l2_ha": 752.4981038480611,
+      "old_residual_max_ha": 97.9744311984408,
+      "reported_residual_l2_ha": 876.4436985962459,
+      "reported_residual_max_ha": 118.77885769637135,
+      "requested_mode": 0,
+      "residual_l2_ha": 876.4436985962469,
+      "residual_max_ha": 118.77885769637135
+    }
+  ]
+}
