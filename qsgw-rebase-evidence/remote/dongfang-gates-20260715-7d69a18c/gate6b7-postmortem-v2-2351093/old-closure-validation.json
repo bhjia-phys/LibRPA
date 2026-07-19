@@ -1,0 +1,23 @@
+{
+  "channel": 0,
+  "closure_tolerance_ha": 1e-10,
+  "effective_hamiltonian_max_abs_ha": 9.947598300641403e-14,
+  "effective_hamiltonian_semantics": "legacy_upper_triangle_authoritative",
+  "hartree_enabled": true,
+  "hartree_iteration_one_max_abs_ha": 0.0,
+  "hartree_post_reference_max_abs_ha": 0.4290153466781104,
+  "hartree_reference_tolerance_ha": 1e-10,
+  "hartree_response_minimum_ha": 1e-12,
+  "hermiticity_max_abs_ha": 4.263256414560602e-14,
+  "hermiticity_tolerance_ha": 1e-10,
+  "iterations": [
+    0,
+    1,
+    2
+  ],
+  "linear_mixing_max_abs_ha": 1.4210854715202004e-14,
+  "matrix_block_count": 64,
+  "passed": true,
+  "qsgw_contract_version": 4,
+  "qsgw_input_contract_sha256": null
+}

@@ -1,0 +1,7 @@
+353537fef0044a046b656e29e91244ea41b46a559c18c5ba48df666a1013aa46  ./diagnose-headwing-basis-b2bc09d0.slurm
+f58854c4a59e54463eefd3ffdf46024537a8376a690a1fceb206fc8bf5a4c892  ./diagnose_headwing_basis.py
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./diagnostic.stderr
+6019c615ff43f5873e5ae17dacf17772647d21e9e41c4b3f41a01d89f4d974f7  ./diagnostic.stdout
+d177b27803193ba7a38bcb3e3021204d8ddc2468d4e0a55e6ae28e008e0a9044  ./headwing-basis-diagnostic.json
+127827185ec67ec203f0029ddbf64b0e3f5e86f92b39f29111f0da3ddef2680c  ./headwing-basis-per-band.tsv
+05bb644eabf6651b1ee9447ad694f8e032bba114600016f96d82e8cacea0b111  ./PROVENANCE.txt

@@ -1,0 +1,13 @@
+Internal ctest changing into directory: /home/bhj/ai-runs/librpa-qsgw-polar-tdd-red-20260716-785ac390/build
+Test project /home/bhj/ai-runs/librpa-qsgw-polar-tdd-red-20260716-785ac390/build
+    Start 28: test_qsgw_fixed_basis
+1/1 Test #28: test_qsgw_fixed_basis ............Subprocess aborted***Exception:   0.02 sec
+test_qsgw_fixed_basis: /home/bhj/ai-runs/librpa-qsgw-polar-tdd-red-20260716-785ac390/source/src/test/test_qsgw_fixed_basis.cpp:582: void {anonymous}::test_velocity_basis_unitary_is_aligned_before_qsgw_rotation(): Assertion `rounded_alignment.maximum_relative_wfc_residual > 1.0e-11' failed.
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
+
+The following tests FAILED:
+	 28 - test_qsgw_fixed_basis (Subprocess aborted)

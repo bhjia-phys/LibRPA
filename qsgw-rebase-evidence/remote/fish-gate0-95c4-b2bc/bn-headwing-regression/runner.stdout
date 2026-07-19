@@ -1,0 +1,44 @@
+Initializing workspace targeting:
+- MPI tasks : 4
+- threads   : 1
+- LibRI     ? True
+
+Disabled following test cases
+- rpa_aims_mole_H2O: Water molecule in box (aims input, non-LibRI) [not selected by --only]
+- rpa_aims_mole_H2O_libri: Water molecule in box (aims input) [not selected by --only]
+- rpa_abacus_BN_libri: BN (abacus input) [not selected by --only]
+- rpa_abacus_BN_headwing_sym_shrink_v1_libri: BN headwing symmetry kpara shrink reader v1 (abacus input) [not selected by --only]
+- exx_aims_bccHe_k_parallel_libri: BCC He, with eigenvector parallelized over k (aims input) [not selected by --only]
+- exx_aims_LiH_ZB_sym_libri: LiH, k555 symmetry speed up with non-symmetrized input (aims input) [not selected by --only]
+- exx_aims_C_sc_libri: 16-atom C supercell (aims input) [not selected by --only]
+- g0w0_band_abacus_BN_headwing_libri: BN headwing (abacus input) [not selected by --only]
+- g0w0_band_abacus_BN_shrink_v1_libri: BN shrink reader v1 (abacus input) [not selected by --only]
+- g0w0_band_abacus_BN_soc_libri: BN SOC (abacus input) [not selected by --only]
+- g0w0_band_abacus_BN_headwing_shrink_soc_libri: BN headwing shrink SOC (abacus input) [not selected by --only]
+- g0w0_band_abacus_MnO2_nspin2_shrink_wing_libri: MnO2 nspin2 shrink wing v1 input (abacus input) [not selected by --only]
+- g0w0_band_abacus_BN_sym_shrink_libri: BN symmetry shrink (abacus input) [not selected by --only]
+- g0w0_aims_Si_libri: Bulk silicon, with eigenvector parllelized over k (aims input) [not selected by --only]
+- g0w0_aims_bccHe_sym_libri: BCC He, k555, symmetry on (aims input) [not selected by --only]
+- g0w0_aims_mole_H2O_libri: Water molecule in box (aims input) [not selected by --only]
+- g0w0_band_aims_Si_libri: Bulk silicon, band structure (aims input) [not selected by --only]
+- g0w0_band_aims_LiH_ZB_sym_libri: LiH, k555 band with symmetry speed up (aims input) [not selected by --only]
+- g0w0_aims_MgO_sym_libri: Bulk MgO, with symmetry on (aims input) [not selected by --only]
+- g0w0_band_aims_NaCl_read_sigc_mat_rf_libri: NaCl band, restart by reading Sigma_c(R,iw) NAO (aims input) [not selected by --only]
+- g0w0_aims_Li_atom_libri: Lithium atom, spin-polarized (aims input) [not selected by --only]
+
+Running BN headwing symmetry kpara shrink reader v1 band (abacus input) [g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri]
+Command: mpirun -np 4 /home/bhj/ai-runs/librpa-qsgw-gate0-20260716T0500-b2bc09d0/build-candidate-oneapi/chi0_main.exe
+Finished test calculations
+
+
+Test group: One-shot GW quasi-particle energies (QPE)
+
+Validate results for BN headwing symmetry kpara shrink reader v1 band (abacus input) [directory: g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri]: [32mPASS[0m
+- [32mPASS[0m: Analytic wing mu pure-imaginary diagnostic, max abs diff = 4.623E-20 (tol = 1.000E-08), max at librpa/librpa.out value 1
+- [32mPASS[0m: Analytic wing lambda pure-imaginary diagnostic, max abs diff = 3.805E-18 (tol = 1.000E-08), max at librpa/librpa.out value 1
+- [32mPASS[0m: Quasi-particle energies on k-grid, max abs diff = 0.000E+00 (tol = 1.000E-04) over 208 table rows
+- [32mPASS[0m: Non-SCF EXX band structure, max abs diff = 0.000E+00 (tol = 1.000E-04) over 3 table rows
+- [32mPASS[0m: QP band structure, max abs diff = 0.000E+00 (tol = 1.000E-04) over 3 table rows
+
+1 tests run, 1 PASSED, 0 FAILED
+All selected tests PASSED :)

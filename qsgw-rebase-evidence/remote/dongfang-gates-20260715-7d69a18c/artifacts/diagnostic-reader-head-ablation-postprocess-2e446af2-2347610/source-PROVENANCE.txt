@@ -1,0 +1,23 @@
+diagnostic=preserve_reader_head_for_scf_grid_iteration_one
+acceptance_gate=false
+base_source_commit=2e446af200a0e5a5fd1ee05c8db99ebb7dde9418
+diagnostic_patch_sha256=ac06b195fa4985b4059a80dcd3ebae17813450ef4cf465f6f4044f64e7aa50e7
+diagnostic_executable_sha256=e654b032b2b0b23254dfdd3bedbd483b927e3553a0497b2ceeb4f728c605b8d3
+reference_g0w0_job=2346965
+reference_g0w0_manifest_sha256=a2bc8e8837c96cfd17f71a96382292f9da5cc72b3712bbfdef2f2411d00952ba
+crystal_symmetry=off
+time_reversal_reduction=off_full_64_kpoint_input
+hartree=off
+band=off
+mixing=none
+headwing=head_only_scf_grid
+qsgw_iterations=0:1
+mpi_ranks=4
+omp_threads=12
+LIBRI_DETERMINISTIC_REDUCTION=1
+slurm_job_id=2347529
+slurm_node_list=c2v100m3-2
+slurm_partition=v100m3
+slurm_job_gpus=0,1,2,3,4,5,6,7
+started_utc=2026-07-16T14:13:43Z
+      4 c2v100m3-2.hpc2

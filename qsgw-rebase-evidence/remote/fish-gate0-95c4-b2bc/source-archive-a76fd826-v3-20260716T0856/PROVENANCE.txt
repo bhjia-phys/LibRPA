@@ -1,0 +1,12 @@
+artifact=validated-linux-git-source-archive
+source_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+source_failed_generator_run=/home/bhj/ai-runs/librpa-qsgw-source-archive-a76fd826-v2-20260716T0852
+source_failure_scope=validator_expectations_only_archive_content_revalidated
+archive=/home/bhj/ai-runs/librpa-qsgw-source-archive-validation-a76fd826-v3-20260716T0856/librpa-a76fd826-linux-git-archive.tar.gz
+archive_sha256=521936e27b18c325a79acedcecd7f0541d54347f3a0f831b89e4517d4104f641
+archive_embedded_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+archive_entry_count=1838
+archive_line_endings=git_blob_lf_bytes
+producer_host=Fisherd-Server
+producer_git=git version 2.47.3
+completed_utc=2026-07-16T00:50:22Z

@@ -1,0 +1,15 @@
+# qsgw_contract_version 5
+# fixed_basis immutable_mf0
+# live_update eigenvalues_wfc
+# velocity fixed_basis_rotation
+# headwing scf_grid_analytic_live
+# symmetry unsupported_full_bz_only
+# hartree disabled_stage1
+# band disabled_stage1
+# qsgw_input_contract /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-headwing-scf-synced-v2-2345960/dataset/qsgw_input.head-only.contract
+# qsgw_input_contract_sha256 dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d
+# qsgw_mixer none
+# qsgw_mixing_beta 0.20000000000000001
+# iter max_delta_eV residual_l2_Ha residual_max_Ha efermi_eV gap_eV electron_count requested_mode applied_mode beta fallback rcond coefficient_l1 coefficient_count converged coefficients fallback_reason
+0 0.00000000000000000e+00 0.00000000000000000e+00 0.00000000000000000e+00 6.97745958234908148e+00 1.08987386594858027e+00 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none
+1 4.06884800607755460e+03 1.07988003725319891e+03 1.47951891063072168e+02 6.69828868371386488e+00 4.55165940444998540e+00 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none

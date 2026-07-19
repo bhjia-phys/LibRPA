@@ -1,0 +1,11 @@
+analysis=qsgw_headwing_velocity_basis_relation
+acceptance_gate=false
+candidate_commit=b2bc09d00ab49a2ff39c46c72d83ab89bc5ddac6
+failed_gate4_job=2343262
+input_root=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-headwing-scf-v1-2343259
+dataset_manifest_sha256=16b05f98f326c9cf183cd8cc5ea9a5344892aafb77245bb5cadcd2c03d718db6
+diagnostic_script_sha256=f58854c4a59e54463eefd3ffdf46024537a8376a690a1fceb206fc8bf5a4c892
+execution_surface=dongfang_sbatch_compute_node
+slurm_job_id=2343477
+slurm_node_list=c21351
+completed_utc=2026-07-16T00:17:30Z

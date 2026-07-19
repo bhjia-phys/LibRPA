@@ -1,0 +1,6 @@
+2344833|qsgw-gate3-min10|FAILED|01:10:20|2:0
+2344833.batch|batch|FAILED|01:10:20|2:0
+2344833.extern|extern|COMPLETED|01:10:20|0:0
+2344833.0|hydra_bstrap_proxy|COMPLETED|00:02:13|0:0
+2344833.1|hydra_bstrap_proxy|COMPLETED|00:40:18|0:0
+2344833.2|hydra_bstrap_proxy|COMPLETED|01:08:30|0:0

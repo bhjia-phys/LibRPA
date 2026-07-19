@@ -1,0 +1,5 @@
+archive_sha256=94d04bd1a4a7b142cccb2e6a2056b4c8d4ea2c53d5e6ae9e8a930389946cb10d
+embedded_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+verification_surface=dongfang_login
+verification_command=gzip -dc ARCHIVE | git get-tar-commit-id
+verified_utc=2026-07-16T00:43:27Z

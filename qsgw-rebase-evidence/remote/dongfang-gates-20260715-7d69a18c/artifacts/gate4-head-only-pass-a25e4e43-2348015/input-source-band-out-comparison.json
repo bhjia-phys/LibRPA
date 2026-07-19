@@ -1,0 +1,60 @@
+{
+  "byte_identical": false,
+  "candidate": {
+    "fermi_ha": 0.253413,
+    "metadata": {
+      "n_bands": 26,
+      "n_basis": 26,
+      "n_kpoints": 64,
+      "n_spins": 1,
+      "state_count": 1664
+    },
+    "path": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-headwing-scf-v1-2343259/dataset/pyatb_librpa_df/band_out",
+    "sha256": "1ebf3df9022f68fd041b4582ed6f29eda1f0889b9d1d76b8a3fb124af005b0bd"
+  },
+  "checks": {
+    "byte_identical_if_required": true,
+    "eigenvalues_within_tolerance": false,
+    "fermi_within_tolerance": false,
+    "metadata_equal": true,
+    "occupations_within_tolerance": true,
+    "state_keys_equal": true
+  },
+  "differences": {
+    "candidate_only_state_count": 0,
+    "eigenvalue_max_abs_ha": 2.1026311207705817e-06,
+    "eigenvalue_max_location": {
+      "band": 26,
+      "kpoint": 64,
+      "spin": 1
+    },
+    "fermi_max_abs_ha": 0.0030039101593575257,
+    "occupation_max_abs": 0.0,
+    "occupation_max_location": {
+      "band": 1,
+      "kpoint": 1,
+      "spin": 1
+    },
+    "reference_only_state_count": 0
+  },
+  "passed": false,
+  "reference": {
+    "fermi_ha": 0.2564169101593575,
+    "metadata": {
+      "n_bands": 26,
+      "n_basis": 26,
+      "n_kpoints": 64,
+      "n_spins": 1,
+      "state_count": 1664
+    },
+    "path": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-headwing-scf-v1-2343259/dataset/band_out",
+    "sha256": "f63409ef843dee38d65e3b8d21cc407f9f59eb0a47b9e74d45cdd15ae7bbb56b"
+  },
+  "schema": "qsgw-band-out-comparison-v1",
+  "thresholds": {
+    "eigenvalue_tolerance_ha": 1e-10,
+    "fermi_tolerance_ha": 1e-10,
+    "occupation_tolerance": 0.0,
+    "require_byte_identical": false
+  }
+}

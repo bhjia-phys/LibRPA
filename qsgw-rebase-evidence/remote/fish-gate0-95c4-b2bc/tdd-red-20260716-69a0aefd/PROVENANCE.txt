@@ -1,0 +1,9 @@
+gate=qsgw_headwing_complete_unitary_tdd_red
+acceptance_gate=false
+source_commit=b2bc09d00ab49a2ff39c46c72d83ab89bc5ddac6
+test_source_sha256=69a0aefdd1c69c577d2d2c83ace0748e6f7401461d07088c24c67387e8641556
+expected_failure=phase_only_alignment_rejects_complete_unitary_basis_rotation
+observed_exit_code=134
+compiler_environment=oneapi-2025.2.1
+host=Fisherd-Server
+completed_utc=2026-07-16T00:22:40Z

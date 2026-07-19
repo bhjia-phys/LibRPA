@@ -1,0 +1,4 @@
+{
+  "error": "invalid QSGW stage-one trace contract: {'hartree': {'expected': 'disabled_stage1', 'actual': 'delta_density'}}",
+  "passed": false
+}

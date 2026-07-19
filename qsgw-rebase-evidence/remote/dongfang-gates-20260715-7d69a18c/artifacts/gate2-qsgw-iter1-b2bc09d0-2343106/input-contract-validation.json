@@ -1,0 +1,43 @@
+{
+  "contract": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-canonical-2341555/dataset/qsgw_input.contract",
+  "contract_sha256": "25422eee1d5f8cd4db678c05d979bbd29cb516c8088157829d6c315da19ec12b",
+  "metadata": {
+    "band_update": "off",
+    "hartree_update": "off",
+    "headwing_grid": "disabled",
+    "headwing_update": "none",
+    "internal_energy_units": "hartree",
+    "mf0_basis": "state_coefficients_in_nao",
+    "mf0_gauge": "producer_state",
+    "n_aos": "26",
+    "n_band_kpoints": "0",
+    "n_bands": "26",
+    "n_headwing_kpoints": "0",
+    "n_scf_kpoints": "64",
+    "n_spins": "1",
+    "producer": "abacus"
+  },
+  "nested_manifests": [
+    {
+      "kpoint_count": 64,
+      "matrix_dimensions": [
+        [
+          26,
+          26
+        ]
+      ],
+      "path": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-canonical-2341555/dataset/qsgw_vxc_scf.manifest",
+      "record_count": 64,
+      "spin_count": 1
+    }
+  ],
+  "passed": true,
+  "record_count": 82,
+  "role_counts": {
+    "mf0_eigenvalues": 1,
+    "mf0_wavefunctions": 64,
+    "reader_static": 15,
+    "scf_kpoints": 1,
+    "vxc_scf_manifest": 1
+  }
+}

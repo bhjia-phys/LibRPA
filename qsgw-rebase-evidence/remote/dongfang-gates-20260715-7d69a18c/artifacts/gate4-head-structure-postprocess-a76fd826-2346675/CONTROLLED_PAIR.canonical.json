@@ -1,0 +1,39 @@
+{
+    "schema": "qsgw-head-mode-controlled-pair-v1",
+    "changed_factor": "parameters.head_mode",
+    "factor_role": "head_mode",
+    "common": {
+        "source_commit": "a76fd826eed3929185ea47cfcb992075a72f2b77",
+        "executable_sha256": "8b508963f90027b5483fb2020e5feb1b5a72495dab4bef92f0e9b9be988d9b02",
+        "dataset_manifest_sha256": "0a07515a3a7eef1827ecc54b2471bf5a3afbbcfb92d9a920cbeab28a9e54bf11",
+        "mpi_ranks": 4,
+        "omp_threads": 12,
+        "deterministic_reduction": true
+    },
+    "side_a": {
+        "parameters": {
+            "head_mode": "disabled"
+        }
+    },
+    "side_b": {
+        "parameters": {
+            "head_mode": "head_only"
+        }
+    },
+    "variants": {
+        "disabled": {
+            "replace_w_head": false,
+            "option_dielect_func": 0,
+            "qsgw_input_contract": "qsgw_input.disabled.contract",
+            "qsgw_input_contract_sha256": "0dd83763717853fb64960f56354a2d7b7acd9c6759adcdff49dac9936635f110",
+            "librpa_input_sha256": "3ed1bd4753a40a290cfa374a4e60d02c548729492453fa2f55fd5ac6cb2af228"
+        },
+        "head_only": {
+            "replace_w_head": true,
+            "option_dielect_func": 4,
+            "qsgw_input_contract": "qsgw_input.head-only.contract",
+            "qsgw_input_contract_sha256": "dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d",
+            "librpa_input_sha256": "afdb711940d2f3e90e1b843844b75ff75af798a8bc4f9a13277dd3a1f3b2f3cf"
+        }
+    }
+}

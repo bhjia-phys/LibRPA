@@ -1,0 +1,242 @@
+{
+  "base_report": {
+    "channel": 0,
+    "components": {
+      "delta_vh": {
+        "count": 43264,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "rms_diff": 0.0,
+        "tolerance": 1e-08
+      },
+      "electron_count": {
+        "count": 2,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "rms_diff": 0.0,
+        "tolerance": 1e-10
+      },
+      "exx": {
+        "count": 43264,
+        "max_abs_diff": 23.95446771085701,
+        "passed": false,
+        "rms_diff": 0.730391471579308,
+        "tolerance": 1e-08
+      },
+      "fermi_energy_ha": {
+        "count": 2,
+        "max_abs_diff": 0.03142454784728749,
+        "passed": false,
+        "rms_diff": 0.022220510878538106,
+        "tolerance": 1e-09
+      },
+      "gap_ha": {
+        "count": 2,
+        "max_abs_diff": 0.020185348744305165,
+        "passed": false,
+        "rms_diff": 0.014273196977713544,
+        "tolerance": 1e-09
+      },
+      "h0": {
+        "count": 43264,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "rms_diff": 0.0,
+        "tolerance": 1e-08
+      },
+      "mixed_h": {
+        "count": 43264,
+        "max_abs_diff": 4.778994530716478,
+        "passed": false,
+        "rms_diff": 0.14751679184313182,
+        "tolerance": 1e-09
+      },
+      "occupation": {
+        "count": 3328,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "rms_diff": 0.0,
+        "tolerance": 1e-12
+      },
+      "raw_h": {
+        "count": 43264,
+        "max_abs_diff": 23.894972653582414,
+        "passed": false,
+        "rms_diff": 0.7375839592156553,
+        "tolerance": 1e-08
+      },
+      "sigma_c_iw": {
+        "count": 259584,
+        "max_abs_diff": 1.9978797879137928,
+        "passed": false,
+        "rms_diff": 0.0382235153750263,
+        "tolerance": 1e-08
+      },
+      "vc": {
+        "count": 43264,
+        "max_abs_diff": 0.3957145291588309,
+        "passed": false,
+        "rms_diff": 0.02717448509262859,
+        "tolerance": 1e-08
+      },
+      "vxc_dft": {
+        "count": 43264,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "rms_diff": 0.0,
+        "tolerance": 1e-08
+      }
+    },
+    "contract": {
+      "differences": {
+        "qsgw_update_hartree": {
+          "new": 1,
+          "old": 0
+        }
+      },
+      "passed": false
+    },
+    "contract_mode": "oracle",
+    "iterations": [
+      0,
+      1
+    ],
+    "optional_zero_velocity_rows_ignored": {
+      "new": 259584,
+      "old": 259584
+    },
+    "passed": false,
+    "state": {
+      "block_count": 128,
+      "eigenvalue_tolerance_ha": 1e-06,
+      "max_alignment_unitarity_residual": 3.675754346275184e-16,
+      "max_eigenvalue_abs_diff_ha": 4.781888235188077,
+      "max_rotation_relative_residual": 0.7187357133323575,
+      "max_velocity_relative_residual": 0.0,
+      "max_wfc_relative_residual": 0.7223254385472632,
+      "passed": false,
+      "state_tolerance": 1e-10
+    }
+  },
+  "channel": 0,
+  "components": {
+    "delta_vh": {
+      "block_count": 64,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "electron_count": {
+      "block_count": 2,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 2
+    },
+    "exx": {
+      "block_count": 64,
+      "max_abs_diff_ha": 23.95446771085701,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 3.5555701060764417,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "fermi_energy_ha": {
+      "block_count": 2,
+      "max_abs_diff_ha": 0.03142454784728749,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.11963062914325186,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 2
+    },
+    "gap_ha": {
+      "block_count": 2,
+      "max_abs_diff_ha": 0.020185348744305165,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.3142983726541819,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 2
+    },
+    "h0": {
+      "block_count": 64,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "mixed_h": {
+      "block_count": 64,
+      "max_abs_diff_ha": 4.778994530716478,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.13846959545890794,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "occupation": {
+      "block_count": 128,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 3328
+    },
+    "raw_h": {
+      "block_count": 64,
+      "max_abs_diff_ha": 23.894972653582414,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.1630699584289321,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "sigma_c_iw": {
+      "block_count": 384,
+      "max_abs_diff_ha": 1.9978797879137928,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.15965508177454532,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 259584
+    },
+    "vc": {
+      "block_count": 64,
+      "max_abs_diff_ha": 0.3957145291588309,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.19520652818010684,
+      "passed": false,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    },
+    "vxc_dft": {
+      "block_count": 64,
+      "max_abs_diff_ha": 0.0,
+      "max_abs_tolerance_ha": 1e-08,
+      "max_relative_frobenius": 0.0,
+      "passed": true,
+      "relative_frobenius_tolerance": 1e-08,
+      "row_count": 43264
+    }
+  },
+  "gap_passed": false,
+  "gap_tolerance_ev": 1e-05,
+  "iterations": [
+    0,
+    1
+  ],
+  "max_gap_difference_ev": 0.5492713211912567,
+  "new_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/runs/gate6b6-legacy-full-reader-hartree-on-mpi4-omp12-miniter2-2348987/old/qsgw_oracle_matrices.dat",
+  "old_trace": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/evidence/gate6b7-attribution-v3-2351376/old-off-trace-with-zero-delta-vh.dat",
+  "passed": false
+}

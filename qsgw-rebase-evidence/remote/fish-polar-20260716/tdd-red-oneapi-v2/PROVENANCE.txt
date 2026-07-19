@@ -1,0 +1,15 @@
+analysis=qsgw_velocity_polar_tdd_red_oneapi_v2
+acceptance_gate=false
+expected_failure_confirmed=true
+candidate_commit=a76fd826eed3929185ea47cfcb992075a72f2b77
+test_file_sha256=785ac390524e051dc7c47552ccf4cf6eea68b8993c6d4bfa678ea66d8475a5f1
+product_source_changed=false
+test_only_change=true
+target=test_qsgw_fixed_basis
+ctest_exit_status=8
+cmake_cxx_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiicpx
+cmake_fortran_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiifx
+cmake_openmp_cxx_flags=-fiopenmp
+execution_surface=fish_direct_small_build_test
+supersedes_misconfigured_evidence=/home/bhj/ai-runs/librpa-qsgw-polar-tdd-red-20260716-785ac390/evidence
+completed_utc=2026-07-16T11:08:23Z

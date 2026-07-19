@@ -1,0 +1,2 @@
+terminate called after throwing an instance of 'std::invalid_argument'
+  what():  QSGW head/wing velocity WFC basis is not phase-equivalent to the fixed reference

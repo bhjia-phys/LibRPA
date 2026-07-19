@@ -1,0 +1,8 @@
+purpose=enable_fail_closed_comparator_on_continuous_iteration_subrange_0_1
+source_physical_rows=unchanged
+legacy_source_headers=qsgw_min_iter_2,qsgw_max_iter_2
+legacy_diagnostic_headers=qsgw_min_iter_1,qsgw_max_iter_1
+current_v5_headers=unchanged_no_qsgw_minmax_fields
+source_trace_hashes=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/evidence/gate6b7-miniter2-postmortem-v2-2351093/SOURCE_SHA256SUMS.txt
+before_hashes=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/evidence/gate6b7-miniter2-postmortem-v2-2351093/TRIMMED_BEFORE_HEADER_TRANSFORM_SHA256SUMS.txt
+after_hashes=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/evidence/gate6b7-miniter2-postmortem-v2-2351093/TRIMMED_AFTER_HEADER_TRANSFORM_SHA256SUMS.txt

@@ -1,0 +1,10 @@
+analysis=gate6b7_attribution_old_off_vs_old_on_v3
+benchmark_acceptance=false
+diagnostic_only=true
+side_a=gate6a2_old_v36_hartree_off_job_2348804
+side_b=gate6b6_oracle_v40_hartree_on_job_2348987
+selection=iterations_0_1
+attribution_rc=1
+slurm_job_id=2351376
+slurm_node_list=c2v100m3-1
+completed_utc=2026-07-17T08:17:31Z

@@ -1,0 +1,9 @@
+f74efacf1438f3eda106de03cfd559af34523d4ddf413c250d5e3e132fffc50b  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/CMakeCache.txt
+45467982c0de2341f03cdaee6c8ebdea815855b9cc3725949890e45331ccdb21  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/configure.log
+041a28da8d2a7e0d34de50d3a3e09944fc782925f1826d5ee4e307eb7509686d  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/build.log
+8041536b8d4f267544db223c5c800ce6ac4467a97782ccb302f2bed4d485b509  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/build-provenance.txt
+4b589de05ce000d71f1745eecc36d8458d157faddea626e31fb3ff037cb4e706  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/build-candidate-a25e4e43-v1.slurm
+cefb8421535141067d3a625302bcc70b88a738edd95cd9a7472729b8b231f7d7  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/source-files.sha256
+6ac0b28e0f3dbc52d18fac469faba08a847183e33312bd45131ffa3d78eaf577  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/oneapi-setvars.log
+2072fc09a44a5f246513be152a06832dccf777da04b3dd8911b70e0f9a31591e  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/build-candidate-a25e4e43-v1/chi0_main.exe
+f36e6393b1eea4c3b89897a48c77f9d4012d4a842d78329b5a30959e4aef6010  /data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/source-archives/librpa-a25e4e43.tar.gz
