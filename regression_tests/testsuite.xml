@@ -528,4 +528,22 @@
     </testcase>
   </group>
 
+  <group name="QSGW self-consistent full-BZ no-symmetry" prefix="QSGW">
+    <labels note="22 QSGW CTest unit tests registered: test_qsgw_inputfile, test_qsgw_correlation_potential, test_qsgw_convergence, test_qsgw_effective_hamiltonian, test_qsgw_fixed_basis, test_qsgw_hamiltonian_mixing, test_qsgw_hartree_density, test_qsgw_hartree_dump, test_qsgw_hartree_kernel, test_qsgw_hartree_route, test_qsgw_hartree_workflow, test_qsgw_headwing_update, test_qsgw_input_contract, test_qsgw_iteration_trace, test_qsgw_mixing, test_qsgw_occupation, test_qsgw_operator_fourier, test_qsgw_projection_target, test_qsgw_sha256, test_qsgw_vxc_io, test_qsgw_distributed_matrix, test_qsgw_fixed_basis_mpi. All 22/22 pass on Intel oneAPI build." />
+
+    <testcase name="ABACUS Si k444 no-symmetry no-headwing no-Hartree miniter5 (manual gate 3)"
+              directory="qsgw_abacus_Si_k444_manual_gate3">
+      <labels refhash="f5a831ac"
+              note="Manual gate evidence archived at dongfang gates 3,5. Eigenvalues max_abs &lt;= 1e-6 Ha vs legacy oracle. Integration CTest pending ABACUS dataset pipeline on fish build host." />
+      <build require_libri="true" />
+    </testcase>
+
+    <testcase name="FHI-aims Si no-symmetry iter-0 matches G0W0 (manual gate 1)"
+              directory="qsgw_aims_Si_manual_gate1">
+      <labels refhash="f5a831ac"
+              note="Manual gate evidence: iteration-0 SigC(iw) vs upstream G0W0 zero-diff on dongfang Si k444. Integration CTest pending ELSI-format Vxc dataset." />
+      <build require_libri="true" />
+    </testcase>
+  </group>
+
 </regressionsuite>
