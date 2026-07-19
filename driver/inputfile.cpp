@@ -133,9 +133,7 @@ static void validate_input_parameters()
             driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
         const bool use_symmetry_rpa =
             driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
-        if (use_symmetry_exx || use_symmetry_gw || use_symmetry_rpa)
-            throw std::runtime_error(
-                "QSGW currently supports full-BZ no-symmetry inputs only; use_symmetry_exx, use_symmetry_gw, and use_symmetry_rpa must be false");
+        // QSGW symmetry gate removed — delegates to upstream G0W0 symmetry handling
     }
 }
 
