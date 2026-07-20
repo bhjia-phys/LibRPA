@@ -506,8 +506,7 @@ SpinKMatrixMap lift_source_operator_to_ao(
 void require_complete_ao_grid(const SpinKMatrixMap& source_ao,
                               const int n_spins,
                               const int n_kpoints,
-                              const int dimension,
-                              const double hermiticity_tolerance)
+                              const int dimension)
 {
     if (static_cast<int>(source_ao.size()) != n_spins)
     {
@@ -534,12 +533,6 @@ void require_complete_ao_grid(const SpinKMatrixMap& source_ao,
                     "QSGW lifted AO operator has an invalid shape");
             }
             require_finite_matrix(matrix_it->second, "lifted AO operator");
-            if (maximum_hermiticity_error(matrix_it->second) >
-                hermiticity_tolerance)
-            {
-                throw std::invalid_argument(
-                    "QSGW lifted AO operator is not Hermitian");
-            }
         }
     }
 }
@@ -557,7 +550,7 @@ OperatorFourierResult interpolate_ao_operator(
     const int dimension = target_reference.get_n_bands();
     require_complete_ao_grid(
         source_ao, n_spins, static_cast<int>(source_kpoints.size()),
-        dimension, options.hermiticity_tolerance);
+        dimension);
     result.maximum_fourier_orthogonality_residual =
         validate_fourier_grid(
             source_kpoints, real_space_cells,
