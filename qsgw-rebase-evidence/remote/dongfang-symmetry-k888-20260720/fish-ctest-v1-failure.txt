@@ -1,0 +1,7 @@
+status=FAILED_BEFORE_BUILD
+remote_directory=/home/bhj/ai-runs/librpa-qsgw-symmetry-k888-ctest-20260720-v1
+failure_stage=oneapi_setvars
+failure_message=/opt/intel/oneapi/compiler/latest/env/vars.sh: line 258: OCL_ICD_FILENAMES: unbound variable
+tests_started=false
+evidence_overwritten=false
+successor=run_fish_full_ctest_v2.sh

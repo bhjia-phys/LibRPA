@@ -1,0 +1,2 @@
+Intel(R) MPI Library for Linux* OS, Version 2021.16 Build 20250722 (id: c37a540)
+Copyright 2003-2025, Intel Corporation.

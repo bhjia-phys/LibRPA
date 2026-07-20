@@ -1,0 +1,7 @@
+ 
+:: initializing oneAPI environment ...
+   run_fish_full_ctest_v1.sh: BASH_VERSION = 5.2.37(1)-release
+   args: Using "$@" for setvars.sh arguments: --force
+:: advisor -- latest
+:: ccl -- latest
+:: compiler -- latest

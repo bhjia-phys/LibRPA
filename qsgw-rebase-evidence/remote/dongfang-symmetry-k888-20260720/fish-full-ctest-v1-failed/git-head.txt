@@ -1,0 +1,7 @@
+commit 76f5a144c26314b480f0eb69717d707831ebb115
+Author:     bohan-jia <bohan.jia01@gmail.com>
+AuthorDate: Mon Jul 20 14:58:42 2026 +0800
+Commit:     bohan-jia <bohan.jia01@gmail.com>
+CommitDate: Mon Jul 20 14:58:42 2026 +0800
+
+    test(qsgw): freeze k888 symmetry input provenance

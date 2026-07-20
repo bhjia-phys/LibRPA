@@ -1,0 +1,3 @@
+## codex/qsgw-symmetry-validation-k888-20260720
+?? build/
+?? regression_tests/testcases/qsgw_aims_Si_libri/

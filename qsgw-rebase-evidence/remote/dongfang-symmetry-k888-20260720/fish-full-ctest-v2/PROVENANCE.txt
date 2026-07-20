@@ -1,0 +1,15 @@
+analysis=fish_full_ctest_after_ibz_operator_restore
+acceptance_gate=false
+host=Fisherd-Server100.96.1.64
+source_root=/home/bhj/LibRPA-qsgw
+build_root=/home/bhj/LibRPA-qsgw/build
+source_commit=76f5a144c26314b480f0eb69717d707831ebb115
+expected_test_count=61
+passed_test_count=61
+failed_test_count=0
+oneapi_setvars=/opt/intel/oneapi/setvars.sh
+pytest_environment=/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv
+pytest_sha256=b8fdb1583d452f3e7c0c90cb8b4479aead2d40652d282d9c667eebb84224813c
+executable_sha256=ca86f0db4511d88262298f419b8f7f6fe1f76a326790ce6bb60284de3191a3f2
+cmake_cache_sha256=33fc99021095aed05bbf804dc06c5daa795d39a9f091f2929db4a74ee82e9c2b
+completed_utc=2026-07-20T07:10:29Z

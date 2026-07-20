@@ -1,0 +1,9 @@
+status=FAILED_BEFORE_UNIT_TEST
+slurm_job_id=2376414
+state=FAILED
+exit_code=1:0
+elapsed=00:00:01
+failure_message=/var/spool/slurmd/job2376414/slurm_script: line 33: SLURM_TMPDIR: unbound variable
+source_read_started=false
+target_created=false
+successor=inventory_si_k888_ibz_dataset_v2.slurm

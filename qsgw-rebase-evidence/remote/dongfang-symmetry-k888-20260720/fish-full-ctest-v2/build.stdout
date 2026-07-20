@@ -1,0 +1,138 @@
+-- Build with LibRI and dependencies
+-- Use internal Cereal  : thirdparty/cereal-1.3.0
+-- Use internal LibComm : thirdparty/LibComm (commit hash 12457e7)
+-- Use internal LibRI   : thirdparty/LibRI   (commit hash e978e96)
+-- Driver MPI thread level         : MPI_THREAD_MULTIPLE
+-- Generate MiniMax grids by using the bundled GreenX library (collected from commit c90d131)
+-- LibRPA test enabled
+-- LibRPA driver enabled
+-- CMAKE_INSTALL_PREFIX /home/bhj/LibRPA-qsgw/install
+-- CMAKE_INSTALL_RPATH: /home/bhj/LibRPA-qsgw/install/lib
+-- CMAKE_CXX_FLAGS:   -fopenmp
+-- CMAKE_Fortran_FLAGS: 
+-- Configuring done (2.4s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/bhj/LibRPA-qsgw/build
+[  1%] Built target test_input_parser
+[  3%] Built target GXCommon
+[  6%] Built target LibGXMiniMax
+[  7%] Built target test_gx_minimax_grid
+[  8%] Built target GXTabulateGrids
+[  9%] Built target test_gx_minimax_duality_error
+[  9%] Building CXX object src/CMakeFiles/rpa_lib.dir/envs_cmake.cpp.o
+[ 10%] Linking CXX static library librpa.a
+[ 44%] Built target rpa_lib
+[ 44%] Linking CXX executable test_qsgw_inputfile
+[ 44%] Linking CXX executable test_atom
+[ 45%] Linking CXX executable test_analycont
+[ 45%] Linking CXX executable ../chi0_main.exe
+[ 45%] Built target test_atom
+[ 45%] Linking CXX executable test_atomic_basis
+[ 45%] Built target test_analycont
+[ 46%] Linking CXX executable test_base_utility
+[ 47%] Built target test_atomic_basis
+[ 49%] Built target test_qsgw_inputfile
+[ 57%] Built target rpa_exe
+[ 57%] Linking CXX executable test_blas_lapack
+[ 57%] Linking CXX executable test_complexmatrix
+[ 57%] Linking CXX executable test_qsgw_correlation_potential
+[ 57%] Built target test_base_utility
+[ 57%] Linking CXX executable test_qsgw_convergence
+[ 57%] Built target test_blas_lapack
+[ 58%] Built target test_complexmatrix
+[ 59%] Built target test_qsgw_correlation_potential
+[ 60%] Linking CXX executable test_qsgw_effective_hamiltonian
+[ 61%] Linking CXX executable test_fitting
+[ 62%] Built target test_qsgw_convergence
+[ 62%] Linking CXX executable test_io
+[ 62%] Linking CXX executable test_symmetry_context
+[ 62%] Built target test_fitting
+[ 63%] Built target test_io
+[ 64%] Linking CXX executable test_arbitrary_float
+[ 64%] Linking CXX executable test_geometry
+[ 64%] Built target test_qsgw_effective_hamiltonian
+[ 65%] Linking CXX executable test_lebedev_laikov
+[ 66%] Built target test_symmetry_context
+[ 66%] Built target test_arbitrary_float
+[ 66%] Built target test_geometry
+[ 67%] Linking CXX executable test_libri_utils
+[ 68%] Linking CXX executable test_matrix
+[ 68%] Linking CXX executable test_matrix_m
+[ 68%] Built target test_lebedev_laikov
+[ 68%] Linking CXX executable test_meanfield
+[ 68%] Built target test_libri_utils
+[ 69%] Linking CXX executable test_pbc
+[ 69%] Built target test_matrix_m
+[ 69%] Built target test_matrix
+[ 70%] Linking CXX executable test_qsgw_fixed_basis
+[ 71%] Linking CXX executable test_profiler
+[ 71%] Built target test_pbc
+[ 72%] Built target test_meanfield
+[ 72%] Linking CXX executable test_qsgw_hamiltonian_mixing
+[ 72%] Linking CXX executable test_qsgw_hartree_density
+[ 72%] Built target test_profiler
+[ 73%] Linking CXX executable test_qsgw_hartree_dump
+[ 73%] Built target test_qsgw_fixed_basis
+[ 74%] Linking CXX executable test_qsgw_hartree_kernel
+[ 75%] Built target test_qsgw_hamiltonian_mixing
+[ 76%] Built target test_qsgw_hartree_density
+[ 76%] Linking CXX executable test_qsgw_hartree_route
+[ 76%] Linking CXX executable test_qsgw_hartree_workflow
+[ 76%] Built target test_qsgw_hartree_dump
+[ 76%] Linking CXX executable test_qsgw_headwing_update
+[ 76%] Built target test_qsgw_hartree_route
+[ 76%] Built target test_qsgw_hartree_kernel
+[ 76%] Linking CXX executable test_qsgw_input_contract
+[ 77%] Linking CXX executable test_qsgw_iteration_trace
+[ 78%] Built target test_qsgw_hartree_workflow
+[ 79%] Linking CXX executable test_qsgw_mixing
+[ 80%] Built target test_qsgw_input_contract
+[ 81%] Built target test_qsgw_headwing_update
+[ 82%] Linking CXX executable test_qsgw_occupation
+[ 82%] Linking CXX executable test_qsgw_operator_fourier
+[ 82%] Built target test_qsgw_iteration_trace
+[ 82%] Linking CXX executable test_qsgw_projection_target
+[ 82%] Built target test_qsgw_mixing
+[ 82%] Linking CXX executable test_qsgw_sha256
+[ 82%] Built target test_qsgw_occupation
+[ 83%] Linking CXX executable test_qsgw_vxc_io
+[ 83%] Built target test_qsgw_operator_fourier
+[ 83%] Linking CXX executable test_qpe_solver
+[ 84%] Built target test_qsgw_sha256
+[ 85%] Built target test_qsgw_projection_target
+[ 86%] Linking CXX executable test_rsh
+[ 86%] Linking CXX executable test_symmetry
+[ 86%] Built target test_qsgw_vxc_io
+[ 87%] Linking CXX executable test_timefreq
+[ 88%] Built target test_symmetry
+[ 88%] Built target test_qpe_solver
+[ 89%] Linking CXX executable test_vector3
+[ 90%] Linking CXX executable test_wigner_rotation
+[ 90%] Built target test_rsh
+[ 90%] Linking CXX executable test_atomic_basis_blacs
+[ 90%] Built target test_vector3
+[ 91%] Linking CXX executable test_base_mpi
+[ 91%] Built target test_timefreq
+[ 92%] Linking CXX executable test_blacs
+[ 92%] Built target test_wigner_rotation
+[ 92%] Linking CXX executable test_dataset
+[ 93%] Built target test_atomic_basis_blacs
+[ 93%] Built target test_base_mpi
+[ 94%] Linking CXX executable test_epsilon
+[ 95%] Linking CXX executable test_qsgw_distributed_matrix
+[ 95%] Built target test_blacs
+[ 95%] Linking CXX executable test_qsgw_fixed_basis_mpi
+[ 96%] Built target test_dataset
+[ 96%] Built target test_qsgw_distributed_matrix
+[ 96%] Linking CXX executable test_matrix_m_mpi
+[ 97%] Linking CXX executable test_meanfield_mpi
+[ 97%] Built target test_epsilon
+[ 97%] Linking CXX executable test_kpoint_blacs_parallel_context
+[ 97%] Built target test_qsgw_fixed_basis_mpi
+[ 98%] Linking CXX executable test_rpa_headwing
+[ 99%] Built target test_matrix_m_mpi
+[ 99%] Built target test_meanfield_mpi
+[ 99%] Linking CXX executable test_shared_memory_mpi
+[100%] Built target test_kpoint_blacs_parallel_context
+[100%] Built target test_shared_memory_mpi
+[100%] Built target test_rpa_headwing

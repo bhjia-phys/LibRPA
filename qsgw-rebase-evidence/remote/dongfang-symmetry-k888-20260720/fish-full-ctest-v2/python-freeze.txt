@@ -1,0 +1,8 @@
+iniconfig==2.3.0
+numpy==2.5.1
+packaging==26.2
+pluggy==1.6.0
+Pygments==2.20.0
+pygreenx @ file:///home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/pygreenx-package
+pytest==9.1.1
+setuptools==80.10.2
