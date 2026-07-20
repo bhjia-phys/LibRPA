@@ -4,6 +4,9 @@
 
 #include "../qsgw/operator_fourier.h"
 
+#include "../core/atomic_basis.h"
+#include "../core/symmetry_context.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -17,6 +20,11 @@
 using librpa_int::ComplexMatrix;
 using librpa_int::MeanField;
 using librpa_int::Matz;
+using librpa_int::AtomicBasis;
+using librpa_int::SymmetryContext;
+using librpa_int::SymmetryKAtomRotation;
+using librpa_int::SymmetryKStar;
+using librpa_int::SymmetryOperation;
 using librpa_int::Vector3_Order;
 using librpa_int::conj;
 using librpa_int::cplxdb;
@@ -25,6 +33,7 @@ using librpa_int::qsgw::OperatorFourierResult;
 using librpa_int::qsgw::OperatorFourierOptions;
 using librpa_int::qsgw::SpinKMatrixMap;
 using librpa_int::qsgw::interpolate_fixed_basis_operator;
+using librpa_int::qsgw::interpolate_symmetry_reduced_fixed_basis_operator;
 
 namespace
 {
@@ -121,6 +130,87 @@ Matz project_to_state_basis(const Matz& ao_operator,
                             const Matz& wavefunctions)
 {
     return conj(wavefunctions) * ao_operator * transpose(wavefunctions);
+}
+
+SymmetryContext make_time_reversal_kstar_context()
+{
+    SymmetryContext context;
+    context.set_available();
+    context.basis_convention = {
+        -1, 0, LIBRPA_ANGULAR_ORDER_NATURAL,
+        LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M};
+    context.atom_to_type[0] = 0;
+    context.input_coord_frac[0] = {0.0, 0.0, 0.0};
+
+    SymmetryOperation identity_operation;
+    identity_operation.rotation.Identity();
+    identity_operation.translation = {0.0, 0.0, 0.0};
+    context.rspace_operations.push_back(identity_operation);
+
+    SymmetryKAtomRotation atom_rotation;
+    atom_rotation.atom_from = 0;
+    atom_rotation.atom_to = 0;
+    atom_rotation.atom_type = 0;
+    atom_rotation.lmax = 0;
+    atom_rotation.bloch_rsh_rotations[0] = ComplexMatrix(1, 1);
+    atom_rotation.bloch_rsh_rotations[0](0, 0) = {1.0, 0.0};
+
+    SymmetryKStar star;
+    star.star_index = 0;
+    star.k_ibz = {0.25, 0.0, 0.0};
+    star.members.resize(2);
+    star.members[0].spatial_isym = 0;
+    star.members[0].k_bz = {0.25, 0.0, 0.0};
+    star.members[0].atom_rotations.push_back(atom_rotation);
+    star.members[1].spatial_isym = 0;
+    star.members[1].time_reversal = true;
+    star.members[1].k_bz = {-0.25, 0.0, 0.0};
+    star.members[1].atom_rotations.push_back(atom_rotation);
+    context.kstars.push_back(star);
+    return context;
+}
+
+void test_symmetry_reduced_operator_matches_explicit_full_grid()
+{
+    Matz identity(2, 2);
+    identity(0, 0) = 1.0;
+    identity(1, 1) = 1.0;
+    const MeanField reduced_reference = make_reference({identity});
+    const MeanField full_reference = make_reference({identity, identity});
+
+    const Matz ao_ibz = make_hermitian(1.2, 2.4, {0.35, -0.2});
+    SpinKMatrixMap reduced_operator;
+    reduced_operator[0][0] = ao_ibz;
+    SpinKMatrixMap explicit_full_operator;
+    explicit_full_operator[0][0] = ao_ibz;
+    explicit_full_operator[0][1] = conj(ao_ibz);
+
+    const std::vector<Vector3_Order<double>> reduced_kpoints = {
+        {0.25, 0.0, 0.0}};
+    const std::vector<Vector3_Order<double>> full_kpoints = {
+        {0.25, 0.0, 0.0}, {0.75, 0.0, 0.0}};
+    const std::vector<Vector3_Order<int>> cells = {
+        {0, 0, 0}, {1, 0, 0}};
+
+    AtomicBasis basis(std::vector<std::size_t>{2});
+    basis.set_l_shells({{0, 0}});
+    const SymmetryContext context = make_time_reversal_kstar_context();
+
+    const OperatorFourierResult expected = interpolate_fixed_basis_operator(
+        explicit_full_operator, full_reference, full_kpoints, cells,
+        full_reference, full_kpoints);
+    const OperatorFourierResult actual =
+        interpolate_symmetry_reduced_fixed_basis_operator(
+            reduced_operator, reduced_reference, reduced_kpoints,
+            full_kpoints, cells, full_reference, full_kpoints,
+            context, basis);
+
+    assert_matrix_close(actual.target.at(0).at(0),
+                        expected.target.at(0).at(0));
+    assert_matrix_close(actual.target.at(0).at(1),
+                        expected.target.at(0).at(1));
+    assert(actual.maximum_fourier_orthogonality_residual < tolerance);
+    assert(actual.maximum_source_roundtrip_relative_error < tolerance);
 }
 
 void test_complete_grid_round_trip_and_target_gauge_projection()
@@ -291,6 +381,7 @@ void test_invalid_basis_and_fourier_contracts_are_rejected()
 int main()
 {
     test_complete_grid_round_trip_and_target_gauge_projection();
+    test_symmetry_reduced_operator_matches_explicit_full_grid();
     test_invalid_basis_and_fourier_contracts_are_rejected();
     std::cout << "test_qsgw_operator_fourier: all tests passed\n";
     return 0;
