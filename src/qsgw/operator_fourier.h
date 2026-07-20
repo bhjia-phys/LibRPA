@@ -2,7 +2,9 @@
 
 #include "matrix_map.h"
 
+#include "../core/atomic_basis.h"
 #include "../core/meanfield.h"
+#include "../core/symmetry_context.h"
 #include "../math/vector3_order.h"
 
 #include <vector>
@@ -44,6 +46,20 @@ OperatorFourierResult interpolate_fixed_basis_operator(
     const std::vector<Vector3_Order<int>>& real_space_cells,
     const MeanField& target_reference,
     const std::vector<Vector3_Order<double>>& target_kpoints,
+    const OperatorFourierOptions& options = {});
+
+// Expand a symmetry-reduced source operator in the AO basis before applying
+// the same complete-grid Fourier interpolation as the full-BZ entry point.
+OperatorFourierResult interpolate_symmetry_reduced_fixed_basis_operator(
+    const SpinKMatrixMap& source_operator,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<double>>& full_source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const SymmetryContext& symmetry_context,
+    const AtomicBasis& source_basis,
     const OperatorFourierOptions& options = {});
 
 } // namespace qsgw

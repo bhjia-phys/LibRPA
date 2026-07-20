@@ -227,6 +227,32 @@ Matz collect_wavefunction_rows(const MeanField& reference,
     return result;
 }
 
+ComplexMatrix to_complex_matrix(const Matz& input)
+{
+    ComplexMatrix result(input.nr(), input.nc());
+    for (int row = 0; row < input.nr(); ++row)
+    {
+        for (int column = 0; column < input.nc(); ++column)
+        {
+            result(row, column) = input(row, column);
+        }
+    }
+    return result;
+}
+
+Matz to_matz(const ComplexMatrix& input)
+{
+    Matz result(input.nr, input.nc);
+    for (int row = 0; row < input.nr; ++row)
+    {
+        for (int column = 0; column < input.nc; ++column)
+        {
+            result(row, column) = input(row, column);
+        }
+    }
+    return result;
+}
+
 Matz checked_inverse(const Matz& matrix,
                      const OperatorFourierOptions& options,
                      OperatorFourierResult& diagnostics)
@@ -435,38 +461,13 @@ void project_to_hermitian(Matz& matrix)
     }
 }
 
-} // namespace
-
-OperatorFourierResult interpolate_fixed_basis_operator(
+SpinKMatrixMap lift_source_operator_to_ao(
     const SpinKMatrixMap& source_operator,
     const MeanField& source_reference,
-    const std::vector<Vector3_Order<double>>& source_kpoints,
-    const std::vector<Vector3_Order<int>>& real_space_cells,
-    const MeanField& target_reference,
-    const std::vector<Vector3_Order<double>>& target_kpoints,
-    const OperatorFourierOptions& options)
+    const OperatorFourierOptions& options,
+    OperatorFourierResult& diagnostics)
 {
-    require_options(options);
-    require_complete_reference(
-        source_reference, source_kpoints, "source");
-    require_complete_reference(
-        target_reference, target_kpoints, "target");
-    require_compatible_references(source_reference, target_reference);
-    require_source_operator(
-        source_operator, source_reference, options.hermiticity_tolerance);
-
-    OperatorFourierResult result;
-    result.maximum_fourier_orthogonality_residual =
-        validate_fourier_grid(
-            source_kpoints, real_space_cells,
-            options.fourier_orthogonality_tolerance);
-
-    const int dimension = source_reference.get_n_bands();
-    const double inverse_kpoint_count =
-        1.0 / static_cast<double>(source_kpoints.size());
     SpinKMatrixMap source_ao;
-    std::map<int, std::vector<Matz>> real_space;
-
     for (int spin = 0; spin < source_reference.get_n_spins(); ++spin)
     {
         for (int kpoint = 0;
@@ -475,7 +476,7 @@ OperatorFourierResult interpolate_fixed_basis_operator(
             const Matz wavefunctions = collect_wavefunction_rows(
                 source_reference, spin, kpoint);
             const Matz inverse_wavefunctions = checked_inverse(
-                wavefunctions, options, result);
+                wavefunctions, options, diagnostics);
             const Matz ao_operator =
                 conj(inverse_wavefunctions) *
                 source_operator.at(spin).at(kpoint) *
@@ -485,11 +486,10 @@ OperatorFourierResult interpolate_fixed_basis_operator(
             const Matz roundtrip =
                 conj(wavefunctions) * ao_operator *
                 transpose(wavefunctions);
-            const double roundtrip_error =
-                relative_frobenius_difference(
-                    roundtrip, source_operator.at(spin).at(kpoint));
-            result.maximum_source_roundtrip_relative_error = std::max(
-                result.maximum_source_roundtrip_relative_error,
+            const double roundtrip_error = relative_frobenius_difference(
+                roundtrip, source_operator.at(spin).at(kpoint));
+            diagnostics.maximum_source_roundtrip_relative_error = std::max(
+                diagnostics.maximum_source_roundtrip_relative_error,
                 roundtrip_error);
             if (!std::isfinite(roundtrip_error) ||
                 roundtrip_error > options.source_roundtrip_tolerance)
@@ -499,14 +499,83 @@ OperatorFourierResult interpolate_fixed_basis_operator(
             }
             source_ao[spin][kpoint] = ao_operator;
         }
+    }
+    return source_ao;
+}
 
+void require_complete_ao_grid(const SpinKMatrixMap& source_ao,
+                              const int n_spins,
+                              const int n_kpoints,
+                              const int dimension,
+                              const double hermiticity_tolerance)
+{
+    if (static_cast<int>(source_ao.size()) != n_spins)
+    {
+        throw std::invalid_argument(
+            "QSGW lifted AO operator spin map is incomplete");
+    }
+    for (int spin = 0; spin < n_spins; ++spin)
+    {
+        const auto spin_it = source_ao.find(spin);
+        if (spin_it == source_ao.end() ||
+            static_cast<int>(spin_it->second.size()) != n_kpoints)
+        {
+            throw std::invalid_argument(
+                "QSGW lifted AO operator k-point map is incomplete");
+        }
+        for (int kpoint = 0; kpoint < n_kpoints; ++kpoint)
+        {
+            const auto matrix_it = spin_it->second.find(kpoint);
+            if (matrix_it == spin_it->second.end() ||
+                matrix_it->second.nr() != dimension ||
+                matrix_it->second.nc() != dimension)
+            {
+                throw std::invalid_argument(
+                    "QSGW lifted AO operator has an invalid shape");
+            }
+            require_finite_matrix(matrix_it->second, "lifted AO operator");
+            if (maximum_hermiticity_error(matrix_it->second) >
+                hermiticity_tolerance)
+            {
+                throw std::invalid_argument(
+                    "QSGW lifted AO operator is not Hermitian");
+            }
+        }
+    }
+}
+
+OperatorFourierResult interpolate_ao_operator(
+    const SpinKMatrixMap& source_ao,
+    const int n_spins,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const OperatorFourierOptions& options,
+    OperatorFourierResult result)
+{
+    const int dimension = target_reference.get_n_bands();
+    require_complete_ao_grid(
+        source_ao, n_spins, static_cast<int>(source_kpoints.size()),
+        dimension, options.hermiticity_tolerance);
+    result.maximum_fourier_orthogonality_residual =
+        validate_fourier_grid(
+            source_kpoints, real_space_cells,
+            options.fourier_orthogonality_tolerance);
+
+    const double inverse_kpoint_count =
+        1.0 / static_cast<double>(source_kpoints.size());
+    std::map<int, std::vector<Matz>> real_space;
+    for (int spin = 0; spin < n_spins; ++spin)
+    {
         auto& spin_real_space = real_space[spin];
         spin_real_space.reserve(real_space_cells.size());
         for (const auto& cell : real_space_cells)
         {
             Matz cell_operator(dimension, dimension);
             for (int kpoint = 0;
-                 kpoint < source_reference.get_n_kpoints(); ++kpoint)
+                 kpoint < static_cast<int>(source_kpoints.size());
+                 ++kpoint)
             {
                 add_scaled(
                     cell_operator, source_ao.at(spin).at(kpoint),
@@ -563,8 +632,7 @@ OperatorFourierResult interpolate_fixed_basis_operator(
                         << ", relative_tolerance="
                         << options.relative_hermiticity_tolerance
                         << ")";
-                throw std::invalid_argument(
-                    message.str());
+                throw std::invalid_argument(message.str());
             }
             project_to_hermitian(target_operator);
             const double repaired_hermiticity_error =
@@ -573,8 +641,7 @@ OperatorFourierResult interpolate_fixed_basis_operator(
                 result.maximum_repaired_target_hermiticity_error,
                 repaired_hermiticity_error);
             if (!std::isfinite(repaired_hermiticity_error) ||
-                repaired_hermiticity_error >
-                    options.hermiticity_tolerance)
+                repaired_hermiticity_error > options.hermiticity_tolerance)
             {
                 throw std::invalid_argument(
                     "QSGW target operator remains non-Hermitian after numerical projection");
@@ -584,6 +651,161 @@ OperatorFourierResult interpolate_fixed_basis_operator(
         }
     }
     return result;
+}
+
+} // namespace
+
+OperatorFourierResult interpolate_fixed_basis_operator(
+    const SpinKMatrixMap& source_operator,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const OperatorFourierOptions& options)
+{
+    require_options(options);
+    require_complete_reference(
+        source_reference, source_kpoints, "source");
+    require_complete_reference(
+        target_reference, target_kpoints, "target");
+    require_compatible_references(source_reference, target_reference);
+    require_source_operator(
+        source_operator, source_reference, options.hermiticity_tolerance);
+
+    OperatorFourierResult result;
+    const SpinKMatrixMap source_ao = lift_source_operator_to_ao(
+        source_operator, source_reference, options, result);
+    return interpolate_ao_operator(
+        source_ao, source_reference.get_n_spins(), source_kpoints,
+        real_space_cells, target_reference, target_kpoints,
+        options, std::move(result));
+}
+
+OperatorFourierResult interpolate_symmetry_reduced_fixed_basis_operator(
+    const SpinKMatrixMap& source_operator,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<double>>& full_source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const SymmetryContext& symmetry_context,
+    const AtomicBasis& source_basis,
+    const OperatorFourierOptions& options)
+{
+    require_options(options);
+    require_complete_reference(
+        source_reference, source_kpoints, "source");
+    require_complete_reference(
+        target_reference, target_kpoints, "target");
+    require_compatible_references(source_reference, target_reference);
+    require_source_operator(
+        source_operator, source_reference, options.hermiticity_tolerance);
+
+    if (source_reference.get_n_spinor() != 1 ||
+        !symmetry_context.available || symmetry_context.kstars.empty() ||
+        full_source_kpoints.size() <= source_kpoints.size() ||
+        symmetry_context.kstars.size() != source_kpoints.size() ||
+        symmetry_context.count_kstar_members() != full_source_kpoints.size())
+    {
+        throw std::invalid_argument(
+            "QSGW symmetry-reduced operator Fourier has an inconsistent k-star contract");
+    }
+    if (!source_basis.initialized() || !source_basis.has_l_shells() ||
+        source_basis.nb_total !=
+            static_cast<std::size_t>(source_reference.get_n_aos()))
+    {
+        throw std::invalid_argument(
+            "QSGW symmetry-reduced operator Fourier requires the complete AO shell layout");
+    }
+
+    const auto atom_nw = source_basis.get_atom_nb_map();
+    const auto layouts = source_basis.build_species_basis_layouts(
+        symmetry_context.atom_to_type);
+    if (layouts.empty() ||
+        !symmetry_species_layouts_match_atom_counts(
+            layouts, symmetry_context.atom_to_type, atom_nw))
+    {
+        throw std::invalid_argument(
+            "QSGW symmetry-reduced operator Fourier AO layout does not match the symmetry context");
+    }
+    const auto member_targets =
+        build_symmetry_full_grid_kstar_member_kfrac_targets(
+            symmetry_context, full_source_kpoints);
+    if (member_targets.size() != symmetry_context.kstars.size())
+    {
+        throw std::invalid_argument(
+            "QSGW symmetry-reduced operator Fourier cannot map k-star members to the full grid");
+    }
+
+    OperatorFourierResult result;
+    const SpinKMatrixMap reduced_ao = lift_source_operator_to_ao(
+        source_operator, source_reference, options, result);
+    SpinKMatrixMap full_ao;
+    for (int spin = 0; spin < source_reference.get_n_spins(); ++spin)
+    {
+        std::vector<bool> used_full_kpoints(full_source_kpoints.size(), false);
+        std::vector<bool> used_stars(symmetry_context.kstars.size(), false);
+        for (int source_kpoint = 0;
+             source_kpoint < source_reference.get_n_kpoints();
+             ++source_kpoint)
+        {
+            const auto& k_ibz =
+                source_kpoints[static_cast<std::size_t>(source_kpoint)];
+            const auto& star = find_symmetry_kstar_for_ibz_kpoint(
+                symmetry_context, k_ibz);
+            const std::size_t star_index = static_cast<std::size_t>(
+                &star - symmetry_context.kstars.data());
+            if (star_index >= symmetry_context.kstars.size() ||
+                used_stars[star_index] ||
+                member_targets[star_index].size() != star.members.size())
+            {
+                throw std::invalid_argument(
+                    "QSGW symmetry-reduced operator Fourier has an ambiguous k-star mapping");
+            }
+            used_stars[star_index] = true;
+
+            const ComplexMatrix ao_ibz = to_complex_matrix(
+                reduced_ao.at(spin).at(source_kpoint));
+            for (std::size_t member_index = 0;
+                 member_index < star.members.size(); ++member_index)
+            {
+                const auto& member = star.members[member_index];
+                const auto& target_k = member_targets[star_index][member_index];
+                const FoldedKPoint folded = fold_fractional_kpoint_to_targets(
+                    target_k, full_source_kpoints);
+                if (folded.target_k_index < 0 ||
+                    folded.target_k_index >=
+                        static_cast<int>(full_source_kpoints.size()) ||
+                    used_full_kpoints[static_cast<std::size_t>(
+                        folded.target_k_index)])
+                {
+                    throw std::invalid_argument(
+                        "QSGW symmetry-reduced operator Fourier produced a duplicate full-grid k point");
+                }
+                used_full_kpoints[static_cast<std::size_t>(
+                    folded.target_k_index)] = true;
+                const ComplexMatrix rotated = rotate_symmetry_kspace_matrix(
+                    symmetry_context, layouts, member, ao_ibz, atom_nw,
+                    k_ibz, member.time_reversal, &target_k);
+                full_ao[spin][folded.target_k_index] = to_matz(rotated);
+            }
+        }
+        if (std::find(used_stars.begin(), used_stars.end(), false) !=
+                used_stars.end() ||
+            std::find(used_full_kpoints.begin(), used_full_kpoints.end(),
+                      false) != used_full_kpoints.end())
+        {
+            throw std::invalid_argument(
+                "QSGW symmetry-reduced operator Fourier did not cover the complete full grid");
+        }
+    }
+
+    return interpolate_ao_operator(
+        full_ao, source_reference.get_n_spins(), full_source_kpoints,
+        real_space_cells, target_reference, target_kpoints,
+        options, std::move(result));
 }
 
 } // namespace qsgw
