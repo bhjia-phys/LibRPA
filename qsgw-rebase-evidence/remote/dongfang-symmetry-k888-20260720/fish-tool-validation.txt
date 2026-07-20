@@ -1,0 +1,9 @@
+host=Fisherd-Server100.96.1.64
+remote_directory=/tmp/qsgw-sym-k888-tools-20260720-v1
+inventory_sha256=b1c25d0bc3c6460588b97f86d7e241e72e80f0fa0df1e89e8eb9172331b5256c
+test_sha256=475f25eb8e4c8ef26b4e332b2dcc944313eab97381221e9c6e11752820d38e3c
+slurm_sha256=981412017e483591298d1649ea1b0cb3035f514fa79b74f49d541a3e23780ddb
+python_test=PASS
+python_test_count=2
+python_test_runtime_seconds=0.257
+bash_n=PASS
