@@ -122,6 +122,14 @@ private:
     std::map<std::string, std::vector<QsgwInputFile>> files_;
 };
 
+void validate_scf_input_binding(
+    const QsgwInputContract& contract,
+    const std::string& contract_base_directory,
+    const std::filesystem::path& eigenvalue_file,
+    const std::vector<std::filesystem::path>& wavefunction_files,
+    const std::filesystem::path& kpoint_file,
+    const std::vector<std::filesystem::path>& reader_static_files);
+
 void validate_band_reference_binding(
     const QsgwInputContract& contract,
     const std::string& contract_base_directory,

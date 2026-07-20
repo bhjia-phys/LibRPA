@@ -28,6 +28,7 @@ using librpa_int::qsgw::validate_band_reference_binding;
 using librpa_int::qsgw::validate_hartree_input_binding;
 using librpa_int::qsgw::validate_independent_headwing_binding;
 using librpa_int::qsgw::validate_qsgw_execution_modes;
+using librpa_int::qsgw::validate_scf_input_binding;
 
 namespace
 {
@@ -354,6 +355,34 @@ void test_contract_verifies_every_static_input_hash()
     std::remove(path.c_str());
 }
 
+void test_scf_binding_requires_the_exact_reader_file_sets()
+{
+    const std::filesystem::path root =
+        std::filesystem::absolute("test_qsgw_scf_binding.tmp")
+            .lexically_normal();
+    std::istringstream input(abacus_independent_contract());
+    const QsgwInputContract contract =
+        QsgwInputContract::parse(input, "scf-binding-contract");
+
+    validate_scf_input_binding(
+        contract, root.string(), root / "mf0_eigenvalues.dat",
+        {root / "mf0_wavefunctions.dat"}, root / "scf_kpoints.dat",
+        {root / "reader_static.dat"});
+
+    assert_throws([&] {
+        validate_scf_input_binding(
+            contract, root.string(), root / "mf0_eigenvalues.dat",
+            {root / "wrong_wavefunctions.dat"}, root / "scf_kpoints.dat",
+            {root / "reader_static.dat"});
+    });
+    assert_throws([&] {
+        validate_scf_input_binding(
+            contract, root.string(), root / "mf0_eigenvalues.dat",
+            {root / "mf0_wavefunctions.dat"}, root / "scf_kpoints.dat",
+            {root / "reader_static.dat", root / "unbound_static.dat"});
+    });
+}
+
 void test_same_grid_velocity_paths_follow_reader_precedence()
 {
     const std::filesystem::path root =
@@ -541,6 +570,7 @@ int main()
     test_hartree_binding_accepts_auxiliary_basis_inferred_from_ri_files();
     test_contract_rejects_missing_roles_bad_dimensions_and_unsafe_paths();
     test_contract_verifies_every_static_input_hash();
+    test_scf_binding_requires_the_exact_reader_file_sets();
     test_same_grid_velocity_paths_follow_reader_precedence();
     test_band_reference_paths_match_the_driver_reader_names();
     test_band_reference_binding_requires_the_exact_reader_file_set();

@@ -558,6 +558,54 @@ const std::vector<QsgwInputFile>& QsgwInputContract::files(
     return found == files_.end() ? empty : found->second;
 }
 
+void validate_scf_input_binding(
+    const QsgwInputContract& contract,
+    const std::string& contract_base_directory,
+    const std::filesystem::path& eigenvalue_file,
+    const std::vector<std::filesystem::path>& wavefunction_files,
+    const std::filesystem::path& kpoint_file,
+    const std::vector<std::filesystem::path>& reader_static_files)
+{
+    if (contract_base_directory.empty() || eigenvalue_file.empty() ||
+        wavefunction_files.empty() || kpoint_file.empty() ||
+        reader_static_files.empty())
+    {
+        throw std::invalid_argument(
+            "QSGW SCF binding requires complete reader file sets and a contract base directory");
+    }
+
+    const auto declared_paths = [&](const std::string& role) {
+        std::vector<std::filesystem::path> paths;
+        for (const QsgwInputFile& file : contract.files(role))
+        {
+            paths.push_back(
+                std::filesystem::absolute(
+                    std::filesystem::path(contract_base_directory) /
+                    file.file)
+                    .lexically_normal());
+        }
+        std::sort(paths.begin(), paths.end());
+        return paths;
+    };
+    const auto require_exact = [&](const std::string& role,
+                                   std::vector<std::filesystem::path> paths) {
+        for (std::filesystem::path& path : paths)
+            path = std::filesystem::absolute(path).lexically_normal();
+        std::sort(paths.begin(), paths.end());
+        if (declared_paths(role) != paths)
+        {
+            throw std::invalid_argument(
+                "QSGW " + role +
+                " contract files do not exactly match the SCF files read by the driver");
+        }
+    };
+
+    require_exact("mf0_eigenvalues", {eigenvalue_file});
+    require_exact("mf0_wavefunctions", wavefunction_files);
+    require_exact("scf_kpoints", {kpoint_file});
+    require_exact("reader_static", reader_static_files);
+}
+
 void validate_band_reference_binding(
     const QsgwInputContract& contract,
     const std::string& contract_base_directory,

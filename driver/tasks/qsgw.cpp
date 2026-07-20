@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -96,24 +97,6 @@ std::string resolve_input_path(const std::string& base,
                : librpa_int::join_path(base, path);
 }
 
-bool role_contains_path(
-    const librpa_int::qsgw::QsgwInputContract& contract,
-    const std::string& role,
-    const std::string& expected)
-{
-    const std::filesystem::path normalized_expected =
-        std::filesystem::path(expected).lexically_normal();
-    for (const auto& file : contract.files(role))
-    {
-        if (std::filesystem::path(file.file).lexically_normal() ==
-            normalized_expected)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 std::filesystem::path resolved_absolute_path(
     const std::string& base,
     const std::string& path)
@@ -128,6 +111,142 @@ std::filesystem::path resolved_absolute_path(
 bool starts_with(const std::string& text, const std::string& prefix)
 {
     return text.rfind(prefix, 0) == 0;
+}
+
+std::vector<std::filesystem::path> discover_prefixed_reader_files(
+    const std::string& prefix,
+    const std::string& excluded_prefix = {})
+{
+    const std::string& input_dir = driver::driver_params.input_dir;
+    const std::vector<std::string> discovered =
+        librpa_int::discover_files_with_prefix(input_dir, prefix);
+    std::vector<std::filesystem::path> result;
+    for (const std::string& path : discovered)
+    {
+        const std::string filename =
+            std::filesystem::path(path).filename().string();
+        if (!excluded_prefix.empty() &&
+            starts_with(excluded_prefix, prefix) &&
+            starts_with(filename, excluded_prefix))
+        {
+            continue;
+        }
+        const std::filesystem::path resolved =
+            std::filesystem::absolute(path).lexically_normal();
+        librpa_int::require_readable_file(resolved.string());
+        result.push_back(resolved);
+    }
+    if (result.empty())
+    {
+        throw std::invalid_argument(
+            "QSGW reader file set is empty for prefix " + prefix);
+    }
+    return result;
+}
+
+std::vector<std::filesystem::path> discover_coulomb_reader_files(
+    const std::string& prefix)
+{
+    std::vector<std::filesystem::path> result =
+        discover_prefixed_reader_files(prefix);
+    int version = driver::driver_params.version_coul_reader;
+    if (version < 0)
+    {
+        version = detect_coulomb_reader_version(
+            driver::driver_params.input_dir, prefix);
+    }
+    if (version == 0)
+    {
+        result.erase(
+            std::remove_if(
+                result.begin(), result.end(),
+                [](const std::filesystem::path& path) {
+                    return path.extension() != ".txt";
+                }),
+            result.end());
+    }
+    else if (version != 1)
+    {
+        throw std::invalid_argument(
+            "Unsupported QSGW Coulomb reader version " +
+            std::to_string(version));
+    }
+    if (result.empty())
+    {
+        throw std::invalid_argument(
+            "QSGW Coulomb reader file set is empty for prefix " + prefix);
+    }
+    return result;
+}
+
+std::vector<std::filesystem::path> discover_scf_wavefunction_files()
+{
+    return discover_prefixed_reader_files(
+        driver::driver_params.prefix_eigvecs_scf);
+}
+
+std::vector<std::filesystem::path> discover_reader_static_files()
+{
+    using librpa_int::path_exists;
+    const auto candidate = [](const std::string& filename) {
+        return resolved_absolute_path(
+            driver::driver_params.input_dir, filename);
+    };
+    std::set<std::filesystem::path> files;
+    const auto add = [&](const std::filesystem::path& path) {
+        librpa_int::require_readable_file(path.string());
+        files.insert(path);
+    };
+    const auto add_all = [&](const std::vector<std::filesystem::path>& paths) {
+        for (const std::filesystem::path& path : paths) add(path);
+    };
+
+    add(candidate(driver::driver_params.fn_stru));
+    const std::filesystem::path basis_wfc =
+        candidate(driver::driver_params.fn_basis_wfc);
+    const std::filesystem::path basis_aux =
+        candidate(driver::driver_params.fn_basis_aux);
+    const std::filesystem::path basis =
+        candidate(driver::driver_params.fn_basis);
+    if (path_exists(basis_wfc.string().c_str()) &&
+        path_exists(basis_aux.string().c_str()))
+    {
+        add(basis_wfc);
+        add(basis_aux);
+    }
+    else if (path_exists(basis.string().c_str()))
+    {
+        add(basis);
+    }
+
+    add_all(discover_prefixed_reader_files(
+        driver::driver_params.prefix_lri_coeff,
+        driver::driver_params.prefix_lri_coeff_shrink));
+    if (driver::get_bool(driver::opts.use_shrink_abfs))
+    {
+        for (const std::string& filename : {
+                 driver::driver_params.fn_basis_aux_shrink,
+                 std::string("basis_out_shrink"),
+                 std::string("basis_out.shrink_backup")})
+        {
+            const std::filesystem::path path = candidate(filename);
+            if (path_exists(path.string().c_str()))
+            {
+                add(path);
+                break;
+            }
+        }
+        add_all(discover_prefixed_reader_files(
+            driver::driver_params.prefix_lri_coeff_shrink,
+            driver::driver_params.prefix_lri_coeff));
+        add_all(discover_prefixed_reader_files(
+            driver::driver_params.prefix_shrink_sinvS));
+    }
+    add_all(discover_coulomb_reader_files(
+        driver::driver_params.prefix_coul_full));
+    add_all(discover_coulomb_reader_files(
+        driver::driver_params.prefix_coul_cut));
+    return {files.begin(), files.end()};
 }
 
 const librpa_int::qsgw::HartreeReaderRoute& hartree_reader_route()
@@ -268,24 +387,20 @@ void validate_stage_one_contract(
         dataset.mf, dataset.pbc.kfrac_list,
         contract.n_spins(), dataset.mf.get_n_spinor(), contract.n_aos(),
         "grid");
-    if (!role_contains_path(contract, "mf0_eigenvalues",
-                            driver::driver_params.fn_eigocc_scf))
-    {
-        throw std::invalid_argument(
-            "QSGW input contract is not bound to the eigenvalue file used by the driver");
-    }
     const std::string bz_sampling_path = resolve_input_path(
         driver::driver_params.input_dir,
         driver::driver_params.fn_bz_sampling);
-    const std::string& loaded_kpoint_file =
+    const std::string loaded_kpoint_file =
         librpa_int::path_exists(bz_sampling_path.c_str())
-            ? driver::driver_params.fn_bz_sampling
-            : driver::driver_params.fn_stru;
-    if (!role_contains_path(contract, "scf_kpoints", loaded_kpoint_file))
-    {
-        throw std::invalid_argument(
-            "QSGW input contract is not bound to the k-point file used by the driver");
-    }
+            ? bz_sampling_path
+            : resolve_input_path(driver::driver_params.input_dir,
+                                 driver::driver_params.fn_stru);
+    validate_scf_input_binding(
+        contract, contract_base,
+        resolved_absolute_path(driver::driver_params.input_dir,
+                               driver::driver_params.fn_eigocc_scf),
+        discover_scf_wavefunction_files(), loaded_kpoint_file,
+        discover_reader_static_files());
     const bool symmetry_reduced_scf_grid =
         dataset.pbc.kfrac_list.size() < dataset.pbc.kfrac_list_full.size();
     if (symmetry_reduced_scf_grid)
