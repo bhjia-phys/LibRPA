@@ -1,50 +1,50 @@
 {
     "schema_version":  "1.0",
     "repository":  {
-                       "path":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714",
-                       "worktree":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-1376-20260714",
-                       "branch":  "codex/qsgw-independent-upstream-1376-20260714",
+                       "path":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716",
+                       "worktree":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716",
+                       "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
                        "status_snapshot":  "qsgw-rebase-evidence/git/status.txt",
                        "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
                        "commits":  {
                                        "branch_head":  {
-                                                           "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                           "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                           "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                           "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                        },
                                        "upstream_old":  {
                                                             "hash":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
                                                             "reference":  "qsgw-rebase-evidence/git/upstream-old.txt"
                                                         },
                                        "upstream_new":  {
-                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
-                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                         },
                                        "qsgw_old":  {
                                                         "hash":  "cb2940201b1f44b1c38b90169048b7d060e44732",
                                                         "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
                                                     },
                                        "rebase_head":  {
-                                                           "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                           "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                           "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                           "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                        }
                                    }
                    },
     "provenance":  {
                        "source":  {
-                                      "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                      "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                      "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                      "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                   },
                        "executable":  {
                                           "path":  null,
                                           "sha256":  null,
-                                          "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                          "reference":  "pending: clean remote Gate-0 build has not been created"
+                                          "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                          "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
                                       },
                        "dataset":  {
-                                       "id":  null,
-                                       "path":  null,
+                                       "id":  "si-k888-symmetry-inventory-supporting",
+                                       "path":  "/data/home/df_iopcas_bhj/ai-runs/si-qsgw-band0-k888-sym-shrink-headwing-iter1-20260514-173351",
                                        "sha256":  null,
-                                       "reference":  "pending: immutable Si-k444 no-symmetry dataset manifest"
+                                       "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/dongfang-inventory-v2-failed"
                                    },
                        "inputs":  [
                                       {
@@ -113,7 +113,7 @@
                    },
     "upstream_inventory":  {
                                "old_commit":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
-                               "new_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                               "new_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                                "commit_list":  {
                                                    "path":  "qsgw-rebase-evidence/git/upstream-commit-list.txt",
                                                    "sha256":  "e324b6388cb0dc839f96f05ccffda6914e2189949f45d414bdda7010da8074e3",
@@ -1342,13 +1342,13 @@
                                               "side_a":  {
                                                              "label":  "new-upstream-g0w0",
                                                              "source":  {
-                                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
-                                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                                "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                                                                                 "reference":  "evidence/build/new-upstream-executable.sha256"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
@@ -1360,14 +1360,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-g0w0",
                                                              "source":  {
-                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1411,13 +1411,13 @@
                                               "side_a":  {
                                                              "label":  "new-upstream-g0w0",
                                                              "source":  {
-                                                                            "hash":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
-                                                                            "reference":  "qsgw-rebase-evidence/git/upstream-new.txt"
+                                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                                                "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                                                                                 "reference":  "evidence/build/new-upstream-executable.sha256"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
@@ -1429,14 +1429,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-iter0",
                                                              "source":  {
-                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1498,14 +1498,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-no-mixing",
                                                              "source":  {
-                                                                            "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                            "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                                                "reference":  "evidence/build/executable.sha256"
+                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1534,7 +1534,7 @@
                        {
                            "id":  "head-only",
                            "gate":  "head-only",
-                           "description":  "Head-only gate",
+                           "description":  "QSGW head-only request must fail during input validation",
                            "observer_types":  [
                                                   "head_only"
                                               ],
@@ -1551,7 +1551,10 @@
                                                       "g0w0-limit",
                                                       "structural-invariants",
                                                       "per-iteration-replay",
-                                                      "independent-comparison"
+                                                      "independent-comparison",
+                                                      "parser-rejection",
+                                                      "runtime-guard",
+                                                      "unchanged-g0w0-headwing-regression"
                                                   ],
                            "control_pair_ids":  [
 
@@ -1561,7 +1564,7 @@
 
                                           ],
                            "oracle_reliability":  "unreliable",
-                           "oracle_reference":  "evidence/oracle/head-wing-assessment.md",
+                           "oracle_reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md",
                            "status":  "planned",
                            "artifacts":  [
 
@@ -1570,7 +1573,7 @@
                        {
                            "id":  "head-plus-wing",
                            "gate":  "head-plus-wing",
-                           "description":  "Head-plus-wing gate",
+                           "description":  "QSGW head-plus-wing request must fail during input validation",
                            "observer_types":  [
                                                   "head_plus_wing"
                                               ],
@@ -1587,7 +1590,10 @@
                                                       "g0w0-limit",
                                                       "structural-invariants",
                                                       "per-iteration-replay",
-                                                      "independent-comparison"
+                                                      "independent-comparison",
+                                                      "parser-rejection",
+                                                      "runtime-guard",
+                                                      "unchanged-g0w0-headwing-regression"
                                                   ],
                            "control_pair_ids":  [
 
@@ -1597,7 +1603,7 @@
 
                                           ],
                            "oracle_reliability":  "unreliable",
-                           "oracle_reference":  "evidence/oracle/head-wing-assessment.md",
+                           "oracle_reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md",
                            "status":  "planned",
                            "artifacts":  [
 
@@ -1637,7 +1643,7 @@
                        {
                            "id":  "hartree",
                            "gate":  "hartree",
-                           "description":  "Declared Hartree feature gate",
+                           "description":  "Two-round Hartree-on no-symmetry and ABACUS symmetry gate using live density",
                            "observer_types":  [
                                                   "hartree"
                                               ],
@@ -1651,7 +1657,13 @@
                                           },
                            "required_artifacts":  [
                                                       "hartree-result",
-                                                      "hartree-comparison"
+                                                      "hartree-comparison",
+                                                      "delta-rho-charge",
+                                                      "delta-vh-iter0-zero",
+                                                      "q0-g0-convention",
+                                                      "unit-validation",
+                                                      "grid-band-hermiticity",
+                                                      "legacy-new-two-round-comparison"
                                                   ],
                            "control_pair_ids":  [
 
@@ -1668,7 +1680,7 @@
                        {
                            "id":  "qsgw-band",
                            "gate":  "qsgw-band",
-                           "description":  "Declared qsgw_band feature gate",
+                           "description":  "Head-wing-off grid AO operator to BvK/Fourier fixed-band projection",
                            "observer_types":  [
                                                   "qsgw_band"
                                               ],
@@ -1682,7 +1694,11 @@
                                           },
                            "required_artifacts":  [
                                                       "band-data",
-                                                      "band-comparison"
+                                                      "band-comparison",
+                                                      "grid-ao-operator",
+                                                      "full-bz-fourier-diagnostics",
+                                                      "symmetry-restoration-diagnostics",
+                                                      "band-component-comparison"
                                                   ],
                            "control_pair_ids":  [
 
@@ -1763,7 +1779,7 @@
                        {
                            "id":  "symmetry",
                            "gate":  "mpi-omp",
-                           "description":  "Declared symmetry feature subgate before parallel variation",
+                           "description":  "ABACUS Si 29-to-512 symmetry-on two-round three-way acceptance",
                            "observer_types":  [
                                                   "symmetry"
                                               ],
@@ -1777,7 +1793,12 @@
                                           },
                            "required_artifacts":  [
                                                       "symmetry-result",
-                                                      "symmetry-invariants"
+                                                      "symmetry-invariants",
+                                                      "mapping-validation",
+                                                      "rotation-phase-time-reversal-validation",
+                                                      "legacy-symmetry-oracle",
+                                                      "full-bz-symmetry-component-comparison",
+                                                      "projector-comparison"
                                                   ],
                            "control_pair_ids":  [
 
@@ -1834,13 +1855,13 @@
                               "default_experiment":  null,
                               "a":  {
                                         "source":  {
-                                                       "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                       "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                       "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                       "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -1908,13 +1929,13 @@
                                     },
                               "b":  {
                                         "source":  {
-                                                       "hash":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
-                                                       "reference":  "qsgw-rebase-evidence/git/candidate-source.txt"
+                                                       "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                       "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "7d69a18cff419be3139d61b8405a8dbca6b53fd8",
+                                                           "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -2017,30 +2038,85 @@
                               "qsgw-rebase-evidence/impact/qsgw-source-lane-audit.md",
                               "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md",
                               "qsgw-rebase-evidence/impact/APPROVAL-U3-HEAD-MATRIX-GETTER-001.md",
-                              "qsgw-rebase-evidence/validation/local-precommit-checks.md"
+                              "qsgw-rebase-evidence/validation/local-precommit-checks.md",
+                              "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md",
+                              "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2",
+                              "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/dongfang-inventory-v2-failed"
                           ],
     "open_issues":  [
                         {
-                            "id":  "ISSUE-GATE0-PROVENANCE",
-                            "class_or_gate":  "build-unit-upstream-regressions",
-                            "blocker":  "No clean candidate executable, remote compiler/library capture, or accepted Si-k444 input manifest exists yet.",
-                            "required":  "Build immutable upstream and candidate commits on the approved remote compute surface."
+                            "id":  "ISSUE-QSGW-HEADWING-REACHABLE",
+                            "class_or_gate":  "qsgw-headwing-fail-fast",
+                            "blocker":  "QSGW parser and runtime still execute iterative head/wing.",
+                            "required":  "Reject QSGW replace_w_head/use_pyatb and remove runtime reachability without changing G0W0."
+                        },
+                        {
+                            "id":  "ISSUE-OBSOLETE-U3-GETTER",
+                            "class_or_gate":  "protected-diff",
+                            "blocker":  "The approved shared head getter is used only by excluded QSGW head/wing code.",
+                            "required":  "Remove the QSGW consumer and getter so shared numerical diff is zero."
+                        },
+                        {
+                            "id":  "ISSUE-BAND-NOT-FOURIER-WIRED",
+                            "class_or_gate":  "qsgw-band-operator-fourier",
+                            "blocker":  "The current qsgw_band loop separately evaluates band EXX/Sigma; operator_fourier is only called by headwing_update.",
+                            "required":  "Project the converged grid AO/real-space operator to immutable mf0_band."
+                        },
+                        {
+                            "id":  "ISSUE-SYMMETRY-ORACLE",
+                            "class_or_gate":  "abacus-symmetry-two-round",
+                            "blocker":  "No merge-before symmetry two-round oracle or three-way full-BZ comparison is frozen.",
+                            "required":  "Regenerate legacy oracle and compare two rounds per component, with miniter5 recommended for acceptance."
+                        },
+                        {
+                            "id":  "ISSUE-HARTREE-E2E",
+                            "class_or_gate":  "hartree-no-symmetry-and-symmetry",
+                            "blocker":  "Hartree unit tests exist but no accepted two-round end-to-end gate exists.",
+                            "required":  "Validate live density, charge, units, q=0 convention, Hermiticity, and legacy equivalence."
+                        },
+                        {
+                            "id":  "ISSUE-REGRESSION-DANGLING",
+                            "class_or_gate":  "formal-regression",
+                            "blocker":  "QSGW testsuite.xml entries reference missing testcase directories.",
+                            "required":  "Commit real ABACUS no-sym, ABACUS symmetry, and FHI-aims two-round cases with legacy references."
                         }
                     ],
     "next_actions":  [
                          {
-                             "id":  "next-gate0",
-                             "action":  "Build and test immutable upstream and candidate commits on fish, then record exact executable and environment provenance.",
+                             "id":  "next-qsgw-headwing-fail-fast",
+                             "action":  "Make every QSGW head/wing request fail fast, remove the obsolete shared getter, then build and run the complete test suite.",
                              "gate":  "build-unit-upstream-regressions",
                              "owner":  "rebase operator",
                              "status":  "ready"
                          }
                      ],
     "planning_state":  {
-                           "frozen_dirty_source":  false,
-                           "clean_candidate_available":  true,
-                           "u3_head_matrix_getter":  "approved_exact_five_line_readonly_getter",
+                           "frozen_dirty_source":  true,
+                           "clean_candidate_available":  false,
+                           "u3_head_matrix_getter":  "approved_but_obsolete_remove_pending",
                            "provenance_policy":  "null means missing and must fail validation; no placeholder or synthetic hash is permitted",
-                           "crystal_symmetry_qsgw":  "out_of_scope_not_tested"
-                       }
+                           "crystal_symmetry_qsgw":  "required_not_yet_numerically_accepted",
+                           "qsgw_iterative_headwing":  "unsupported_fail_fast_pending",
+                           "qsgw_band_operator_fourier":  "not_wired",
+                           "formal_qsgw_regression":  "dangling_entries_no_committed_cases"
+                       },
+    "revised_scope":  {
+                          "effective_date":  "2026-07-20",
+                          "freeze_parent":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                          "upstream_base":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                          "no_sym_candidate":  "c27482016f70ece5a0e5ccad7199d93ac3f6ebf5",
+                          "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
+                          "supports_target":  [
+                                                  "full_bz_no_crystal_symmetry",
+                                                  "abacus_ibz_crystal_symmetry",
+                                                  "linear_fixed_basis_hamiltonian_mixing_beta_0.2",
+                                                  "hartree_live_density",
+                                                  "headwing_off_qsgw_band_operator_fourier"
+                                              ],
+                          "explicitly_unsupported":  [
+                                                         "qsgw_iterative_headwing",
+                                                         "unvalidated_fhi_aims_symmetry"
+                                                     ],
+                          "audit":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                      }
 }

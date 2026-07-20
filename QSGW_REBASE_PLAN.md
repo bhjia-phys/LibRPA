@@ -4,9 +4,23 @@ Status: `in_progress`
 
 Manifest: `qsgw-rebase-manifest.json`
 
-Current gate: `build-unit-upstream-regressions` (not entered; clean candidate is not yet available)
+Current gate: `revised-goal-audit` (entered on 2026-07-20; implementation gates are not yet accepted)
 
-Scope: full-BZ, no-crystal-symmetry QSGW only. Crystal-symmetry/IBZ QSGW and full-grid-versus-IBZ equivalence are explicitly excluded from this branch and PR.
+Scope: full-BZ/no-crystal-symmetry QSGW plus numerically accepted ABACUS IBZ/crystal-symmetry QSGW, linear fixed-basis Hamiltonian mixing, Hartree updates, and head-wing-off `qsgw_band`. QSGW iterative head/wing is explicitly unsupported and must fail fast. Existing G0W0 head/wing behavior remains upstream-owned and unchanged.
+
+## Revised-goal freeze (2026-07-20)
+
+| Field | Recorded value |
+|---|---|
+| Worktree | `F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716` |
+| Revised branch | `codex/qsgw-symmetry-no-headwing-42d-20260720` |
+| Frozen parent | `7e11dd65050666a04361f2d2bd09c7b3aca81c9c` |
+| Preserved prior branch | `codex/qsgw-symmetry-validation-k888-20260720` at the same frozen parent |
+| Upstream base | `42d3863c1d865194d382a085851d1e2e8a39764f` (`upstream-ssh/master`) |
+| No-sym candidate | `c27482016f70ece5a0e5ccad7199d93ac3f6ebf5` |
+| Audit | `qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md` |
+
+The older live-state and gate tables below are retained as historical provenance. Where they conflict with this revised-goal freeze, this section and the revised audit are authoritative.
 
 ## Ownership boundary
 
@@ -106,7 +120,7 @@ The current dirty source is frozen and must be separated before clean-candidate 
 |---|---|---|---|
 | Upstream API adapter and task registration | `driver/*`, `driver/tasks/qsgw.cpp`, fixed-basis/distributed/input/trace modules | U2 | prove old formula is preserved and commit as the rebase candidate |
 | Linear Hamiltonian mixing | `src/qsgw/mixing*`, `hamiltonian_mixing*` and driver wiring | U4 unless legacy equivalence is proved | separate immutable feature commit and two-sided benchmark |
-| Live independent head/wing update | `src/qsgw/headwing_update*`, `operator_fourier*` and driver wiring | U2 for upstream ownership migration; U4 for any changed QSGW equation | split by formula, then benchmark separately where U4 |
+| QSGW head/wing | current driver and `src/qsgw/headwing_update*` still implement it | excluded by revised goal | remove runtime reachability; any QSGW request must fail during input validation without changing G0W0 |
 | Hartree update | `src/qsgw/hartree_*` and driver wiring | U2 only if it reproduces the old equation; otherwise U4 | real legacy Hartree oracle and provenance required |
 | qsgw-band operator path | projection/operator Fourier and band wiring | U2 only if it reproduces the old equation; otherwise U4 | prohibit state-basis k-to-k Fourier; run dedicated band gate |
 | Regression comparator | `regression_tests/backend/comparisons/cmp_qsgw.py` | test infrastructure | keep separate from numerical implementation commit |
@@ -158,15 +172,15 @@ There are no changes to `driver/tasks/g0w0.cpp`, `driver/tasks/g0w0_band.cpp`, `
 | 1 | upstream G0W0 vs candidate G0W0 | planned | byte-identical inputs and direct tensor/result A/B |
 | 2 | QSGW iteration 0/1 vs upstream G0W0 | planned | Sigma/EXX/Vc/H/U/eigenvalue/WFC/invariant comparison |
 | 3 | solid no-mixing old/new | planned | immutable legacy miniter5/miniter10 per-iteration replay |
-| 4 | head-only | planned | full-BZ live-state evidence; no symmetry comparison |
-| 5 | head-plus-wing | planned | full-BZ live velocity/head-wing evidence |
-| 6 | linear mixing beta=0.2 | planned | disabled-vs-linear controlled pair and old/new trajectory |
-| 7 | Hartree | planned | delta-VH iter0, charge, Hermiticity, grid/band and old/new evidence |
-| 8 | qsgw-band | planned | grid convergence followed by AO/real-space BvK/Fourier projection |
-| 9 | FHI-aims no-symmetry | planned | formal regression and complete input provenance |
-| 10 | ABACUS no-symmetry | planned | formal regression and complete input provenance |
-| 11a | symmetry-disabled contract | planned | omitted documented false default vs explicit false only; no crystal-symmetry calculation |
-| 11b | MPI/OMP/determinism | planned | MPI 1/2/4, OMP 1/32 and deterministic comparisons |
+| 4 | QSGW head/wing fail-fast | not entered | parser/runtime rejection plus unchanged upstream G0W0 head-wing regression |
+| 5 | linear mixing beta=0.2 | planned | disabled-vs-linear controlled pair and old/new trajectory |
+| 6 | Hartree no-symmetry | planned | delta-VH iter0, live-density charge, units, Hermiticity and old/new evidence |
+| 7 | ABACUS symmetry-on two-round | not entered | 29-to-512 mapping, old/new/full-BZ component comparison, no head-wing |
+| 8 | qsgw-band no-symmetry and symmetry | not entered | grid AO/real-space operator followed by BvK/Fourier projection |
+| 9 | FHI-aims no-symmetry | planned | formal two-round regression and complete input provenance |
+| 10 | ABACUS no-symmetry | planned | formal two-round regression and complete input provenance |
+| 11 | ABACUS symmetry-on regression | planned | committed small two-round Hartree-on case with mapping provenance |
+| 12 | MPI/OMP/determinism | planned | MPI 1/4, OMP 1/32 and deterministic comparisons |
 
 Heavy builds and runs must use SSH on fish/dongfang; dongfang jobs must use `sbatch`. Earlier dirty-source results remain supporting evidence only.
 
@@ -188,7 +202,13 @@ Heavy builds and runs must use SSH on fish/dongfang; dongfang jobs must use `sba
 | `ISSUE-CANDIDATE-SPLIT` | U2/U4 | frozen dirty source combines adapter and potentially independent formula features | formula-level split and clean immutable commits |
 | `ISSUE-REMOTE-GATE0` | Gate 0 | no clean candidate executable or complete CTest from the frozen source | after candidate commit, SSH build on fish and sbatch numerical work on dongfang |
 | `ISSUE-LEGACY-HARTREE` | Hartree | legacy pinned LibRI lacks required Hartree header; historical build used a dirty LibRI tree | rebuild from archived exact dirty LibRI with complete provenance |
+| `ISSUE-QSGW-HEADWING-REACHABLE` | revised scope | QSGW parser and runtime still execute same-grid and independent-grid iterative head/wing | add parser and runtime fail-fast tests; remove dead QSGW-only implementation reachability |
+| `ISSUE-OBSOLETE-U3-GETTER` | protected diff | the approved five-line `get_head_matrices` interface is now used only by excluded QSGW head/wing code | remove the consumer and getter; final protected shared numerical diff should be zero |
+| `ISSUE-BAND-NOT-FOURIER-WIRED` | qsgw-band | `operator_fourier` is called only by the QSGW head-wing adapter; the current band loop separately evaluates band EXX/Sigma | wire the converged grid AO/real-space effective operator to the fixed band reference and validate full-BZ plus symmetry restoration |
+| `ISSUE-SYMMETRY-ORACLE` | symmetry | only k-star count preflight and one-iteration supporting evidence exist; no legacy two-round oracle or full-BZ per-component comparison exists | regenerate a merge-before symmetry oracle and run the three-way two-round comparison |
+| `ISSUE-REGRESSION-DANGLING` | CI | both QSGW `testsuite.xml` entries point to absent testcase directories | replace placeholders with committed two-round ABACUS no-sym, ABACUS symmetry, and FHI-aims cases |
+| `ISSUE-STALE-MANIFEST` | provenance | the manifest records an older worktree, base, scope, HEAD, and gate | refresh with the revised freeze before accepting any new numerical gate |
 
 ## Exactly one next action
 
-- [ ] Form clean immutable candidate commits from the classified source lanes; retain only the approved U3 getter in shared numerical source, then rerun manifest validation and start Gate 0.
+- [ ] Commit the revised audit and make all QSGW head/wing requests fail fast, with parser/runtime unit tests proving that G0W0 input behavior is untouched.
