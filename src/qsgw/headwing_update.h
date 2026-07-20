@@ -38,5 +38,24 @@ IndependentHeadwingUpdateResult update_independent_headwing_state(
     const OperatorFourierOptions& fourier_options = {},
     const OccupationSettings& occupation_settings = {});
 
+IndependentHeadwingUpdateResult
+update_symmetry_reduced_independent_headwing_state(
+    const SpinKMatrixMap& source_hamiltonian,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<double>>& full_source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const SymmetryContext& symmetry_context,
+    const AtomicBasis& source_basis,
+    MeanField& target_live,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const VelocityMatrix& target_reference_velocity,
+    VelocityMatrix& target_live_velocity,
+    const std::vector<double>& target_kpoint_weights,
+    double electron_count,
+    const OperatorFourierOptions& fourier_options = {},
+    const OccupationSettings& occupation_settings = {});
+
 } // namespace qsgw
 } // namespace librpa_int

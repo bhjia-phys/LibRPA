@@ -392,12 +392,41 @@ void validate_stage_one_contract(
         contract.n_spins(), dataset.mf.get_n_spinor(), contract.n_aos(),
         "grid");
     if (!role_contains_path(contract, "mf0_eigenvalues",
-                            driver::driver_params.fn_eigocc_scf) ||
-        !role_contains_path(contract, "scf_kpoints",
-                            driver::driver_params.fn_bz_sampling))
+                            driver::driver_params.fn_eigocc_scf))
     {
         throw std::invalid_argument(
-            "QSGW input contract is not bound to the eigenvalue or k-point file used by the driver");
+            "QSGW input contract is not bound to the eigenvalue file used by the driver");
+    }
+    const std::string bz_sampling_path = resolve_input_path(
+        driver::driver_params.input_dir,
+        driver::driver_params.fn_bz_sampling);
+    const std::string& loaded_kpoint_file =
+        librpa_int::path_exists(bz_sampling_path.c_str())
+            ? driver::driver_params.fn_bz_sampling
+            : driver::driver_params.fn_stru;
+    if (!role_contains_path(contract, "scf_kpoints", loaded_kpoint_file))
+    {
+        throw std::invalid_argument(
+            "QSGW input contract is not bound to the k-point file used by the driver");
+    }
+    const bool symmetry_reduced_scf_grid =
+        dataset.pbc.kfrac_list.size() < dataset.pbc.kfrac_list_full.size();
+    if (symmetry_reduced_scf_grid)
+    {
+        const bool all_symmetry_routes_enabled =
+            driver::get_bool(driver::opts.use_symmetry_exx) &&
+            driver::get_bool(driver::opts.use_symmetry_gw) &&
+            driver::get_bool(driver::opts.use_symmetry_rpa);
+        if (!all_symmetry_routes_enabled ||
+            !dataset.symmetry_context.available ||
+            dataset.symmetry_context.kstars.size() !=
+                dataset.pbc.kfrac_list.size() ||
+            dataset.symmetry_context.count_kstar_members() !=
+                dataset.pbc.kfrac_list_full.size())
+        {
+            throw std::invalid_argument(
+                "QSGW symmetry-reduced SCF input requires complete EXX/GW/RPA k-star restoration");
+        }
     }
     const bool producer_matches_constants =
         (contract.producer() == QsgwProducer::FhiAims &&
@@ -894,7 +923,10 @@ void write_contract_header(std::ostream& output,
                            const std::string& contract_sha256,
                            const librpa_int::qsgw::HeadwingGridMode headwing_grid,
                            const bool update_hartree,
-                           const bool compute_band)
+                           const bool compute_band,
+                           const bool symmetry_reduced_scf_grid,
+                           const std::size_t scf_kpoint_count,
+                           const std::size_t full_kpoint_count)
 {
     using librpa_int::qsgw::HeadwingGridMode;
     const bool compute_headwing =
@@ -921,7 +953,17 @@ void write_contract_header(std::ostream& output,
                    : headwing_grid == HeadwingGridMode::IndependentFullGrid
                          ? "independent_full_grid_analytic_live"
                          : "disabled_stage1")
-           << "\n"
+           << "\n";
+    if (headwing_grid == HeadwingGridMode::IndependentFullGrid)
+    {
+        output << "# headwing_operator_source "
+               << (symmetry_reduced_scf_grid
+                       ? "ibz_restored_to_full_grid"
+                       : "full_grid")
+               << " scf_kpoints=" << scf_kpoint_count
+               << " full_kpoints=" << full_kpoint_count << "\n";
+    }
+    output
            << "# symmetry exx_" << (use_symmetry_exx ? "on" : "off")
            << "_gw_" << (use_symmetry_gw ? "on" : "off")
            << "_rpa_" << (use_symmetry_rpa ? "on" : "off") << "\n"
@@ -993,6 +1035,9 @@ void run_qsgw_stage_one(const bool compute_band)
         headwing_grid == HeadwingGridMode::IndependentFullGrid
             ? IterationChannel::Headwing
             : IterationChannel::Grid;
+    const bool symmetry_reduced_scf_grid =
+        dataset->pbc.kfrac_list.size() <
+        dataset->pbc.kfrac_list_full.size();
 
     const std::string contract_path = resolve_input_path(
         driver_params.input_dir, driver_params.qsgw_input_contract);
@@ -1147,11 +1192,15 @@ void run_qsgw_stage_one(const bool compute_band)
             throw std::runtime_error("Cannot open QSGW trace output");
         write_contract_header(
             trace, contract_path, contract_sha256, headwing_grid,
-            driver_params.qsgw_update_hartree, compute_band);
+            driver_params.qsgw_update_hartree, compute_band,
+            symmetry_reduced_scf_grid, dataset->pbc.kfrac_list.size(),
+            dataset->pbc.kfrac_list_full.size());
         write_contract_header(eigenvalue_trace, contract_path,
                                contract_sha256, headwing_grid,
                                driver_params.qsgw_update_hartree,
-                               compute_band);
+                               compute_band, symmetry_reduced_scf_grid,
+                               dataset->pbc.kfrac_list.size(),
+                               dataset->pbc.kfrac_list_full.size());
         write_iteration_summary_header(trace);
         write_eigenvalue_trace_header(eigenvalue_trace);
         if (driver_params.qsgw_write_iteration_matrices)
@@ -1159,7 +1208,10 @@ void run_qsgw_stage_one(const bool compute_band)
             write_contract_header(matrix_trace, contract_path,
                                    contract_sha256, headwing_grid,
                                    driver_params.qsgw_update_hartree,
-                                   compute_band);
+                                   compute_band,
+                                   symmetry_reduced_scf_grid,
+                                   dataset->pbc.kfrac_list.size(),
+                                   dataset->pbc.kfrac_list_full.size());
             write_matrix_trace_header(matrix_trace);
             write_matrix_component_trace(
                 matrix_trace, 0, IterationChannel::Grid, "h0",
@@ -1511,8 +1563,19 @@ void run_qsgw_stage_one(const bool compute_band)
             dataset->mf, reference, dataset->pbc.weight_k, electron_count);
         if (independent_headwing)
         {
-            independent_headwing_update =
-                update_independent_headwing_state(
+            independent_headwing_update = symmetry_reduced_scf_grid
+                ? update_symmetry_reduced_independent_headwing_state(
+                    mixed_hamiltonian, reference,
+                    dataset->pbc.kfrac_list,
+                    dataset->pbc.kfrac_list_full, dataset->pbc.Rlist,
+                    dataset->symmetry_context, dataset->basis_wfc,
+                    independent_headwing->live,
+                    independent_headwing->reference,
+                    independent_headwing->kpoints,
+                    independent_headwing->reference_velocity,
+                    independent_headwing->live_velocity,
+                    independent_headwing->weights, electron_count)
+                : update_independent_headwing_state(
                     mixed_hamiltonian, reference,
                     dataset->pbc.kfrac_list, dataset->pbc.Rlist,
                     independent_headwing->live,

@@ -7,21 +7,14 @@ namespace librpa_int
 {
 namespace qsgw
 {
+namespace
+{
 
-IndependentHeadwingUpdateResult update_independent_headwing_state(
-    const SpinKMatrixMap& source_hamiltonian,
-    const MeanField& source_reference,
-    const std::vector<Vector3_Order<double>>& source_kpoints,
-    const std::vector<Vector3_Order<int>>& real_space_cells,
+void require_distinct_headwing_state(
     MeanField& target_live,
     const MeanField& target_reference,
-    const std::vector<Vector3_Order<double>>& target_kpoints,
     const VelocityMatrix& target_reference_velocity,
-    VelocityMatrix& target_live_velocity,
-    const std::vector<double>& target_kpoint_weights,
-    const double electron_count,
-    const OperatorFourierOptions& fourier_options,
-    const OccupationSettings& occupation_settings)
+    VelocityMatrix& target_live_velocity)
 {
     if (&target_live == &target_reference)
     {
@@ -33,12 +26,18 @@ IndependentHeadwingUpdateResult update_independent_headwing_state(
         throw std::invalid_argument(
             "QSGW independent head-wing live and reference velocities must be distinct");
     }
+}
 
-    OperatorFourierResult projection = interpolate_fixed_basis_operator(
-        source_hamiltonian, source_reference, source_kpoints,
-        real_space_cells, target_reference, target_kpoints,
-        fourier_options);
-
+IndependentHeadwingUpdateResult apply_headwing_projection(
+    OperatorFourierResult projection,
+    MeanField& target_live,
+    const MeanField& target_reference,
+    const VelocityMatrix& target_reference_velocity,
+    VelocityMatrix& target_live_velocity,
+    const std::vector<double>& target_kpoint_weights,
+    const double electron_count,
+    const OccupationSettings& occupation_settings)
+{
     MeanField next_live = target_live;
     VelocityMatrix next_velocity = target_live_velocity;
     FixedBasisDiagonalizationResult diagonalization =
@@ -71,6 +70,69 @@ IndependentHeadwingUpdateResult update_independent_headwing_state(
     result.maximum_repaired_target_hermiticity_error =
         projection.maximum_repaired_target_hermiticity_error;
     return result;
+}
+
+} // namespace
+
+IndependentHeadwingUpdateResult update_independent_headwing_state(
+    const SpinKMatrixMap& source_hamiltonian,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    MeanField& target_live,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const VelocityMatrix& target_reference_velocity,
+    VelocityMatrix& target_live_velocity,
+    const std::vector<double>& target_kpoint_weights,
+    const double electron_count,
+    const OperatorFourierOptions& fourier_options,
+    const OccupationSettings& occupation_settings)
+{
+    require_distinct_headwing_state(
+        target_live, target_reference, target_reference_velocity,
+        target_live_velocity);
+    return apply_headwing_projection(
+        interpolate_fixed_basis_operator(
+            source_hamiltonian, source_reference, source_kpoints,
+            real_space_cells, target_reference, target_kpoints,
+            fourier_options),
+        target_live, target_reference, target_reference_velocity,
+        target_live_velocity, target_kpoint_weights, electron_count,
+        occupation_settings);
+}
+
+IndependentHeadwingUpdateResult
+update_symmetry_reduced_independent_headwing_state(
+    const SpinKMatrixMap& source_hamiltonian,
+    const MeanField& source_reference,
+    const std::vector<Vector3_Order<double>>& source_kpoints,
+    const std::vector<Vector3_Order<double>>& full_source_kpoints,
+    const std::vector<Vector3_Order<int>>& real_space_cells,
+    const SymmetryContext& symmetry_context,
+    const AtomicBasis& source_basis,
+    MeanField& target_live,
+    const MeanField& target_reference,
+    const std::vector<Vector3_Order<double>>& target_kpoints,
+    const VelocityMatrix& target_reference_velocity,
+    VelocityMatrix& target_live_velocity,
+    const std::vector<double>& target_kpoint_weights,
+    const double electron_count,
+    const OperatorFourierOptions& fourier_options,
+    const OccupationSettings& occupation_settings)
+{
+    require_distinct_headwing_state(
+        target_live, target_reference, target_reference_velocity,
+        target_live_velocity);
+    return apply_headwing_projection(
+        interpolate_symmetry_reduced_fixed_basis_operator(
+            source_hamiltonian, source_reference, source_kpoints,
+            full_source_kpoints, real_space_cells, target_reference,
+            target_kpoints, symmetry_context, source_basis,
+            fourier_options),
+        target_live, target_reference, target_reference_velocity,
+        target_live_velocity, target_kpoint_weights, electron_count,
+        occupation_settings);
 }
 
 } // namespace qsgw
