@@ -65,7 +65,6 @@ foreach(target
     test_qsgw_hartree_kernel
     test_qsgw_hartree_route
     test_qsgw_hartree_workflow
-    test_qsgw_headwing_update
     test_qsgw_input_contract
     test_qsgw_iteration_trace
     test_qsgw_mixing

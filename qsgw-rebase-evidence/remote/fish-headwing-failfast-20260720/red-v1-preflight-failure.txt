@@ -1,0 +1,5 @@
+run=red-v1
+result=failed_before_evidence_directory_and_before_configure
+cause=git_worktree_dot_git_is_a_file_not_a_directory
+source_mutated=false
+numerical_or_test_result=none

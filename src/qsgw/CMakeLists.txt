@@ -10,7 +10,6 @@ target_sources(rpa_lib PRIVATE
   hartree_kernel.cpp
   hartree_route.cpp
   hartree_workflow.cpp
-  headwing_update.cpp
   input_contract.cpp
   iteration_trace.cpp
   mixing.cpp

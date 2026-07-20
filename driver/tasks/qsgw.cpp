@@ -5,7 +5,6 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
-#include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -29,7 +28,6 @@
 #include "../../src/qsgw/hamiltonian_mixing.h"
 #include "../../src/qsgw/hartree_route.h"
 #include "../../src/qsgw/hartree_workflow.h"
-#include "../../src/qsgw/headwing_update.h"
 #include "../../src/qsgw/input_contract.h"
 #include "../../src/qsgw/iteration_trace.h"
 #include "../../src/qsgw/occupation.h"
@@ -52,7 +50,6 @@ using librpa_int::Vector3_Order;
 using librpa_int::cplxdb;
 using librpa_int::qsgw::ScopedReferenceEigenvectors;
 using librpa_int::qsgw::SpinKMatrixMap;
-using librpa_int::qsgw::VelocityMatrix;
 using SigmaMatrixMap = librpa_int::qsgw::SpinKFrequencyMatrixMap;
 
 template <typename Function>
@@ -126,125 +123,6 @@ std::filesystem::path resolved_absolute_path(
         ? value
         : std::filesystem::path(base) / value;
     return std::filesystem::absolute(resolved).lexically_normal();
-}
-
-struct HeadwingKPathInfo
-{
-    int n_basis = 0;
-    int n_states = 0;
-    int n_spins = 0;
-    std::vector<Vector3_Order<double>> kpoints;
-};
-
-struct IndependentHeadwingState
-{
-    MeanField reference;
-    MeanField live;
-    VelocityMatrix reference_velocity;
-    VelocityMatrix live_velocity;
-    std::vector<Vector3_Order<double>> kpoints;
-    std::vector<double> weights;
-    librpa_int::qsgw::OccupationResult initial_occupations;
-    SpinKMatrixMap reference_hamiltonian;
-    std::unique_ptr<librpa_int::KPointBlacsParallelContext> kblacs;
-    librpa_int::Dataset* owner = nullptr;
-
-    ~IndependentHeadwingState()
-    {
-        if (owner != nullptr) owner->p_headwing.reset();
-    }
-};
-
-HeadwingKPathInfo read_independent_headwing_kpoints(
-    const std::filesystem::path& path,
-    const bool use_spinor_wfc)
-{
-    librpa_int::require_readable_file(path.string());
-    std::ifstream input(path);
-    HeadwingKPathInfo result;
-    int n_kpoints = 0;
-    input >> result.n_basis >> result.n_states >> result.n_spins >> n_kpoints;
-    if (!input || result.n_basis <= 0 || result.n_states <= 0 ||
-        result.n_spins <= 0 || n_kpoints <= 0)
-    {
-        throw std::invalid_argument(
-            "Invalid QSGW independent head-wing k_path_info header in " +
-            path.string());
-    }
-    if (use_spinor_wfc)
-    {
-        if (result.n_basis % 2 != 0)
-        {
-            throw std::invalid_argument(
-                "QSGW independent head-wing spinor basis size must be even");
-        }
-        result.n_basis /= 2;
-    }
-
-    result.kpoints.reserve(static_cast<std::size_t>(n_kpoints));
-    for (int kpoint = 0; kpoint < n_kpoints; ++kpoint)
-    {
-        Vector3_Order<double> coordinate;
-        input >> coordinate.x >> coordinate.y >> coordinate.z;
-        if (!input || !std::isfinite(coordinate.x) ||
-            !std::isfinite(coordinate.y) || !std::isfinite(coordinate.z))
-        {
-            throw std::invalid_argument(
-                "Invalid QSGW independent head-wing k point in " +
-                path.string());
-        }
-        result.kpoints.push_back(coordinate);
-    }
-    return result;
-}
-
-void validate_independent_wfc_reader_set(
-    const librpa_int::qsgw::IndependentHeadwingPaths& paths)
-{
-    std::vector<std::filesystem::path> actual;
-    const std::string& prefix = driver::driver_params.prefix_eigvecs_scf;
-    for (const auto& entry : std::filesystem::directory_iterator(
-             paths.directory))
-    {
-        if (!entry.is_regular_file()) continue;
-        const std::string filename = entry.path().filename().string();
-        if (filename.rfind(prefix, 0) == 0)
-        {
-            actual.push_back(
-                std::filesystem::absolute(entry.path()).lexically_normal());
-        }
-    }
-    std::vector<std::filesystem::path> expected = paths.wavefunctions;
-    std::sort(actual.begin(), actual.end());
-    std::sort(expected.begin(), expected.end());
-    if (actual != expected)
-    {
-        throw std::invalid_argument(
-            "QSGW independent head-wing WFC files selected by the reader do not exactly match the input contract");
-    }
-}
-
-void validate_same_grid_velocity_binding(
-    const librpa_int::qsgw::QsgwInputContract& contract,
-    const std::string& contract_base,
-    const int n_kpoints)
-{
-    std::vector<std::filesystem::path> expected =
-        librpa_int::qsgw::resolve_same_grid_velocity_paths(
-            contract.producer(), driver::driver_params.input_dir, n_kpoints);
-
-    std::vector<std::filesystem::path> declared;
-    for (const auto& file : contract.files("velocity_mf0"))
-    {
-        declared.push_back(resolved_absolute_path(contract_base, file.file));
-    }
-    std::sort(expected.begin(), expected.end());
-    std::sort(declared.begin(), declared.end());
-    if (declared != expected)
-    {
-        throw std::invalid_argument(
-            "QSGW velocity_mf0 contract files do not exactly match the same-grid head/wing files read by the driver");
-    }
 }
 
 bool starts_with(const std::string& text, const std::string& prefix)
@@ -370,13 +248,12 @@ void validate_stage_one_contract(
     const librpa_int::qsgw::QsgwInputContract& contract,
     const librpa_int::Dataset& dataset,
     const std::string& contract_base,
-    const librpa_int::qsgw::HeadwingGridMode headwing_grid,
     const bool update_hartree,
     const bool compute_band)
 {
     using namespace librpa_int::qsgw;
     validate_qsgw_execution_modes(
-        contract, headwing_grid, update_hartree, compute_band);
+        contract, HeadwingGridMode::Disabled, update_hartree, compute_band);
     if (contract.n_spins() != dataset.mf.get_n_spins() ||
         contract.n_bands() != dataset.mf.get_n_bands() ||
         contract.n_aos() != dataset.mf.get_n_aos() ||
@@ -438,21 +315,6 @@ void validate_stage_one_contract(
         throw std::invalid_argument(
             "QSGW input-contract producer does not match constants_choice");
     }
-    if (headwing_grid == HeadwingGridMode::ScfGrid)
-    {
-        validate_same_grid_velocity_binding(
-            contract, contract_base, dataset.mf.get_n_kpoints());
-    }
-    else if (headwing_grid == HeadwingGridMode::IndependentFullGrid)
-    {
-        if (contract.producer() != QsgwProducer::Abacus)
-        {
-            throw std::invalid_argument(
-                "QSGW independent full-grid head/wing currently requires ABACUS PyATB input");
-        }
-        validate_independent_headwing_binding(
-            contract, contract_base, driver::driver_params.input_dir);
-    }
     if (update_hartree)
     {
         validate_hartree_reader_binding(contract, contract_base);
@@ -474,134 +336,6 @@ void validate_stage_one_contract(
             contract, contract_base, driver::driver_params.input_dir,
             driver::driver_params.fn_band_kpath_info);
     }
-}
-
-std::unique_ptr<IndependentHeadwingState>
-load_independent_headwing_state(
-    librpa_int::Dataset& dataset,
-    const librpa_int::qsgw::IndependentHeadwingPaths& paths,
-    const int expected_n_kpoints,
-    const MeanField& source_reference,
-    const double electron_count)
-{
-    using namespace librpa_int;
-    using namespace librpa_int::qsgw;
-
-    if (driver::get_bool(driver::opts.use_kpara_scf_eigvec))
-    {
-        throw std::invalid_argument(
-            "QSGW independent head-wing operator Fourier currently requires use_kpara_scf_eigvec = false");
-    }
-    validate_independent_wfc_reader_set(paths);
-    const HeadwingKPathInfo info = read_independent_headwing_kpoints(
-        paths.kpoints, driver::driver_params.use_spinor_wfc);
-    if (static_cast<int>(info.kpoints.size()) != expected_n_kpoints)
-    {
-        throw std::invalid_argument(
-            "QSGW independent head-wing k-point count does not match the input contract");
-    }
-
-    auto state = std::make_unique<IndependentHeadwingState>();
-    state->kpoints = info.kpoints;
-    std::vector<int> identity_map(
-        static_cast<std::size_t>(expected_n_kpoints));
-    for (int kpoint = 0; kpoint < expected_n_kpoints; ++kpoint)
-        identity_map[static_cast<std::size_t>(kpoint)] = kpoint;
-
-    read_scf_occ_eigenvalues(
-        paths.eigenvalues.string(), state->live,
-        driver::driver_params.use_spinor_wfc, identity_map,
-        expected_n_kpoints);
-    const int read_status = read_eigenvector(
-        path_as_directory(paths.directory.string()), state->live,
-        driver::driver_params.use_spinor_wfc, identity_map, nullptr,
-        LegacyTextWfcOrder::SpinBasisBand);
-    if (read_status != 0)
-    {
-        throw std::runtime_error(
-            "Failed to read QSGW independent head-wing eigenvectors from " +
-            paths.directory.string());
-    }
-    read_velocity(
-        paths.velocity.string(), state->live, state->live_velocity);
-
-    const int complete_dimension =
-        state->live.get_n_aos() * state->live.get_n_spinor();
-    if (info.n_basis != state->live.get_n_aos() ||
-        info.n_states != state->live.get_n_bands() ||
-        info.n_spins != state->live.get_n_spins() ||
-        state->live.get_n_bands() != complete_dimension ||
-        source_reference.get_n_spins() != state->live.get_n_spins() ||
-        source_reference.get_n_bands() != state->live.get_n_bands() ||
-        source_reference.get_n_aos() != state->live.get_n_aos() ||
-        source_reference.get_n_spinor() != state->live.get_n_spinor())
-    {
-        throw std::invalid_argument(
-            "QSGW independent head-wing data do not form a complete source-compatible AO basis");
-    }
-    for (int spin = 0; spin < state->live.get_n_spins(); ++spin)
-    {
-        for (int spinor = 0; spinor < state->live.get_n_spinor(); ++spinor)
-        {
-            for (int kpoint = 0;
-                 kpoint < state->live.get_n_kpoints(); ++kpoint)
-            {
-                const ComplexMatrix* wavefunction =
-                    state->live.find_wfc(spin, spinor, kpoint);
-                if (wavefunction == nullptr ||
-                    wavefunction->nr != state->live.get_n_bands() ||
-                    wavefunction->nc != state->live.get_n_aos())
-                {
-                    throw std::invalid_argument(
-                        "QSGW independent head-wing wavefunction map is incomplete");
-                }
-            }
-        }
-    }
-
-    state->reference = state->live;
-    state->reference_velocity = state->live_velocity;
-    state->weights.assign(
-        static_cast<std::size_t>(expected_n_kpoints),
-        1.0 / static_cast<double>(expected_n_kpoints));
-    state->initial_occupations = analyze_qsgw_occupations(
-        state->reference, state->weights, electron_count);
-    state->reference_hamiltonian =
-        build_reference_hamiltonian(state->reference);
-
-    KPointBlacsProcessShape process_shape(
-        KPointBlacsProcessShape::AUTO,
-        KPointBlacsProcessShape::AUTO, true);
-    state->kblacs = std::make_unique<KPointBlacsParallelContext>(
-        process_shape, dataset.comm_h.comm, expected_n_kpoints);
-
-    std::vector<double> frequency_weights;
-    driver::h.get_imaginary_frequency_grids(
-        driver::opts, dataset.omegas_imagfreq, frequency_weights);
-    const auto& frequencies = dataset.tfg.get_freq_nodes();
-    const auto& auxiliary_basis =
-        driver::get_bool(driver::opts.use_shrink_abfs)
-            ? dataset.basis_aux_shrink
-            : dataset.basis_aux;
-    if (!auxiliary_basis.initialized())
-    {
-        throw std::invalid_argument(
-            "QSGW independent head-wing auxiliary basis is not initialized");
-    }
-
-    state->owner = &dataset;
-    dataset.p_headwing = std::make_unique<diele_func>(
-        state->live, state->live_velocity, state->kpoints,
-        dataset.basis_wfc, auxiliary_basis, frequencies,
-        info.n_basis, info.n_states, info.n_spins,
-        auxiliary_basis.nb_total, dataset.pbc, dataset.comm_h,
-        dataset.blacs_h, state->kblacs.get());
-    dataset.p_headwing->use_2d_dielectric =
-        driver::get_bool(driver::opts.use_2d_dielectric);
-    dataset.p_headwing->use_soc = state->live.get_n_spinor() > 1;
-    dataset.p_headwing->debug =
-        librpa_int::global::should_output(LIBRPA_VERBOSE_DEBUG);
-    return state;
 }
 
 SpinKMatrixMap load_vxc_manifest_root(
@@ -767,59 +501,6 @@ SpinKMatrixMap build_correlation_map(
     return result;
 }
 
-SigmaMatrixMap copy_head_tensor(
-    const librpa_int::diele_func& headwing,
-    const std::vector<double>& frequencies)
-{
-    const auto& head = headwing.get_head_matrices();
-    if (head.size() != frequencies.size())
-    {
-        throw std::invalid_argument(
-            "QSGW head tensor and frequency grids have different sizes");
-    }
-
-    SigmaMatrixMap result;
-    for (std::size_t ifrequency = 0; ifrequency < head.size(); ++ifrequency)
-    {
-        Matz tensor(3, 3, librpa_int::MAJOR::ROW);
-        for (int row = 0; row < 3; ++row)
-        {
-            for (int column = 0; column < 3; ++column)
-            {
-                tensor(row, column) = head[ifrequency](row, column);
-            }
-        }
-        result[0][0][frequencies[ifrequency]] = std::move(tensor);
-    }
-    return result;
-}
-
-void refresh_headwing(
-    librpa_int::Dataset& dataset,
-    const librpa::Options& options,
-    const MeanField& live)
-{
-    if (!dataset.p_headwing)
-    {
-        throw std::invalid_argument(
-            "QSGW head/wing object is not initialized");
-    }
-    dataset.p_headwing->get_meanfield_df() = live;
-    dataset.p_headwing->init(options.sqrt_coulomb_threshold, dataset.vq);
-    dataset.p_headwing->cal_head();
-    dataset.epsmacs_imagfreq = dataset.p_headwing->get_head_vec();
-    dataset.omegas_imagfreq = dataset.tfg.get_freq_nodes();
-    if (options.option_dielect_func == 3)
-    {
-        const auto& headwing_cs =
-            options.use_shrink_abfs == LIBRPA_SWITCH_ON
-                ? dataset.cs_data_shrink
-                : dataset.cs_data;
-        dataset.p_headwing->cal_wing(
-            headwing_cs, options.sqrt_coulomb_threshold, dataset.vq);
-    }
-}
-
 librpa_int::qsgw::HartreeStaticData load_hartree_static_input_root(
     librpa_int::Dataset& dataset)
 {
@@ -921,16 +602,9 @@ librpa_int::qsgw::HartreeStaticData load_hartree_static_input_root(
 void write_contract_header(std::ostream& output,
                            const std::string& contract_path,
                            const std::string& contract_sha256,
-                           const librpa_int::qsgw::HeadwingGridMode headwing_grid,
                            const bool update_hartree,
-                           const bool compute_band,
-                           const bool symmetry_reduced_scf_grid,
-                           const std::size_t scf_kpoint_count,
-                           const std::size_t full_kpoint_count)
+                           const bool compute_band)
 {
-    using librpa_int::qsgw::HeadwingGridMode;
-    const bool compute_headwing =
-        headwing_grid != HeadwingGridMode::Disabled;
     const bool use_symmetry_exx =
         driver::get_bool(driver::opts.use_symmetry_exx);
     const bool use_symmetry_gw =
@@ -940,30 +614,8 @@ void write_contract_header(std::ostream& output,
     output << "# qsgw_contract_version 5\n"
            << "# fixed_basis immutable_mf0\n"
            << "# live_update eigenvalues_wfc\n"
-           << "# velocity "
-           << (headwing_grid == HeadwingGridMode::ScfGrid
-                   ? "fixed_basis_rotation"
-                   : headwing_grid == HeadwingGridMode::IndependentFullGrid
-                         ? "live_ao_fourier_rotation"
-                         : "disabled_stage1")
-           << "\n"
-           << "# headwing "
-           << (headwing_grid == HeadwingGridMode::ScfGrid
-                   ? "scf_grid_analytic_live"
-                   : headwing_grid == HeadwingGridMode::IndependentFullGrid
-                         ? "independent_full_grid_analytic_live"
-                         : "disabled_stage1")
-           << "\n";
-    if (headwing_grid == HeadwingGridMode::IndependentFullGrid)
-    {
-        output << "# headwing_operator_source "
-               << (symmetry_reduced_scf_grid
-                       ? "ibz_restored_to_full_grid"
-                       : "full_grid")
-               << " scf_kpoints=" << scf_kpoint_count
-               << " full_kpoints=" << full_kpoint_count << "\n";
-    }
-    output
+           << "# velocity disabled_stage1\n"
+           << "# headwing disabled_stage1\n"
            << "# symmetry exx_" << (use_symmetry_exx ? "on" : "off")
            << "_gw_" << (use_symmetry_gw ? "on" : "off")
            << "_rpa_" << (use_symmetry_rpa ? "on" : "off") << "\n"
@@ -996,6 +648,12 @@ void run_qsgw_stage_one(const bool compute_band)
     using namespace librpa_int::global;
     using namespace librpa_int::qsgw;
 
+    if (driver::get_bool(opts.replace_w_head) || driver_params.use_pyatb)
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "QSGW iterative head/wing is unsupported; set replace_w_head = false and use_pyatb = false");
+    }
+
     profiler.start("qsgw", "QSGW fixed-basis self-consistent calculation");
     const auto dataset = api::get_dataset_instance(h);
     if (opts.parallel_routing != LIBRPA_ROUTING_LIBRI &&
@@ -1023,28 +681,11 @@ void run_qsgw_stage_one(const bool compute_band)
                 driver_params.version_coul_reader,
                 driver::get_bool(opts.use_shrink_abfs));
 
-    const bool compute_headwing =
-        driver::get_bool(opts.replace_w_head) &&
-        (opts.option_dielect_func == 3 || opts.option_dielect_func == 4);
-    const HeadwingGridMode headwing_grid = !compute_headwing
-        ? HeadwingGridMode::Disabled
-        : driver_params.use_pyatb
-              ? HeadwingGridMode::IndependentFullGrid
-              : HeadwingGridMode::ScfGrid;
-    const IterationChannel headwing_channel =
-        headwing_grid == HeadwingGridMode::IndependentFullGrid
-            ? IterationChannel::Headwing
-            : IterationChannel::Grid;
-    const bool symmetry_reduced_scf_grid =
-        dataset->pbc.kfrac_list.size() <
-        dataset->pbc.kfrac_list_full.size();
-
     const std::string contract_path = resolve_input_path(
         driver_params.input_dir, driver_params.qsgw_input_contract);
     std::optional<QsgwInputContract> input_contract;
     std::string contract_sha256;
     int contract_producer = -1;
-    int contract_headwing_kpoints = 0;
     collective_root_stage(dataset->comm_h, "QSGW input preflight", [&] {
         require_readable_file(contract_path);
         std::ifstream stream(contract_path);
@@ -1052,15 +693,12 @@ void run_qsgw_stage_one(const bool compute_band)
         const std::string base = parent_path(contract_path);
         input_contract->validate_file_hashes(base);
         validate_stage_one_contract(
-            *input_contract, *dataset, base, headwing_grid,
+            *input_contract, *dataset, base,
             driver_params.qsgw_update_hartree, compute_band);
         contract_producer = static_cast<int>(input_contract->producer());
-        contract_headwing_kpoints =
-            input_contract->n_headwing_kpoints();
         contract_sha256 = sha256_file(contract_path);
     });
     dataset->comm_h.bcast(&contract_producer, 1, 0);
-    dataset->comm_h.bcast(&contract_headwing_kpoints, 1, 0);
     if (contract_producer != static_cast<int>(QsgwProducer::Abacus) &&
         contract_producer != static_cast<int>(QsgwProducer::FhiAims))
     {
@@ -1075,43 +713,6 @@ void run_qsgw_stage_one(const bool compute_band)
         reference, dataset->pbc.weight_k, electron_count);
     const SpinKMatrixMap reference_hamiltonian =
         build_reference_hamiltonian(reference);
-
-    std::unique_ptr<IndependentHeadwingState> independent_headwing;
-    std::optional<MeanField> scf_headwing_reader_meanfield;
-    VelocityMatrix scf_headwing_reader_velocity;
-    VelocityMatrix reference_velocity;
-    if (compute_headwing)
-    {
-        if (headwing_grid == HeadwingGridMode::ScfGrid)
-        {
-            read_headwing_input(
-                driver_params.input_dir, opts.option_dielect_func == 3);
-            scf_headwing_reader_meanfield =
-                dataset->p_headwing->get_meanfield_df();
-            scf_headwing_reader_velocity = dataset->velocity_matrix;
-            reference_velocity = scf_headwing_reader_velocity;
-            if (contract_producer == static_cast<int>(QsgwProducer::FhiAims))
-            {
-                prepare_fhi_aims_interband_velocity(
-                    reference_velocity, reference);
-            }
-            align_distributed_velocity_to_reference_wfc(
-                dataset->p_headwing->get_meanfield_df(), reference,
-                reference_velocity, dataset->comm_h);
-        }
-        else
-        {
-            const IndependentHeadwingPaths paths =
-                resolve_independent_headwing_paths(
-                    driver_params.input_dir,
-                    contract_headwing_kpoints);
-            independent_headwing = load_independent_headwing_state(
-                *dataset, paths, contract_headwing_kpoints,
-                reference, electron_count);
-            refresh_headwing(
-                *dataset, opts, independent_headwing->live);
-        }
-    }
 
     std::optional<MeanField> band_reference;
     SpinKMatrixMap band_reference_hamiltonian;
@@ -1191,27 +792,20 @@ void run_qsgw_stage_one(const bool compute_band)
             (driver_params.qsgw_write_iteration_matrices && !matrix_trace))
             throw std::runtime_error("Cannot open QSGW trace output");
         write_contract_header(
-            trace, contract_path, contract_sha256, headwing_grid,
-            driver_params.qsgw_update_hartree, compute_band,
-            symmetry_reduced_scf_grid, dataset->pbc.kfrac_list.size(),
-            dataset->pbc.kfrac_list_full.size());
+            trace, contract_path, contract_sha256,
+            driver_params.qsgw_update_hartree, compute_band);
         write_contract_header(eigenvalue_trace, contract_path,
-                               contract_sha256, headwing_grid,
+                               contract_sha256,
                                driver_params.qsgw_update_hartree,
-                               compute_band, symmetry_reduced_scf_grid,
-                               dataset->pbc.kfrac_list.size(),
-                               dataset->pbc.kfrac_list_full.size());
+                               compute_band);
         write_iteration_summary_header(trace);
         write_eigenvalue_trace_header(eigenvalue_trace);
         if (driver_params.qsgw_write_iteration_matrices)
         {
             write_contract_header(matrix_trace, contract_path,
-                                   contract_sha256, headwing_grid,
+                                   contract_sha256,
                                    driver_params.qsgw_update_hartree,
-                                   compute_band,
-                                   symmetry_reduced_scf_grid,
-                                   dataset->pbc.kfrac_list.size(),
-                                   dataset->pbc.kfrac_list_full.size());
+                                   compute_band);
             write_matrix_trace_header(matrix_trace);
             write_matrix_component_trace(
                 matrix_trace, 0, IterationChannel::Grid, "h0",
@@ -1238,42 +832,6 @@ void run_qsgw_stage_one(const bool compute_band)
                     matrix_trace, 0, IterationChannel::Band,
                     dataset->mf_band);
             }
-            if (compute_headwing)
-            {
-                if (independent_headwing)
-                {
-                    write_matrix_component_trace(
-                        matrix_trace, 0, IterationChannel::Headwing,
-                        "h0", independent_headwing->reference_hamiltonian);
-                    write_wavefunction_trace(
-                        matrix_trace, 0, IterationChannel::Headwing,
-                        independent_headwing->reference);
-                    write_occupation_trace(
-                        matrix_trace, 0, IterationChannel::Headwing,
-                        independent_headwing->live);
-                }
-                else
-                {
-                    write_wavefunction_trace(
-                        matrix_trace, 0, headwing_channel,
-                        *scf_headwing_reader_meanfield,
-                        "headwing_reader_wfc");
-                    write_velocity_trace(
-                        matrix_trace, 0, headwing_channel,
-                        scf_headwing_reader_velocity,
-                        "headwing_reader_velocity");
-                }
-                write_velocity_trace(
-                    matrix_trace, 0, headwing_channel,
-                    independent_headwing
-                        ? independent_headwing->reference_velocity
-                        : reference_velocity);
-                write_frequency_matrix_component_trace(
-                    matrix_trace, 0, headwing_channel,
-                    "head_tensor", copy_head_tensor(
-                        *dataset->p_headwing,
-                        dataset->tfg.get_freq_nodes()));
-            }
         }
         IterationSummary summary;
         summary.iteration = 0;
@@ -1291,13 +849,6 @@ void run_qsgw_stage_one(const bool compute_band)
                 eigenvalue_trace, 0, IterationChannel::Band,
                 *band_reference, dataset->kfrac_band_list);
         }
-        if (independent_headwing)
-        {
-            write_eigenvalue_trace(
-                eigenvalue_trace, 0, IterationChannel::Headwing,
-                independent_headwing->live,
-                independent_headwing->kpoints);
-        }
     });
 
     bool converged = false;
@@ -1308,29 +859,6 @@ void run_qsgw_stage_one(const bool compute_band)
         completed_iterations = iteration;
         const EigenvalueSnapshot previous = eigenvalue_snapshot(dataset->mf);
         dataset->invalidate_compute_objects();
-        SigmaMatrixMap head_tensor;
-        std::optional<IndependentHeadwingUpdateResult>
-            independent_headwing_update;
-        if (compute_headwing)
-        {
-            const bool replay_scf_reader_headwing =
-                headwing_grid == HeadwingGridMode::ScfGrid &&
-                iteration == 1;
-            if (!replay_scf_reader_headwing)
-            {
-                refresh_headwing(
-                    *dataset, opts,
-                    independent_headwing
-                        ? independent_headwing->live
-                        : dataset->mf);
-            }
-            collective_root_stage(
-                dataset->comm_h, "QSGW head-tensor trace", [&] {
-                    head_tensor = copy_head_tensor(
-                        *dataset->p_headwing,
-                        dataset->tfg.get_freq_nodes());
-                });
-        }
         h.build_g0w0_sigma(opts);
         if (!dataset->p_exx || !dataset->p_g0w0)
             throw LIBRPA_RUNTIME_ERROR(
@@ -1479,12 +1007,6 @@ void run_qsgw_stage_one(const bool compute_band)
                 write_frequency_matrix_component_trace(
                     rows, iteration, IterationChannel::Grid,
                     "sigma_c_iw", sigma);
-                if (compute_headwing)
-                {
-                    write_frequency_matrix_component_trace(
-                        rows, iteration, headwing_channel,
-                        "head_tensor", head_tensor);
-                }
                 write_matrix_component_trace(
                     rows, iteration, IterationChannel::Grid, "exx",
                     exchange);
@@ -1537,21 +1059,9 @@ void run_qsgw_stage_one(const bool compute_band)
             broadcast_spin_k_matrix_map(
                 mixed_band_hamiltonian, 0, dataset->comm_h);
         }
-        if (headwing_grid == HeadwingGridMode::ScfGrid && iteration == 1)
-        {
-            // The reader-computed head/wing is replayed for iteration one.
-            // Switch to the aligned fixed-basis velocity before rotating v0.
-            dataset->velocity_matrix = reference_velocity;
-        }
         const FixedBasisDiagonalizationResult diagonalization =
             diagonalize_in_reference_basis(
-                dataset->mf, reference, mixed_hamiltonian,
-                headwing_grid == HeadwingGridMode::ScfGrid
-                    ? &reference_velocity
-                    : nullptr,
-                headwing_grid == HeadwingGridMode::ScfGrid
-                    ? &dataset->velocity_matrix
-                    : nullptr);
+                dataset->mf, reference, mixed_hamiltonian);
         std::optional<FixedBasisDiagonalizationResult> band_diagonalization;
         if (compute_band)
         {
@@ -1561,30 +1071,6 @@ void run_qsgw_stage_one(const bool compute_band)
         }
         const OccupationResult occupations = update_qsgw_occupations(
             dataset->mf, reference, dataset->pbc.weight_k, electron_count);
-        if (independent_headwing)
-        {
-            independent_headwing_update = symmetry_reduced_scf_grid
-                ? update_symmetry_reduced_independent_headwing_state(
-                    mixed_hamiltonian, reference,
-                    dataset->pbc.kfrac_list,
-                    dataset->pbc.kfrac_list_full, dataset->pbc.Rlist,
-                    dataset->symmetry_context, dataset->basis_wfc,
-                    independent_headwing->live,
-                    independent_headwing->reference,
-                    independent_headwing->kpoints,
-                    independent_headwing->reference_velocity,
-                    independent_headwing->live_velocity,
-                    independent_headwing->weights, electron_count)
-                : update_independent_headwing_state(
-                    mixed_hamiltonian, reference,
-                    dataset->pbc.kfrac_list, dataset->pbc.Rlist,
-                    independent_headwing->live,
-                    independent_headwing->reference,
-                    independent_headwing->kpoints,
-                    independent_headwing->reference_velocity,
-                    independent_headwing->live_velocity,
-                    independent_headwing->weights, electron_count);
-        }
         if (compute_band)
             dataset->mf_band.get_efermi() = occupations.chemical_potential;
         const double maximum_change_ev =
@@ -1631,14 +1117,6 @@ void run_qsgw_stage_one(const bool compute_band)
                     eigenvalue_trace, iteration, IterationChannel::Band,
                     dataset->mf_band, dataset->kfrac_band_list);
             }
-            if (independent_headwing)
-            {
-                write_eigenvalue_trace(
-                    eigenvalue_trace, iteration,
-                    IterationChannel::Headwing,
-                    independent_headwing->live,
-                    independent_headwing->kpoints);
-            }
             if (driver_params.qsgw_write_iteration_matrices)
             {
                 matrix_trace << matrix_rows;
@@ -1662,80 +1140,6 @@ void run_qsgw_stage_one(const bool compute_band)
                     write_occupation_trace(
                         matrix_trace, iteration, IterationChannel::Band,
                         dataset->mf_band);
-                }
-                if (compute_headwing)
-                {
-                    write_velocity_trace(
-                        matrix_trace, iteration, headwing_channel,
-                        independent_headwing
-                            ? independent_headwing->live_velocity
-                            : dataset->velocity_matrix);
-                }
-                if (independent_headwing)
-                {
-                    if (!independent_headwing_update)
-                    {
-                        throw std::runtime_error(
-                            "QSGW independent head-wing update result is missing");
-                    }
-                    write_matrix_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing, "projected_h",
-                        independent_headwing_update->projected_hamiltonian);
-                    write_matrix_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing, "rotation_u",
-                        independent_headwing_update->unitary);
-                    write_wavefunction_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        independent_headwing->live);
-                    write_occupation_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        independent_headwing->live);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "basis_inverse_residual",
-                        independent_headwing_update
-                            ->maximum_basis_inverse_residual);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "basis_condition_estimate",
-                        independent_headwing_update
-                            ->maximum_basis_condition_estimate);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "fourier_orthogonality_residual",
-                        independent_headwing_update
-                            ->maximum_fourier_orthogonality_residual);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "source_roundtrip_relative_error",
-                        independent_headwing_update
-                            ->maximum_source_roundtrip_relative_error);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "target_hermiticity_error",
-                        independent_headwing_update
-                            ->maximum_target_hermiticity_error);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "target_relative_hermiticity_error",
-                        independent_headwing_update
-                            ->maximum_target_relative_hermiticity_error);
-                    write_scalar_component_trace(
-                        matrix_trace, iteration,
-                        IterationChannel::Headwing,
-                        "repaired_target_hermiticity_error",
-                        independent_headwing_update
-                            ->maximum_repaired_target_hermiticity_error);
                 }
             }
             trace.flush();

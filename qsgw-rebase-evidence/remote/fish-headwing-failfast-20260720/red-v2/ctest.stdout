@@ -1,0 +1,13 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-headwing-failfast-red-v1/build
+Test project /tmp/librpa-qsgw-headwing-failfast-red-v1/build
+    Start 6: test_qsgw_inputfile
+1/1 Test #6: test_qsgw_inputfile ..............Subprocess aborted***Exception:   0.11 sec
+test_qsgw_inputfile: /tmp/librpa-qsgw-headwing-failfast-red-v1/driver/test/test_qsgw_inputfile.cpp:79: void {anonymous}::assert_throws_with_message(Function&&, const std::string&) [with Function = test_qsgw_headwing_requests_fail_fast()::<lambda()>; std::string = std::__cxx11::basic_string<char>]: Assertion `threw' failed.
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.12 sec
+
+The following tests FAILED:
+	  6 - test_qsgw_inputfile (Subprocess aborted)

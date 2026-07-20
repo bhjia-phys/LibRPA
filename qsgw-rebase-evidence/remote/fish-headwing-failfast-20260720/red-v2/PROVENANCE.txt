@@ -1,0 +1,8 @@
+analysis=qsgw_headwing_failfast_tdd_red
+acceptance_gate=false
+expected_failure=true
+source_root=/tmp/librpa-qsgw-headwing-failfast-red-v1
+source_commit=4b3bd906a65d4a8602de89195449fc704cc39d85
+test_sha256=83e93e99423666bc216b984de1ac9c7f32c031fb108c8d4c356c00aa4924b1c1
+ctest_exit_code=8
+completed_utc=2026-07-20T08:13:22Z
