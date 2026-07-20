@@ -203,22 +203,30 @@ void test_qsgw_does_not_require_the_g0w0_matrix_dump_switch()
     assert(driver::opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_OFF);
 }
 
-void test_qsgw_rejects_all_crystal_symmetry_modes()
+void test_qsgw_preserves_upstream_crystal_symmetry_options()
 {
-    assert_throws([&] {
-        parse(valid_qsgw_prefix() +
-              "use_symmetry_exx = true\n"
-              "use_symmetry_gw = true\n");
-    });
-    assert_throws([&] {
-        parse(valid_qsgw_prefix() + "use_symmetry_gw = true\n");
-    });
-    assert_throws([&] {
-        parse(valid_qsgw_prefix() + "use_symmetry_exx = true\n");
-    });
-    assert_throws([&] {
-        parse(valid_qsgw_prefix() + "use_symmetry_rpa = true\n");
-    });
+    parse(valid_qsgw_prefix() + "use_symmetry_exx = true\n");
+    assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
+    assert(driver::opts.use_symmetry_gw == LIBRPA_SWITCH_OFF);
+    assert(driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_OFF);
+
+    parse(valid_qsgw_prefix() + "use_symmetry_gw = true\n");
+    assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_OFF);
+    assert(driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON);
+    assert(driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON);
+
+    parse(valid_qsgw_prefix() + "use_symmetry_rpa = true\n");
+    assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_OFF);
+    assert(driver::opts.use_symmetry_gw == LIBRPA_SWITCH_OFF);
+    assert(driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON);
+
+    parse(valid_qsgw_prefix() +
+          "use_symmetry_exx = true\n"
+          "use_symmetry_gw = true\n"
+          "use_symmetry_rpa = true\n");
+    assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
+    assert(driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON);
+    assert(driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON);
 }
 
 void test_staged_qsgw_rejects_ambiguous_or_unsupported_inputs()
@@ -280,7 +288,7 @@ int main()
     test_independent_full_grid_headwing_is_explicitly_selected();
     test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls();
     test_qsgw_does_not_require_the_g0w0_matrix_dump_switch();
-    test_qsgw_rejects_all_crystal_symmetry_modes();
+    test_qsgw_preserves_upstream_crystal_symmetry_options();
     test_staged_qsgw_rejects_ambiguous_or_unsupported_inputs();
     test_g0w0_parser_defaults_are_unchanged();
     return 0;

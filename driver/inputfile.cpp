@@ -127,13 +127,7 @@ static void validate_input_parameters()
         if (params.use_pyatb && !analytic_headwing)
             throw std::runtime_error(
                 "QSGW use_pyatb requires analytic head/wing option_dielect_func = 3 or 4");
-        const bool use_symmetry_exx =
-            driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
-        const bool use_symmetry_gw =
-            driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
-        const bool use_symmetry_rpa =
-            driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
-        // QSGW symmetry gate removed — delegates to upstream G0W0 symmetry handling
+        // QSGW inherits the upstream EXX, GW, and RPA symmetry switches.
     }
 }
 

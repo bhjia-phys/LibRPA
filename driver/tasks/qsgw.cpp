@@ -899,6 +899,12 @@ void write_contract_header(std::ostream& output,
     using librpa_int::qsgw::HeadwingGridMode;
     const bool compute_headwing =
         headwing_grid != HeadwingGridMode::Disabled;
+    const bool use_symmetry_exx =
+        driver::get_bool(driver::opts.use_symmetry_exx);
+    const bool use_symmetry_gw =
+        driver::get_bool(driver::opts.use_symmetry_gw);
+    const bool use_symmetry_rpa =
+        driver::get_bool(driver::opts.use_symmetry_rpa);
     output << "# qsgw_contract_version 5\n"
            << "# fixed_basis immutable_mf0\n"
            << "# live_update eigenvalues_wfc\n"
@@ -916,7 +922,9 @@ void write_contract_header(std::ostream& output,
                          ? "independent_full_grid_analytic_live"
                          : "disabled_stage1")
            << "\n"
-           << "# symmetry unsupported_full_bz_only\n"
+           << "# symmetry exx_" << (use_symmetry_exx ? "on" : "off")
+           << "_gw_" << (use_symmetry_gw ? "on" : "off")
+           << "_rpa_" << (use_symmetry_rpa ? "on" : "off") << "\n"
            << "# hartree "
            << (update_hartree ? "delta_density" : "disabled_stage1")
            << "\n";
