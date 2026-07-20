@@ -1,0 +1,17 @@
+analysis=qsgw_headwing_failfast_tdd_green
+acceptance_gate=true
+source_root=/tmp/librpa-qsgw-headwing-failfast-green-v3-44059ebf
+source_commit=44059ebf4dbe2c76f2bfa7598baa388e14b0205e
+upstream_base=42d3863c1d865194d382a085851d1e2e8a39764f
+expected_test_count=60
+passed_test_count=60
+failed_test_count=0
+not_run_test_count=0
+focused_ctest=pass
+full_ctest=pass
+protected_diff=empty
+cxx_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiicpx
+fortran_compiler=/opt/intel/oneapi/mpi/2021.16/bin/mpiifx
+executable_sha256=14343853a0e9857d90426bbe40cd1f2dec5cc735c152c3b67529f7b1bd4e391d
+cmake_cache_sha256=8e1ac909dfff1277255046c85fda8f7850dd01dfb52b9802c8c6123bd2d85be7
+completed_utc=2026-07-20T08:51:05Z

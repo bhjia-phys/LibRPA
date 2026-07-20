@@ -1,0 +1,18 @@
+CMake Error: File /tmp/.git/HEAD does not exist.
+CMake Error at build/CMakeFiles/git-data/grabRef.cmake:42 (configure_file):
+  configure_file Problem configuring file
+Call Stack (most recent call first):
+  cmake/GetGitRevisionDescription.cmake:168 (include)
+  CMakeLists.txt:133 (get_git_head_revision)
+
+
+CMake Error at build/CMakeFiles/git-data/grabRef.cmake:46 (file):
+  file failed to open for reading (No such file or directory):
+
+    /tmp/librpa-qsgw-headwing-failfast-green-v1-44059ebf/build/CMakeFiles/git-data/head-ref
+Call Stack (most recent call first):
+  cmake/GetGitRevisionDescription.cmake:168 (include)
+  CMakeLists.txt:133 (get_git_head_revision)
+
+
+-- Python 3 interpreter version: 3.13.5

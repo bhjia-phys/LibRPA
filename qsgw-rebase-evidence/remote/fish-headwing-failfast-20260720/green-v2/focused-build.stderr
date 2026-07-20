@@ -1,0 +1,9 @@
+/tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8:
+
+  628 |     if (max_error_tmp > max_error) then
+      |        ^
+Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]
+/tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/thirdparty/greenX/GX-TimeFrequency/src/minimax_grids.F90:628:8: Warning: ‘*max_error_297(D)’ may be used uninitialized [-Wmaybe-uninitialized]

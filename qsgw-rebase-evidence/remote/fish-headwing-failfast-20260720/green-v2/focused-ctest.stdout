@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/build
+Test project /tmp/librpa-qsgw-headwing-failfast-green-v2-44059ebf/build
+    Start 6: test_qsgw_inputfile
+1/1 Test #6: test_qsgw_inputfile ..............   Passed    0.44 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.45 sec
