@@ -23,6 +23,13 @@ bundle manifests, runner/tool/input hashes, exact input identity, expected
 matrix count and dimensions, and comparison thresholds. A successful run has
 `GREEN_CONFIRMED`; any failed run has `FAILED`.
 
+Rejected preflight attempts from runner commit `14059056` used run tags
+`20260722-14059056-v1` and `20260722-14059056-debug1`. Both stopped before
+creating a run directory or launching LibRPA because the comparator hashes had
+been measured from a CRLF Windows working tree instead of the canonical LF Git
+blobs. No numerical output from those attempts is accepted. The corrected
+runner pins the hashes measured from the clean fish checkout.
+
 Required variables:
 
 ```bash
