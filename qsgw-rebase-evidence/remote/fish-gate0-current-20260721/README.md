@@ -9,7 +9,7 @@ The runner performs these checks on fish:
   `CANDIDATE_COMMIT`;
 - identical oneAPI/CMake configuration for both sides;
 - exactly 39 upstream and 63 candidate CTests, all passing;
-- nine focused QSGW parser/Hartree/Fourier/band/cut tests;
+- ten focused QSGW parser/Hartree/Fourier/band/cut tests;
 - focused Python comparator/driver-wiring tests and runtime-parameter docs;
 - zero diff in the explicitly protected G0W0/GW/EXX files;
 - immutable compiler, MPI, CMake, executable, test, and checksum evidence.
