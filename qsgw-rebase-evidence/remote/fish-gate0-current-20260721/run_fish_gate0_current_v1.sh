@@ -7,6 +7,7 @@ set -euo pipefail
 
 bare_repo=${BARE_REPO:-/tmp/librpa-qsgw-cb294020-84e6b0a/repo.git}
 pytest_env=${PYTEST_ENV:-/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv}
+docs_python=${DOCS_PYTHON:-/usr/bin/python3}
 upstream_commit=42d3863c1d865194d382a085851d1e2e8a39764f
 expected_upstream_tests=39
 expected_candidate_tests=63
@@ -43,6 +44,8 @@ trap record_failure ERR
 
 test -d "$bare_repo"
 test -x "$pytest_env/bin/python"
+test -x "$docs_python"
+"$docs_python" -c 'import yaml'
 test -x "$expected_cxx"
 test -x "$expected_fortran"
 test ! -e "$source_root"
@@ -95,6 +98,8 @@ export OMP_PLACES=cores
   ctest --version | head -n 1
   mpirun --version | head -n 2
   "$pytest_env/bin/python" --version
+  "$docs_python" --version
+  "$docs_python" -c 'import yaml; print("PyYAML", yaml.__version__)'
 } >"$run_root/toolchain.txt"
 
 configure_build_test() {
@@ -164,7 +169,7 @@ grep -Fq '100% tests passed, 0 tests failed out of 10' \
   >"$run_root/candidate-python-tests.stdout" \
   2>"$run_root/candidate-python-tests.stderr"
 
-"$pytest_env/bin/python" -B \
+"$docs_python" -B \
   "$candidate_source/docs/user_guide/generate_runtime_parameters.py" \
   --check --check-defaults \
   >"$run_root/candidate-docs-check.stdout" \
