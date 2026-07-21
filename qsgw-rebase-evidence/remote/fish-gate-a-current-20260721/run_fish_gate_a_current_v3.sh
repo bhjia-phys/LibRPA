@@ -104,7 +104,7 @@ provenance_value() {
 }
 
 test ! -e "$run_root"
-test -d "$RUNNER_SOURCE/.git"
+test -e "$RUNNER_SOURCE/.git"
 test "$(git -C "$RUNNER_SOURCE" rev-parse HEAD)" = "$RUNNER_COMMIT"
 test -z "$(git -C "$RUNNER_SOURCE" status --porcelain)"
 test "$(sha256sum "$0" | awk '{print $1}')" = "$RUNNER_SHA256"
