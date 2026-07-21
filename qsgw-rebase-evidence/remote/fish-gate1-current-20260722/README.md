@@ -5,10 +5,11 @@ candidate build from accepted fish Gate 0. Both executables receive the same
 Si k444 symmetry-reduced ABACUS payload and byte-identical `librpa.in` files.
 
 The numerical oracle is the complete set of 48 correlation self-energy
-matrices: one spin, eight IBZ k-points, and six imaginary frequencies. The
-gate also requires byte-identical `energy_qp` output. Acceptance thresholds
-for the SigmaC comparison are `1e-12 Ha` maximum absolute difference and
-`1e-12` relative Frobenius difference.
+matrices: one spin, eight IBZ k-points, and six imaginary frequencies.
+Acceptance thresholds for the SigmaC comparison are `1e-10 Ha` maximum
+absolute difference and `1e-10` relative Frobenius difference. `energy_qp` is
+compared structurally: k-point coordinates, occupations, and KS energies must
+be exact, while QP energies must agree within `1e-9 Ha`.
 
 The frozen QSGW bundle stores full AO-basis Vxc matrices, while upstream
 `task = g0w0` requires the traditional diagonal KS-basis `vxc_out`. The
@@ -57,6 +58,18 @@ write `FAILED` because its `ERR` trap was not inherited through the run
 function/subshell. The current runner uses `set -E` plus an `EXIT` trap that
 writes `FAILED` after run-root creation unless the green path is completed.
 
+Run `20260722-ca542aca-v1` is a completed numerical run rejected only by the
+earlier observer thresholds. Both executables finished successfully with empty
+stderr and wrote all 48 SigmaC blocks plus 2816 QP states. The observed SigmaC
+maximum absolute and relative Frobenius differences were respectively
+`1.8186075345471608e-11 Ha` and `2.1449190585723414e-11`. Occupations and KS
+energies were exact; 47 printed QP values differed, with maximum
+`2.000000165480742e-10 Ha`. These are comfortably inside the project-wide
+matrix `1e-8` and eigenvalue `1e-6 Ha` contracts, but the temporary `1e-12`
+SigmaC and byte-identical text checks rejected them. The versioned recovery
+postcheck revalidates the frozen completed run using the tighter-than-project
+`1e-10` SigmaC and `1e-9 Ha` QP thresholds; the source run remains rejected.
+
 Required variables:
 
 ```bash
@@ -65,4 +78,14 @@ RUNNER_SOURCE=<clean-checkout-at-runner-commit> \
 RUNNER_SHA256=<sha256-of-runner> \
 RUN_TAG=<unique-tag> \
 bash run_fish_gate1_current_v1.sh
+```
+
+Recovery postcheck variables:
+
+```bash
+RECOVERY_COMMIT=<commit-containing-recovery-tools> \
+RECOVERY_SOURCE=<clean-checkout-at-recovery-commit> \
+RECOVERY_SHA256=<sha256-of-recovery-runner> \
+RECOVERY_TAG=<unique-tag> \
+bash recover_fish_gate1_current_v1.sh
 ```

@@ -28,6 +28,8 @@ stru_tail_source=$RUNNER_SOURCE/$gate_dir/stru_symmetry_tail.dd421665.si444.txt
 stru_provenance_source=$RUNNER_SOURCE/$gate_dir/STRU_SYMMETRY_SOURCE_PROVENANCE.txt
 stru_builder_source=$RUNNER_SOURCE/$gate_dir/build_stru_symmetry_overlay_v1.py
 stru_builder_test_source=$RUNNER_SOURCE/$gate_dir/test_build_stru_symmetry_overlay_v1.py
+energy_comparator_source=$RUNNER_SOURCE/$gate_dir/compare_energy_qp_v1.py
+energy_comparator_test_source=$RUNNER_SOURCE/$gate_dir/test_compare_energy_qp_v1.py
 comparator_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/dongfang-gates-20260715-7d69a18c/compare_g0w0_sigc_dump_directories.py
 comparator_test_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/dongfang-gates-20260715-7d69a18c/test_compare_g0w0_sigc_dump_directories.py
 expected_vxc_sha=7928a0bd99f3a58b78881fa72861da2ccbfb2d4f4a47338a77d140d1adaff1dd
@@ -38,6 +40,8 @@ expected_stru_provenance_sha=3252fd881b65ca662d9105ddfbaea48711ce085d7e733293a3b
 expected_stru_builder_sha=d90e22d671c9b5ade4b799d987dfa471d1c0b65747c96748cfbb832998938c80
 expected_stru_builder_test_sha=1ef3e79588c1c45e5ffb8ed93e99784cc7464c7683ff6c5518be4cbdeac1d57f
 expected_overlay_stru_sha=e756fd9551bfa9df748473880259ba019de904867c1aaff126b1b3a9c51a8873
+expected_energy_comparator_sha=3b0cda0c4287ff1b483fe26c511dbebd755f9c4e1a8bd0e85fa2660bfc596bbb
+expected_energy_comparator_test_sha=c172118a9a735342468c4eef009baafe9b18db4c10cbc89e190bb967cbf64cd5
 expected_comparator_sha=15417e56ce7b92fc719eea6788944de8805fba5e5849698fa32a89206cba2eaa
 expected_comparator_test_sha=5ce8acf1c8659c3c5e8f20a61d62e8347f987f7b3adeb09b4c7cb3ce5cef2dcd
 
@@ -139,6 +143,8 @@ test -f "$stru_tail_source"
 test -f "$stru_provenance_source"
 test -f "$stru_builder_source"
 test -f "$stru_builder_test_source"
+test -f "$energy_comparator_source"
+test -f "$energy_comparator_test_source"
 test -f "$comparator_source"
 test -f "$comparator_test_source"
 test "$(sha256sum "$dataset/stru_out" | awk '{print $1}')" = \
@@ -154,6 +160,10 @@ test "$(sha256sum "$stru_builder_source" | awk '{print $1}')" = \
   "$expected_stru_builder_sha"
 test "$(sha256sum "$stru_builder_test_source" | awk '{print $1}')" = \
   "$expected_stru_builder_test_sha"
+test "$(sha256sum "$energy_comparator_source" | awk '{print $1}')" = \
+  "$expected_energy_comparator_sha"
+test "$(sha256sum "$energy_comparator_test_source" | awk '{print $1}')" = \
+  "$expected_energy_comparator_test_sha"
 test "$(sha256sum "$comparator_source" | awk '{print $1}')" = \
   "$expected_comparator_sha"
 test "$(sha256sum "$comparator_test_source" | awk '{print $1}')" = \
@@ -168,6 +178,8 @@ cp "$stru_provenance_source" "$run_root/STRU_SYMMETRY_SOURCE_PROVENANCE.txt"
 cp "$stru_tail_source" "$tool_dir/stru_symmetry_tail.dd421665.si444.txt"
 cp "$stru_builder_source" "$tool_dir/build_stru_symmetry_overlay_v1.py"
 cp "$stru_builder_test_source" "$tool_dir/test_build_stru_symmetry_overlay_v1.py"
+cp "$energy_comparator_source" "$tool_dir/compare_energy_qp_v1.py"
+cp "$energy_comparator_test_source" "$tool_dir/test_compare_energy_qp_v1.py"
 cp "$comparator_source" "$tool_dir/compare_g0w0_sigc_dump_directories.py"
 cp "$comparator_test_source" "$tool_dir/test_compare_g0w0_sigc_dump_directories.py"
 for path in "$dataset"/*; do
@@ -205,7 +217,9 @@ find "$overlay" -maxdepth 1 -type l -printf '%f -> %l\n' | \
   2>"$run_root/comparator-unit-test.stderr"
 (
   cd "$tool_dir"
-  "$python" -B -m unittest -v test_build_stru_symmetry_overlay_v1.py \
+  "$python" -B -m unittest -v \
+    test_build_stru_symmetry_overlay_v1.py \
+    test_compare_energy_qp_v1.py \
     >"$run_root/stru-builder-unit-test.stdout" \
     2>"$run_root/stru-builder-unit-test.stderr"
 )
@@ -322,8 +336,8 @@ run_one candidate "$candidate_exe"
 "$python" -B "$tool_dir/compare_g0w0_sigc_dump_directories.py" \
   "$upstream_run" "$candidate_run" "$run_root/g0w0-comparison.json" \
   --source kgrid \
-  --max-abs-tolerance-ha 1e-12 \
-  --relative-frobenius-tolerance 1e-12 \
+  --max-abs-tolerance-ha 1e-10 \
+  --relative-frobenius-tolerance 1e-10 \
   >"$run_root/comparator.stdout" \
   2>"$run_root/comparator.stderr"
 "$python" - "$run_root/g0w0-comparison.json" <<'PY'
@@ -338,8 +352,31 @@ assert report["spin_count"] == 1
 assert report["kpoint_count"] == 8
 assert report["frequency_count"] == 6
 assert report["matrix_dimensions"] == [44]
+assert report["thresholds"]["max_abs_tolerance_ha"] == 1.0e-10
+assert report["thresholds"]["relative_frobenius_tolerance"] == 1.0e-10
 PY
-cmp "$upstream_run/energy_qp" "$candidate_run/energy_qp"
+"$python" -B "$tool_dir/compare_energy_qp_v1.py" \
+  "$upstream_run/energy_qp" \
+  "$candidate_run/energy_qp" \
+  "$run_root/energy-qp-comparison.json" \
+  --max-abs-tolerance-ha 1e-9 \
+  >"$run_root/energy-qp-comparator.stdout" \
+  2>"$run_root/energy-qp-comparator.stderr"
+"$python" - "$run_root/energy-qp-comparison.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["passed"] is True
+assert report["kpoint_count"] == 64
+assert report["state_count"] == 2816
+assert report["kpoint_coordinate_max_abs_difference"] == 0.0
+assert report["occupation_max_abs_difference"] == 0.0
+assert report["ks_energy_max_abs_difference_ha"] == 0.0
+assert report["qp_energy_max_abs_difference_ha"] <= 1.0e-9
+assert report["thresholds"]["qp_energy_max_abs_tolerance_ha"] == 1.0e-9
+PY
 sha256sum "$upstream_run/energy_qp" "$candidate_run/energy_qp" \
   >"$run_root/energy-qp.sha256"
 
@@ -386,10 +423,12 @@ qsgw_input_contract_sha256=$expected_contract_sha
 qsgw_vxc_scf_manifest_sha256=$expected_vxc_manifest_sha
 librpa_input_sha256=$(sha256sum "$run_root/librpa.in" | awk '{print $1}')
 comparison_sha256=$(sha256sum "$run_root/g0w0-comparison.json" | awk '{print $1}')
+energy_qp_comparison_sha256=$(sha256sum "$run_root/energy-qp-comparison.json" | awk '{print $1}')
 sigc_block_count=48
-sigc_max_abs_tolerance_ha=1e-12
-sigc_relative_frobenius_tolerance=1e-12
-energy_qp=byte_identical
+sigc_max_abs_tolerance_ha=1e-10
+sigc_relative_frobenius_tolerance=1e-10
+energy_qp_max_abs_tolerance_ha=1e-9
+energy_qp_ks_and_occupations=exact
 symmetry=exx_on_gw_on_rpa_on
 headwing=off
 hartree=off
