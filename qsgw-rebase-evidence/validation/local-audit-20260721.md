@@ -164,8 +164,8 @@ AO output.
   evidence.
 - Versioned commit-list, name-status, and semantic-hunk artifacts are hashed
   in the manifest. Re-running the refresh script with candidate source
-  `4f38a3736555db6895bf2f39dc76b098a6510063` is idempotent; manifest SHA-256 remains
-  `525db77c4d8232e03965637716f34d3fe07f2d07c4344cb2d1a576d26e9d7b8f`.
+  `5cf996de098c349c741b0b6c74dd0951d1ea3171` is idempotent; manifest SHA-256 remains
+  `56d7330aa172e2b7385da702f8262ae3b1a60dfbbb6493d4d64702dedf2fea4d`.
 - Freeze-parent and candidate-source provenance are now separate. The generator
   accepts an explicit candidate source, verifies that it exists and descends
   from the freeze parent, and only then may close the clean-candidate issue.
