@@ -11,7 +11,8 @@ The runner performs these checks on fish:
 - exactly 39 upstream and 63 candidate CTests, all passing;
 - ten focused QSGW parser/Hartree/Fourier/band/cut tests;
 - focused Python comparator/driver-wiring tests and runtime-parameter docs;
-- an explicit `DOCS_PYTHON` with PyYAML for the runtime-parameter docs check;
+- an explicit `DOCS_PYTHON` with PyYAML, generating runtime-parameter docs in
+  the immutable run root before checking defaults and byte-idempotence;
 - zero diff in the explicitly protected G0W0/GW/EXX files;
 - immutable compiler, MPI, CMake, executable, test, and checksum evidence.
 

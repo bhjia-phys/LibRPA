@@ -169,10 +169,16 @@ grep -Fq '100% tests passed, 0 tests failed out of 10' \
   >"$run_root/candidate-python-tests.stdout" \
   2>"$run_root/candidate-python-tests.stderr"
 
-"$docs_python" -B \
-  "$candidate_source/docs/user_guide/generate_runtime_parameters.py" \
-  --check --check-defaults \
-  >"$run_root/candidate-docs-check.stdout" \
+{
+  "$docs_python" -B \
+    "$candidate_source/docs/user_guide/generate_runtime_parameters.py" \
+    --output "$run_root/candidate-runtime-parameters.md" \
+    --check-defaults
+  "$docs_python" -B \
+    "$candidate_source/docs/user_guide/generate_runtime_parameters.py" \
+    --output "$run_root/candidate-runtime-parameters.md" \
+    --check --check-defaults
+} >"$run_root/candidate-docs-check.stdout" \
   2>"$run_root/candidate-docs-check.stderr"
 
 git -C "$candidate_source" diff --exit-code "$upstream_commit" -- \
