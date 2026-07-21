@@ -67,6 +67,16 @@ def _relative(difference: np.ndarray, reference: np.ndarray) -> float:
     )
 
 
+def _legacy_upper_hermitian(matrix: np.ndarray) -> np.ndarray:
+    """Materialize the operator diagonalized by legacy eigsh(UPLO='U')."""
+    result = matrix.copy()
+    diagonal = np.diag_indices_from(result)
+    result[diagonal] = result[diagonal].real
+    lower_rows, lower_columns = np.tril_indices(result.shape[0], -1)
+    result[lower_rows, lower_columns] = result[lower_columns, lower_rows].conj()
+    return result
+
+
 def _parse_band_out(path: Path) -> dict[str, object]:
     rows = [line.split() for line in path.read_text(encoding="utf-8").splitlines()]
     if len(rows) < 5 or any(not row for row in rows[:5]):
@@ -215,6 +225,11 @@ def validate(
     raw_closure_relative = 0.0
     none_mixing = 0.0
     hermiticity = 0.0
+    component_hermiticity = {
+        "vxc_dft": 0.0,
+        "exx": 0.0,
+        "vc": 0.0,
+    }
     rotation_unitarity = 0.0
     diagonalization_offdiagonal = 0.0
     diagonalization_eigenvalue = 0.0
@@ -271,14 +286,23 @@ def validate(
         if any(matrix.shape != h0.shape for matrix in (vxc, exx, correlation, raw, mixed, rotation)):
             raise ValidationError("Hamiltonian block shapes differ")
         block_dimensions.add(dimension)
-        expected_raw = h0 - vxc + exx + correlation
+        expected_raw = _legacy_upper_hermitian(h0 - vxc + exx + correlation)
         raw_closure = max(raw_closure, _max_abs(raw - expected_raw))
         raw_closure_relative = max(
             raw_closure_relative, _relative(raw - expected_raw, expected_raw)
         )
         none_mixing = max(none_mixing, _max_abs(mixed - raw))
-        for matrix in (h0, vxc, exx, correlation, raw, mixed):
+        for matrix in (h0, raw, mixed):
             hermiticity = max(hermiticity, _max_abs(matrix - matrix.conj().T))
+        for name, matrix in (
+            ("vxc_dft", vxc),
+            ("exx", exx),
+            ("vc", correlation),
+        ):
+            component_hermiticity[name] = max(
+                component_hermiticity[name],
+                _max_abs(matrix - matrix.conj().T),
+            )
         identity = np.eye(dimension, dtype=np.complex128)
         rotation_unitarity = max(
             rotation_unitarity,
@@ -346,6 +370,7 @@ def validate(
         "raw_h_closure_relative_frobenius": raw_closure_relative,
         "none_mixer_max_abs_ha": none_mixing,
         "hermiticity_max_abs_ha": hermiticity,
+        "component_hermiticity_max_abs_ha": component_hermiticity,
         "rotation_unitarity_max_abs": rotation_unitarity,
         "diagonalization_offdiagonal_max_abs_ha": diagonalization_offdiagonal,
         "diagonalization_eigenvalue_max_abs_ha": diagonalization_eigenvalue,

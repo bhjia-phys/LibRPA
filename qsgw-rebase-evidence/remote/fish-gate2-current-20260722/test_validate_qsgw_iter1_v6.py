@@ -50,6 +50,18 @@ class ValidatorTests(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertGreater(report["raw_h_closure_max_abs_ha"], 1e-6)
 
+    def test_exx_lower_triangle_noise_uses_legacy_upper_triangle(self):
+        with fixture.scratch_directory(HERE) as directory:
+            report = self.run_validate(
+                fixture.write_fixture(directory, exx_lower_shift=1e-5)
+            )
+        self.assertTrue(report["passed"])
+        self.assertLessEqual(report["raw_h_closure_max_abs_ha"], 1e-10)
+        self.assertLessEqual(report["hermiticity_max_abs_ha"], 1e-10)
+        self.assertGreater(
+            report["component_hermiticity_max_abs_ha"]["exx"], 1e-6
+        )
+
     def test_symmetry_contract_mismatch_is_rejected(self):
         with fixture.scratch_directory(HERE) as directory:
             paths = fixture.write_fixture(

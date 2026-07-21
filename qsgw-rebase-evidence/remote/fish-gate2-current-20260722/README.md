@@ -16,6 +16,11 @@ validate the actual symmetry/head-wing/Hartree/band/mixer contract, the input
 contract hash, initial occupations/eigenvalues/Fermi level, charge, full
 Hamiltonian closure, no-mixer identity, Hermiticity, rotation unitarity,
 diagonalization, fixed-basis wavefunction rotation, and all 48 SigmaC blocks.
+Hamiltonian closure reproduces the legacy `eigsh(UPLO='U')` contract: the
+upper triangle of the assembled components is authoritative and is
+materialized as a Hermitian operator. Raw component anti-Hermiticity remains
+reported as a diagnostic but is not substituted for the assembled-operator
+invariant.
 
 The runner binds the accepted Gate0 and Gate1 archives, candidate executable,
 frozen ABACUS bundle, physical `vxc_out`, dimensionless pinned-producer

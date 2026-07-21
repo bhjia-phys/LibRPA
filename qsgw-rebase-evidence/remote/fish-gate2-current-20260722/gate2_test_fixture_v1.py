@@ -58,10 +58,16 @@ def _matrix_rows(
     return rows
 
 
-def matrix_trace(contract_sha: str, *, raw_shift: float = 0.0, symmetry: str = "exx_on_gw_on_rpa_on") -> str:
+def matrix_trace(
+    contract_sha: str,
+    *,
+    raw_shift: float = 0.0,
+    exx_lower_shift: float = 0.0,
+    symmetry: str = "exx_on_gw_on_rpa_on",
+) -> str:
     h0 = [[-1.0 + 0j, 0j], [0j, 1.0 + 0j]]
     vxc = [[0.1 + 0j, 0j], [0j, 0.2 + 0j]]
-    exx = [[0.3 + 0j, 0j], [0j, 0.4 + 0j]]
+    exx = [[0.3 + 0j, 0j], [exx_lower_shift + 0j, 0.4 + 0j]]
     vc = [[0.01 + 0j, 0j], [0j, 0.02 + 0j]]
     raw = [[-0.79 + raw_shift + 0j, 0j], [0j, 1.22 + 0j]]
     identity = [[1.0 + 0j, 0j], [0j, 1.0 + 0j]]
@@ -136,7 +142,13 @@ def write_sigc(path: Path, matrix: list[list[complex]]) -> None:
     )
 
 
-def write_fixture(root: Path, *, raw_shift: float = 0.0, symmetry: str = "exx_on_gw_on_rpa_on") -> dict[str, Path]:
+def write_fixture(
+    root: Path,
+    *,
+    raw_shift: float = 0.0,
+    exx_lower_shift: float = 0.0,
+    symmetry: str = "exx_on_gw_on_rpa_on",
+) -> dict[str, Path]:
     root.mkdir(parents=True, exist_ok=True)
     contract = root / "qsgw_input.contract"
     contract.write_text("fixture contract\n", encoding="utf-8", newline="\n")
@@ -146,7 +158,12 @@ def write_fixture(root: Path, *, raw_shift: float = 0.0, symmetry: str = "exx_on
     iterations = root / "qsgw_iterations.dat"
     bands = root / "band_out"
     matrix.write_text(
-        matrix_trace(contract_sha, raw_shift=raw_shift, symmetry=symmetry),
+        matrix_trace(
+            contract_sha,
+            raw_shift=raw_shift,
+            exx_lower_shift=exx_lower_shift,
+            symmetry=symmetry,
+        ),
         encoding="utf-8",
         newline="\n",
     )
