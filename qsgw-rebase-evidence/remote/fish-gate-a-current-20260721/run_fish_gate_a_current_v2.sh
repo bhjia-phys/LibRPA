@@ -313,6 +313,7 @@ use_fullcoul_exx = false
 use_fullcoul_wc = false
 use_abacus_exx_symmetry = true
 use_abacus_gw_symmetry = true
+qsgw_iterative_headwing = false
 max_iter = $target_iter
 EOF
 
