@@ -231,7 +231,7 @@ cp "$current_contract_parser_source" "$run_root/tools/cmp_qsgw_v6.py"
 
 (
   cd "$run_root/tools"
-  "$python" -B test_compare_qsgw_legacy_v4_current_v6.py \
+  "$python" -B "$adapter_test_source" \
     >"$run_root/adapter-unit-test.stdout" \
     2>"$run_root/adapter-unit-test.stderr"
   PYTHONPATH="$run_root/tools" "$python" -B test_validate_qsgw_trace_closure.py \
