@@ -4,7 +4,7 @@ import cmp_qsgw
 
 
 CONTRACT_HEADER = (
-    "# qsgw_contract_version 5\n"
+    "# qsgw_contract_version 6\n"
     "# fixed_basis immutable_mf0\n"
     "# live_update eigenvalues_wfc\n"
     "# velocity disabled_stage1\n"
@@ -12,6 +12,7 @@ CONTRACT_HEADER = (
     "# symmetry unsupported_full_bz_only\n"
     "# hartree disabled_stage1\n"
     "# band disabled_stage1\n"
+    "# h_qsgw_cut disabled_non_band\n"
     "# qsgw_input_contract qsgw_input.contract\n"
     "# qsgw_input_contract_sha256 " + "a" * 64 + "\n"
     "# qsgw_mixer linear\n"
@@ -188,6 +189,79 @@ class TestQsgwMatrixTrace(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("missing required components", msg)
 
+    def test_fourier_band_trajectory_requires_static_projection_diagnostics(self):
+        header = MATRIX_HEADER.replace(
+            "# band disabled_stage1",
+            "# band fixed_reference_operator_fourier_live",
+        ).replace(
+            "# h_qsgw_cut disabled_non_band",
+            "# h_qsgw_cut band_postprocess\n"
+            "# qsgw_band0_unoccupied_keep 10\n"
+            "# qsgw_band0_cut_mode 2\n"
+            "# qsgw_band0_cut_shift_ha 20",
+        )
+        grid_rows = [
+            matrix_rows("h0", [[1.0]], iteration=0),
+            matrix_rows("vxc_dft", [[-0.2]], iteration=0),
+            matrix_rows("wfc_spinor0", [[1.0]], iteration=0),
+            matrix_rows("occupation", [[1.0]], iteration=0),
+            matrix_rows("sigma_c_iw", [[0.1 + 0.02j]],
+                        frequency_index=0, frequency=0.25),
+            matrix_rows("exx", [[-0.3]]),
+            matrix_rows("vc", [[0.1]]),
+            matrix_rows("raw_h", [[0.6]]),
+            matrix_rows("mixed_h", [[0.52]]),
+            matrix_rows("rotation_u", [[1.0]]),
+            matrix_rows("wfc_spinor0", [[1.0]]),
+            matrix_rows("occupation", [[1.0]]),
+        ]
+        band_rows = [
+            matrix_rows("h0", [[1.1]], iteration=0, channel=1),
+            matrix_rows("vxc_dft", [[-0.25]], iteration=0, channel=1),
+            matrix_rows("wfc_spinor0", [[1.0]], iteration=0, channel=1),
+            matrix_rows("occupation", [[1.0]], iteration=0, channel=1),
+            matrix_rows("exx", [[-0.28]], channel=1),
+            matrix_rows("vc", [[0.12]], channel=1),
+            matrix_rows("raw_h", [[0.69]], channel=1),
+            matrix_rows("mixed_h", [[0.608]], channel=1),
+            matrix_rows("rotation_u", [[1.0]], channel=1),
+            matrix_rows("wfc_spinor0", [[1.0]], channel=1),
+            matrix_rows("occupation", [[1.0]], channel=1),
+        ]
+        diagnostics = [
+            "basis_inverse_residual",
+            "basis_condition_estimate",
+            "fourier_orthogonality_residual",
+            "source_roundtrip_relative_error",
+            "target_hermiticity_error",
+            "target_relative_hermiticity_error",
+            "repaired_target_hermiticity_error",
+        ]
+        band_rows.extend(
+            matrix_rows(component, [[1.0e-13]], channel=1)
+            for component in diagnostics
+        )
+        trace = header + "".join(grid_rows + band_rows)
+        compare = cmp_qsgw.matrix_trace()
+
+        passed, msg = compare(
+            {"qsgw_matrices.dat": trace},
+            {"qsgw_matrices.dat": trace},
+        )
+        self.assertTrue(passed, msg)
+
+        missing_diagnostic = trace.replace(
+            matrix_rows("fourier_orthogonality_residual", [[1.0e-13]],
+                        channel=1),
+            "",
+        )
+        passed, msg = compare(
+            {"qsgw_matrices.dat": missing_diagnostic},
+            {"qsgw_matrices.dat": missing_diagnostic},
+        )
+        self.assertFalse(passed)
+        self.assertIn("missing required components", msg)
+
 
 class TestQsgwEigenvalueTrace(unittest.TestCase):
 
@@ -305,12 +379,19 @@ class TestQsgwIterationSummary(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("iteration zero", msg)
 
-    def test_contract_rejects_symmetry_and_inconsistent_feature_modes(self):
+    def test_contract_accepts_explicit_symmetry_and_rejects_invalid_modes(self):
         symmetric = self._trace().replace(
+            "# symmetry unsupported_full_bz_only",
+            "# symmetry exx_on_gw_on_rpa_on",
+        )
+        passed, msg = self._compare(symmetric, symmetric)
+        self.assertTrue(passed, msg)
+
+        invalid_symmetry = self._trace().replace(
             "# symmetry unsupported_full_bz_only",
             "# symmetry crystal_reduction",
         )
-        passed, msg = self._compare(symmetric, symmetric)
+        passed, msg = self._compare(invalid_symmetry, invalid_symmetry)
         self.assertFalse(passed)
         self.assertIn("symmetry", msg)
 

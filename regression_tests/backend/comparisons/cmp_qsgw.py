@@ -32,6 +32,10 @@ CONTRACT_KEYS = frozenset((
     "hartree_coulomb",
     "hartree_normalization",
     "band",
+    "h_qsgw_cut",
+    "qsgw_band0_unoccupied_keep",
+    "qsgw_band0_cut_mode",
+    "qsgw_band0_cut_shift_ha",
     "qsgw_input_contract",
     "qsgw_input_contract_sha256",
     "qsgw_mixer",
@@ -461,7 +465,7 @@ def _parse_contract(text, label):
     except ValueError as error:
         raise ValueError("{}: invalid QSGW contract version".format(
             label)) from error
-    if version != 5:
+    if version not in (5, 6):
         raise ValueError("{}: unsupported QSGW contract version {}".format(
             label, version))
     values["qsgw_contract_version"] = version
@@ -469,12 +473,17 @@ def _parse_contract(text, label):
     expected = {
         "fixed_basis": "immutable_mf0",
         "live_update": "eigenvalues_wfc",
-        "symmetry": "unsupported_full_bz_only",
     }
     for key, required in expected.items():
         if values[key] != required:
             raise ValueError("{}: invalid {} QSGW contract".format(
                 label, key))
+
+    symmetry = values["symmetry"]
+    if symmetry != "unsupported_full_bz_only" and re.fullmatch(
+            r"exx_(?:on|off)_gw_(?:on|off)_rpa_(?:on|off)",
+            symmetry) is None:
+        raise ValueError("{}: invalid symmetry QSGW contract".format(label))
 
     headwing_velocity = {
         "disabled_stage1": "disabled_stage1",
@@ -510,6 +519,46 @@ def _parse_contract(text, label):
     if values["band"] not in (
             "disabled_stage1", "fixed_reference_operator_fourier_live"):
         raise ValueError("{}: invalid band QSGW contract".format(label))
+    cut_keys = (
+        "qsgw_band0_unoccupied_keep",
+        "qsgw_band0_cut_mode",
+        "qsgw_band0_cut_shift_ha",
+    )
+    if version == 6:
+        if "h_qsgw_cut" not in values:
+            raise ValueError("{}: missing QSGW contract keys ['h_qsgw_cut']".format(
+                label))
+        cut_contract = values["h_qsgw_cut"]
+        if cut_contract == "disabled_non_band":
+            if values["band"] != "disabled_stage1" or any(
+                    key in values for key in cut_keys):
+                raise ValueError("{}: inconsistent disabled H_QSGW cut contract".format(
+                    label))
+        elif cut_contract == "band_postprocess":
+            if values["band"] != "fixed_reference_operator_fourier_live":
+                raise ValueError("{}: H_QSGW cut requires band postprocessing".format(
+                    label))
+            missing_cut = [key for key in cut_keys if key not in values]
+            if missing_cut:
+                raise ValueError("{}: enabled H_QSGW cut is missing contract fields {}".format(
+                    label, missing_cut))
+            try:
+                unoccupied_keep = int(values["qsgw_band0_unoccupied_keep"])
+                cut_mode = int(values["qsgw_band0_cut_mode"])
+            except ValueError as error:
+                raise ValueError("{}: invalid H_QSGW cut integer contract".format(
+                    label)) from error
+            cut_shift = _finite_float(values["qsgw_band0_cut_shift_ha"])
+            if unoccupied_keep < 0 or cut_mode not in (0, 1, 2):
+                raise ValueError("{}: invalid H_QSGW cut contract".format(label))
+            values["qsgw_band0_unoccupied_keep"] = unoccupied_keep
+            values["qsgw_band0_cut_mode"] = cut_mode
+            values["qsgw_band0_cut_shift_ha"] = cut_shift
+        else:
+            raise ValueError("{}: invalid H_QSGW cut contract".format(label))
+    elif "h_qsgw_cut" in values or any(key in values for key in cut_keys):
+        raise ValueError("{}: QSGW contract version 5 has H_QSGW cut fields".format(
+            label))
     if not values["qsgw_input_contract"]:
         raise ValueError("{}: empty QSGW input contract path".format(label))
     sha256 = values["qsgw_input_contract_sha256"].lower()
@@ -654,7 +703,7 @@ def _validate_matrix_trajectory(blocks, contract, label):
                 "{}: iteration 0 channel {} is missing required components {}"
                 .format(label, channel, sorted(missing)))
 
-    independent_diagnostics = {
+    fourier_diagnostics = {
         "basis_inverse_residual",
         "basis_condition_estimate",
         "fourier_orthogonality_residual",
@@ -674,7 +723,7 @@ def _validate_matrix_trajectory(blocks, contract, label):
                     "differ from iteration zero"
                     .format(label, iteration, channel))
 
-            if channel in (0, 1):
+            if channel == 0:
                 required = {
                     "sigma_c_iw", "exx", "vc", "raw_h", "mixed_h",
                     "rotation_u", "occupation",
@@ -686,11 +735,18 @@ def _validate_matrix_trajectory(blocks, contract, label):
                         "head_tensor", "velocity_x", "velocity_y",
                         "velocity_z",
                     })
+            elif channel == 1:
+                required = {
+                    "exx", "vc", "raw_h", "mixed_h", "rotation_u",
+                    "occupation",
+                } | fourier_diagnostics
+                if hartree:
+                    required.add("delta_vh")
             else:
                 required = {
                     "head_tensor", "projected_h", "rotation_u",
                     "occupation", "velocity_x", "velocity_y", "velocity_z",
-                } | independent_diagnostics
+                } | fourier_diagnostics
             missing = required - present
             if missing:
                 raise ValueError(
