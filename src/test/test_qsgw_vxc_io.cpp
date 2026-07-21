@@ -248,6 +248,19 @@ std::string valid_grid_manifest()
         "1\t2\t0.5\t0.5\t0.0\t2\t2\tba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\tvxck2s1_nao.txt\n";
 }
 
+std::string valid_abacus_state_grid_manifest()
+{
+    return
+        "# librpa-qsgw-vxc-manifest-v2\n"
+        "kind\tscf\n"
+        "producer\tabacus\n"
+        "units\tRy\n"
+        "basis\tstate\n"
+        "gauge\tmf0_state\n"
+        "spin\tk_index\tkx\tky\tkz\trows\tcolumns\tsha256\tfile\n"
+        "1\t1\t0.0\t0.0\t0.0\t2\t2\tba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\tvxck1s1_nao.txt\n";
+}
+
 std::string valid_band_manifest()
 {
     return
@@ -278,6 +291,43 @@ void test_manifest_binds_each_matrix_to_spin_index_and_k_coordinate()
     assert(manifest.gauge() == VxcGauge::AoBloch);
     assert(manifest.at(0, 0).file == "vxck1s1_nao.txt");
     assert(manifest.at(0, 1).file == "vxck2s1_nao.txt");
+}
+
+void test_abacus_out_mat_xc_manifest_is_state_basis_without_projection()
+{
+    std::istringstream input(valid_abacus_state_grid_manifest());
+    const VxcManifest manifest =
+        VxcManifest::parse(input, "abacus-out-mat-xc-manifest");
+    manifest.validate(
+        VxcDatasetKind::ScfGrid, 1, {{0.0, 0.0, 0.0}}, 2, 2, 1.0e-10);
+    assert(manifest.producer() == "abacus");
+    assert(manifest.units() == VxcUnits::Rydberg);
+    assert(manifest.basis() == VxcBasis::State);
+    assert(manifest.gauge() == VxcGauge::Mf0State);
+
+    MeanField reference(1, 1, 2, 2, 1);
+    const double inv_sqrt_two = 1.0 / std::sqrt(2.0);
+    ComplexMatrix wfc(2, 2);
+    wfc(0, 0) = inv_sqrt_two;
+    wfc(0, 1) = cplxdb(0.0, inv_sqrt_two);
+    wfc(1, 0) = cplxdb(0.0, inv_sqrt_two);
+    wfc(1, 1) = inv_sqrt_two;
+    reference.get_eigenvectors()[0][0][0] = wfc;
+
+    Matz vxc_state(2, 2);
+    vxc_state(0, 0) = -1.0;
+    vxc_state(0, 1) = cplxdb(0.2, 0.1);
+    vxc_state(1, 0) = cplxdb(0.2, -0.1);
+    vxc_state(1, 1) = 0.5;
+    const Matz selected = prepare_vxc_in_fixed_state_basis(
+        vxc_state, manifest.basis(), reference, 0, 0);
+    for (int row = 0; row < 2; ++row)
+    {
+        for (int column = 0; column < 2; ++column)
+        {
+            assert_close(selected(row, column), vxc_state(row, column));
+        }
+    }
 }
 
 void test_fhi_aims_manifest_marks_hartree_state_basis_without_projection()
@@ -395,6 +445,7 @@ void test_manifest_rejects_incompatible_producer_units_or_basis()
 
     assert_bad_manifest(valid_grid_manifest(), "units\tRy", "units\tHa");
     assert_bad_manifest(valid_grid_manifest(), "basis\tnao", "basis\tstate");
+    assert_bad_manifest(valid_grid_manifest(), "gauge\tao_bloch", "gauge\tmf0_state");
 
     const std::string aims_manifest =
         "# librpa-qsgw-vxc-manifest-v2\n"
@@ -464,6 +515,7 @@ int main()
     test_abacus_nao_vxc_is_projected_to_the_fixed_state_basis();
     test_vxc_matrix_validation_rejects_invalid_numeric_data_and_layout();
     test_manifest_binds_each_matrix_to_spin_index_and_k_coordinate();
+    test_abacus_out_mat_xc_manifest_is_state_basis_without_projection();
     test_fhi_aims_manifest_marks_hartree_state_basis_without_projection();
     test_manifest_rejects_nscf_files_presented_as_scf_grid();
     test_manifest_rejects_duplicate_spin_k_entries();

@@ -317,7 +317,12 @@ VxcManifest VxcManifest::parse(std::istream& input,
         throw std::invalid_argument(
             "Unsupported QSGW Vxc gauge in " + source_name);
 
-    const bool valid_abacus =
+    const bool valid_abacus_state =
+        result.producer_ == "abacus" &&
+        result.units_ == VxcUnits::Rydberg &&
+        result.basis_ == VxcBasis::State &&
+        result.gauge_ == VxcGauge::Mf0State;
+    const bool valid_abacus_nao =
         result.producer_ == "abacus" &&
         result.units_ == VxcUnits::Rydberg &&
         result.basis_ == VxcBasis::Nao &&
@@ -327,7 +332,7 @@ VxcManifest VxcManifest::parse(std::istream& input,
         result.units_ == VxcUnits::Hartree &&
         result.basis_ == VxcBasis::State &&
         result.gauge_ == VxcGauge::Mf0State;
-    if (!valid_abacus && !valid_aims)
+    if (!valid_abacus_state && !valid_abacus_nao && !valid_aims)
     {
         throw std::invalid_argument(
             "Incompatible QSGW Vxc producer, units, basis, or gauge in " +

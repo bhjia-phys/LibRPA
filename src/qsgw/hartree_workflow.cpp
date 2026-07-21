@@ -165,11 +165,25 @@ Cs_LRI materialize_hartree_coefficients(
                     "QSGW Hartree RI tensor contains an invalid atom index");
             }
             const int ao_j = static_cast<int>(wavefunction_basis[atom_j]);
-            if (tensor.shape.size() != 3 ||
-                tensor.shape[0] != static_cast<std::size_t>(aux_i) ||
-                tensor.shape[1] != static_cast<std::size_t>(ao_i) ||
-                tensor.shape[2] != static_cast<std::size_t>(ao_j) ||
-                tensor.data == nullptr)
+            const std::size_t expected_size =
+                static_cast<std::size_t>(aux_i) *
+                static_cast<std::size_t>(ao_i) *
+                static_cast<std::size_t>(ao_j);
+#ifdef LIBRPA_USE_LIBRI
+            const bool shape_matches =
+                tensor.shape.size() == 3 &&
+                tensor.shape[0] == static_cast<std::size_t>(aux_i) &&
+                tensor.shape[1] == static_cast<std::size_t>(ao_i) &&
+                tensor.shape[2] == static_cast<std::size_t>(ao_j);
+#else
+            // The no-LibRI compatibility Tensor keeps its shape private.
+            // Its public total-size contract is sufficient for this linear
+            // aux-major tensor copy.
+            const bool shape_matches =
+                tensor.get_shape_all() == expected_size;
+#endif
+            if (!shape_matches || tensor.data == nullptr ||
+                tensor.data->size() != expected_size)
             {
                 throw std::invalid_argument(
                     "QSGW Hartree RI tensor has an invalid shape");

@@ -9,6 +9,7 @@
 #include <cassert>
 #include <complex>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <valarray>
@@ -19,7 +20,10 @@ using librpa_int::AtomPairBvKRemap;
 using librpa_int::ComplexMatrix;
 using librpa_int::Cs_LRI;
 using librpa_int::Matrix3;
+using librpa_int::MeanField;
 using librpa_int::Matz;
+using librpa_int::SpeciesBasisLayout;
+using librpa_int::SymmetryContext;
 using librpa_int::Vector3;
 using librpa_int::Vector3_Order;
 using librpa_int::atom_t;
@@ -29,6 +33,7 @@ using librpa_int::matrix;
 using librpa_int::qsgw::HartreeDkMap;
 using librpa_int::qsgw::HartreeKNormalization;
 using librpa_int::qsgw::HartreeStaticData;
+using librpa_int::qsgw::HartreeSymmetryData;
 using librpa_int::qsgw::build_hartree_c_k;
 using librpa_int::qsgw::build_hartree_delta_fixed_basis;
 using librpa_int::qsgw::build_hartree_static_data;
@@ -285,6 +290,96 @@ void test_end_to_end_delta_is_projected_to_an_independent_target_basis()
     assert_close(projected.at(0).at(0)(1, 1), 24.0);
 }
 
+void test_symmetry_reduced_hartree_matches_explicit_full_grid()
+{
+    SymmetryContext context;
+    context.set_available();
+    const std::vector<SpeciesBasisLayout> wfc_layouts{{"X", {0}}};
+    context.atom_to_type[0] = 0;
+    context.input_coord_frac[0] = {0.0, 0.0, 0.0};
+    librpa_int::SymmetryOperation identity_operation;
+    identity_operation.rotation.Identity();
+    identity_operation.translation = {0.0, 0.0, 0.0};
+    context.rspace_operations.push_back(identity_operation);
+    context.rsh_rotations.emplace_back();
+    context.rsh_rotations.back()[0] = ComplexMatrix(1, 1);
+    context.rsh_rotations.back()[0](0, 0) = 1.0;
+
+    librpa_int::SymmetryKAtomRotation atom_rotation;
+    atom_rotation.atom_from = 0;
+    atom_rotation.atom_to = 0;
+    atom_rotation.atom_type = 0;
+    atom_rotation.lmax = 0;
+    atom_rotation.bloch_rsh_rotations[0] = ComplexMatrix(1, 1);
+    atom_rotation.bloch_rsh_rotations[0](0, 0) = 1.0;
+
+    librpa_int::SymmetryKStar star;
+    star.star_index = 0;
+    star.k_ibz = {0.0, 0.0, 0.0};
+    star.members.resize(2);
+    star.members[0].spatial_isym = 0;
+    star.members[0].k_bz = {0.0, 0.0, 0.0};
+    star.members[0].atom_rotations.push_back(atom_rotation);
+    star.members[1].spatial_isym = 0;
+    star.members[1].k_bz = {0.5, 0.0, 0.0};
+    star.members[1].atom_rotations.push_back(atom_rotation);
+    context.kstars.push_back(star);
+
+    const std::vector<Vector3_Order<double>> ibz_k{{0.0, 0.0, 0.0}};
+    const std::vector<Vector3_Order<double>> full_k{
+        {0.0, 0.0, 0.0}, {0.5, 0.0, 0.0}};
+    const std::map<atom_t, std::size_t> atom_ao_sizes{{0, 1}};
+
+    MeanField ibz_reference(1, 1, 1, 1, 1);
+    ibz_reference.get_eigenvectors()[0][0][0] = ComplexMatrix(1, 1);
+    ibz_reference.get_eigenvectors()[0][0][0](0, 0) = 1.0;
+    ibz_reference.get_weight()[0](0, 0) = 1.0;
+    MeanField ibz_live = ibz_reference;
+    ibz_live.get_weight()[0](0, 0) = 1.5;
+
+    MeanField full_reference(1, 2, 1, 1, 1);
+    for (int kpoint = 0; kpoint < 2; ++kpoint)
+    {
+        full_reference.get_eigenvectors()[0][0][kpoint] =
+            ComplexMatrix(1, 1);
+        full_reference.get_eigenvectors()[0][0][kpoint](0, 0) = 1.0;
+        full_reference.get_weight()[0](kpoint, 0) = 0.5;
+    }
+    MeanField full_live = full_reference;
+    for (int kpoint = 0; kpoint < 2; ++kpoint)
+        full_live.get_weight()[0](kpoint, 0) = 0.75;
+
+    HartreeStaticData static_data;
+    for (int kpoint = 0; kpoint < 2; ++kpoint)
+    {
+        static_data.c_k[0][0][kpoint] = ComplexMatrix(1, 1);
+        static_data.c_k[0][0][kpoint](0, 0) = 1.0;
+    }
+    static_data.v_q0[0][0] = ComplexMatrix(1, 1);
+    static_data.v_q0[0][0](0, 0) = 3.0;
+    static_data.atom_ao_sizes = {{0, 1}};
+    static_data.period = {2, 1, 1};
+    static_data.full_kpoints = full_k;
+    static_data.translations = {{0, 0, 0}, {1, 0, 0}};
+
+    const HartreeSymmetryData symmetry_data{
+        &context, &wfc_layouts, &atom_ao_sizes};
+    const auto restored = build_hartree_delta_fixed_basis(
+        static_data, ibz_live, ibz_reference, ibz_k,
+        full_reference, full_k, &symmetry_data);
+    const auto explicit_full = build_hartree_delta_fixed_basis(
+        static_data, full_live, full_reference, full_k,
+        full_reference, full_k);
+
+    assert(std::abs(explicit_full.at(0).at(0)(0, 0)) > 1.0e-12);
+    for (int kpoint = 0; kpoint < 2; ++kpoint)
+    {
+        assert_close(
+            restored.at(0).at(kpoint)(0, 0),
+            explicit_full.at(0).at(kpoint)(0, 0));
+    }
+}
+
 void test_workflow_propagates_explicit_legacy_k_normalization()
 {
     librpa_int::MeanField reference(1, 2, 1, 1, 1);
@@ -407,6 +502,7 @@ int main()
     test_distributed_libri_coefficients_without_full_hartree_copy_are_rejected();
     test_libri_coefficients_with_full_hartree_copy_are_supported();
     test_end_to_end_delta_is_projected_to_an_independent_target_basis();
+    test_symmetry_reduced_hartree_matches_explicit_full_grid();
     test_workflow_propagates_explicit_legacy_k_normalization();
     test_static_builder_binds_complete_full_bz_input();
     test_static_builder_rejects_an_incomplete_full_bz_grid();

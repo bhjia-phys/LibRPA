@@ -3,6 +3,7 @@
 #endif
 
 #include "../qsgw/hamiltonian_mixing.h"
+#include "../qsgw/hamiltonian_cut.h"
 
 #include <cassert>
 #include <cmath>
@@ -13,11 +14,15 @@
 #include <vector>
 
 using librpa_int::Matz;
+using librpa_int::MeanField;
 using librpa_int::cplxdb;
+using librpa_int::qsgw::HamiltonianCutMode;
+using librpa_int::qsgw::HamiltonianCutOptions;
 using librpa_int::qsgw::MixingMode;
 using librpa_int::qsgw::MixingOptions;
 using librpa_int::qsgw::SpinKHamiltonianMixer;
 using librpa_int::qsgw::SpinKMatrixMap;
+using librpa_int::qsgw::apply_hamiltonian_cut;
 using librpa_int::qsgw::measure_spin_k_hamiltonian_residual;
 
 namespace
@@ -360,6 +365,65 @@ void test_residual_uses_complex_frobenius_norm()
     assert_close(residual.maximum, 4.0);
 }
 
+void test_exact_cut_region_does_not_enter_linear_mixing_residual()
+{
+    MeanField live(1, 1, 5, 1, 1);
+    live.get_efermi() = 0.0;
+    live.get_eigenvals()[0](0, 0) = -2.0;
+    live.get_eigenvals()[0](0, 1) = -0.5;
+    live.get_eigenvals()[0](0, 2) = 0.0;
+    live.get_eigenvals()[0](0, 3) = 0.4;
+    live.get_eigenvals()[0](0, 4) = 0.8;
+
+    SpinKMatrixMap reference;
+    reference[0][0] = Matz(5, 5);
+    SpinKMatrixMap raw = deep_copy_map(reference);
+    for (int band = 0; band < 5; ++band)
+    {
+        reference[0][0](band, band) = -2.0 + band;
+        raw[0][0](band, band) = 10.0 + band;
+    }
+    raw[0][0](0, 1) = cplxdb(1.0, 2.0);
+    raw[0][0](1, 0) = std::conj(raw[0][0](0, 1));
+    raw[0][0](3, 4) = cplxdb(100.0, -50.0);
+    raw[0][0](4, 3) = std::conj(raw[0][0](3, 4));
+
+    HamiltonianCutOptions cut_options;
+    cut_options.mode = HamiltonianCutMode::ShiftedReferenceDiagonal;
+    cut_options.unoccupied_keep = 1;
+    cut_options.shift_ha = 20.0;
+    const auto cut_reference = apply_hamiltonian_cut(
+        reference, reference, live, cut_options);
+    const auto cut_raw = apply_hamiltonian_cut(
+        raw, reference, live, cut_options);
+
+    MixingOptions mixing_options;
+    mixing_options.mode = MixingMode::Linear;
+    mixing_options.beta = 0.2;
+    SpinKHamiltonianMixer mixer(mixing_options);
+    mixer.initialize(cut_reference);
+    const auto mixed = mixer.mix(cut_raw);
+    const Matz& matrix = mixed.grid.at(0).at(0);
+
+    assert_close(matrix(0, 0), 0.8 * reference.at(0).at(0)(0, 0) +
+                                      0.2 * raw.at(0).at(0)(0, 0));
+    assert_close(matrix(0, 1), 0.2 * raw.at(0).at(0)(0, 1));
+    for (int band = 3; band < 5; ++band)
+    {
+        assert_close(matrix(band, band),
+                     reference.at(0).at(0)(band, band) + 20.0);
+    }
+    assert_close(matrix(3, 4), 0.0);
+    assert_close(matrix(4, 3), 0.0);
+
+    const auto projected = apply_hamiltonian_cut(
+        mixed.grid, reference, live, cut_options);
+    mixer.initialize(projected);
+    const auto repeated = mixer.mix(projected);
+    assert_close(repeated.residual_l2, 0.0);
+    assert_close(repeated.residual_max, 0.0);
+}
+
 } // namespace
 
 int main()
@@ -371,6 +435,7 @@ int main()
     test_invalid_band_call_is_transactional();
     test_nonhermitian_and_nonfinite_maps_are_rejected();
     test_residual_uses_complex_frobenius_norm();
+    test_exact_cut_region_does_not_enter_linear_mixing_residual();
     std::cout << "test_qsgw_hamiltonian_mixing: all tests passed\n";
     return 0;
 }

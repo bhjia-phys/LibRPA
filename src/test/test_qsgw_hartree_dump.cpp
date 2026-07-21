@@ -41,6 +41,12 @@ HartreeStaticData make_static_data()
                                 Vector3_Order<double>(0.5, 0.0, 0.0)};
     static_data.translations = {Vector3_Order<int>(0, 0, 0),
                                 Vector3_Order<int>(1, 0, 0)};
+    const std::map<librpa_int::atom_t, librpa_int::Vector3<double>>
+        coordinates{{0, {0.1, 0.0, 0.0}}, {1, {0.9, 0.0, 0.0}}};
+    static_data.bvk_remap =
+        librpa_int::AtomPairBvKRemap<librpa_int::atom_t>(
+            coordinates, static_data.translations,
+            Vector3_Order<int>(3, 1, 1), librpa_int::Matrix3{}, 0);
     return static_data;
 }
 
@@ -165,6 +171,34 @@ void test_dump_schema_and_roundtrip()
            std::string::npos);
     assert(manifest.find("kpoint_count=2\n") != std::string::npos);
     assert(manifest.find("atom_ao_sizes=0:2 1:2 \n") != std::string::npos);
+    assert(manifest.find("full_kpoints_file=full_kpoints.txt\n") !=
+           std::string::npos);
+    assert(manifest.find("translations_file=translations.txt\n") !=
+           std::string::npos);
+    assert(manifest.find("bvk_remap_source_count=1\n") !=
+           std::string::npos);
+    assert(manifest.find("bvk_remap_file=bvk_remap.txt\n") !=
+           std::string::npos);
+
+    const std::string kpoints_text =
+        read_file(call_dir / "full_kpoints.txt");
+    assert(kpoints_text.find("# index kx ky kz\n") == 0);
+    assert(count_data_rows(kpoints_text) == 2);
+    assert(kpoints_text.find("1 0.5 0 0\n") != std::string::npos);
+
+    const std::string translations_text =
+        read_file(call_dir / "translations.txt");
+    assert(translations_text.find("# index R_x R_y R_z\n") == 0);
+    assert(count_data_rows(translations_text) == 2);
+    assert(translations_text.find("1 1 0 0\n") != std::string::npos);
+
+    const std::string remap_text = read_file(call_dir / "bvk_remap.txt");
+    assert(remap_text.find("# atom_i atom_j source_R_x source_R_y source_R_z "
+                           "target_index target_count target_R_x target_R_y "
+                           "target_R_z\n") == 0);
+    assert(count_data_rows(remap_text) == 1);
+    assert(remap_text.find("0 1 1 0 0 0 1 -2 0 0\n") !=
+           std::string::npos);
 
     const std::string density_text = read_file(call_dir / "density_delta_k.txt");
     assert(density_text.find("# kpoint row column real imag\n") == 0);

@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace librpa_int
@@ -558,11 +559,10 @@ OperatorFourierResult interpolate_ao_operator(
 
     const double inverse_kpoint_count =
         1.0 / static_cast<double>(source_kpoints.size());
-    std::map<int, std::vector<Matz>> real_space;
+    SpinRMatrixMap real_space;
     for (int spin = 0; spin < n_spins; ++spin)
     {
         auto& spin_real_space = real_space[spin];
-        spin_real_space.reserve(real_space_cells.size());
         for (const auto& cell : real_space_cells)
         {
             Matz cell_operator(dimension, dimension);
@@ -576,7 +576,7 @@ OperatorFourierResult interpolate_ao_operator(
                           cell, -1.0) * inverse_kpoint_count);
             }
             require_finite_matrix(cell_operator, "real-space operator");
-            spin_real_space.push_back(std::move(cell_operator));
+            spin_real_space[cell] = std::move(cell_operator);
         }
 
         for (int target_kpoint = 0;
@@ -588,7 +588,8 @@ OperatorFourierResult interpolate_ao_operator(
                  cell < real_space_cells.size(); ++cell)
             {
                 add_scaled(
-                    target_ao, spin_real_space[cell],
+                    target_ao,
+                    spin_real_space.at(real_space_cells[cell]),
                     phase(target_kpoints[static_cast<std::size_t>(target_kpoint)],
                           real_space_cells[cell], 1.0));
             }
@@ -643,6 +644,7 @@ OperatorFourierResult interpolate_ao_operator(
                 std::move(target_operator);
         }
     }
+    result.real_space_ao = std::move(real_space);
     return result;
 }
 

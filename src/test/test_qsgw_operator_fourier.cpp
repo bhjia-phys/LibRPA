@@ -209,6 +209,10 @@ void test_symmetry_reduced_operator_matches_explicit_full_grid()
                         expected.target.at(0).at(0));
     assert_matrix_close(actual.target.at(0).at(1),
                         expected.target.at(0).at(1));
+    assert_matrix_close(actual.real_space_ao.at(0).at({0, 0, 0}),
+                        expected.real_space_ao.at(0).at({0, 0, 0}));
+    assert_matrix_close(actual.real_space_ao.at(0).at({1, 0, 0}),
+                        expected.real_space_ao.at(0).at({1, 0, 0}));
     assert(actual.maximum_fourier_orthogonality_residual < tolerance);
     assert(actual.maximum_source_roundtrip_relative_error < tolerance);
 }
@@ -266,6 +270,22 @@ void test_complete_grid_round_trip_and_target_gauge_projection()
     assert_matrix_close(
         result.target.at(0).at(1),
         project_to_state_basis(ao_k0, target_c_at_k0));
+    Matz expected_r0(2, 2);
+    Matz expected_r1(2, 2);
+    for (int row = 0; row < 2; ++row)
+    {
+        for (int column = 0; column < 2; ++column)
+        {
+            expected_r0(row, column) =
+                0.5 * (ao_k0(row, column) + ao_k1(row, column));
+            expected_r1(row, column) =
+                0.5 * (ao_k0(row, column) - ao_k1(row, column));
+        }
+    }
+    assert_matrix_close(
+        result.real_space_ao.at(0).at({0, 0, 0}), expected_r0);
+    assert_matrix_close(
+        result.real_space_ao.at(0).at({1, 0, 0}), expected_r1);
     assert(result.maximum_basis_inverse_residual < tolerance);
     assert(result.maximum_source_roundtrip_relative_error < tolerance);
     assert(result.maximum_target_hermiticity_error < tolerance);

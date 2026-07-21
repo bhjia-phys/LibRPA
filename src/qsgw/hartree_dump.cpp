@@ -33,6 +33,18 @@ void write_complex_value(std::ostream& output, const cplxdb& value)
            << std::setprecision(17) << value.imag();
 }
 
+std::size_t count_bvk_remap_sources(const HartreeStaticData& static_data)
+{
+    std::size_t count = 0;
+    for (const auto& [atom_pair, by_translation] :
+         static_data.bvk_remap.data())
+    {
+        static_cast<void>(atom_pair);
+        count += by_translation.size();
+    }
+    return count;
+}
+
 std::filesystem::path next_call_directory(
     const std::filesystem::path& dump_root)
 {
@@ -94,6 +106,83 @@ void write_manifest(const std::filesystem::path& call_dir,
     output << "hartree_r_file=hartree_r.txt\n";
     output << "hartree_r_columns=atom_i atom_j R_x R_y R_z row column real "
               "imag\n";
+    output << "full_kpoints_file=full_kpoints.txt\n";
+    output << "full_kpoints_columns=index kx ky kz\n";
+    output << "translations_file=translations.txt\n";
+    output << "translations_columns=index R_x R_y R_z\n";
+    output << "bvk_remap_source_count="
+           << count_bvk_remap_sources(static_data) << '\n';
+    output << "bvk_remap_file=bvk_remap.txt\n";
+    output << "bvk_remap_columns=atom_i atom_j source_R_x source_R_y "
+              "source_R_z target_index target_count target_R_x target_R_y "
+              "target_R_z\n";
+}
+
+void write_full_kpoints(const std::filesystem::path& call_dir,
+                        const HartreeStaticData& static_data)
+{
+    std::ofstream output(call_dir / "full_kpoints.txt");
+    if (!output)
+    {
+        throw std::runtime_error(
+            "QSGW Hartree dump cannot write full k-point grid");
+    }
+    output << "# index kx ky kz\n";
+    for (std::size_t index = 0; index < static_data.full_kpoints.size();
+         ++index)
+    {
+        const auto& kpoint = static_data.full_kpoints[index];
+        output << index << ' ' << std::setprecision(17) << kpoint.x << ' '
+               << kpoint.y << ' ' << kpoint.z << '\n';
+    }
+}
+
+void write_translations(const std::filesystem::path& call_dir,
+                        const HartreeStaticData& static_data)
+{
+    std::ofstream output(call_dir / "translations.txt");
+    if (!output)
+    {
+        throw std::runtime_error(
+            "QSGW Hartree dump cannot write BvK translations");
+    }
+    output << "# index R_x R_y R_z\n";
+    for (std::size_t index = 0; index < static_data.translations.size();
+         ++index)
+    {
+        const auto& translation = static_data.translations[index];
+        output << index << ' ' << translation.x << ' ' << translation.y
+               << ' ' << translation.z << '\n';
+    }
+}
+
+void write_bvk_remap(const std::filesystem::path& call_dir,
+                     const HartreeStaticData& static_data)
+{
+    std::ofstream output(call_dir / "bvk_remap.txt");
+    if (!output)
+    {
+        throw std::runtime_error(
+            "QSGW Hartree dump cannot write atom-pair BvK remap");
+    }
+    output << "# atom_i atom_j source_R_x source_R_y source_R_z "
+              "target_index target_count target_R_x target_R_y target_R_z\n";
+    for (const auto& [atom_pair, by_translation] :
+         static_data.bvk_remap.data())
+    {
+        for (const auto& [source, targets] : by_translation)
+        {
+            for (std::size_t index = 0; index < targets.size(); ++index)
+            {
+                const auto& target = targets[index];
+                output << atom_pair.first << ' ' << atom_pair.second << ' '
+                       << source.x << ' ' << source.y << ' ' << source.z
+                       << ' ' << index << ' ' << targets.size() << ' '
+                       << target.x << ' ' << target.y << ' ' << target.z
+                       << '\n';
+            }
+        }
+    }
 }
 
 void write_density_delta_k(const std::filesystem::path& call_dir,
@@ -197,6 +286,9 @@ void maybe_dump_hartree_pipeline(
         next_call_directory(std::filesystem::path(dump_root_env));
     write_manifest(call_dir, static_data, density_delta_k, hartree_k,
                    hartree_r);
+    write_full_kpoints(call_dir, static_data);
+    write_translations(call_dir, static_data);
+    write_bvk_remap(call_dir, static_data);
     write_density_delta_k(call_dir, density_delta_k);
     write_hartree_k(call_dir, hartree_k);
     write_hartree_r(call_dir, hartree_r);

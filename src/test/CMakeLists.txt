@@ -58,7 +58,10 @@ foreach(target
     test_meanfield
     test_pbc
     test_profiler
+    test_qsgw_abacus_csr
+    test_qsgw_band_output
     test_qsgw_fixed_basis
+    test_qsgw_hamiltonian_cut
     test_qsgw_hamiltonian_mixing
     test_qsgw_hartree_density
     test_qsgw_hartree_dump

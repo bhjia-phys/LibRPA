@@ -101,11 +101,16 @@ void test_defaults_and_explicit_linear_mixing()
     assert(defaults.qsgw_hartree_coulomb == "full");
     assert(defaults.qsgw_hartree_normalization ==
            "weighted_occupations");
+    assert(defaults.qsgw_band0_unoccupied_keep == 10);
+    assert(defaults.qsgw_band0_cut_mode == 2);
+    assert(std::abs(defaults.qsgw_band0_cut_shift_ha - 20.0) < 1.0e-14);
+    assert(!defaults.qsgw_export_hamiltonian_for_pyatb);
+    assert(!defaults.qsgw_hr_export_full_mp_rgrid);
 
     parse(valid_qsgw_prefix() +
           "qsgw_input_contract = manifests/si.contract\n"
           "qsgw_mixer = NONE\n"
-          "qsgw_mixing_beta = 0.35\n"
+          "qsgw_mixing_beta = 3.5D-1\n"
           "qsgw_min_iter = 5\n"
           "qsgw_max_iter = 10\n"
           "qsgw_write_iteration_matrices = true\n"
@@ -177,6 +182,19 @@ void test_qsgw_headwing_requests_fail_fast()
     }
 }
 
+void test_qsgw_requires_replicated_scf_wavefunctions()
+{
+    const std::string message =
+        "QSGW fixed-basis iteration requires replicated SCF wavefunctions";
+    for (const std::string& prefix :
+         {valid_qsgw_prefix(), valid_qsgw_band_prefix()})
+    {
+        assert_throws_with_message([&] {
+            parse(prefix + "use_kpara_scf_eigvec = true\n");
+        }, message);
+    }
+}
+
 void test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls()
 {
     parse(valid_qsgw_band_prefix() +
@@ -185,6 +203,11 @@ void test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls()
           "qsgw_mixing_beta = 0.27\n"
           "qsgw_min_iter = 2\n"
           "qsgw_max_iter = 5\n"
+          "qsgw_band0_unoccupied_keep = 7\n"
+          "qsgw_band0_cut_mode = 1\n"
+          "qsgw_band0_cut_shift_ha = 3.5\n"
+          "qsgw_export_hamiltonian_for_pyatb = true\n"
+          "qsgw_hr_export_full_mp_rgrid = true\n"
           "qsgw_write_iteration_matrices = true\n");
     assert(driver::driver_params.qsgw_input_contract ==
            "manifests/si-band.contract");
@@ -193,10 +216,36 @@ void test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls()
            1.0e-14);
     assert(driver::driver_params.qsgw_min_iter == 2);
     assert(driver::driver_params.qsgw_max_iter == 5);
+    assert(driver::driver_params.qsgw_band0_unoccupied_keep == 7);
+    assert(driver::driver_params.qsgw_band0_cut_mode == 1);
+    assert(std::abs(driver::driver_params.qsgw_band0_cut_shift_ha - 3.5) <
+           1.0e-14);
+    assert(driver::driver_params.qsgw_export_hamiltonian_for_pyatb);
+    assert(driver::driver_params.qsgw_hr_export_full_mp_rgrid);
     assert(driver::driver_params.qsgw_write_iteration_matrices);
     assert(driver::driver_params.format().find(
                "qsgw_input_contract = manifests/si-band.contract") !=
            std::string::npos);
+    assert(driver::driver_params.format().find(
+               "qsgw_band0_cut_mode = 1") != std::string::npos);
+    assert(driver::driver_params.format().find(
+               "qsgw_export_hamiltonian_for_pyatb = true") !=
+           std::string::npos);
+
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_prefix() +
+              "qsgw_export_hamiltonian_for_pyatb = true\n");
+    }, "requires task = qsgw_band");
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_band_prefix() +
+              "qsgw_export_hamiltonian_for_pyatb = true\n");
+    }, "currently requires qsgw_hr_export_full_mp_rgrid = true");
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_band_prefix() +
+              "use_spinor_wfc = true\n"
+              "qsgw_export_hamiltonian_for_pyatb = true\n"
+              "qsgw_hr_export_full_mp_rgrid = true\n");
+    }, "currently supports non-SOC input only");
 
 }
 
@@ -248,6 +297,35 @@ void test_staged_qsgw_rejects_ambiguous_or_unsupported_inputs()
               "qsgw_min_iter = 5\nqsgw_max_iter = 4\n");
     });
     assert_throws([&] {
+        parse(valid_qsgw_band_prefix() +
+              "qsgw_band0_unoccupied_keep = -1\n");
+    });
+    assert_throws([&] {
+        parse(valid_qsgw_band_prefix() +
+              "qsgw_band0_cut_mode = 3\n");
+    });
+    assert_throws([&] {
+        parse(valid_qsgw_band_prefix() +
+              "qsgw_band0_cut_shift_ha = nan\n");
+    });
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_prefix() +
+              "qsgw_max_iter = ten\n");
+    }, "qsgw_max_iter must be a valid integer");
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_prefix() +
+              "qsgw_mixing_beta = 0.2garbage\n");
+    }, "qsgw_mixing_beta must be a valid floating-point value");
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_prefix() +
+              "qsgw_update_hartree = maybe\n");
+    }, "qsgw_update_hartree must be true or false");
+    assert_throws_with_message([&] {
+        parse(valid_qsgw_prefix() +
+              "qsgw_max_iter = 5\n"
+              "qsgw_max_iter = invalid\n");
+    }, "qsgw_max_iter must be a valid integer");
+    assert_throws([&] {
         parse(valid_qsgw_prefix() +
               "replace_w_head = true\noption_dielect_func = 0\n");
     });
@@ -266,6 +344,11 @@ void test_g0w0_parser_defaults_are_unchanged()
         "qsgw_update_hartree = true\n"
         "qsgw_hartree_coulomb = invalid\n"
         "qsgw_hartree_normalization = invalid\n"
+        "qsgw_band0_unoccupied_keep = -1\n"
+        "qsgw_band0_cut_mode = 99\n"
+        "qsgw_band0_cut_shift_ha = nan\n"
+        "qsgw_export_hamiltonian_for_pyatb = true\n"
+        "qsgw_hr_export_full_mp_rgrid = true\n"
         "use_symmetry_exx = true\n"
         "use_symmetry_gw = true\n"
         "use_symmetry_rpa = true\n");
@@ -276,6 +359,12 @@ void test_g0w0_parser_defaults_are_unchanged()
     assert(driver::driver_params.qsgw_hartree_coulomb == "full");
     assert(driver::driver_params.qsgw_hartree_normalization ==
            "weighted_occupations");
+    assert(driver::driver_params.qsgw_band0_unoccupied_keep == 10);
+    assert(driver::driver_params.qsgw_band0_cut_mode == 2);
+    assert(std::abs(driver::driver_params.qsgw_band0_cut_shift_ha - 20.0) <
+           1.0e-14);
+    assert(!driver::driver_params.qsgw_export_hamiltonian_for_pyatb);
+    assert(!driver::driver_params.qsgw_hr_export_full_mp_rgrid);
     assert(driver::opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_OFF);
     assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
     assert(driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON);
@@ -300,6 +389,7 @@ int main()
     test_defaults_and_explicit_linear_mixing();
     test_hartree_modes_are_qsgw_only_and_explicit();
     test_qsgw_headwing_requests_fail_fast();
+    test_qsgw_requires_replicated_scf_wavefunctions();
     test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls();
     test_qsgw_does_not_require_the_g0w0_matrix_dump_switch();
     test_qsgw_preserves_upstream_crystal_symmetry_options();

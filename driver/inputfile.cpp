@@ -70,6 +70,112 @@ static std::string check_dirpath(const std::string &dirpath)
 #define _parse_switch(obj, name) parser.parse_bool(#name, btmp, flag); if (flag == 0) obj.name = get_switch(btmp);
 #define _parse_string_post(obj, name, post) parser.parse_string(#name, stmp, flag); if (flag == 0) obj.name = post(stmp);
 
+static bool get_last_assigned_value(const InputParser &parser,
+                                    const std::string &name,
+                                    std::string &value)
+{
+    const std::string space = "[ \\r\\f\\t]*";
+    const std::regex assignment(
+        "(^|[\\r\\n])" + space + name + space + "=" +
+            "([^\\r\\n#!]*)",
+        std::regex_constants::ECMAScript | std::regex_constants::icase);
+    const std::string &params = parser.get_params();
+    bool found = false;
+    for (std::sregex_iterator it(params.begin(), params.end(), assignment), end;
+         it != end; ++it)
+    {
+        value = (*it)[2].str();
+        found = true;
+    }
+    if (!found)
+        return false;
+
+    const auto first = std::find_if_not(
+        value.begin(), value.end(),
+        [](const unsigned char ch) { return std::isspace(ch); });
+    const auto last = std::find_if_not(
+        value.rbegin(), value.rend(),
+        [](const unsigned char ch) { return std::isspace(ch); }).base();
+    value = first < last ? std::string(first, last) : std::string{};
+    return true;
+}
+
+static void parse_qsgw_string(const InputParser &parser,
+                              const std::string &name,
+                              std::string &value)
+{
+    std::string token;
+    if (!get_last_assigned_value(parser, name, token))
+        return;
+    if (token.empty())
+        throw std::runtime_error(name + " must not be empty");
+    value = token;
+}
+
+static void parse_qsgw_int(const InputParser &parser,
+                           const std::string &name,
+                           int &value)
+{
+    std::string token;
+    if (!get_last_assigned_value(parser, name, token))
+        return;
+    try
+    {
+        std::size_t consumed = 0;
+        const int parsed = std::stoi(token, &consumed);
+        if (consumed != token.size())
+            throw std::invalid_argument("trailing input");
+        value = parsed;
+    }
+    catch (const std::exception &)
+    {
+        throw std::runtime_error(name + " must be a valid integer");
+    }
+}
+
+static void parse_qsgw_double(const InputParser &parser,
+                              const std::string &name,
+                              double &value)
+{
+    std::string token;
+    if (!get_last_assigned_value(parser, name, token))
+        return;
+    std::replace(token.begin(), token.end(), 'd', 'e');
+    std::replace(token.begin(), token.end(), 'D', 'E');
+    try
+    {
+        std::size_t consumed = 0;
+        const double parsed = std::stod(token, &consumed);
+        if (consumed != token.size())
+            throw std::invalid_argument("trailing input");
+        value = parsed;
+    }
+    catch (const std::exception &)
+    {
+        throw std::runtime_error(name +
+                                 " must be a valid floating-point value");
+    }
+}
+
+static void parse_qsgw_bool(const InputParser &parser,
+                            const std::string &name,
+                            bool &value)
+{
+    std::string token;
+    if (!get_last_assigned_value(parser, name, token))
+        return;
+    std::transform(token.begin(), token.end(), token.begin(),
+                   [](const unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    if (token == "true" || token == "t" || token == ".t.")
+        value = true;
+    else if (token == "false" || token == "f" || token == ".f.")
+        value = false;
+    else
+        throw std::runtime_error(name + " must be true or false");
+}
+
 static void validate_input_parameters()
 {
     const auto &params = driver::driver_params;
@@ -90,6 +196,9 @@ static void validate_input_parameters()
     }
     if (task == "qsgw" || task == "qsgw_band")
     {
+        if (driver::opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
+            throw std::runtime_error(
+                "QSGW fixed-basis iteration requires replicated SCF wavefunctions; set use_kpara_scf_eigvec = false");
         if (params.qsgw_input_contract.empty())
             throw std::runtime_error("qsgw_input_contract must not be empty");
         if (params.qsgw_mixer != "none" && params.qsgw_mixer != "linear")
@@ -102,6 +211,28 @@ static void validate_input_parameters()
             params.qsgw_max_iter < params.qsgw_min_iter)
             throw std::runtime_error(
                 "qsgw iteration bounds must satisfy 1 <= min <= max");
+        if (params.qsgw_band0_unoccupied_keep < 0)
+            throw std::runtime_error(
+                "qsgw_band0_unoccupied_keep must be non-negative");
+        if (params.qsgw_band0_cut_mode < 0 ||
+            params.qsgw_band0_cut_mode > 2)
+            throw std::runtime_error(
+                "qsgw_band0_cut_mode must be 0, 1, or 2");
+        if (!std::isfinite(params.qsgw_band0_cut_shift_ha))
+            throw std::runtime_error(
+                "qsgw_band0_cut_shift_ha must be finite");
+        if (params.qsgw_export_hamiltonian_for_pyatb &&
+            task != "qsgw_band")
+            throw std::runtime_error(
+                "qsgw_export_hamiltonian_for_pyatb requires task = qsgw_band");
+        if (params.qsgw_export_hamiltonian_for_pyatb &&
+            !params.qsgw_hr_export_full_mp_rgrid)
+            throw std::runtime_error(
+                "qsgw_export_hamiltonian_for_pyatb currently requires qsgw_hr_export_full_mp_rgrid = true");
+        if (params.qsgw_export_hamiltonian_for_pyatb &&
+            params.use_spinor_wfc)
+            throw std::runtime_error(
+                "qsgw_export_hamiltonian_for_pyatb currently supports non-SOC input only");
         if (!(params.qsgw_convergence_tolerance_ev > 0.0) ||
             !std::isfinite(params.qsgw_convergence_tolerance_ev))
             throw std::runtime_error(
@@ -183,22 +314,39 @@ void parse_inputfile_to_params(const std::string &fn)
                    });
     if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
     {
-        _parse_string(driver_params, qsgw_input_contract);
-        _parse_string(driver_params, qsgw_mixer);
+        parse_qsgw_string(parser, "qsgw_input_contract",
+                           driver_params.qsgw_input_contract);
+        parse_qsgw_string(parser, "qsgw_mixer", driver_params.qsgw_mixer);
         std::transform(driver_params.qsgw_mixer.begin(),
                        driver_params.qsgw_mixer.end(),
                        driver_params.qsgw_mixer.begin(),
                        [](const unsigned char ch) {
                            return static_cast<char>(std::tolower(ch));
                        });
-        _parse_double(driver_params, qsgw_mixing_beta);
-        _parse_int(driver_params, qsgw_min_iter);
-        _parse_int(driver_params, qsgw_max_iter);
-        _parse_bool(driver_params, qsgw_write_iteration_matrices);
-        _parse_double(driver_params, qsgw_convergence_tolerance_ev);
-        _parse_bool(driver_params, qsgw_update_hartree);
-        _parse_string(driver_params, qsgw_hartree_coulomb);
-        _parse_string(driver_params, qsgw_hartree_normalization);
+        parse_qsgw_double(parser, "qsgw_mixing_beta",
+                          driver_params.qsgw_mixing_beta);
+        parse_qsgw_int(parser, "qsgw_min_iter", driver_params.qsgw_min_iter);
+        parse_qsgw_int(parser, "qsgw_max_iter", driver_params.qsgw_max_iter);
+        parse_qsgw_int(parser, "qsgw_band0_unoccupied_keep",
+                       driver_params.qsgw_band0_unoccupied_keep);
+        parse_qsgw_int(parser, "qsgw_band0_cut_mode",
+                       driver_params.qsgw_band0_cut_mode);
+        parse_qsgw_double(parser, "qsgw_band0_cut_shift_ha",
+                          driver_params.qsgw_band0_cut_shift_ha);
+        parse_qsgw_bool(parser, "qsgw_export_hamiltonian_for_pyatb",
+                        driver_params.qsgw_export_hamiltonian_for_pyatb);
+        parse_qsgw_bool(parser, "qsgw_hr_export_full_mp_rgrid",
+                        driver_params.qsgw_hr_export_full_mp_rgrid);
+        parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
+                        driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_double(parser, "qsgw_convergence_tolerance_ev",
+                          driver_params.qsgw_convergence_tolerance_ev);
+        parse_qsgw_bool(parser, "qsgw_update_hartree",
+                        driver_params.qsgw_update_hartree);
+        parse_qsgw_string(parser, "qsgw_hartree_coulomb",
+                           driver_params.qsgw_hartree_coulomb);
+        parse_qsgw_string(parser, "qsgw_hartree_normalization",
+                           driver_params.qsgw_hartree_normalization);
         std::transform(driver_params.qsgw_hartree_coulomb.begin(),
                        driver_params.qsgw_hartree_coulomb.end(),
                        driver_params.qsgw_hartree_coulomb.begin(),

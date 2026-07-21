@@ -27,6 +27,7 @@ struct OperatorFourierOptions
 struct OperatorFourierResult
 {
     SpinKMatrixMap target;
+    SpinRMatrixMap real_space_ao;
     double maximum_basis_inverse_residual = 0.0;
     double maximum_basis_condition_estimate = 0.0;
     double maximum_fourier_orthogonality_residual = 0.0;

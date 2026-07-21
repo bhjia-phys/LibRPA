@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace librpa_int
 {
@@ -177,7 +178,7 @@ std::string sha256_file(const std::string& path)
         throw std::runtime_error("Cannot open QSGW input for SHA256: " + path);
     }
     Sha256 digest;
-    std::array<char, 1024 * 1024> buffer{};
+    std::vector<char> buffer(1024 * 1024);
     while (input)
     {
         input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
