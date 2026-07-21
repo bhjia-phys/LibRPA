@@ -169,8 +169,8 @@ for relative_path in "${!source_hashes[@]}"; do
     "${source_hashes[$relative_path]}"
 done
 (
-  cd "$source_run"
-  sha256sum --check --quiet input-overlay.sha256
+  cd "$source_run/input-overlay"
+  sha256sum --check --quiet ../input-overlay.sha256
 )
 grep -Fq 'libRPA finished successfully' "$source_run/candidate-qsgw/librpa.stdout"
 test ! -s "$source_run/candidate-qsgw/librpa.stderr"
