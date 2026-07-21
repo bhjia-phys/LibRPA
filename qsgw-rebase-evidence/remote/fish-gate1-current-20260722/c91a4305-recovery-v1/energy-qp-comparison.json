@@ -1,0 +1,38 @@
+{
+  "candidate_path": "/home/bhj/ai-runs/librpa-qsgw-gate1-current-20260722-ca542aca-v1/candidate/energy_qp",
+  "candidate_sha256": "8fc06df11d7382dd8491a890270ee35d79b2aaa218667d58154ecaafb0ce88a8",
+  "checks": {
+    "kpoint_coordinates_exact": true,
+    "ks_energies_exact": true,
+    "occupations_exact": true,
+    "qp_energies_within_tolerance": true
+  },
+  "kpoint_coordinate_max_abs_difference": 0.0,
+  "kpoint_count": 64,
+  "ks_energy_max_abs_difference_ha": 0.0,
+  "ks_energy_max_abs_location": [
+    1,
+    1
+  ],
+  "ks_energy_nonzero_difference_count": 0,
+  "occupation_max_abs_difference": 0.0,
+  "occupation_max_abs_location": [
+    1,
+    1
+  ],
+  "occupation_nonzero_difference_count": 0,
+  "passed": true,
+  "qp_energy_max_abs_difference_ha": 2.000000165480742e-10,
+  "qp_energy_max_abs_location": [
+    1,
+    41
+  ],
+  "qp_energy_nonzero_difference_count": 47,
+  "reference_path": "/home/bhj/ai-runs/librpa-qsgw-gate1-current-20260722-ca542aca-v1/upstream/energy_qp",
+  "reference_sha256": "cd0a1462b419abc823cae31efb0990a12a969bc5979b4a2e65969696cda6246f",
+  "schema": "energy-qp-comparison-v1",
+  "state_count": 2816,
+  "thresholds": {
+    "qp_energy_max_abs_tolerance_ha": 1e-09
+  }
+}

@@ -69,6 +69,7 @@ matrix `1e-8` and eigenvalue `1e-6 Ha` contracts, but the temporary `1e-12`
 SigmaC and byte-identical text checks rejected them. The versioned recovery
 postcheck revalidates the frozen completed run using the tighter-than-project
 `1e-10` SigmaC and `1e-9 Ha` QP thresholds; the source run remains rejected.
+The accepted compact evidence is archived in `c91a4305-recovery-v1/`.
 
 Required variables:
 
