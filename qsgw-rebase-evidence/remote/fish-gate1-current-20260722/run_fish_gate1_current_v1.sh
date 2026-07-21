@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 : "${RUNNER_COMMIT:?set RUNNER_COMMIT}"
 : "${RUNNER_SOURCE:?set RUNNER_SOURCE}"
@@ -24,10 +24,20 @@ expected_vxc_manifest_sha=714af7a617cdf971651a21e2b599819b7a53f9eac6b76cf8e3ead8
 gate_dir=qsgw-rebase-evidence/remote/fish-gate1-current-20260722
 vxc_source=$RUNNER_SOURCE/$gate_dir/vxc_out
 vxc_provenance_source=$RUNNER_SOURCE/$gate_dir/VXC_SOURCE_PROVENANCE.txt
+stru_tail_source=$RUNNER_SOURCE/$gate_dir/stru_symmetry_tail.dd421665.si444.txt
+stru_provenance_source=$RUNNER_SOURCE/$gate_dir/STRU_SYMMETRY_SOURCE_PROVENANCE.txt
+stru_builder_source=$RUNNER_SOURCE/$gate_dir/build_stru_symmetry_overlay_v1.py
+stru_builder_test_source=$RUNNER_SOURCE/$gate_dir/test_build_stru_symmetry_overlay_v1.py
 comparator_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/dongfang-gates-20260715-7d69a18c/compare_g0w0_sigc_dump_directories.py
 comparator_test_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/dongfang-gates-20260715-7d69a18c/test_compare_g0w0_sigc_dump_directories.py
 expected_vxc_sha=7928a0bd99f3a58b78881fa72861da2ccbfb2d4f4a47338a77d140d1adaff1dd
 expected_vxc_provenance_sha=f0ffd643620324363a7cd8c2ba8660d1ff1efb9b78763b1ecdb74b2542af5490
+expected_source_stru_sha=5d943ee64376bc4e3315cc7ae779a1a91785b42e515290d37dacd78147947b5a
+expected_stru_tail_sha=9863bfb6be3234e0ea050f45d7b2245f5529e357a6f87567998632fc3461ed8e
+expected_stru_provenance_sha=3252fd881b65ca662d9105ddfbaea48711ce085d7e733293a3bcf3257c04f37e
+expected_stru_builder_sha=d90e22d671c9b5ade4b799d987dfa471d1c0b65747c96748cfbb832998938c80
+expected_stru_builder_test_sha=1ef3e79588c1c45e5ffb8ed93e99784cc7464c7683ff6c5518be4cbdeac1d57f
+expected_overlay_stru_sha=e756fd9551bfa9df748473880259ba019de904867c1aaff126b1b3a9c51a8873
 expected_comparator_sha=15417e56ce7b92fc719eea6788944de8805fba5e5849698fa32a89206cba2eaa
 expected_comparator_test_sha=5ce8acf1c8659c3c5e8f20a61d62e8347f987f7b3adeb09b4c7cb3ce5cef2dcd
 
@@ -40,15 +50,17 @@ candidate_run=$run_root/candidate
 overlay=$run_root/input-overlay
 tool_dir=$run_root/tools
 
-record_failure() {
+run_succeeded=0
+record_exit() {
   local rc=$?
-  if [[ -d ${run_root:-/nonexistent} ]]; then
+  trap - EXIT
+  if [[ $run_succeeded -ne 1 && -d ${run_root:-/nonexistent} ]]; then
     printf 'failed_utc=%s\nexit_code=%s\n' \
       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" >"$run_root/FAILED"
   fi
   exit "$rc"
 }
-trap record_failure ERR
+trap record_exit EXIT
 
 provenance_value() {
   local key=$1
@@ -123,11 +135,25 @@ test "$(find "$dataset" -maxdepth 1 -type f | wc -l)" -eq 56
 
 test -f "$vxc_source"
 test -f "$vxc_provenance_source"
+test -f "$stru_tail_source"
+test -f "$stru_provenance_source"
+test -f "$stru_builder_source"
+test -f "$stru_builder_test_source"
 test -f "$comparator_source"
 test -f "$comparator_test_source"
+test "$(sha256sum "$dataset/stru_out" | awk '{print $1}')" = \
+  "$expected_source_stru_sha"
 test "$(sha256sum "$vxc_source" | awk '{print $1}')" = "$expected_vxc_sha"
 test "$(sha256sum "$vxc_provenance_source" | awk '{print $1}')" = \
   "$expected_vxc_provenance_sha"
+test "$(sha256sum "$stru_tail_source" | awk '{print $1}')" = \
+  "$expected_stru_tail_sha"
+test "$(sha256sum "$stru_provenance_source" | awk '{print $1}')" = \
+  "$expected_stru_provenance_sha"
+test "$(sha256sum "$stru_builder_source" | awk '{print $1}')" = \
+  "$expected_stru_builder_sha"
+test "$(sha256sum "$stru_builder_test_source" | awk '{print $1}')" = \
+  "$expected_stru_builder_test_sha"
 test "$(sha256sum "$comparator_source" | awk '{print $1}')" = \
   "$expected_comparator_sha"
 test "$(sha256sum "$comparator_test_source" | awk '{print $1}')" = \
@@ -138,15 +164,35 @@ test -x "$python"
 mkdir -p "$upstream_run" "$candidate_run" "$overlay" "$tool_dir"
 cp "$0" "$run_root/run_fish_gate1_current_v1.sh"
 cp "$vxc_provenance_source" "$run_root/VXC_SOURCE_PROVENANCE.txt"
+cp "$stru_provenance_source" "$run_root/STRU_SYMMETRY_SOURCE_PROVENANCE.txt"
+cp "$stru_tail_source" "$tool_dir/stru_symmetry_tail.dd421665.si444.txt"
+cp "$stru_builder_source" "$tool_dir/build_stru_symmetry_overlay_v1.py"
+cp "$stru_builder_test_source" "$tool_dir/test_build_stru_symmetry_overlay_v1.py"
 cp "$comparator_source" "$tool_dir/compare_g0w0_sigc_dump_directories.py"
 cp "$comparator_test_source" "$tool_dir/test_compare_g0w0_sigc_dump_directories.py"
 for path in "$dataset"/*; do
   test -f "$path"
+  if [[ $(basename "$path") == stru_out ]]; then
+    continue
+  fi
   ln -s "$path" "$overlay/$(basename "$path")"
 done
 cp "$vxc_source" "$overlay/vxc_out"
-test "$(find "$overlay" -maxdepth 1 -type l | wc -l)" -eq 56
-test "$(find "$overlay" -maxdepth 1 -type f | wc -l)" -eq 1
+"$python" -B "$tool_dir/build_stru_symmetry_overlay_v1.py" \
+  "$dataset/stru_out" \
+  "$tool_dir/stru_symmetry_tail.dd421665.si444.txt" \
+  "$overlay/stru_out" \
+  "$run_root/stru-symmetry-overlay-validation.json" \
+  --expected-grid 4 4 4 \
+  --n-scf-kpoints 8 \
+  --metric-tolerance 1e-10 \
+  --atom-tolerance 1e-5 \
+  >"$run_root/stru-symmetry-overlay-builder.stdout" \
+  2>"$run_root/stru-symmetry-overlay-builder.stderr"
+test "$(sha256sum "$overlay/stru_out" | awk '{print $1}')" = \
+  "$expected_overlay_stru_sha"
+test "$(find "$overlay" -maxdepth 1 -type l | wc -l)" -eq 55
+test "$(find "$overlay" -maxdepth 1 -type f | wc -l)" -eq 2
 (
   cd "$overlay"
   for path in *; do sha256sum "$path"; done
@@ -157,6 +203,32 @@ find "$overlay" -maxdepth 1 -type l -printf '%f -> %l\n' | \
 "$python" -B "$tool_dir/test_compare_g0w0_sigc_dump_directories.py" \
   >"$run_root/comparator-unit-test.stdout" \
   2>"$run_root/comparator-unit-test.stderr"
+(
+  cd "$tool_dir"
+  "$python" -B -m unittest -v test_build_stru_symmetry_overlay_v1.py \
+    >"$run_root/stru-builder-unit-test.stdout" \
+    2>"$run_root/stru-builder-unit-test.stderr"
+)
+"$python" - "$run_root/stru-symmetry-overlay-validation.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["status"] == "PASS"
+assert report["source_sha256"] == "5d943ee64376bc4e3315cc7ae779a1a91785b42e515290d37dacd78147947b5a"
+assert report["tail_sha256"] == "9863bfb6be3234e0ea050f45d7b2245f5529e357a6f87567998632fc3461ed8e"
+assert report["output_sha256"] == "e756fd9551bfa9df748473880259ba019de904867c1aaff126b1b3a9c51a8873"
+assert report["grid"] == [4, 4, 4]
+assert report["n_scf_kpoints"] == 8
+assert report["n_full_kpoints"] == 64
+assert report["n_symops"] == 48
+assert report["convention"] == "row"
+assert report["identity_count"] == 1
+assert report["source_prefix_byte_identical"] is True
+assert report["metric_max_abs"] <= 1.0e-10
+assert report["atom_fractional_max_abs"] <= 1.0e-5
+PY
 
 cat >"$run_root/librpa.in" <<EOF
 task = g0w0
@@ -214,6 +286,9 @@ upstream_commit=$expected_upstream_commit
 candidate_commit=$expected_candidate_commit
 dataset_manifest_sha256=$expected_dataset_manifest_sha
 vxc_out_sha256=$expected_vxc_sha
+source_stru_out_sha256=$expected_source_stru_sha
+symmetry_tail_sha256=$expected_stru_tail_sha
+overlay_stru_out_sha256=$expected_overlay_stru_sha
 librpa_input_sha256=$(sha256sum "$run_root/librpa.in" | awk '{print $1}')
 mpi_ranks=$mpi_ranks
 omp_threads=$omp_threads
@@ -297,6 +372,16 @@ dataset=$dataset
 dataset_manifest_sha256=$expected_dataset_manifest_sha
 vxc_out_source_provenance_sha256=$expected_vxc_provenance_sha
 vxc_out_sha256=$expected_vxc_sha
+source_stru_out_sha256=$expected_source_stru_sha
+symmetry_tail_source_provenance_sha256=$expected_stru_provenance_sha
+symmetry_tail_sha256=$expected_stru_tail_sha
+symmetry_overlay_builder_sha256=$expected_stru_builder_sha
+overlay_stru_out_sha256=$expected_overlay_stru_sha
+symmetry_operation_count=48
+symmetry_operation_convention=row
+symmetry_overlay_metric_max_abs=0
+symmetry_overlay_atom_fractional_tolerance=1e-5
+symmetry_overlay_validation_sha256=$(sha256sum "$run_root/stru-symmetry-overlay-validation.json" | awk '{print $1}')
 qsgw_input_contract_sha256=$expected_contract_sha
 qsgw_vxc_scf_manifest_sha256=$expected_vxc_manifest_sha
 librpa_input_sha256=$(sha256sum "$run_root/librpa.in" | awk '{print $1}')
@@ -325,5 +410,7 @@ EOF
   sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
 )
 touch "$run_root/GREEN_CONFIRMED"
+run_succeeded=1
+trap - EXIT
 printf 'FISH_GATE1_CURRENT_G0W0_AB_V1=PASS\n'
 cat "$run_root/g0w0-comparison.json"

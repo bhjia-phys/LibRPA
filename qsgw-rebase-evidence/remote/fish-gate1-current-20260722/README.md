@@ -15,8 +15,26 @@ The frozen QSGW bundle stores full AO-basis Vxc matrices, while upstream
 versioned `vxc_out` in this directory is the matching file from the same
 historical ABACUS producer root. Its source path and SHA256 are recorded in
 `VXC_SOURCE_PROVENANCE.txt`. The runner builds a run-local overlay consisting
-of symlinks to every frozen bundle file plus this physical `vxc_out`; it does
-not modify or copy the 1.7 GiB frozen bundle.
+of 55 symlinks to the frozen bundle plus physical `vxc_out` and `stru_out`
+files; it does not modify or copy the 1.7 GiB frozen bundle.
+
+Upstream `42d3863c` reconstructs symmetry from the symmetry-operation tail in
+`stru_out` and ignores the historical `symrot_R.txt`, `symrot_k.txt`, and
+`irreducible_sector.txt` sidecars. The historical frozen `stru_out` predates
+that tail. `build_stru_symmetry_overlay_v1.py` appends the 48 row-convention
+fractional operations emitted by pinned ABACUS commit `dd421665` while keeping
+the historical lattice, atoms, and legacy k-point payload byte-for-byte. The
+builder rejects an existing symmetry block and validates the legacy 4x4x4
+payload, operation determinants, identity count, source lattice metric, and
+two-atom mapping before writing the run-local file.
+
+The complete pinned-producer `stru_out` is deliberately not used. Its direct
+lattice omits `LATTICE_CONSTANT = 10.2` while its Cartesian atom coordinates
+include that scale, so it violates LibRPA's documented Bohr-unit structure
+contract. Only its dimensionless fractional rotations/translations are reused,
+and those are independently validated against the historical Si structure.
+The exact source, hashes, rejected fields, and reuse scope are recorded in
+`STRU_SYMMETRY_SOURCE_PROVENANCE.txt`.
 
 The runner fails closed on Gate 0 provenance, executable hashes, frozen
 bundle manifests, runner/tool/input hashes, exact input identity, expected
@@ -29,6 +47,15 @@ creating a run directory or launching LibRPA because the comparator hashes had
 been measured from a CRLF Windows working tree instead of the canonical LF Git
 blobs. No numerical output from those attempts is accepted. The corrected
 runner pins the hashes measured from the clean fish checkout.
+
+Run `20260722-83b10134-v1` passed every provenance and input preflight but is
+also rejected. Upstream stopped before producing SigmaC with
+`Generated symmetry k-star count does not match Coulomb k-points`; candidate
+execution never started. This identified the missing new-format `stru_out`
+symmetry tail rather than a numerical difference. That runner also failed to
+write `FAILED` because its `ERR` trap was not inherited through the run
+function/subshell. The current runner uses `set -E` plus an `EXIT` trap that
+writes `FAILED` after run-root creation unless the green path is completed.
 
 Required variables:
 
