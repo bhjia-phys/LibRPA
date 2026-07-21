@@ -219,6 +219,7 @@ cp "$gate2_accept/SOURCE_RUN_SHA256SUMS.txt" "$run_root/gate2-SOURCE_RUN_SHA256S
 cp "$legacy_gate/PROVENANCE.txt" "$run_root/legacy-gate-PROVENANCE.txt"
 cp "$bundle/PROVENANCE.txt" "$run_root/bundle-PROVENANCE.txt"
 cp "$base_comparator_source" "$run_root/tools/base_comparator.py"
+cp "$base_comparator_source" "$run_root/tools/compare_qsgw_component_traces.py"
 cp "$closure_source" "$run_root/tools/validate_qsgw_trace_closure.py"
 cp "$closure_source" "$run_root/tools/validate_qsgw_trace_closure_v3.py"
 cp "$closure_test_source" "$run_root/tools/test_validate_qsgw_trace_closure.py"
