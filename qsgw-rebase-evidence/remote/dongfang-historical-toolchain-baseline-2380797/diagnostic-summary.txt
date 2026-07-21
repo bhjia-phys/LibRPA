@@ -1,0 +1,8 @@
+historical_reproduction_passed=True
+goal_thresholds_passed=False
+h0_max_abs_ha=2.8264057760907235e-12
+h0_max_relative_frobenius=2.726668832914288e-14
+oracle_hermiticity_max_abs_ha=7.971150662207058e-08
+sigcrf_max_abs_ha=3.918961415558838e-14
+sigcrf_max_relative_frobenius=1.8401605690397526e-12
+text_max_abs_ev=0.0

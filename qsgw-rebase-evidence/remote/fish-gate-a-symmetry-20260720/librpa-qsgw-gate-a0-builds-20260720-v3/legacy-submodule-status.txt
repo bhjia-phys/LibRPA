@@ -1,0 +1,2 @@
+ c46a34d7b76d0f317ccd1718740f8169d8aa3fa4 thirdparty/LibComm (v0.1.1)
+-d4f732011c6c2d115f651c38796cf7ecf823393b thirdparty/LibRI

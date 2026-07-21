@@ -1,0 +1,7 @@
+host=Fisherd-Server.com
+started_utc=2026-07-20T12:28:15Z
+Intel(R) oneAPI DPC++/C++ Compiler 2025.2.1 (2025.2.0.20250806)
+ifx (IFX) 2025.2.1 20250806
+cmake version 3.31.6
+Intel(R) MPI Library for Linux* OS, Version 2021.16 Build 20250722 (id: c37a540)
+Copyright 2003-2025, Intel Corporation.

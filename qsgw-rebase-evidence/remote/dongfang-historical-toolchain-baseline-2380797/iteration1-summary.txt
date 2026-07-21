@@ -1,0 +1,1 @@
+Iteration 1: HOMO = 5.9827 eV, LUMO = 7.43882 eV, Efermi = 6.71076 eV

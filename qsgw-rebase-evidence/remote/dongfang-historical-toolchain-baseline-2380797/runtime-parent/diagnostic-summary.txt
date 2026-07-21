@@ -1,0 +1,3 @@
+exx_energy_max_abs_diff_ev=1.0000000003174137e-05
+exx_energy_relative_frobenius=4.974202354735494e-09
+exx_max_location={"band": 10, "kpoint": 65}

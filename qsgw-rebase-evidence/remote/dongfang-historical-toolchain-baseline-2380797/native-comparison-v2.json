@@ -1,0 +1,348 @@
+{
+  "absolute_invariants_passed": false,
+  "acceptance_semantics": {
+    "cli_exit_accepts": "historical_reproduction_parity",
+    "goal_thresholds": "historical reproduction parity and both H0 Hermiticity invariants",
+    "historical_reproduction_parity": "H0/SigcRF/text differences satisfy their parity thresholds",
+    "thresholds_are_not_relaxed": true
+  },
+  "artifacts": {
+    "hrs1_nao_qsgw_iter_0001.csr": {
+      "byte_equal": false,
+      "oracle_sha256": "8251e4de8d0f53c587f5bb0d5feb6a2658b136b90bc414ed391b76239bacd6af",
+      "oracle_size": 3268368,
+      "reproduced_sha256": "6314470cd8e0ca711d8b00bcf6b03594abe939f5dd78f1a27710a551fd1db057",
+      "reproduced_size": 3268255
+    },
+    "librpa.in": {
+      "byte_equal": true,
+      "oracle_sha256": "ab6e1f986b13adcd68169c38d55b12b5cde018a5cc8557f78addd7d390e1d4e4",
+      "oracle_size": 825,
+      "reproduced_sha256": "ab6e1f986b13adcd68169c38d55b12b5cde018a5cc8557f78addd7d390e1d4e4",
+      "reproduced_size": 825
+    }
+  },
+  "goal_thresholds_passed": false,
+  "h0": {
+    "absolute_invariants_passed": false,
+    "all_byte_equal": false,
+    "files": [
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000001.bin",
+        "frobenius": 3.3788437859046133e-12,
+        "max_abs": 2.8264057760907235e-12,
+        "oracle_hermiticity_max_abs_ha": 6.1008172617949e-08,
+        "reference_frobenius": 123.91837780656608,
+        "relative_frobenius": 2.726668832914288e-14,
+        "reproduced_hermiticity_max_abs_ha": 6.100817299264927e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000002.bin",
+        "frobenius": 1.5752055550700406e-12,
+        "max_abs": 1.2099210540440575e-12,
+        "oracle_hermiticity_max_abs_ha": 4.085858051287167e-08,
+        "reference_frobenius": 122.0803936120067,
+        "relative_frobenius": 1.2903018318210254e-14,
+        "reproduced_hermiticity_max_abs_ha": 4.085858064514433e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000003.bin",
+        "frobenius": 2.1882759184426155e-12,
+        "max_abs": 1.8433032877859637e-12,
+        "oracle_hermiticity_max_abs_ha": 7.971150662207058e-08,
+        "reference_frobenius": 121.51144025532722,
+        "relative_frobenius": 1.8008805704586148e-14,
+        "reproduced_hermiticity_max_abs_ha": 7.971150737130878e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000004.bin",
+        "frobenius": 8.290602580836833e-13,
+        "max_abs": 6.116218661946938e-13,
+        "oracle_hermiticity_max_abs_ha": 6.073601902323551e-08,
+        "reference_frobenius": 121.7096674613335,
+        "relative_frobenius": 6.8117864042892995e-15,
+        "reproduced_hermiticity_max_abs_ha": 6.07360183711924e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000005.bin",
+        "frobenius": 2.131853236729253e-12,
+        "max_abs": 1.754707491092327e-12,
+        "oracle_hermiticity_max_abs_ha": 2.2167751046771237e-08,
+        "reference_frobenius": 121.17646614105793,
+        "relative_frobenius": 1.7592964249738277e-14,
+        "reproduced_hermiticity_max_abs_ha": 2.2167750757532233e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000006.bin",
+        "frobenius": 2.8182041567003688e-12,
+        "max_abs": 2.262301457279404e-12,
+        "oracle_hermiticity_max_abs_ha": 4.9224398912720504e-08,
+        "reference_frobenius": 121.43302964192544,
+        "relative_frobenius": 2.3207888043397442e-14,
+        "reproduced_hermiticity_max_abs_ha": 4.922439835807107e-08
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000007.bin",
+        "frobenius": 2.889866203063796e-12,
+        "max_abs": 1.9107493365311257e-12,
+        "oracle_hermiticity_max_abs_ha": 3.2730953382512642e-09,
+        "reference_frobenius": 120.70710797821255,
+        "relative_frobenius": 2.394114357859864e-14,
+        "reproduced_hermiticity_max_abs_ha": 3.273095560749879e-09
+      },
+      {
+        "byte_equal": false,
+        "file": "H0_GW_spin_01_k_000008.bin",
+        "frobenius": 2.106617948650738e-12,
+        "max_abs": 1.7664758546480337e-12,
+        "oracle_hermiticity_max_abs_ha": 1.6909710807628118e-08,
+        "reference_frobenius": 120.91149276548211,
+        "relative_frobenius": 1.7422809862555403e-14,
+        "reproduced_hermiticity_max_abs_ha": 1.6909710181329102e-08
+      }
+    ],
+    "max_abs_ha": 2.8264057760907235e-12,
+    "max_hermiticity_abs_ha": 7.971150737130878e-08,
+    "max_relative_frobenius": 2.726668832914288e-14,
+    "oracle_absolute_invariant_passed": false,
+    "oracle_hermiticity_max_abs_ha": 7.971150662207058e-08,
+    "parity_passed": true,
+    "passed": true,
+    "reproduced_absolute_invariant_passed": false,
+    "reproduced_hermiticity_max_abs_ha": 7.971150737130878e-08,
+    "v1_combined_passed": false
+  },
+  "historical_reproduction_passed": true,
+  "legacy_oracle_invariant_gap": true,
+  "oracle": "/ssd/work/df_iopcas_bhj/qsgw-newarch-runs/si-k444-qsgw-old-exactinput-wcfq-20260704-014854/librpa",
+  "parser_dependency": {
+    "path": "/data/home/df_iopcas_bhj/compare_legacy_band0_native_outputs_v1.py",
+    "sha256": "350e6589b74a27a588d44ba7f1b53f42bcd46cfebd4c9a5c7658debdb520e88d"
+  },
+  "passed": true,
+  "reproduced": "/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-gate-a0-exact847-historical-toolchain-band0-iter1-20260720-v1/reproduced",
+  "reproduced_absolute_invariant_gap": true,
+  "schema": "librpa-legacy-qsgw-band0-native-comparison-v2",
+  "sigcrf": {
+    "all_byte_equal": false,
+    "files": [
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_000_myid_00000.dat",
+        "frobenius": 2.304484034911146e-13,
+        "max_abs": 2.5199308771767792e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.848245187403735,
+        "relative_frobenius": 2.7167664127451065e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_001_myid_00000.dat",
+        "frobenius": 2.295323367358341e-13,
+        "max_abs": 2.5016520057134758e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8485787080180075,
+        "relative_frobenius": 2.7049033232514626e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_002_myid_00000.dat",
+        "frobenius": 2.3130663711430516e-13,
+        "max_abs": 2.538788130893454e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8494580050451225,
+        "relative_frobenius": 2.722990845227462e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_003_myid_00000.dat",
+        "frobenius": 2.2903876434724056e-13,
+        "max_abs": 2.4890798019166572e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8514473450924677,
+        "relative_frobenius": 2.6899932881036446e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_004_myid_00000.dat",
+        "frobenius": 2.3171942710094855e-13,
+        "max_abs": 2.5459616127928944e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8558174899363742,
+        "relative_frobenius": 2.7075799434547164e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_005_myid_00000.dat",
+        "frobenius": 2.290259370823484e-13,
+        "max_abs": 2.48563664296827e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8651919476153827,
+        "relative_frobenius": 2.647111288004739e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_006_myid_00000.dat",
+        "frobenius": 2.3191222980994827e-13,
+        "max_abs": 2.547700674770014e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8843677299957201,
+        "relative_frobenius": 2.6223506573568734e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_007_myid_00000.dat",
+        "frobenius": 2.294109744488683e-13,
+        "max_abs": 2.4792314465625936e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.9195704098074434,
+        "relative_frobenius": 2.4947624673667627e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_008_myid_00000.dat",
+        "frobenius": 2.3246101556820604e-13,
+        "max_abs": 2.545914120554021e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.9714248940787029,
+        "relative_frobenius": 2.3929901012951856e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_009_myid_00000.dat",
+        "frobenius": 2.307549599968841e-13,
+        "max_abs": 2.4563782426612114e-14,
+        "record_count": 256,
+        "reference_frobenius": 1.017398646476952,
+        "relative_frobenius": 2.2680879397268943e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_010_myid_00000.dat",
+        "frobenius": 2.3506046107275693e-13,
+        "max_abs": 2.5316023787139894e-14,
+        "record_count": 256,
+        "reference_frobenius": 1.0038552777443628,
+        "relative_frobenius": 2.3415771803375063e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_011_myid_00000.dat",
+        "frobenius": 2.3465402591782693e-13,
+        "max_abs": 2.4627873098504493e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.8878364422659367,
+        "relative_frobenius": 2.6429870947732534e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_012_myid_00000.dat",
+        "frobenius": 2.4280165604599626e-13,
+        "max_abs": 2.6595424395819203e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.6917549147308384,
+        "relative_frobenius": 3.509937564237911e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_013_myid_00000.dat",
+        "frobenius": 2.437958849702096e-13,
+        "max_abs": 2.9195531851118446e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.4781250644075374,
+        "relative_frobenius": 5.098998214458934e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_014_myid_00000.dat",
+        "frobenius": 2.5419711685735943e-13,
+        "max_abs": 3.656978495526113e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.2898819845796919,
+        "relative_frobenius": 8.768986359256752e-13,
+        "value_count": 123904
+      },
+      {
+        "byte_equal": false,
+        "file": "SigcRF_ispin_00_s_00_iomega_015_myid_00000.dat",
+        "frobenius": 2.480411203756397e-13,
+        "max_abs": 3.918961415558838e-14,
+        "record_count": 256,
+        "reference_frobenius": 0.13479319389235392,
+        "relative_frobenius": 1.8401605690397526e-12,
+        "value_count": 123904
+      }
+    ],
+    "max_abs_ha": 3.918961415558838e-14,
+    "max_relative_frobenius": 1.8401605690397526e-12,
+    "passed": true
+  },
+  "text_outputs": {
+    "all_byte_equal": true,
+    "files": {
+      "EXX_band_spin_1_1.dat": {
+        "byte_equal": true,
+        "frobenius": 0.0,
+        "max_abs": 0.0,
+        "passed": true,
+        "reference_frobenius": 5194.23005768195,
+        "relative_frobenius": 0.0
+      },
+      "KS_band_spin_1_1.dat": {
+        "byte_equal": true,
+        "frobenius": 0.0,
+        "max_abs": 0.0,
+        "passed": true,
+        "reference_frobenius": 5405.123887465995,
+        "relative_frobenius": 0.0
+      },
+      "QSGW_band_spin_1_1.dat": {
+        "byte_equal": true,
+        "frobenius": 0.0,
+        "max_abs": 0.0,
+        "passed": true,
+        "reference_frobenius": 46854.73460701544,
+        "relative_frobenius": 0.0
+      },
+      "homo_lumo_vs_iterations.dat": {
+        "byte_equal": true,
+        "frobenius": 0.0,
+        "max_abs": 0.0,
+        "passed": true,
+        "reference_frobenius": 16.352807275834934,
+        "relative_frobenius": 0.0
+      }
+    },
+    "max_abs_ev": 0.0,
+    "passed": true
+  },
+  "thresholds": {
+    "band_max_abs_ev": 1e-05,
+    "h0_max_abs_ha": 1e-06,
+    "h0_relative_frobenius": 1e-08,
+    "hermiticity_ha": 1e-10,
+    "sigcrf_max_abs_ha": 1e-06,
+    "sigcrf_relative_frobenius": 1e-08
+  }
+}

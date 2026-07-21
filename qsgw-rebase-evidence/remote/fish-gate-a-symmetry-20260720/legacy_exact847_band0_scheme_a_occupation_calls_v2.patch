@@ -1,0 +1,94 @@
+diff --git a/driver/task_qsgw_band_0.cpp b/driver/task_qsgw_band_0.cpp
+index c846c563..cccd0ec2 100644
+--- a/driver/task_qsgw_band_0.cpp
++++ b/driver/task_qsgw_band_0.cpp
+@@ -1346,7 +1346,24 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+     printf("%5f\n", efermi);
+ 
+     // 计算初始体系总电子数/初始总占据数
+-    double total_electrons = meanfield.get_total_weight();
++    const std::vector<double> qsgw_kpoint_weights =
++        read_qsgw_kpoint_weights(
++            driver_params.input_dir + "bz_sampling_out", n_kpoints);
++    const MeanField qsgw_reference_meanfield = meanfield;
++    const double total_electrons = qsgw_physical_electron_count(
++        qsgw_reference_meanfield, qsgw_kpoint_weights);
++
++    const std::vector<double> qsgw_band_kpoint_weights(
++        static_cast<std::size_t>(meanfield_band.get_n_kpoints()),
++        1.0 / static_cast<double>(meanfield_band.get_n_kpoints()));
++    const MeanField qsgw_band_reference_meanfield = meanfield_band;
++    const double band_reference_electrons = qsgw_physical_electron_count(
++        qsgw_band_reference_meanfield, qsgw_band_kpoint_weights);
++    if (std::abs(band_reference_electrons - total_electrons) > 1.0e-12)
++    {
++        throw std::runtime_error(
++            "QSGW band0 grid and band references have different electron counts");
++    }
+     printf("%5s\n", "Total_electrons");
+     printf("%5f\n", total_electrons);
+ 
+@@ -1409,9 +1426,13 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+                 lib_printf("QSGW band0: restart checkpoint has no Hartree reference; the first resumed Hartree update step will define a new reference and use zero Delta V_H\n");
+             }
+             diagonalize_and_store_fixed_basis(meanfield, checkpoint.H0_GW_all, n_spins, n_kpoints, n_bands);
+-            update_fermi_energy_and_occupations(meanfield, temperature, checkpoint.efermi_ha);
+-            compute_homo_lumo_ha_band(meanfield, homo, lumo);
+-            efermi = checkpoint.efermi_ha;
++            const auto restart_occupations =
++                update_qsgw_zero_temperature_occupations(
++                    meanfield, qsgw_reference_meanfield,
++                    qsgw_kpoint_weights, total_electrons);
++            homo = restart_occupations.vbm;
++            lumo = restart_occupations.cbm;
++            efermi = restart_occupations.chemical_potential;
+             iteration = checkpoint.iteration;
+ 
+             const bool history_loaded = load_iteration_history_file_band(
+@@ -1975,12 +1996,15 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+                 printf("%5f\n", Efermi0);
+                 // 计算费米能级
+ 
+-                double efermi = calculate_fermi_energy(meanfield, temperature, total_electrons);
++                const auto occupation_result =
++                    update_qsgw_zero_temperature_occupations(
++                        meanfield, qsgw_reference_meanfield,
++                        qsgw_kpoint_weights, total_electrons);
++                double efermi = occupation_result.chemical_potential;
+                 printf("%5s\n", "efermi0");
+                 printf("%5f\n", efermi);
+ 
+                 // 将占据数和费米能级更新到 MeanField 对象中
+-                update_fermi_energy_and_occupations(meanfield, temperature, efermi);
+ 
+                 // const std::string final_banner(90, '-');
+                 lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
+@@ -2018,7 +2042,8 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+                 }
+ 
+                 // 计算 HOMO 和 LUMO
+-                compute_homo_lumo_ha_band(meanfield, homo, lumo);
++                homo = occupation_result.vbm;
++                lumo = occupation_result.cbm;
+ 
+                 // 输出当前 HOMO 和 LUMO 值
+                 std::cout << "Iteration " << iteration << ": HOMO = " << homo * HA2EV << " eV, "
+@@ -2152,13 +2177,15 @@ void task_qsgw_band_0(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+                                   meanfield_band.get_n_kpoints(), n_bands);
+ 
+             double total_electrons_band = total_electrons;
++            const auto band_occupation_result =
++                update_qsgw_zero_temperature_occupations(
++                    meanfield_band, qsgw_band_reference_meanfield,
++                    qsgw_band_kpoint_weights, total_electrons_band);
+             printf("%5s\n", "Total_electrons_band");
+             printf("%5f\n", total_electrons_band);
+-            double efermi_band0 =
+-                calculate_fermi_energy(meanfield_band, temperature, total_electrons_band);
++            double efermi_band0 = band_occupation_result.chemical_potential;
+             printf("%5s\n", "efermi_band0");
+             printf("%5f\n", efermi_band0);
+-            update_fermi_energy_and_occupations(meanfield_band, temperature, efermi_band0);
+             double efermi_band1 = meanfield_band.get_efermi();
+             printf("%5s\n", "efermi_band1");
+             printf("%5f\n", efermi_band1);

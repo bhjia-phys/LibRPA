@@ -1,0 +1,660 @@
+{
+  "analyzed": true,
+  "exx": {
+    "byte_equal": false,
+    "coordinate_max_abs": 0.0,
+    "energy_max_abs_diff_ev": 7.677100000000003,
+    "energy_max_location": {
+      "band": 43,
+      "kpoint": 151
+    },
+    "energy_relative_frobenius": 0.013503333691848331,
+    "gap_abs_diff_ev": 0.0,
+    "n_bands": 44,
+    "n_kpoints": 201,
+    "near_gap_bands": [
+      {
+        "band": 1,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.002729999999999677
+      },
+      {
+        "band": 2,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.006450000000000067
+      },
+      {
+        "band": 3,
+        "kpoint": 168,
+        "max_abs_diff_ev": 0.005910000000000082
+      },
+      {
+        "band": 4,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.013419999999999987
+      },
+      {
+        "band": 5,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.02077000000000062
+      },
+      {
+        "band": 6,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.022560000000000358
+      },
+      {
+        "band": 7,
+        "kpoint": 129,
+        "max_abs_diff_ev": 0.01454999999999984
+      },
+      {
+        "band": 8,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.03153000000000006
+      },
+      {
+        "band": 9,
+        "kpoint": 61,
+        "max_abs_diff_ev": 0.021390000000000242
+      },
+      {
+        "band": 10,
+        "kpoint": 152,
+        "max_abs_diff_ev": 0.015750000000000597
+      },
+      {
+        "band": 11,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.024229999999999308
+      },
+      {
+        "band": 12,
+        "kpoint": 73,
+        "max_abs_diff_ev": 0.05105000000000004
+      }
+    ],
+    "observed": "/home/bhj/ai-runs/librpa-qsgw-gate-a0-legacy-exact847-band0-iter1-20260720-v1/work/EXX_band_spin_1_1.dat",
+    "observed_edges": {
+      "cbm_ev": -45.48751,
+      "cbm_location": {
+        "band": 44,
+        "kpoint": 87
+      },
+      "gap_ev": -49.9839,
+      "vbm_ev": 4.49639,
+      "vbm_location": {
+        "band": 4,
+        "kpoint": 81
+      }
+    },
+    "observed_sha256": "a535463ca93748a4beba2c7f46d1477f694476c6b526907e3fdbf145de966c11",
+    "occupation_max_abs": 0.0,
+    "per_band": [
+      {
+        "band": 1,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.002729999999999677
+      },
+      {
+        "band": 2,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.006450000000000067
+      },
+      {
+        "band": 3,
+        "kpoint": 168,
+        "max_abs_diff_ev": 0.005910000000000082
+      },
+      {
+        "band": 4,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.013419999999999987
+      },
+      {
+        "band": 5,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.02077000000000062
+      },
+      {
+        "band": 6,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.022560000000000358
+      },
+      {
+        "band": 7,
+        "kpoint": 129,
+        "max_abs_diff_ev": 0.01454999999999984
+      },
+      {
+        "band": 8,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.03153000000000006
+      },
+      {
+        "band": 9,
+        "kpoint": 61,
+        "max_abs_diff_ev": 0.021390000000000242
+      },
+      {
+        "band": 10,
+        "kpoint": 152,
+        "max_abs_diff_ev": 0.015750000000000597
+      },
+      {
+        "band": 11,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.024229999999999308
+      },
+      {
+        "band": 12,
+        "kpoint": 73,
+        "max_abs_diff_ev": 0.05105000000000004
+      },
+      {
+        "band": 13,
+        "kpoint": 132,
+        "max_abs_diff_ev": 0.04352000000000089
+      },
+      {
+        "band": 14,
+        "kpoint": 129,
+        "max_abs_diff_ev": 0.054050000000000153
+      },
+      {
+        "band": 15,
+        "kpoint": 73,
+        "max_abs_diff_ev": 0.07089000000000567
+      },
+      {
+        "band": 16,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.07739000000000118
+      },
+      {
+        "band": 17,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.12238999999999578
+      },
+      {
+        "band": 18,
+        "kpoint": 180,
+        "max_abs_diff_ev": 0.10844999999999771
+      },
+      {
+        "band": 19,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.12606999999999857
+      },
+      {
+        "band": 20,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.11664999999999992
+      },
+      {
+        "band": 21,
+        "kpoint": 151,
+        "max_abs_diff_ev": 0.09995999999999583
+      },
+      {
+        "band": 22,
+        "kpoint": 126,
+        "max_abs_diff_ev": 0.031050000000000466
+      },
+      {
+        "band": 23,
+        "kpoint": 194,
+        "max_abs_diff_ev": 0.17947000000000202
+      },
+      {
+        "band": 24,
+        "kpoint": 168,
+        "max_abs_diff_ev": 0.17266000000000048
+      },
+      {
+        "band": 25,
+        "kpoint": 166,
+        "max_abs_diff_ev": 0.08550000000000324
+      },
+      {
+        "band": 26,
+        "kpoint": 72,
+        "max_abs_diff_ev": 0.06419999999999959
+      },
+      {
+        "band": 27,
+        "kpoint": 169,
+        "max_abs_diff_ev": 0.12254000000000076
+      },
+      {
+        "band": 28,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.1836800000000025
+      },
+      {
+        "band": 29,
+        "kpoint": 73,
+        "max_abs_diff_ev": 0.608079999999994
+      },
+      {
+        "band": 30,
+        "kpoint": 182,
+        "max_abs_diff_ev": 0.13466000000000378
+      },
+      {
+        "band": 31,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.6783100000000033
+      },
+      {
+        "band": 32,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.6946299999999965
+      },
+      {
+        "band": 33,
+        "kpoint": 76,
+        "max_abs_diff_ev": 0.2742099999999965
+      },
+      {
+        "band": 34,
+        "kpoint": 74,
+        "max_abs_diff_ev": 1.4784099999999967
+      },
+      {
+        "band": 35,
+        "kpoint": 76,
+        "max_abs_diff_ev": 0.7735500000000002
+      },
+      {
+        "band": 36,
+        "kpoint": 76,
+        "max_abs_diff_ev": 2.3865399999999966
+      },
+      {
+        "band": 37,
+        "kpoint": 76,
+        "max_abs_diff_ev": 2.9013499999999937
+      },
+      {
+        "band": 38,
+        "kpoint": 75,
+        "max_abs_diff_ev": 4.182289999999995
+      },
+      {
+        "band": 39,
+        "kpoint": 72,
+        "max_abs_diff_ev": 1.0544700000000091
+      },
+      {
+        "band": 40,
+        "kpoint": 154,
+        "max_abs_diff_ev": 2.6269900000000064
+      },
+      {
+        "band": 41,
+        "kpoint": 76,
+        "max_abs_diff_ev": 4.8123099999999965
+      },
+      {
+        "band": 42,
+        "kpoint": 180,
+        "max_abs_diff_ev": 5.882159999999999
+      },
+      {
+        "band": 43,
+        "kpoint": 151,
+        "max_abs_diff_ev": 7.677100000000003
+      },
+      {
+        "band": 44,
+        "kpoint": 152,
+        "max_abs_diff_ev": 7.125290000000007
+      }
+    ],
+    "reference": "/home/bhj/ai-runs/librpa-qsgw-gate-a-historical-band0-oracle-20260720-v1-2380156/oracle/EXX_band_spin_1_1.dat",
+    "reference_edges": {
+      "cbm_ev": -45.48751,
+      "cbm_location": {
+        "band": 44,
+        "kpoint": 87
+      },
+      "gap_ev": -49.9839,
+      "vbm_ev": 4.49639,
+      "vbm_location": {
+        "band": 4,
+        "kpoint": 81
+      }
+    },
+    "reference_sha256": "a95d0a6b6a68483a483e499dc3060d127dfe12c50b04edfb9a43dad4795ce4b8"
+  },
+  "qsgw": {
+    "byte_equal": false,
+    "coordinate_max_abs": 0.0,
+    "energy_max_abs_diff_ev": 0.23666000000000054,
+    "energy_max_location": {
+      "band": 11,
+      "kpoint": 113
+    },
+    "energy_relative_frobenius": 8.677154042474504e-06,
+    "gap_abs_diff_ev": 2.0000000000131024e-05,
+    "n_bands": 44,
+    "n_kpoints": 201,
+    "near_gap_bands": [
+      {
+        "band": 1,
+        "kpoint": 130,
+        "max_abs_diff_ev": 0.006459999999999688
+      },
+      {
+        "band": 2,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.00873999999999997
+      },
+      {
+        "band": 3,
+        "kpoint": 49,
+        "max_abs_diff_ev": 0.07695000000000007
+      },
+      {
+        "band": 4,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.010909999999999975
+      },
+      {
+        "band": 5,
+        "kpoint": 150,
+        "max_abs_diff_ev": 0.011900000000000688
+      },
+      {
+        "band": 6,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.014020000000000366
+      },
+      {
+        "band": 7,
+        "kpoint": 30,
+        "max_abs_diff_ev": 0.011169999999999902
+      },
+      {
+        "band": 8,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.04172999999999938
+      },
+      {
+        "band": 9,
+        "kpoint": 169,
+        "max_abs_diff_ev": 0.017479999999999052
+      },
+      {
+        "band": 10,
+        "kpoint": 33,
+        "max_abs_diff_ev": 0.01606999999999914
+      },
+      {
+        "band": 11,
+        "kpoint": 113,
+        "max_abs_diff_ev": 0.23666000000000054
+      },
+      {
+        "band": 12,
+        "kpoint": 76,
+        "max_abs_diff_ev": 0.017030000000001877
+      }
+    ],
+    "observed": "/home/bhj/ai-runs/librpa-qsgw-gate-a0-legacy-exact847-band0-iter1-20260720-v1/work/QSGW_band_spin_1_1.dat",
+    "observed_edges": {
+      "cbm_ev": 7.26069,
+      "cbm_location": {
+        "band": 5,
+        "kpoint": 18
+      },
+      "gap_ev": 1.27799,
+      "vbm_ev": 5.9827,
+      "vbm_location": {
+        "band": 4,
+        "kpoint": 81
+      }
+    },
+    "observed_sha256": "cca92723b2359772f500ac61c64f19168d5d55e8f7248ae64b1996b9e6f56eaa",
+    "occupation_max_abs": 0.0,
+    "per_band": [
+      {
+        "band": 1,
+        "kpoint": 130,
+        "max_abs_diff_ev": 0.006459999999999688
+      },
+      {
+        "band": 2,
+        "kpoint": 75,
+        "max_abs_diff_ev": 0.00873999999999997
+      },
+      {
+        "band": 3,
+        "kpoint": 49,
+        "max_abs_diff_ev": 0.07695000000000007
+      },
+      {
+        "band": 4,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.010909999999999975
+      },
+      {
+        "band": 5,
+        "kpoint": 150,
+        "max_abs_diff_ev": 0.011900000000000688
+      },
+      {
+        "band": 6,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.014020000000000366
+      },
+      {
+        "band": 7,
+        "kpoint": 30,
+        "max_abs_diff_ev": 0.011169999999999902
+      },
+      {
+        "band": 8,
+        "kpoint": 74,
+        "max_abs_diff_ev": 0.04172999999999938
+      },
+      {
+        "band": 9,
+        "kpoint": 169,
+        "max_abs_diff_ev": 0.017479999999999052
+      },
+      {
+        "band": 10,
+        "kpoint": 33,
+        "max_abs_diff_ev": 0.01606999999999914
+      },
+      {
+        "band": 11,
+        "kpoint": 113,
+        "max_abs_diff_ev": 0.23666000000000054
+      },
+      {
+        "band": 12,
+        "kpoint": 76,
+        "max_abs_diff_ev": 0.017030000000001877
+      },
+      {
+        "band": 13,
+        "kpoint": 147,
+        "max_abs_diff_ev": 0.027419999999999334
+      },
+      {
+        "band": 14,
+        "kpoint": 136,
+        "max_abs_diff_ev": 0.14890000000000114
+      },
+      {
+        "band": 15,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 16,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 17,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 18,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 19,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 20,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 21,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 22,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 23,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 24,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 25,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 26,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 27,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 28,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 29,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 30,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 31,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 32,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 33,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 34,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 35,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 36,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 37,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 38,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 39,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 40,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 41,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 42,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 43,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      },
+      {
+        "band": 44,
+        "kpoint": 1,
+        "max_abs_diff_ev": 0.0
+      }
+    ],
+    "reference": "/home/bhj/ai-runs/librpa-qsgw-gate-a-historical-band0-oracle-20260720-v1-2380156/oracle/QSGW_band_spin_1_1.dat",
+    "reference_edges": {
+      "cbm_ev": 7.26067,
+      "cbm_location": {
+        "band": 5,
+        "kpoint": 18
+      },
+      "gap_ev": 1.2779699999999998,
+      "vbm_ev": 5.9827,
+      "vbm_location": {
+        "band": 4,
+        "kpoint": 81
+      }
+    },
+    "reference_sha256": "835d4e35a346cd5cc1639fa1696ca3aa9283e877c2ff10c8ee309ed162a66059"
+  },
+  "schema": "librpa-legacy-band0-text-difference-analysis-v1"
+}

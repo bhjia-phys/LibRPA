@@ -1,0 +1,74 @@
+diff --git a/driver/task_qsgw.cpp b/driver/task_qsgw.cpp
+index dbe2912e..d7262f79 100644
+--- a/driver/task_qsgw.cpp
++++ b/driver/task_qsgw.cpp
+@@ -13,6 +13,7 @@
+ #include <map>       // 用于std::map容器
+ #include <sstream>
+ #include <string>  // 用于std::string类
++#include <utility>
+ #include <vector>
+ // 自定义头文件
+ 
+@@ -908,6 +909,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+     std::map<int, std::map<int, Matz>> Hartree_0;
+     std::map<int, std::map<int, Matz>> Hartree_i;
+     std::map<int, std::map<int, Matz>> Hartree_i_delta;
++    atpair_k_cplx_mat_t hartree_full_vq_cut;
+     std::map<int, std::map<int, Matz>> H_DFT_nao;
+     std::map<int, std::map<int, Matz>> H_DFT_band_nao;
+     map<int, map<int, map<int, map<Vector3_Order<int>, Matz>>>> H_nao_R;
+@@ -1339,6 +1341,43 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+         oracle_env_bool("QSGW_ORACLE_TRACE", true);
+     const bool oracle_update_hartree =
+         oracle_env_bool("QSGW_ORACLE_UPDATE_HARTREE", false);
++    if (oracle_update_hartree)
++    {
++        const int saved_n_irk_points = n_irk_points;
++        const auto saved_irk_points = irk_points;
++        const auto saved_irk_weight = irk_weight;
++        auto gw_vq_cut = std::move(Vq_cut);
++        try
++        {
++            Vq_cut.clear();
++            read_Vq_full(driver_params.input_dir, "coulomb_cut_", true);
++            hartree_full_vq_cut = std::move(Vq_cut);
++        }
++        catch (...)
++        {
++            Vq_cut = std::move(gw_vq_cut);
++            n_irk_points = saved_n_irk_points;
++            irk_points = saved_irk_points;
++            irk_weight = saved_irk_weight;
++            throw;
++        }
++        Vq_cut = std::move(gw_vq_cut);
++        n_irk_points = saved_n_irk_points;
++        irk_points = saved_irk_points;
++        irk_weight = saved_irk_weight;
++        if (hartree_full_vq_cut.empty())
++        {
++            throw std::runtime_error(
++                "Legacy Hartree isolated full Coulomb reader produced an empty map");
++        }
++        mpi_comm_global_h.barrier();
++        if (mpi_comm_global_h.is_root())
++        {
++            lib_printf(
++                "QSGW_LEGACY_HARTREE_READER mode=isolated_full "
++                "gw_vq_restored=true reader_state_restored=true\n");
++        }
++    }
+     if (!(mixing_beta > 0.0 && mixing_beta <= 1.0))
+     {
+         throw std::runtime_error(
+@@ -1512,7 +1551,8 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+             {
+                 Profiler::start("ft_vq_cut", "Fourier transform truncated Coulomb");
+                 const auto VR = FT_Vq(
+-                    Vq_cut, meanfield.get_n_kpoints(), Rlist, true);
++                    hartree_full_vq_cut, meanfield.get_n_kpoints(), Rlist,
++                    true);
+                 Profiler::stop("ft_vq_cut");
+                 Profiler::start("qsgw_hartree_real_work");
+                 if (Params::use_shrink_abfs)

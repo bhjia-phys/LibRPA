@@ -1,0 +1,16 @@
+diff --git a/driver/task_qsgw.cpp b/driver/task_qsgw.cpp
+--- a/driver/task_qsgw.cpp
++++ b/driver/task_qsgw.cpp
+@@ -874,11 +874,7 @@ void task_qsgw(std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
+     Vector3_Order<int> period{kv_nmp[0], kv_nmp[1], kv_nmp[2]};
+     auto Rlist = construct_R_grid(period);
+ 
+-    vector<Vector3_Order<double>> qlist;
+-    for (auto q_weight : irk_weight)
+-    {
+-        qlist.push_back(q_weight.first);
+-    }
++    vector<Vector3_Order<double>> qlist = klist;
+ 
+     // 读取 meanfield 数据
+     const auto n_spins = meanfield.get_n_spins();

@@ -1,0 +1,642 @@
+/tmp/ifx1202815377EzfYal/ifxtAeB2K.i90(1): warning #5194: Source line truncated.
+# 1 "/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/thirdparty/greenX-6ff8a00/GX-TimeFrequency/utilities/gx_tabulate_minimax.F90"
+------------------------------------------------------------------------------------------------------------------------------------^
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.cpp:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.cpp:618:24: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  618 |         LIBRPA::utils::lib_printf("\n");
+      |                        ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/coulmat.cpp:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/abacus_symmetry.h:17:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_mpi_io.h:20:9: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   20 |         lib_printf(format, std::forward<Args>(args)...);
+      |         ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/coulmat.cpp:574:24: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf_root<>' requested here
+  574 |         LIBRPA::utils::lib_printf_root(
+      |                        ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/chi0.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/chi0.h:10:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix_m.h:20:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/chi0.cpp:284:28: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  284 |             LIBRPA::utils::lib_printf("Finished construction of R-space Green's function\n");
+      |                            ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/epsilon.cpp:3584:70: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+ 3583 |                                              "[rank %d] chi0_wq block M=%d N=%d dims=%d x %d ifreq=%d\n",
+      |                                                                         ~~
+      |                                                                         %lu
+ 3584 |                                              mpi_comm_global_h.myid, M, N, chi.nr, chi.nc, ifreq);
+      |                                                                      ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/epsilon.cpp:3584:73: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+ 3583 |                                              "[rank %d] chi0_wq block M=%d N=%d dims=%d x %d ifreq=%d\n",
+      |                                                                              ~~
+      |                                                                              %lu
+ 3584 |                                              mpi_comm_global_h.myid, M, N, chi.nr, chi.nc, ifreq);
+      |                                                                         ^
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/epsilon.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/epsilon.h:3:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/base_blacs.h:5:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/parallel_mpi.h:5:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/epsilon.cpp:1408:9: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1408 |         lib_printf("Calculating EcRPA with BLACS/ScaLAPACK 2D gamma_only\n");
+      |         ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/exx.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/exx.h:5:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix_m.h:20:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/exx.cpp:1609:16: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1609 |         utils::lib_printf("Warning: reset EXX k-space matrices\n");
+      |                ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/fitting.cpp:5:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/fitting.cpp:113:9: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  113 |         lib_printf("Warning: inconsistent x and y size of data\n");
+      |         ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/gw.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/gw.h:7:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix_m.h:20:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/gw.cpp:1776:16: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1776 |         utils::lib_printf("Warning: reset Sigmac_c k-space matrices\n");
+      |                ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+4 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/librpa.cpp:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/librpa.h:10:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/meanfield.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/librpa.cpp:475:20: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  475 |     LIBRPA::utils::lib_printf("Begin run LibRPA\n");
+      |                    ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/librpa_main.cpp:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/chi0.h:10:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix_m.h:20:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/librpa_main.cpp:30:24: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   30 |         LIBRPA::utils::lib_printf("LibRPA control parameters:\n");
+      |                        ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix.cpp:14:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix.cpp:503:24: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  503 |         LIBRPA::utils::lib_printf("\n");
+      |                        ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/ri.cpp:397:72: warning: format specifies type 'int' but the argument has type 'mapped_type' (aka 'unsigned long') [-Wformat]
+  397 |                 printf("I: %d, J: %d, mu:%d, nu:%d, myid: %d\n", I, J, atom_mu[I], atom_mu[J],
+      |                                          ~~                            ^~~~~~~~~~
+      |                                          %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/ri.cpp:397:84: warning: format specifies type 'int' but the argument has type 'mapped_type' (aka 'unsigned long') [-Wformat]
+  397 |                 printf("I: %d, J: %d, mu:%d, nu:%d, myid: %d\n", I, J, atom_mu[I], atom_mu[J],
+      |                                                 ~~                                 ^~~~~~~~~~
+      |                                                 %lu
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/ri.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/ri.h:13:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/ri.cpp:207:24: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  207 |         LIBRPA::utils::lib_printf(" mid init_N_all_mu\n");
+      |                        ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+4 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/timefreq.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/timefreq.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/timefreq.cpp:96:5: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   96 |     lib_printf("\n");
+      |     ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_cmake.cpp:4:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_cmake.cpp:16:5: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   16 |     lib_printf("LibRPA CMake build info:\n");
+      |     ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_mem.cpp:83:53: warning: format specifies type 'int *' but the argument has type 'long *' [-Wformat]
+   83 |             if (sscanf(line, "MemAvailable: %d kB", &value) == 1)
+      |                                             ~~      ^~~~~~
+      |                                             %ld
+1 warning generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/hartree.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/hartree.h:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/matrix_m.h:20:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/lapack_connector.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/hartree.cpp:203:16: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  203 |         utils::lib_printf("Computing Hartree orbital energy using LibRI\n");
+      |                ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+2 warnings generated.
+2 warnings generated.
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/main.cpp:5:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/abacus_symmetry.h:17:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/main.cpp:110:13: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  110 |             lib_printf("Error: iterative pyatb head/wing refresh requires an initial velocity seed.\n");
+      |             ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/read_data.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/read_data.h:12:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/meanfield.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/read_data.cpp:1409:35: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1409 |     if (myid == 0) LIBRPA::utils::lib_printf("Finished Cs filtering\n");
+      |                                   ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_rpa.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_rpa.h:4:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_rpa.cpp:33:9: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   33 |         lib_printf("RPA correlation energy (Hartree)\n");
+      |         ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_exx.cpp:4:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/read_data.h:12:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/meanfield.h:11:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_exx.cpp:77:21: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   77 |                     lib_printf("\n");
+      |                     ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_exx_band.cpp:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/abacus_symmetry.h:17:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_exx_band.cpp:67:13: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   67 |             lib_printf("ABACUS EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |             ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:136:93: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  136 |                         sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J,
+      |                                                              ~~                             ^
+      |                                                              %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:136:96: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  136 |                         sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J,
+      |                                                                   ~~                           ^
+      |                                                                   %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:234:91: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  234 |                         sprintf(fn, "Wcfq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J,
+      |                                                            ~~                             ^
+      |                                                            %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:234:94: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  234 |                         sprintf(fn, "Wcfq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J,
+      |                                                                 ~~                           ^
+      |                                                                 %lu
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.h:4:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw.cpp:71:13: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   71 |             lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |             ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw_band.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw_band.h:4:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_gw_band.cpp:400:13: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  400 |             lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |             ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+6 warnings generated.
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_screened_coulomb.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_screened_coulomb.h:4:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_screened_coulomb.cpp:60:17: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+   60 |                 lib_printf("Dielection function parsed:\n");
+      |                 ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.cpp:1597:97: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+ 1597 |                             sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I,
+      |                                                                  ~~                             ^
+      |                                                                  %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.cpp:1598:37: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+ 1597 |                             sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I,
+      |                                                                       ~~
+      |                                                                       %lu
+ 1598 |                                     J, mpi_comm_global_h.myid);
+      |                                     ^
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.h:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.cpp:1206:13: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1206 |             lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |             ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgwA.cpp:2:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.h:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgwA.cpp:1141:9: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+ 1141 |         lib_printf("Final Quasi-Particle Energy after QSGW Iterations [unit: eV]\n\n");
+      |         ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_scRPA.cpp:305:97: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  305 |                             sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J, mpi_comm_global_h.myid);
+      |                                                                  ~~                             ^
+      |                                                                  %lu
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_scRPA.cpp:305:100: warning: format specifies type 'int' but the argument has type 'unsigned long' [-Wformat]
+  305 |                             sprintf(fn, "chi0fq_ifreq_%d_iq_%d_I_%d_J_%d_id_%d.mtx", ifreq, iq, I, J, mpi_comm_global_h.myid);
+      |                                                                       ~~                           ^
+      |                                                                       %lu
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band.h:5:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band.cpp:766:17: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  766 |                 lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |                 ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_scRPA.cpp:2:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw.h:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_scRPA.cpp:320:17: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+  320 |                 lib_printf("ABACUS GW/EXX symmetry builds `V(R)` directly from the full IBZ operator;"
+      |                 ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band_0.cpp:1:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band_0.h:6:
+In file included from /tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/complexmatrix.h:13:
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/driver/task_qsgw_band_0.cpp:8:20: note: in instantiation of function template specialization 'LIBRPA::utils::lib_printf<>' requested here
+    8 |     LIBRPA::utils::lib_printf("task_qsgw_band_0: stub (disabled)");
+      |                    ^
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:16:40: note: treat the string as an argument to avoid this
+   16 |         (fprintf(envs::pfile_redirect, format, std::forward<Args>(args)...), fflush(envs::pfile_redirect)):
+      |                                        ^
+      |                                        "%s", 
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: warning: format string is not a string literal (potentially insecure) [-Wformat-security]
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^~~~~~
+/tmp/librpa-qsgw-gate-a0-legacy-e08f4a13-20260720-v3/src/utils_io.h:17:16: note: treat the string as an argument to avoid this
+   17 |         printf(format, std::forward<Args>(args)...);
+      |                ^
+      |                "%s", 
+2 warnings generated.
+4 warnings generated.
+4 warnings generated.
+2 warnings generated.
