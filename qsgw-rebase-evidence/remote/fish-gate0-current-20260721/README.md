@@ -1,7 +1,8 @@
 # Fish Gate 0 current runner
 
-This runner is prepared for the first clean candidate commit produced from the
-2026-07-21 local audit. It is not evidence that the remote gate has run.
+This runner was used for the accepted clean candidate Gate 0 at
+`66bfe1cfd35c983222935d250039a8fe5c4b7af1`. The immutable output and complete
+checksum manifest are stored in `66bfe1cf-v1/`.
 
 The runner performs these checks on fish:
 

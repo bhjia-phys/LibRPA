@@ -27,11 +27,11 @@ validation. G0W0 head/wing remains upstream-owned and unchanged.
 |---|---|
 | Worktree | `F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716` |
 | Branch | `codex/qsgw-symmetry-no-headwing-42d-20260720` |
-| Committed HEAD | `b7273e13c77d5ea781f192cea3c4201710b6f9fa` |
+| Executable candidate source | `66bfe1cfd35c983222935d250039a8fe5c4b7af1` |
 | Frozen upstream | `42d3863c1d865194d382a085851d1e2e8a39764f` |
 | Legacy source | raw `8476213` archive plus the separately recorded compatibility harness |
 | ABACUS producer | `dd4216653386d32f79e3219f3ea5dd2d229c1c5a` |
-| Dirty state | audited QSGW-only implementation/tests/docs plus driver QSGW wiring; no clean candidate commit yet |
+| Candidate state | clean executable source; later branch commits contain evidence metadata only |
 | Live upstream comparison | GitHub compare at `2026-07-21T18:37:20Z`: `master` identical to `42d3863c`, 0 ahead/behind |
 
 `42d3863c` remains the frozen base and was also the live master tip at the
@@ -70,7 +70,7 @@ For the Si semiconductor benchmark, QSGW band occupations are display labels
 derived from the grid chemical potential and remain 2/0. Finite-temperature or
 metallic band-path occupation equivalence is not part of the current claim.
 
-## Local Verification, 2026-07-21
+## Local and Gate 0 Verification, 2026-07-22
 
 Full details and executable hashes are in
 `qsgw-rebase-evidence/validation/local-audit-20260721.md`.
@@ -83,7 +83,7 @@ Full details and executable hashes are in
 | Gate C corrected-legacy patch/build/parity tests | 24/24 PASS |
 | Regression backend excluding known Windows ACL workspace test | 54/54 PASS |
 | Runtime-parameter generation/default check | PASS |
-| MSVC syntax checks including latest driver retention fix | PASS with and without `LIBRPA_USE_LIBRI`; Linux link/build pending fish Gate 0 |
+| MSVC syntax checks including latest driver retention fix | PASS with and without `LIBRPA_USE_LIBRI` |
 | Hartree syntax checks with and without `LIBRPA_USE_LIBRI` | PASS |
 | QSGW implementation files in CMake | 22/22 |
 | QSGW C++ tests registered in CMake | 23/23 |
@@ -91,15 +91,16 @@ Full details and executable hashes are in
 | Protected G0W0/GW/EXX/API diff | empty |
 | Frozen upstream inventory | 30/30 commits and 30/30 commit-map rows |
 | Current semantic records | 31 total: 9 U0, 11 U1, 11 U2, 0 U3/U4 |
-| Manifest validation | intentionally INVALID only for 59 unfilled remote provenance fields |
+| Fish Gate 0 | upstream 39/39, candidate 63/63, focused QSGW 10/10, Python 29/29, docs PASS, protected diff empty |
+| Manifest validation | intentionally INVALID only for 43 unfilled numerical-run provenance fields |
 | Gate A current comparator tests | 6/6 PASS |
 | Gate D band/cut observer tests | 10/10 PASS plus 2 subtests; linear post-mix cut negative fixture included |
 | Pinned ABACUS producer/contract tests | 78/78 PASS |
 | Exact layered staging plan | 388 candidates, 137 exclusions, 0 unclassified; adversarial probe and all five isolated-index dry-runs passed |
 
-The last immutable fish build at `b7273e13` passed 60/60 CTests. The current
-source adds three registered C++ tests, so the next clean fish Gate 0 must list
-and pass exactly 63 tests with zero failed and zero Not Run.
+The immutable fish build at `66bfe1cf` passed exactly 63/63 candidate CTests
+with zero failed and zero Not Run. Its 52-file checksum archive is committed
+under `qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1`.
 
 Two Windows-only portability defects were found and fixed during this audit:
 
@@ -148,8 +149,8 @@ parity remain pending.
 
 | Gate | Requirement | Current status |
 |---|---|---|
-| Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | versioned runner complete locally; remote execution pending |
-| A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | historical records exist; refresh for clean candidate pending |
+| Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | ACCEPTED at `66bfe1cf`; upstream 39/39, candidate 63/63, focused 10/10, protected diff empty |
+| A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | candidate executable and fish build toolchain frozen; numerical-run environment and same-input bundle still pending |
 | A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | historical capability evidence only; clean-candidate rerun pending |
 | A2 | candidate symmetry-on versus full-BZ comparison including weights, rotations, phases, time reversal, and Hermiticity | eigenvalue parity passed as supporting evidence; component gate pending |
 | B0-B2 | clean pinned ABACUS build and independently frozen no-sym/sym bundles | symmetry producer provenance partly frozen; pinned no-sym/full-BZ producer, observer, contract, and immutable Hartree-bundle runners pass 19 local tests; their dongfang jobs and resulting bundle are pending |

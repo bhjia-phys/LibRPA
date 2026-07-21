@@ -44,9 +44,25 @@ AO output.
   unchanged G0W0 behavior.
 - Focused comparator and driver-wiring pytest: `29 passed`.
 - Full regression backend excluding `test_driver_workspace.py`: `54 passed`.
-- `generate_runtime_parameters.py --check --check-defaults`: PASS.
+- Local `generate_runtime_parameters.py --check --check-defaults`: PASS against
+  the generated ignored file. The clean fish checkout instead generated into
+  the immutable run root, then passed `--check --check-defaults` on that output.
 - Pytest emitted only the known Windows ACL warning for the repository-local
   cache; isolated test temporary directories and test results were unaffected.
+
+## Fish Gate 0, 2026-07-22
+
+- Immutable candidate source: `66bfe1cfd35c983222935d250039a8fe5c4b7af1`.
+- Frozen upstream: `42d3863c1d865194d382a085851d1e2e8a39764f`.
+- Upstream CTest: 39/39 PASS; candidate CTest: 63/63 PASS; focused QSGW
+  CTest: 10/10 PASS; focused Python: 29/29 PASS.
+- Runtime-parameter generation/default/idempotence check: PASS with fish
+  `/usr/bin/python3`, Python 3.13.5, PyYAML 6.0.3.
+- Protected G0W0/GW/EXX/API diff: empty. Failed tests: 0. Not Run: 0.
+- Candidate executable SHA-256:
+  `b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16`.
+- The 52-file checksum manifest verifies locally after import. Evidence is in
+  `qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1`.
 
 ## Gate C Hartree Observer Preparation
 
@@ -164,15 +180,15 @@ AO output.
   evidence.
 - Versioned commit-list, name-status, and semantic-hunk artifacts are hashed
   in the manifest. Re-running the refresh script with candidate source
-  `5cf996de098c349c741b0b6c74dd0951d1ea3171` is idempotent; manifest SHA-256 remains
-  `56d7330aa172e2b7385da702f8262ae3b1a60dfbbb6493d4d64702dedf2fea4d`.
+  `66bfe1cfd35c983222935d250039a8fe5c4b7af1` is idempotent; manifest SHA-256 remains
+  `be51539d18e4e332e9f7b95560e66d90311db26ac1355023d33a1358d3fb8716`.
 - Freeze-parent and candidate-source provenance are now separate. The generator
   accepts an explicit candidate source, verifies that it exists and descends
   from the freeze parent, and only then may close the clean-candidate issue.
 - The positive current-HEAD path is byte-idempotent. A nonexistent SHA and the
   existing but pre-freeze upstream commit both fail before manifest writing.
-- The current manifest validator result is intentionally invalid with 59
-  unresolved provenance fields: 18 missing SHA-256 values, 37 missing required
+- The current manifest validator result is intentionally invalid with 43
+  unresolved provenance fields: 10 missing SHA-256 values, 29 missing required
   strings, and 4 missing references. It reports no upstream inventory,
   classification, formula-map, protected-hunk, or schema consistency error.
   Raw output is in `manifest-validator-20260721.txt`; its exit code is recorded

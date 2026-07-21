@@ -8,7 +8,7 @@
                        "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
                        "commits":  {
                                        "branch_head":  {
-                                                           "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                           "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        },
                                        "upstream_old":  {
@@ -24,21 +24,21 @@
                                                         "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
                                                     },
                                        "rebase_head":  {
-                                                           "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                           "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        }
                                    }
                    },
     "provenance":  {
                        "source":  {
-                                      "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                      "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                       "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                   },
                        "executable":  {
-                                          "path":  null,
-                                          "sha256":  null,
-                                          "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                          "reference":  "pending: clean-candidate fish Gate 0"
+                                          "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                          "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                          "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                          "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                       },
                        "dataset":  {
                                        "id":  "si-k444-symmetry-gate-a-v3-supporting",
@@ -2307,9 +2307,62 @@
                            "depends_on":  [
 
                                           ],
-                           "status":  "planned",
+                           "status":  "accepted",
                            "artifacts":  [
-
+                                             {
+                                                 "id":  "build-log",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-build.stdout",
+                                                 "sha256":  "159ca67cc720cd1c085d5db78bd26f7da04347911a2c98aa410153d01e1339e7",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "unit-results",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-ctest.xml",
+                                                 "sha256":  "eb53ea4c508a43d388e6f8e8f2434ab8a0dc2f8dcd486744ef8736fabf3152d5",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "upstream-regression-results",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/upstream-ctest.xml",
+                                                 "sha256":  "4d3c128151850302cb69f9ff709d37bc303c2414da2563d820eb5bf4bebbb934",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "focused-qsgw-results",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-focused-ctest.xml",
+                                                 "sha256":  "07d5122cb7f2043ddf7224b9e0ddea4989a845c66737569955ad90839a14b1dc",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "python-qsgw-results",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-python-tests.stdout",
+                                                 "sha256":  "8f475134935a1f99ed04d6f60d0ccbe78a8690df1357a3e5d3c8a5f1140c8e28",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "runtime-parameter-doc",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-runtime-parameters.md",
+                                                 "sha256":  "bb9bec3cc9c798234f0b494c3ff2f0d490ce92f2882b43b6b7ee0ab880b78908",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "protected-diff",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/protected-diff.patch",
+                                                 "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate0-provenance",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt",
+                                                 "sha256":  "a2dade04eafdc6c1f5af9bf28c4fbbf5a54b4b31e393b05352b6941be69210a2",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate0-checksum-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/OUTPUT_SHA256SUMS.txt",
+                                                 "sha256":  "4f65a0eb309c7d8bc4ee52a2e90ca1107c9688465234e6f45cbbdcfbbc60d274",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                             }
                                          ]
                        },
                        {
@@ -2333,10 +2386,10 @@
                                                                             "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  null,
-                                                                                "sha256":  null,
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/chi0_main.exe",
+                                                                                "sha256":  "ae86432a32bdd9d2cc6e7d2f80f7e99e4de053329eb233c69d6e7e833aa006c3",
                                                                                 "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
-                                                                                "reference":  "evidence/build/new-upstream-executable.sha256"
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2347,14 +2400,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-g0w0",
                                                              "source":  {
-                                                                            "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  null,
-                                                                                "sha256":  null,
-                                                                                "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                                                                "reference":  "pending: clean-candidate fish Gate 0"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2402,10 +2455,10 @@
                                                                             "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  null,
-                                                                                "sha256":  null,
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/chi0_main.exe",
+                                                                                "sha256":  "ae86432a32bdd9d2cc6e7d2f80f7e99e4de053329eb233c69d6e7e833aa006c3",
                                                                                 "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
-                                                                                "reference":  "evidence/build/new-upstream-executable.sha256"
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2416,14 +2469,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-iter0",
                                                              "source":  {
-                                                                            "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  null,
-                                                                                "sha256":  null,
-                                                                                "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                                                                "reference":  "pending: clean-candidate fish Gate 0"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2485,14 +2538,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-no-mixing",
                                                              "source":  {
-                                                                            "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  null,
-                                                                                "sha256":  null,
-                                                                                "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                                                                "reference":  "pending: clean-candidate fish Gate 0"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2842,14 +2895,14 @@
                               "default_experiment":  null,
                               "a":  {
                                         "source":  {
-                                                       "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                       "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
-                                                           "path":  null,
-                                                           "sha256":  null,
-                                                           "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                                           "reference":  "evidence/build/executable.sha256"
+                                                           "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                                           "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                                           "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                        },
                                         "dataset":  {
                                                         "id":  null,
@@ -2916,14 +2969,14 @@
                                     },
                               "b":  {
                                         "source":  {
-                                                       "hash":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                                                       "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
-                                                           "path":  null,
-                                                           "sha256":  null,
-                                                           "source_commit":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
-                                                           "reference":  "evidence/build/executable.sha256"
+                                                           "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
+                                                           "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
+                                                           "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
                                                        },
                                         "dataset":  {
                                                         "id":  null,
@@ -2993,7 +3046,7 @@
     "approvals":  [
 
                   ],
-    "current_gate":  "build-unit-upstream-regressions",
+    "current_gate":  "g0w0-upstream-vs-rebased",
     "verified_evidence":  [
                               "qsgw-rebase-evidence/git/status.txt",
                               "qsgw-rebase-evidence/git/protected-src-inventory.json",
@@ -3014,15 +3067,10 @@
                               "qsgw-rebase-evidence/validation/layered-staging-plan-20260722.json",
                               "qsgw-rebase-evidence/validation/verify-layered-staging-plan.ps1",
                               "qsgw-rebase-evidence/git/upstream-master-compare-20260722.json",
-                              "qsgw-rebase-evidence/remote/fish-gate-d-current-20260721"
+                              "qsgw-rebase-evidence/remote/fish-gate-d-current-20260721",
+                              "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1"
                           ],
     "open_issues":  [
-                        {
-                            "id":  "ISSUE-REMOTE-GATE0",
-                            "class_or_gate":  "build-unit-upstream-regressions",
-                            "blocker":  "The current source has no immutable fish build or complete 63-test CTest result.",
-                            "required":  "Build the clean candidate on fish and pass exactly 63 tests with zero failed and zero Not Run."
-                        },
                         {
                             "id":  "ISSUE-SYMMETRY-ORACLE",
                             "class_or_gate":  "abacus-symmetry-two-round",
@@ -3050,9 +3098,9 @@
                     ],
     "next_actions":  [
                          {
-                             "id":  "next-clean-candidate-gate0",
-                             "action":  "Run the 63-test fish Gate 0 for the immutable candidate when network access returns.",
-                             "gate":  "build-unit-upstream-regressions",
+                             "id":  "next-g0w0-direct-ab",
+                             "action":  "Run byte-identical-input upstream versus candidate G0W0 direct A/B on fish.",
+                             "gate":  "g0w0-upstream-vs-rebased",
                              "owner":  "rebase operator",
                              "status":  "ready"
                          }
@@ -3069,12 +3117,13 @@
                            "hartree":  "unit_verified_remote_gate_pending",
                            "expected_ctest_count":  63,
                            "layered_staging_plan":  "388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed",
-                           "upstream_master_live_compare":  "42d3863c_identical_2026-07-21T18:37:20Z"
+                           "upstream_master_live_compare":  "42d3863c_identical_2026-07-21T18:37:20Z",
+                           "fish_gate0":  "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty"
                        },
     "revised_scope":  {
                           "effective_date":  "2026-07-21",
                           "freeze_parent":  "b7273e13c77d5ea781f192cea3c4201710b6f9fa",
-                          "candidate_source":  "5cf996de098c349c741b0b6c74dd0951d1ea3171",
+                          "candidate_source":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
                           "upstream_base":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                           "no_sym_candidate":  "c27482016f70ece5a0e5ccad7199d93ac3f6ebf5",
                           "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",

@@ -1,0 +1,11 @@
+host=Fisherd-Server.com
+os=Linux Fisherd-Server 6.12.43+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.43-1 (2025-08-27) x86_64 GNU/Linux
+Intel(R) oneAPI DPC++/C++ Compiler 2025.2.1 (2025.2.0.20250806)
+ifx (IFX) 2025.2.1 20250806
+cmake version 3.31.6
+ctest version 3.31.6
+Intel(R) MPI Library for Linux* OS, Version 2021.16 Build 20250722 (id: c37a540)
+Copyright 2003-2025, Intel Corporation.
+Python 3.13.5
+Python 3.13.5
+PyYAML 6.0.3

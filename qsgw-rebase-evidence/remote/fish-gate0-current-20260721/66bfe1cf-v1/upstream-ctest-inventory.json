@@ -1,0 +1,1214 @@
+{
+  "backtraceGraph" : 
+  {
+    "commands" : 
+    [
+      "add_test",
+      "config_test"
+    ],
+    "files" : 
+    [
+      "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/upstream/thirdparty/greenX/GX-TimeFrequency/CMakeLists.txt",
+      "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/upstream/driver/test/CMakeLists.txt",
+      "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/upstream/src/test/CMakeLists.txt"
+    ],
+    "nodes" : 
+    [
+      {
+        "file" : 0
+      },
+      {
+        "command" : 0,
+        "file" : 0,
+        "line" : 178,
+        "parent" : 0
+      },
+      {
+        "file" : 0
+      },
+      {
+        "command" : 0,
+        "file" : 0,
+        "line" : 191,
+        "parent" : 2
+      },
+      {
+        "file" : 0
+      },
+      {
+        "command" : 0,
+        "file" : 0,
+        "line" : 207,
+        "parent" : 4
+      },
+      {
+        "file" : 0
+      },
+      {
+        "command" : 0,
+        "file" : 0,
+        "line" : 223,
+        "parent" : 6
+      },
+      {
+        "file" : 1
+      },
+      {
+        "command" : 0,
+        "file" : 1,
+        "line" : 6,
+        "parent" : 8
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 10
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 11
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 13
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 14
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 16
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 17
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 19
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 20
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 22
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 23
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 25
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 26
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 28
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 29
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 31
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 32
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 34
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 35
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 37
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 38
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 40
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 41
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 43
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 44
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 46
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 47
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 49
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 50
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 52
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 53
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 55
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 56
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 58
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 59
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 61
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 62
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 64
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 65
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 67
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 68
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 70
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 71
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 73
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 74
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 76
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 77
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 65,
+        "parent" : 79
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 30,
+        "parent" : 80
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 82
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 83
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 85
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 86
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 88
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 89
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 91
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 92
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 94
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 95
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 97
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 98
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 100
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 101
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 103
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 104
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 106
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 107
+      },
+      {
+        "file" : 2
+      },
+      {
+        "command" : 1,
+        "file" : 2,
+        "line" : 81,
+        "parent" : 109
+      },
+      {
+        "command" : 0,
+        "file" : 2,
+        "line" : 24,
+        "parent" : 110
+      }
+    ]
+  },
+  "kind" : "ctestInfo",
+  "tests" : 
+  [
+    {
+      "backtrace" : 1,
+      "command" : 
+      [
+        "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/pytest",
+        "-s",
+        "test_gx_minimax_grid.py",
+        "--build-dir",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream"
+      ],
+      "name" : "test_gx_minimax_grid",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/thirdparty/greenX/test/time-frequency"
+        }
+      ]
+    },
+    {
+      "backtrace" : 3,
+      "command" : 
+      [
+        "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/pytest",
+        "-s",
+        "test_gx_tabulate_minimax.py",
+        "--build-dir",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream"
+      ],
+      "name" : "test_gx_tabulate_minimax",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/thirdparty/greenX/test/time-frequency"
+        }
+      ]
+    },
+    {
+      "backtrace" : 5,
+      "command" : 
+      [
+        "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/pytest",
+        "-s",
+        "test_gx_minimax_sine_duality_error.py",
+        "--build-dir",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream"
+      ],
+      "name" : "test_gx_minimax_sine_duality_error",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/thirdparty/greenX/test/time-frequency"
+        }
+      ]
+    },
+    {
+      "backtrace" : 7,
+      "command" : 
+      [
+        "/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/pytest",
+        "-s",
+        "test_gx_minimax_sine_duality_error_tikhonov.py",
+        "--build-dir",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream"
+      ],
+      "name" : "test_gx_minimax_sine_duality_error_tikhonov",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/thirdparty/greenX/test/time-frequency"
+        }
+      ]
+    },
+    {
+      "backtrace" : 9,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/driver/test/test_input_parser"
+      ],
+      "name" : "test_input_parser",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/driver/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 12,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_analycont"
+      ],
+      "name" : "test_analycont",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 15,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_atom"
+      ],
+      "name" : "test_atom",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 18,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_atomic_basis"
+      ],
+      "name" : "test_atomic_basis",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 21,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_base_utility"
+      ],
+      "name" : "test_base_utility",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 24,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_blas_lapack"
+      ],
+      "name" : "test_blas_lapack",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 27,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_complexmatrix"
+      ],
+      "name" : "test_complexmatrix",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 30,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_fitting"
+      ],
+      "name" : "test_fitting",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 33,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_io"
+      ],
+      "name" : "test_io",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 36,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_symmetry_context"
+      ],
+      "name" : "test_symmetry_context",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 39,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_arbitrary_float"
+      ],
+      "name" : "test_arbitrary_float",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 42,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_geometry"
+      ],
+      "name" : "test_geometry",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 45,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_lebedev_laikov"
+      ],
+      "name" : "test_lebedev_laikov",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 48,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_libri_utils"
+      ],
+      "name" : "test_libri_utils",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 51,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_matrix"
+      ],
+      "name" : "test_matrix",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 54,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_matrix_m"
+      ],
+      "name" : "test_matrix_m",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 57,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_meanfield"
+      ],
+      "name" : "test_meanfield",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 60,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_pbc"
+      ],
+      "name" : "test_pbc",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 63,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_profiler"
+      ],
+      "name" : "test_profiler",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 66,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_qpe_solver"
+      ],
+      "name" : "test_qpe_solver",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 69,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_rsh"
+      ],
+      "name" : "test_rsh",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 72,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_symmetry"
+      ],
+      "name" : "test_symmetry",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 75,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_timefreq"
+      ],
+      "name" : "test_timefreq",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 78,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_vector3"
+      ],
+      "name" : "test_vector3",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 81,
+      "command" : 
+      [
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_wigner_rotation"
+      ],
+      "name" : "test_wigner_rotation",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 84,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_atomic_basis_blacs"
+      ],
+      "name" : "test_atomic_basis_blacs",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 87,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_base_mpi"
+      ],
+      "name" : "test_base_mpi",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 90,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_blacs"
+      ],
+      "name" : "test_blacs",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 93,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_dataset"
+      ],
+      "name" : "test_dataset",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 96,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_epsilon"
+      ],
+      "name" : "test_epsilon",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 99,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_matrix_m_mpi"
+      ],
+      "name" : "test_matrix_m_mpi",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 102,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_meanfield_mpi"
+      ],
+      "name" : "test_meanfield_mpi",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 105,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_kpoint_blacs_parallel_context"
+      ],
+      "name" : "test_kpoint_blacs_parallel_context",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 108,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_rpa_headwing"
+      ],
+      "name" : "test_rpa_headwing",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    },
+    {
+      "backtrace" : 111,
+      "command" : 
+      [
+        "/opt/intel/oneapi/mpi/2021.16/bin/mpirun",
+        "-np",
+        "4",
+        "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test/test_shared_memory_mpi"
+      ],
+      "name" : "test_shared_memory_mpi",
+      "properties" : 
+      [
+        {
+          "name" : "WORKING_DIRECTORY",
+          "value" : "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/src/test"
+        }
+      ]
+    }
+  ],
+  "version" : 
+  {
+    "major" : 1,
+    "minor" : 0
+  }
+}

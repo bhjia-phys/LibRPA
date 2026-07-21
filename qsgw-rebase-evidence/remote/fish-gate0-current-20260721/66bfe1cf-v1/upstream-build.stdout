@@ -1,0 +1,215 @@
+[  0%] Building Fortran object thirdparty/greenX/GX-common/CMakeFiles/GXCommon.dir/src/kinds.f90.o
+[  0%] Building CXX object driver/test/CMakeFiles/test_input_parser.dir/test_input_parser.cpp.o
+[  1%] Building CXX object driver/test/CMakeFiles/test_input_parser.dir/__/input_parser.cpp.o
+[  2%] Building Fortran object thirdparty/greenX/GX-common/CMakeFiles/GXCommon.dir/src/constants.f90.o
+[  2%] Building Fortran object thirdparty/greenX/GX-common/CMakeFiles/GXCommon.dir/src/lapack_interfaces.f90.o
+[  2%] Building Fortran object thirdparty/greenX/GX-common/CMakeFiles/GXCommon.dir/src/unit_conversion.f90.o
+[  3%] Building Fortran object thirdparty/greenX/GX-common/CMakeFiles/GXCommon.dir/src/error_handling.f90.o
+[  4%] Linking Fortran static library ../lib/libGXCommon.a
+[  4%] Built target GXCommon
+[  5%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/src/minimax_utils.F90.o
+[  6%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/src/minimax_omega.F90.o
+[  6%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/src/minimax_tau.F90.o
+[  6%] Linking CXX executable test_input_parser
+[  6%] Built target test_input_parser
+[  7%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/api/api_utilities.f90.o
+[  7%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/src/minimax_grids.F90.o
+[  8%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/LibGXMiniMax.dir/api/gx_minimax.f90.o
+[  8%] Linking Fortran static library ../lib/libLibGXMiniMax.a
+[  8%] Built target LibGXMiniMax
+[  9%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/GXTabulateGrids.dir/utilities/gx_tabulate_minimax.F90.o
+[ 10%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/test_gx_minimax_duality_error.dir/test/test_gx_minimax_duality_error.f90.o
+[ 11%] Building Fortran object thirdparty/greenX/GX-TimeFrequency/CMakeFiles/test_gx_minimax_grid.dir/test/test_gx_minimax_grid.f90.o
+[ 12%] Building Fortran object src/CMakeFiles/rpa_lib.dir/interface/gx_minimax_wrp.f90.o
+[ 13%] Linking Fortran executable ../bin/test_gx_minimax_grid.exe
+[ 13%] Linking Fortran executable ../bin/test_gx_minimax_duality_error.exe
+[ 13%] Linking Fortran executable ../bin/gx_tabulate_grids.exe
+[ 14%] Building CXX object src/CMakeFiles/rpa_lib.dir/envs_cmake.cpp.o
+[ 14%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/compute_exx.cpp.o
+[ 14%] Built target test_gx_minimax_grid
+[ 15%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/compute_helper.cpp.o
+[ 15%] Built target test_gx_minimax_duality_error
+[ 15%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/compute_g0w0.cpp.o
+[ 15%] Built target GXTabulateGrids
+[ 16%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/compute_rpa.cpp.o
+[ 17%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/dataset.cpp.o
+[ 17%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/dataset_helper.cpp.o
+[ 18%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/global.cpp.o
+[ 18%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/handler.cpp.o
+[ 19%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/input.cpp.o
+[ 20%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/instance_manager.cpp.o
+[ 20%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/librpa.cpp.o
+[ 21%] Building CXX object src/CMakeFiles/rpa_lib.dir/api/options.cpp.o
+[ 21%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/analycont.cpp.o
+[ 22%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/symmetry_context.cpp.o
+[ 22%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/atomic_basis.cpp.o
+[ 23%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/chi0.cpp.o
+[ 24%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/coulmat.cpp.o
+[ 24%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/dielecmodel.cpp.o
+[ 25%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/epsilon.cpp.o
+[ 25%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/exx.cpp.o
+[ 26%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/geometry.cpp.o
+[ 26%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/gw.cpp.o
+[ 27%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/meanfield.cpp.o
+[ 28%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/meanfield_mpi.cpp.o
+[ 28%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/minimax_gx.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/pbc.cpp.o
+[ 29%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/qpoint_view.cpp.o
+[ 30%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/qpe_solver.cpp.o
+[ 30%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/ri.cpp.o
+[ 31%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/timefreq.cpp.o
+[ 32%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/utils_atomic_basis_blacs.cpp.o
+[ 32%] Building CXX object src/CMakeFiles/rpa_lib.dir/core/utils_complexmatrix.cpp.o
+[ 33%] Building CXX object src/CMakeFiles/rpa_lib.dir/io/fs.cpp.o
+[ 33%] Building CXX object src/CMakeFiles/rpa_lib.dir/io/aux_basis_summary.cpp.o
+[ 34%] Building CXX object src/CMakeFiles/rpa_lib.dir/io/global_io.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/rpa_lib.dir/io/input_elsi.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/rpa_lib.dir/io/output_gw.cpp.o
+[ 35%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/complexmatrix.cpp.o
+[ 36%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/fitting.cpp.o
+[ 36%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/interpolate.cpp.o
+[ 37%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/lebedev_laikov.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/mathtools.cpp.o
+[ 38%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/matrix.cpp.o
+[ 39%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/matrix3.cpp.o
+[ 39%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/rsh.cpp.o
+[ 40%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/symmetry.cpp.o
+[ 40%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/utils_matrix_mpi.cpp.o
+[ 41%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/vector3_order.cpp.o
+[ 42%] Building CXX object src/CMakeFiles/rpa_lib.dir/math/wigner_rotation.cpp.o
+[ 42%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/base_blacs.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/base_mpi.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/utils_blacs.cpp.o
+[ 44%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/global_mpi.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/two_level_parallel_context.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/rpa_lib.dir/mpi/kpoint_blacs_parallel_context.cpp.o
+[ 46%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/constants.cpp.o
+[ 46%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/dev_options.cpp.o
+[ 47%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/profiler.cpp.o
+[ 47%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/utils_cmake.cpp.o
+[ 48%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/utils_mem.cpp.o
+[ 49%] Building CXX object src/CMakeFiles/rpa_lib.dir/utils/elpa_stub.cpp.o
+[ 49%] Linking CXX static library librpa.a
+[ 49%] Built target rpa_lib
+[ 50%] Building CXX object driver/CMakeFiles/rpa_exe.dir/driver.cpp.o
+[ 51%] Building CXX object src/test/CMakeFiles/test_analycont.dir/test_analycont.cpp.o
+[ 51%] Building CXX object src/test/CMakeFiles/test_atomic_basis.dir/test_atomic_basis.cpp.o
+[ 52%] Building CXX object src/test/CMakeFiles/test_atom.dir/test_atom.cpp.o
+[ 53%] Linking CXX executable test_atom
+[ 53%] Linking CXX executable test_analycont
+[ 53%] Built target test_atom
+[ 53%] Built target test_analycont
+[ 54%] Building CXX object src/test/CMakeFiles/test_base_utility.dir/test_base_utility.cpp.o
+[ 55%] Building CXX object src/test/CMakeFiles/test_blas_lapack.dir/test_blas_lapack.cpp.o
+[ 56%] Linking CXX executable test_atomic_basis
+[ 56%] Building CXX object driver/CMakeFiles/rpa_exe.dir/input_parser.cpp.o
+[ 56%] Linking CXX executable test_base_utility
+[ 56%] Built target test_atomic_basis
+[ 56%] Building CXX object src/test/CMakeFiles/test_complexmatrix.dir/test_complexmatrix.cpp.o
+[ 57%] Linking CXX executable test_blas_lapack
+[ 57%] Built target test_base_utility
+[ 58%] Building CXX object src/test/CMakeFiles/test_fitting.dir/test_fitting.cpp.o
+[ 58%] Built target test_blas_lapack
+[ 59%] Building CXX object src/test/CMakeFiles/test_io.dir/test_io.cpp.o
+[ 60%] Linking CXX executable test_complexmatrix
+[ 60%] Linking CXX executable test_fitting
+[ 60%] Built target test_complexmatrix
+[ 60%] Building CXX object src/test/CMakeFiles/test_symmetry_context.dir/test_symmetry_context.cpp.o
+[ 60%] Built target test_fitting
+[ 61%] Building CXX object src/test/CMakeFiles/test_arbitrary_float.dir/test_arbitrary_float.cpp.o
+[ 62%] Linking CXX executable test_io
+[ 62%] Built target test_io
+[ 63%] Building CXX object src/test/CMakeFiles/test_geometry.dir/test_geometry.cpp.o
+[ 63%] Linking CXX executable test_arbitrary_float
+[ 63%] Built target test_arbitrary_float
+[ 63%] Linking CXX executable test_geometry
+[ 63%] Building CXX object src/test/CMakeFiles/test_lebedev_laikov.dir/test_lebedev_laikov.cpp.o
+[ 63%] Built target test_geometry
+[ 64%] Linking CXX executable test_lebedev_laikov
+[ 64%] Building CXX object src/test/CMakeFiles/test_libri_utils.dir/test_libri_utils.cpp.o
+[ 65%] Building CXX object driver/CMakeFiles/rpa_exe.dir/inputfile.cpp.o
+[ 65%] Built target test_lebedev_laikov
+[ 66%] Building CXX object src/test/CMakeFiles/test_matrix.dir/test_matrix.cpp.o
+[ 66%] Linking CXX executable test_matrix
+[ 66%] Built target test_matrix
+[ 67%] Building CXX object src/test/CMakeFiles/test_matrix_m.dir/test_matrix_m.cpp.o
+[ 68%] Linking CXX executable test_libri_utils
+[ 68%] Built target test_libri_utils
+[ 69%] Building CXX object src/test/CMakeFiles/test_meanfield.dir/test_meanfield.cpp.o
+[ 70%] Linking CXX executable test_symmetry_context
+[ 70%] Built target test_symmetry_context
+[ 70%] Building CXX object src/test/CMakeFiles/test_pbc.dir/test_pbc.cpp.o
+[ 70%] Linking CXX executable test_matrix_m
+[ 70%] Built target test_matrix_m
+[ 71%] Building CXX object src/test/CMakeFiles/test_profiler.dir/test_profiler.cpp.o
+[ 71%] Linking CXX executable test_profiler
+[ 72%] Linking CXX executable test_pbc
+[ 72%] Built target test_profiler
+[ 73%] Building CXX object src/test/CMakeFiles/test_qpe_solver.dir/test_qpe_solver.cpp.o
+[ 74%] Linking CXX executable test_meanfield
+[ 74%] Built target test_pbc
+[ 75%] Building CXX object src/test/CMakeFiles/test_rsh.dir/test_rsh.cpp.o
+[ 75%] Built target test_meanfield
+[ 75%] Building CXX object driver/CMakeFiles/rpa_exe.dir/main.cpp.o
+[ 75%] Building CXX object src/test/CMakeFiles/test_symmetry.dir/test_symmetry.cpp.o
+[ 75%] Linking CXX executable test_qpe_solver
+[ 76%] Linking CXX executable test_rsh
+[ 76%] Built target test_qpe_solver
+[ 77%] Building CXX object src/test/CMakeFiles/test_timefreq.dir/test_timefreq.cpp.o
+[ 77%] Built target test_rsh
+[ 78%] Building CXX object src/test/CMakeFiles/test_vector3.dir/test_vector3.cpp.o
+[ 78%] Linking CXX executable test_vector3
+[ 78%] Linking CXX executable test_timefreq
+[ 79%] Building CXX object driver/CMakeFiles/rpa_exe.dir/read_data.cpp.o
+[ 79%] Built target test_vector3
+[ 80%] Building CXX object driver/CMakeFiles/rpa_exe.dir/reader_eigenvec.cpp.o
+[ 80%] Built target test_timefreq
+[ 81%] Building CXX object src/test/CMakeFiles/test_wigner_rotation.dir/test_wigner_rotation.cpp.o
+[ 82%] Linking CXX executable test_symmetry
+[ 82%] Built target test_symmetry
+[ 82%] Building CXX object src/test/CMakeFiles/test_atomic_basis_blacs.dir/test_atomic_basis_blacs.cpp.o
+[ 83%] Linking CXX executable test_wigner_rotation
+[ 83%] Built target test_wigner_rotation
+[ 84%] Building CXX object src/test/CMakeFiles/test_base_mpi.dir/test_base_mpi.cpp.o
+[ 84%] Linking CXX executable test_base_mpi
+[ 84%] Built target test_base_mpi
+[ 85%] Building CXX object src/test/CMakeFiles/test_blacs.dir/test_blacs.cpp.o
+[ 85%] Linking CXX executable test_blacs
+[ 85%] Built target test_blacs
+[ 85%] Building CXX object src/test/CMakeFiles/test_dataset.dir/test_dataset.cpp.o
+[ 85%] Building CXX object driver/CMakeFiles/rpa_exe.dir/reader_basis.cpp.o
+[ 86%] Building CXX object driver/CMakeFiles/rpa_exe.dir/reader_structure.cpp.o
+[ 86%] Building CXX object driver/CMakeFiles/rpa_exe.dir/reader_lri.cpp.o
+[ 87%] Linking CXX executable test_dataset
+[ 88%] Building CXX object driver/CMakeFiles/rpa_exe.dir/reader_coulomb.cpp.o
+[ 89%] Linking CXX executable test_atomic_basis_blacs
+[ 89%] Built target test_dataset
+[ 89%] Built target test_atomic_basis_blacs
+[ 89%] Building CXX object src/test/CMakeFiles/test_epsilon.dir/test_epsilon.cpp.o
+[ 90%] Building CXX object src/test/CMakeFiles/test_matrix_m_mpi.dir/test_matrix_m_mpi.cpp.o
+[ 91%] Building CXX object driver/CMakeFiles/rpa_exe.dir/task.cpp.o
+[ 91%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/task_helper.cpp.o
+[ 92%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/exx.cpp.o
+[ 92%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/exx_band.cpp.o
+[ 93%] Linking CXX executable test_epsilon
+[ 93%] Built target test_epsilon
+[ 93%] Building CXX object src/test/CMakeFiles/test_meanfield_mpi.dir/test_meanfield_mpi.cpp.o
+[ 94%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/g0w0.cpp.o
+[ 94%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/g0w0_band.cpp.o
+[ 95%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/rpa.cpp.o
+[ 96%] Building CXX object driver/CMakeFiles/rpa_exe.dir/tasks/print_minimax.cpp.o
+[ 96%] Building CXX object src/test/CMakeFiles/test_kpoint_blacs_parallel_context.dir/test_kpoint_blacs_parallel_context.cpp.o
+[ 97%] Linking CXX executable test_meanfield_mpi
+[ 98%] Linking CXX executable test_kpoint_blacs_parallel_context
+[ 98%] Built target test_meanfield_mpi
+[ 99%] Building CXX object src/test/CMakeFiles/test_rpa_headwing.dir/test_rpa_headwing.cpp.o
+[ 99%] Built target test_kpoint_blacs_parallel_context
+[ 99%] Building CXX object src/test/CMakeFiles/test_shared_memory_mpi.dir/test_shared_memory_mpi.cpp.o
+[ 99%] Linking CXX executable ../chi0_main.exe
+[100%] Linking CXX executable test_shared_memory_mpi
+[100%] Linking CXX executable test_matrix_m_mpi
+[100%] Built target rpa_exe
+[100%] Built target test_shared_memory_mpi
+[100%] Built target test_matrix_m_mpi
+[100%] Linking CXX executable test_rpa_headwing
+[100%] Built target test_rpa_headwing

@@ -1,0 +1,84 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream
+Test project /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream
+      Start  1: test_gx_minimax_grid
+      Start  2: test_gx_tabulate_minimax
+      Start  3: test_gx_minimax_sine_duality_error
+      Start  4: test_gx_minimax_sine_duality_error_tikhonov
+ 1/39 Test  #1: test_gx_minimax_grid ..........................   Passed    0.44 sec
+      Start  5: test_input_parser
+ 2/39 Test  #5: test_input_parser .............................   Passed    0.01 sec
+      Start  6: test_analycont
+ 3/39 Test  #6: test_analycont ................................   Passed    0.02 sec
+      Start  7: test_atom
+ 4/39 Test  #7: test_atom .....................................   Passed    0.03 sec
+      Start  8: test_atomic_basis
+ 5/39 Test  #8: test_atomic_basis .............................   Passed    0.02 sec
+      Start  9: test_base_utility
+ 6/39 Test  #9: test_base_utility .............................   Passed    0.03 sec
+      Start 10: test_blas_lapack
+ 7/39 Test #10: test_blas_lapack ..............................   Passed    0.06 sec
+      Start 11: test_complexmatrix
+ 8/39 Test #11: test_complexmatrix ............................   Passed    0.06 sec
+      Start 12: test_fitting
+ 9/39 Test #12: test_fitting ..................................   Passed    0.02 sec
+      Start 13: test_io
+10/39 Test #13: test_io .......................................   Passed    0.03 sec
+      Start 14: test_symmetry_context
+11/39 Test #14: test_symmetry_context .........................   Passed    0.08 sec
+      Start 15: test_arbitrary_float
+12/39 Test #15: test_arbitrary_float ..........................   Passed    0.02 sec
+      Start 16: test_geometry
+13/39 Test #16: test_geometry .................................   Passed    0.01 sec
+      Start 17: test_lebedev_laikov
+14/39 Test #17: test_lebedev_laikov ...........................   Passed    0.03 sec
+      Start 18: test_libri_utils
+15/39 Test #18: test_libri_utils ..............................   Passed    0.02 sec
+      Start 19: test_matrix
+16/39 Test #19: test_matrix ...................................   Passed    0.06 sec
+      Start 20: test_matrix_m
+17/39 Test #20: test_matrix_m .................................   Passed    0.06 sec
+      Start 21: test_meanfield
+18/39 Test #21: test_meanfield ................................   Passed    0.06 sec
+      Start 22: test_pbc
+19/39 Test #22: test_pbc ......................................   Passed    0.03 sec
+      Start 23: test_profiler
+20/39 Test #23: test_profiler .................................   Passed    0.03 sec
+      Start 24: test_qpe_solver
+21/39 Test #24: test_qpe_solver ...............................   Passed    0.03 sec
+      Start 25: test_rsh
+22/39 Test #25: test_rsh ......................................   Passed    0.06 sec
+      Start 26: test_symmetry
+23/39 Test #26: test_symmetry .................................   Passed    0.04 sec
+      Start 27: test_timefreq
+24/39 Test #27: test_timefreq .................................   Passed    1.14 sec
+      Start 28: test_vector3
+25/39 Test #28: test_vector3 ..................................   Passed    0.03 sec
+      Start 29: test_wigner_rotation
+26/39 Test #29: test_wigner_rotation ..........................   Passed    0.07 sec
+      Start 30: test_atomic_basis_blacs
+27/39 Test #30: test_atomic_basis_blacs .......................   Passed    0.56 sec
+      Start 31: test_base_mpi
+28/39 Test #31: test_base_mpi .................................   Passed    0.56 sec
+      Start 32: test_blacs
+29/39 Test #32: test_blacs ....................................   Passed    0.57 sec
+      Start 33: test_dataset
+30/39 Test #33: test_dataset ..................................   Passed    0.62 sec
+      Start 34: test_epsilon
+31/39 Test #34: test_epsilon ..................................   Passed    0.64 sec
+      Start 35: test_matrix_m_mpi
+32/39 Test  #2: test_gx_tabulate_minimax ......................   Passed    6.37 sec
+      Start 36: test_meanfield_mpi
+33/39 Test #35: test_matrix_m_mpi .............................   Passed    1.28 sec
+      Start 37: test_kpoint_blacs_parallel_context
+34/39 Test #36: test_meanfield_mpi ............................   Passed    0.66 sec
+      Start 38: test_rpa_headwing
+35/39 Test #37: test_kpoint_blacs_parallel_context ............   Passed    0.60 sec
+      Start 39: test_shared_memory_mpi
+36/39 Test #38: test_rpa_headwing .............................   Passed    0.60 sec
+37/39 Test #39: test_shared_memory_mpi ........................   Passed    0.57 sec
+38/39 Test  #4: test_gx_minimax_sine_duality_error_tikhonov ...   Passed    8.28 sec
+39/39 Test  #3: test_gx_minimax_sine_duality_error ............   Passed    8.33 sec
+
+100% tests passed, 0 tests failed out of 39
+
+Total Test time (real) =   8.34 sec

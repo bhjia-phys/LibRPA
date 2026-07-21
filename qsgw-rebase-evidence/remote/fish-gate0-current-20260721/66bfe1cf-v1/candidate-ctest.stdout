@@ -1,0 +1,132 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate
+Test project /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate
+      Start  1: test_gx_minimax_grid
+      Start  2: test_gx_tabulate_minimax
+      Start  3: test_gx_minimax_sine_duality_error
+      Start  4: test_gx_minimax_sine_duality_error_tikhonov
+ 1/63 Test  #1: test_gx_minimax_grid ..........................   Passed    0.45 sec
+      Start  5: test_input_parser
+ 2/63 Test  #5: test_input_parser .............................   Passed    0.01 sec
+      Start  6: test_qsgw_inputfile
+ 3/63 Test  #6: test_qsgw_inputfile ...........................   Passed    0.61 sec
+      Start  7: test_analycont
+ 4/63 Test  #7: test_analycont ................................   Passed    0.03 sec
+      Start  8: test_atom
+ 5/63 Test  #8: test_atom .....................................   Passed    0.03 sec
+      Start  9: test_atomic_basis
+ 6/63 Test  #9: test_atomic_basis .............................   Passed    0.02 sec
+      Start 10: test_base_utility
+ 7/63 Test #10: test_base_utility .............................   Passed    0.03 sec
+      Start 11: test_blas_lapack
+ 8/63 Test #11: test_blas_lapack ..............................   Passed    0.06 sec
+      Start 12: test_complexmatrix
+ 9/63 Test #12: test_complexmatrix ............................   Passed    0.07 sec
+      Start 13: test_qsgw_correlation_potential
+10/63 Test #13: test_qsgw_correlation_potential ...............   Passed    0.03 sec
+      Start 14: test_qsgw_convergence
+11/63 Test #14: test_qsgw_convergence .........................   Passed    0.01 sec
+      Start 15: test_qsgw_effective_hamiltonian
+12/63 Test #15: test_qsgw_effective_hamiltonian ...............   Passed    0.03 sec
+      Start 16: test_fitting
+13/63 Test #16: test_fitting ..................................   Passed    0.02 sec
+      Start 17: test_io
+14/63 Test #17: test_io .......................................   Passed    0.02 sec
+      Start 18: test_symmetry_context
+15/63 Test #18: test_symmetry_context .........................   Passed    0.08 sec
+      Start 19: test_arbitrary_float
+16/63 Test #19: test_arbitrary_float ..........................   Passed    0.03 sec
+      Start 20: test_geometry
+17/63 Test #20: test_geometry .................................   Passed    0.03 sec
+      Start 21: test_lebedev_laikov
+18/63 Test #21: test_lebedev_laikov ...........................   Passed    0.03 sec
+      Start 22: test_libri_utils
+19/63 Test #22: test_libri_utils ..............................   Passed    0.03 sec
+      Start 23: test_matrix
+20/63 Test #23: test_matrix ...................................   Passed    0.06 sec
+      Start 24: test_matrix_m
+21/63 Test #24: test_matrix_m .................................   Passed    0.06 sec
+      Start 25: test_meanfield
+22/63 Test #25: test_meanfield ................................   Passed    0.06 sec
+      Start 26: test_pbc
+23/63 Test #26: test_pbc ......................................   Passed    0.03 sec
+      Start 27: test_profiler
+24/63 Test #27: test_profiler .................................   Passed    0.03 sec
+      Start 28: test_qsgw_abacus_csr
+25/63 Test #28: test_qsgw_abacus_csr ..........................   Passed    0.03 sec
+      Start 29: test_qsgw_band_output
+26/63 Test #29: test_qsgw_band_output .........................   Passed    0.03 sec
+      Start 30: test_qsgw_fixed_basis
+27/63 Test #30: test_qsgw_fixed_basis .........................   Passed    0.06 sec
+      Start 31: test_qsgw_hamiltonian_cut
+28/63 Test #31: test_qsgw_hamiltonian_cut .....................   Passed    0.03 sec
+      Start 32: test_qsgw_hamiltonian_mixing
+29/63 Test #32: test_qsgw_hamiltonian_mixing ..................   Passed    0.04 sec
+      Start 33: test_qsgw_hartree_density
+30/63 Test #33: test_qsgw_hartree_density .....................   Passed    0.04 sec
+      Start 34: test_qsgw_hartree_dump
+31/63 Test #34: test_qsgw_hartree_dump ........................   Passed    0.03 sec
+      Start 35: test_qsgw_hartree_kernel
+32/63 Test #35: test_qsgw_hartree_kernel ......................   Passed    0.03 sec
+      Start 36: test_qsgw_hartree_route
+33/63 Test #36: test_qsgw_hartree_route .......................   Passed    0.03 sec
+      Start 37: test_qsgw_hartree_workflow
+34/63 Test #37: test_qsgw_hartree_workflow ....................   Passed    0.04 sec
+      Start 38: test_qsgw_input_contract
+35/63 Test #38: test_qsgw_input_contract ......................   Passed    0.03 sec
+      Start 39: test_qsgw_iteration_trace
+36/63 Test #39: test_qsgw_iteration_trace .....................   Passed    0.03 sec
+      Start 40: test_qsgw_mixing
+37/63 Test #40: test_qsgw_mixing ..............................   Passed    0.04 sec
+      Start 41: test_qsgw_occupation
+38/63 Test #41: test_qsgw_occupation ..........................   Passed    0.02 sec
+      Start 42: test_qsgw_operator_fourier
+39/63 Test #42: test_qsgw_operator_fourier ....................   Passed    0.06 sec
+      Start 43: test_qsgw_projection_target
+40/63 Test #43: test_qsgw_projection_target ...................   Passed    0.03 sec
+      Start 44: test_qsgw_sha256
+41/63 Test #44: test_qsgw_sha256 ..............................   Passed    0.03 sec
+      Start 45: test_qsgw_vxc_io
+42/63 Test #45: test_qsgw_vxc_io ..............................   Passed    0.07 sec
+      Start 46: test_qpe_solver
+43/63 Test #46: test_qpe_solver ...............................   Passed    0.03 sec
+      Start 47: test_rsh
+44/63 Test #47: test_rsh ......................................   Passed    0.06 sec
+      Start 48: test_symmetry
+45/63 Test #48: test_symmetry .................................   Passed    0.04 sec
+      Start 49: test_timefreq
+46/63 Test #49: test_timefreq .................................   Passed    1.15 sec
+      Start 50: test_vector3
+47/63 Test #50: test_vector3 ..................................   Passed    0.03 sec
+      Start 51: test_wigner_rotation
+48/63 Test #51: test_wigner_rotation ..........................   Passed    0.06 sec
+      Start 52: test_atomic_basis_blacs
+49/63 Test #52: test_atomic_basis_blacs .......................   Passed    0.59 sec
+      Start 53: test_base_mpi
+50/63 Test #53: test_base_mpi .................................   Passed    0.60 sec
+      Start 54: test_blacs
+51/63 Test #54: test_blacs ....................................   Passed    0.60 sec
+      Start 55: test_dataset
+52/63 Test #55: test_dataset ..................................   Passed    0.65 sec
+      Start 56: test_epsilon
+53/63 Test  #2: test_gx_tabulate_minimax ......................   Passed    6.40 sec
+      Start 57: test_qsgw_distributed_matrix
+54/63 Test #56: test_epsilon ..................................   Passed    0.67 sec
+      Start 58: test_qsgw_fixed_basis_mpi
+55/63 Test #57: test_qsgw_distributed_matrix ..................   Passed    0.59 sec
+      Start 59: test_matrix_m_mpi
+56/63 Test #58: test_qsgw_fixed_basis_mpi .....................   Passed    0.62 sec
+      Start 60: test_meanfield_mpi
+57/63 Test #60: test_meanfield_mpi ............................   Passed    0.69 sec
+      Start 61: test_kpoint_blacs_parallel_context
+58/63 Test #59: test_matrix_m_mpi .............................   Passed    1.29 sec
+      Start 62: test_rpa_headwing
+59/63 Test  #4: test_gx_minimax_sine_duality_error_tikhonov ...   Passed    8.33 sec
+      Start 63: test_shared_memory_mpi
+60/63 Test  #3: test_gx_minimax_sine_duality_error ............   Passed    8.36 sec
+61/63 Test #61: test_kpoint_blacs_parallel_context ............   Passed    0.60 sec
+62/63 Test #62: test_rpa_headwing .............................   Passed    0.63 sec
+63/63 Test #63: test_shared_memory_mpi ........................   Passed    0.59 sec
+
+100% tests passed, 0 tests failed out of 63
+
+Total Test time (real) =   8.93 sec

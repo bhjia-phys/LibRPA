@@ -1,0 +1,26 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate
+Test project /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate
+      Start  6: test_qsgw_inputfile
+ 1/10 Test  #6: test_qsgw_inputfile ..............   Passed    0.61 sec
+      Start 28: test_qsgw_abacus_csr
+ 2/10 Test #28: test_qsgw_abacus_csr .............   Passed    0.03 sec
+      Start 29: test_qsgw_band_output
+ 3/10 Test #29: test_qsgw_band_output ............   Passed    0.02 sec
+      Start 31: test_qsgw_hamiltonian_cut
+ 4/10 Test #31: test_qsgw_hamiltonian_cut ........   Passed    0.02 sec
+      Start 32: test_qsgw_hamiltonian_mixing
+ 5/10 Test #32: test_qsgw_hamiltonian_mixing .....   Passed    0.04 sec
+      Start 34: test_qsgw_hartree_dump
+ 6/10 Test #34: test_qsgw_hartree_dump ...........   Passed    0.03 sec
+      Start 37: test_qsgw_hartree_workflow
+ 7/10 Test #37: test_qsgw_hartree_workflow .......   Passed    0.04 sec
+      Start 42: test_qsgw_operator_fourier
+ 8/10 Test #42: test_qsgw_operator_fourier .......   Passed    0.06 sec
+      Start 44: test_qsgw_sha256
+ 9/10 Test #44: test_qsgw_sha256 .................   Passed    0.03 sec
+      Start 45: test_qsgw_vxc_io
+10/10 Test #45: test_qsgw_vxc_io .................   Passed    0.06 sec
+
+100% tests passed, 0 tests failed out of 10
+
+Total Test time (real) =   0.94 sec

@@ -1,7 +1,8 @@
 param(
     [string]$Repository = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
     [string]$Manifest = (Join-Path $Repository 'qsgw-rebase-manifest.json'),
-    [string]$CandidateSourceCommit = ''
+    [string]$CandidateSourceCommit = '',
+    [string]$Gate0Evidence = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +32,47 @@ function Invoke-GitLines {
     return @($lines | Where-Object { $_ -ne $null -and $_.Trim().Length -gt 0 })
 }
 
+function Read-KeyValueFile {
+    param([string]$Path)
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match '^([^=]+)=(.*)$') {
+            $values[$matches[1]] = $matches[2]
+        }
+    }
+    return $values
+}
+
+function Assert-ChecksumManifest {
+    param([string]$Root, [string]$ChecksumFile)
+
+    $rootFull = [IO.Path]::GetFullPath($Root)
+    foreach ($line in Get-Content -LiteralPath $ChecksumFile) {
+        if ($line -notmatch '^([0-9a-f]{64})  (.+)$') {
+            throw "Malformed checksum row: $line"
+        }
+        $expected = $matches[1]
+        $relative = $matches[2]
+        if ($relative.StartsWith('./')) {
+            $relative = $relative.Substring(2)
+        }
+        $path = [IO.Path]::GetFullPath((Join-Path $rootFull $relative))
+        if (-not $path.StartsWith(
+                $rootFull + [IO.Path]::DirectorySeparatorChar,
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Checksum path escapes Gate 0 evidence root: $relative"
+        }
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Gate 0 checksum target is missing: $relative"
+        }
+        $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+        if ($actual -ne $expected) {
+            throw "Gate 0 checksum mismatch for ${relative}: $actual"
+        }
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($CandidateSourceCommit)) {
     $candidateSource = @(Invoke-GitLines @('rev-parse', 'HEAD'))[0]
 }
@@ -50,6 +92,60 @@ $null = Invoke-GitLines @(
     'merge-base', '--is-ancestor', $frozenParent, $candidateSource
 )
 $hasCleanCandidate = $candidateSource -ne $frozenParent
+
+if ([string]::IsNullOrWhiteSpace($Gate0Evidence)) {
+    $Gate0Evidence = Join-Path $Repository (
+        'qsgw-rebase-evidence\remote\fish-gate0-current-20260721\66bfe1cf-v1'
+    )
+}
+$gate0 = $null
+$gate0Reference =
+    'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt'
+if (Test-Path -LiteralPath $Gate0Evidence -PathType Container) {
+    $green = Join-Path $Gate0Evidence 'GREEN_CONFIRMED'
+    $failed = Join-Path $Gate0Evidence 'FAILED'
+    $provenancePath = Join-Path $Gate0Evidence 'PROVENANCE.txt'
+    $checksumPath = Join-Path $Gate0Evidence 'OUTPUT_SHA256SUMS.txt'
+    if (-not (Test-Path -LiteralPath $green -PathType Leaf) -or
+        (Test-Path -LiteralPath $failed) -or
+        -not (Test-Path -LiteralPath $provenancePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $checksumPath -PathType Leaf)) {
+        throw 'Gate 0 evidence is incomplete or contains FAILED'
+    }
+    Assert-ChecksumManifest -Root $Gate0Evidence -ChecksumFile $checksumPath
+    $gate0 = Read-KeyValueFile -Path $provenancePath
+    $expectedGate0 = @{
+        gate = 'fish_gate0_current_v1'
+        acceptance = 'true'
+        upstream_commit = $upstream
+        candidate_commit = $candidateSource
+        upstream_test_count = '39'
+        candidate_test_count = '63'
+        candidate_focused_test_count = '10'
+        failed_test_count = '0'
+        not_run_test_count = '0'
+        protected_diff = 'empty'
+    }
+    foreach ($key in $expectedGate0.Keys) {
+        if ($gate0[$key] -ne $expectedGate0[$key]) {
+            throw "Gate 0 provenance mismatch for ${key}: $($gate0[$key])"
+        }
+    }
+    $runnerPath = Join-Path $Repository (
+        'qsgw-rebase-evidence\remote\fish-gate0-current-20260721\run_fish_gate0_current_v1.sh'
+    )
+    $runnerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $runnerPath).Hash.ToLowerInvariant()
+    if ($runnerHash -ne $gate0.runner_sha256) {
+        throw "Gate 0 runner hash mismatch: $runnerHash"
+    }
+    foreach ($side in @('upstream', 'candidate')) {
+        $hashFile = Join-Path $Gate0Evidence "${side}-executable.sha256"
+        $hashValue = ((Get-Content -LiteralPath $hashFile -Raw).Trim() -split '\s+')[0]
+        if ($hashValue -ne $gate0["${side}_executable_sha256"]) {
+            throw "Gate 0 ${side} executable hash record mismatch"
+        }
+    }
+}
 
 function Get-CommitPaths {
     param([string]$Commit)
@@ -140,11 +236,22 @@ $data.repository.commits.upstream_new.reference =
 $data.provenance.source.hash = $candidateSource
 $data.provenance.source.reference =
     'qsgw-rebase-evidence/validation/local-audit-20260721.md'
-$data.provenance.executable.path = $null
-$data.provenance.executable.sha256 = $null
+$data.provenance.executable.path = if ($gate0) {
+    $gate0.candidate_executable
+} else {
+    $null
+}
+$data.provenance.executable.sha256 = if ($gate0) {
+    $gate0.candidate_executable_sha256
+} else {
+    $null
+}
 $data.provenance.executable.source_commit = $candidateSource
-$data.provenance.executable.reference =
+$data.provenance.executable.reference = if ($gate0) {
+    $gate0Reference
+} else {
     'pending: clean-candidate fish Gate 0'
+}
 $data.provenance.dataset.id = 'si-k444-symmetry-gate-a-v3-supporting'
 $data.provenance.dataset.path =
     '/home/bhj/ai-runs/librpa-qsgw-gate-a-symmetry-bundle-20260720-v3/dataset'
@@ -257,6 +364,14 @@ foreach ($benchmark in @($data.benchmarks)) {
         $benchmark.definition.side_a.source.reference =
             'qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md'
         $benchmark.definition.side_a.executable.source_commit = $upstream
+        if ($gate0) {
+            $benchmark.definition.side_a.executable.path =
+                $gate0.upstream_executable
+            $benchmark.definition.side_a.executable.sha256 =
+                $gate0.upstream_executable_sha256
+            $benchmark.definition.side_a.executable.reference =
+                $gate0Reference
+        }
         $benchmark.definition.side_b.source.hash = $candidateSource
         $benchmark.definition.side_b.source.reference =
             $data.provenance.source.reference
@@ -286,7 +401,45 @@ foreach ($pair in @($data.control_pairs)) {
         $side.source.hash = $candidateSource
         $side.source.reference = $data.provenance.source.reference
         $side.executable.source_commit = $candidateSource
+        if ($gate0) {
+            $side.executable.path = $data.provenance.executable.path
+            $side.executable.sha256 = $data.provenance.executable.sha256
+            $side.executable.reference = $data.provenance.executable.reference
+        }
     }
+}
+if ($gate0) {
+    $buildBenchmark = @(
+        $data.benchmarks | Where-Object { $_.id -eq 'build-upstream-regressions' }
+    )[0]
+    $artifactSpecs = @(
+        @('build-log', 'candidate-build.stdout'),
+        @('unit-results', 'candidate-ctest.xml'),
+        @('upstream-regression-results', 'upstream-ctest.xml'),
+        @('focused-qsgw-results', 'candidate-focused-ctest.xml'),
+        @('python-qsgw-results', 'candidate-python-tests.stdout'),
+        @('runtime-parameter-doc', 'candidate-runtime-parameters.md'),
+        @('protected-diff', 'protected-diff.patch'),
+        @('gate0-provenance', 'PROVENANCE.txt'),
+        @('gate0-checksum-manifest', 'OUTPUT_SHA256SUMS.txt')
+    )
+    $buildArtifacts = @()
+    foreach ($spec in $artifactSpecs) {
+        $relative =
+            'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/' +
+            $spec[1]
+        $record = [pscustomobject][ordered]@{
+            id = $spec[0]
+            path = $null
+            sha256 = $null
+            reference = $null
+        }
+        Set-HashedArtifact -Record $record -RelativePath $relative `
+            -Reference $gate0Reference
+        $buildArtifacts += $record
+    }
+    $buildBenchmark.status = 'accepted'
+    $buildBenchmark.artifacts = @($buildArtifacts)
 }
 $data.upstream_inventory.new_commit = $upstream
 
@@ -765,7 +918,11 @@ Set-HashedArtifact `
     -RelativePath $hunkInventoryRelative `
     -Reference 'reviewed semantic hunk inventory with exact commit/change coverage'
 
-$data.current_gate = 'build-unit-upstream-regressions'
+$data.current_gate = if ($gate0) {
+    'g0w0-upstream-vs-rebased'
+} else {
+    'build-unit-upstream-regressions'
+}
 $verified = @($data.verified_evidence) + @(
     'qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md',
     'qsgw-rebase-evidence/validation/local-audit-20260721.md',
@@ -778,6 +935,12 @@ $verified = @($data.verified_evidence) + @(
     'qsgw-rebase-evidence/remote/fish-gate-d-current-20260721'
 )
 $data.verified_evidence = @($verified | Select-Object -Unique)
+if ($gate0) {
+    $data.verified_evidence = @(
+        @($data.verified_evidence) +
+        'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1'
+    ) | Select-Object -Unique
+}
 
 $openIssues = @(
     [pscustomobject]@{
@@ -811,6 +974,11 @@ $openIssues = @(
         required = 'Commit a small two-round ABACUS dataset and references before enabling formal cases.'
     }
 )
+if ($gate0) {
+    $openIssues = @(
+        $openIssues | Where-Object { $_.id -ne 'ISSUE-REMOTE-GATE0' }
+    )
+}
 if (-not $hasCleanCandidate) {
     $cleanCandidateIssue = [pscustomobject]@{
         id = 'ISSUE-CLEAN-CANDIDATE'
@@ -822,7 +990,18 @@ if (-not $hasCleanCandidate) {
 }
 $data.open_issues = @($openIssues)
 
-if ($hasCleanCandidate) {
+if ($gate0) {
+    $data.next_actions = @(
+        [pscustomobject]@{
+            id = 'next-g0w0-direct-ab'
+            action = 'Run byte-identical-input upstream versus candidate G0W0 direct A/B on fish.'
+            gate = 'g0w0-upstream-vs-rebased'
+            owner = 'rebase operator'
+            status = 'ready'
+        }
+    )
+}
+elseif ($hasCleanCandidate) {
     $data.next_actions = @(
         [pscustomobject]@{
             id = 'next-clean-candidate-gate0'
@@ -855,6 +1034,11 @@ Set-Property -Object $data.planning_state -Name 'qsgw_iterative_headwing' -Value
 Set-Property -Object $data.planning_state -Name 'qsgw_band_operator_fourier' -Value 'wired_unit_and_linear_postmix_observer_verified_remote_gate_pending'
 Set-Property -Object $data.planning_state -Name 'hartree' -Value 'unit_verified_remote_gate_pending'
 Set-Property -Object $data.planning_state -Name 'expected_ctest_count' -Value 63
+Set-Property -Object $data.planning_state -Name 'fish_gate0' -Value $(if ($gate0) {
+    'accepted_39_upstream_63_candidate_10_focused_protected_diff_empty'
+} else {
+    'pending'
+})
 Set-Property -Object $data.planning_state -Name 'formal_qsgw_regression' -Value 'disabled_historical_placeholders_no_committed_cases'
 Set-Property -Object $data.planning_state -Name 'upstream_master_live_compare' -Value '42d3863c_identical_2026-07-21T18:37:20Z'
 Set-Property -Object $data.planning_state -Name 'layered_staging_plan' -Value '388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed'

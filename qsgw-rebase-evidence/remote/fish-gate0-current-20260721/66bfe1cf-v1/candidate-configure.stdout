@@ -1,0 +1,47 @@
+-- The CXX compiler identification is IntelLLVM 2025.2.1
+-- The Fortran compiler identification is IntelLLVM 2025.2.1
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /opt/intel/oneapi/mpi/2021.16/bin/mpiicpx - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting Fortran compiler ABI info
+-- Detecting Fortran compiler ABI info - done
+-- Check for working Fortran compiler: /opt/intel/oneapi/mpi/2021.16/bin/mpiifx - skipped
+-- Found IntelMKL: /opt/intel/oneapi/mkl/2025.2/lib/libmkl_intel_lp64.so
+-- Found MPI_CXX: /opt/intel/oneapi/mpi/2021.16/bin/mpiicpx (found version "4.1")
+-- Found MPI_Fortran: /opt/intel/oneapi/mpi/2021.16/bin/mpiifx (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- Found OpenMP_CXX: -fiopenmp (found version "5.1")
+-- Found OpenMP_Fortran: -fiopenmp
+-- Found OpenMP: TRUE (found version "5.1")
+-- Performing Test LIBRPA_STD_FILESYSTEM_NO_EXTRA_LIB
+-- Performing Test LIBRPA_STD_FILESYSTEM_NO_EXTRA_LIB - Success
+-- Build with LibRI and dependencies
+-- Use internal Cereal  : thirdparty/cereal-1.3.0
+-- Use internal LibComm : thirdparty/LibComm (commit hash 12457e7)
+-- Use internal LibRI   : thirdparty/LibRI   (commit hash e978e96)
+-- Driver MPI thread level         : MPI_THREAD_MULTIPLE
+-- Generate MiniMax grids by using the bundled GreenX library (collected from commit c90d131)
+-- Looking for Fortran sgemm
+-- Looking for Fortran sgemm - not found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Looking for Fortran sgemm
+-- Looking for Fortran sgemm - found
+-- Found BLAS: /opt/intel/oneapi/mkl/2025.2/lib/libmkl_intel_lp64.so;/opt/intel/oneapi/mkl/2025.2/lib/libmkl_intel_thread.so;/opt/intel/oneapi/mkl/2025.2/lib/libmkl_core.so;/opt/intel/oneapi/compiler/2025.2/lib/libiomp5.so;-lm;-ldl
+-- Looking for Fortran cheev
+-- Looking for Fortran cheev - found
+-- Found LAPACK: /opt/intel/oneapi/mkl/2025.2/lib/libmkl_intel_lp64.so;/opt/intel/oneapi/mkl/2025.2/lib/libmkl_intel_thread.so;/opt/intel/oneapi/mkl/2025.2/lib/libmkl_core.so;/opt/intel/oneapi/compiler/2025.2/lib/libiomp5.so;-lm;-ldl;-lm;-ldl
+-- Found Python3: /home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/python3 (found suitable version "3.13.5", minimum required is "3.7") found components: Interpreter Development Development.Module Development.Embed
+-- Found pygreenx: 0.0.1
+-- LibRPA test enabled
+-- LibRPA driver enabled
+-- CMAKE_INSTALL_PREFIX /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/candidate/install
+-- CMAKE_INSTALL_RPATH: /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/candidate/install/lib
+-- CMAKE_CXX_FLAGS:   -fiopenmp
+-- CMAKE_Fortran_FLAGS: 
+-- Configuring done (8.1s)
+-- Generating done (0.2s)
+-- Build files have been written to: /tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate
