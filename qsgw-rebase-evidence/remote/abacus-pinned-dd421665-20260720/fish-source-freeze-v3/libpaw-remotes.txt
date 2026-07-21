@@ -1,0 +1,2 @@
+origin	git@github.com:wenfei-li/libpaw_interface (fetch)
+origin	git@github.com:wenfei-li/libpaw_interface (push)

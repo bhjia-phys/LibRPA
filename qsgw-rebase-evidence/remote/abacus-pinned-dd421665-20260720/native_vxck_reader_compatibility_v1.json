@@ -1,0 +1,30 @@
+{
+  "both_readers_accept_native_comment_row_schema": true,
+  "both_readers_convert_rydberg_to_hartree": true,
+  "candidate": {
+    "driver_source": "driver/tasks/qsgw.cpp",
+    "driver_source_sha256": "7292378d46af4fe924d79d57258307b3b6615d7563c82c5d49de86ffa6670cee",
+    "energy_conversion": "Ry_to_Ha_scale_0.5",
+    "unit_test_source": "src/test/test_qsgw_vxc_io.cpp",
+    "unit_test_source_sha256": "3eddd2da925cce02199058d477f5c601e52dfdd6f3ff2c17262ac7a9797331b1",
+    "vxc_io_source": "src/qsgw/vxc_io.cpp",
+    "vxc_io_source_sha256": "76535b252f847ce398197ab8fdb8e3e80baf67bcace3184cd5848d505e67348a"
+  },
+  "candidate_manifest_should_bind_native_vxck": true,
+  "legacy": {
+    "commit": "8476213f66c68efb43404713eacbd04966820f26",
+    "energy_conversion": "Ry_to_Ha_scale_0.5",
+    "raw_source": "qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/oracle-source-audit-v1/exact847/task_qsgw_band_0.cpp",
+    "raw_source_sha256": "a932e60fa1b96e10a44eaa2f07da23bf57bbbb1c36600b1d4f9861a5d843e68e",
+    "reader_slice_bytes": 3420,
+    "reader_slice_sha256": "bf7c57320d4253dd63c9a8d48d9368be7d14b752137f8d3684d1d630ac17552b",
+    "scheme_a_reader_slice_sha256": "bf7c57320d4253dd63c9a8d48d9368be7d14b752137f8d3684d1d630ac17552b",
+    "scheme_a_source": "qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/patch-work-scheme-a-v3/task_qsgw_band_0.cpp",
+    "scheme_a_source_sha256": "34e5c93fe12259f4838469b0e19b2c2316d4b6871ba9d6c9da5b3c057a01ab34"
+  },
+  "legacy_parser_unchanged_by_scheme_a": true,
+  "native_file_alias_required": false,
+  "numerical_runtime_parity_pending": true,
+  "schema": "librpa-native-vxck-reader-compatibility-v1",
+  "source_contract_passed": true
+}

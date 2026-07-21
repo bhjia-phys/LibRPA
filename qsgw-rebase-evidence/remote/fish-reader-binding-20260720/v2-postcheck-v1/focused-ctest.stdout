@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-reader-binding-green-v2-b7273e13/build
+Test project /tmp/librpa-qsgw-reader-binding-green-v2-b7273e13/build
+    Start 35: test_qsgw_input_contract
+1/1 Test #35: test_qsgw_input_contract .........   Passed    0.05 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.05 sec

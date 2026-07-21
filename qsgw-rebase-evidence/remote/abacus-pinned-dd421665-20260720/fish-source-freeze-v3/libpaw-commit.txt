@@ -1,0 +1,7 @@
+commit c211c0ab330adf3cc374f50ab3edee46b174e64c
+Author:     wenfei-li <liwenfei@gmail.com>
+AuthorDate: Fri Jan 19 16:07:48 2024 +0800
+Commit:     wenfei-li <liwenfei@gmail.com>
+CommitDate: Fri Jan 19 16:07:48 2024 +0800
+
+    fix cmake

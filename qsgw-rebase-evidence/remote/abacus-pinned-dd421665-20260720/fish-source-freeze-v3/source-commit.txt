@@ -1,0 +1,7 @@
+commit dd4216653386d32f79e3219f3ea5dd2d229c1c5a
+Author:     Codex <codex@openai.com>
+AuthorDate: Thu Jul 16 12:21:46 2026 +0800
+Commit:     AroundPeking <gonghuanjing@iphy.ac.cn>
+CommitDate: Sat Jul 18 17:21:55 2026 +0800
+
+    Fix finite high-L terms in 2D Ewald Gamma sum

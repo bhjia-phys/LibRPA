@@ -1,0 +1,43 @@
+{
+  "candidate": {
+    "basis_transform": "none",
+    "driver_source": "driver/tasks/qsgw.cpp",
+    "driver_source_sha256": "7292378d46af4fe924d79d57258307b3b6615d7563c82c5d49de86ffa6670cee",
+    "energy_conversion": "Ry_to_Ha_scale_0.5",
+    "manifest_contract": "abacus_Ry_state_mf0_state",
+    "true_nao_projection_path_retained": true,
+    "unit_test_source": "src/test/test_qsgw_vxc_io.cpp",
+    "unit_test_source_sha256": "69197257889523b7d6a5e6e336464a05473296e4ae4906597b85856b6dc41f5e",
+    "vxc_io_source": "src/qsgw/vxc_io.cpp",
+    "vxc_io_source_sha256": "c8956b3c9e792faf0ae6cf4d6392895d345271fce02b79144979527ad91bb715"
+  },
+  "conclusion": "ABACUS out_mat_xc writes C-dagger Vxc_AO C in the producer KS state basis; the _nao filename suffix is not a basis label",
+  "generator": {
+    "dimension_binding": "n_bands",
+    "manifest_basis": "state",
+    "manifest_gauge": "mf0_state",
+    "source": "qsgw-rebase-evidence/remote/abacus-pinned-dd421665-20260720/prepare_abacus_qsgw_ibz_contract_v3.py",
+    "source_sha256": "aa2a00ba2768acbbd6652ef2f74e7833eec6a832a32acf90609272985c386b92"
+  },
+  "legacy": {
+    "basis_interpretation": "producer_ks_state",
+    "basis_transform": "none",
+    "commit": "8476213f66c68efb43404713eacbd04966820f26",
+    "energy_conversion": "Ry_to_Ha_scale_0.5",
+    "source": "qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/oracle-source-audit-v1/exact847/task_qsgw_band_0.cpp",
+    "source_sha256": "a932e60fa1b96e10a44eaa2f07da23bf57bbbb1c36600b1d4f9861a5d843e68e"
+  },
+  "numerical_runtime_parity_pending": true,
+  "producer": {
+    "commit": "dd4216653386d32f79e3219f3ea5dd2d229c1c5a",
+    "energy_units": "Ry",
+    "matrix_basis": "ks_state",
+    "matrix_shape": "n_bands_x_n_bands",
+    "nao_suffix_is_not_basis_label": true,
+    "producer_transform": "C_dagger_Vxc_AO_C",
+    "source": "source/source_io/module_hs/write_vxc.hpp",
+    "source_sha256": "f5fd558c74d634bca0f6952fc88df3b49bbf0f49a69a5389b131c5d24193935f"
+  },
+  "schema": "librpa-native-vxck-state-basis-audit-v1",
+  "source_contract_passed": true
+}
