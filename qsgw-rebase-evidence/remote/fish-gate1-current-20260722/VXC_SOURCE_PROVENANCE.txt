@@ -1,0 +1,14 @@
+role=g0w0_ks_diagonal_vxc_compatibility_input
+producer=abacus_historical_dirty_checkout_not_pinned
+producer_host=dongfang
+producer_root=/data/home/df_iopcas_bhj/ai-runs/si-qsgw-k444-headwing-kconv-20260517-203305/base_iter1
+source_file=/data/home/df_iopcas_bhj/ai-runs/si-qsgw-k444-headwing-kconv-20260517-203305/base_iter1/scf_librpa_root/vxc_out
+source_sha256=7928a0bd99f3a58b78881fa72861da2ccbfb2d4f4a47338a77d140d1adaff1dd
+source_size_bytes=16903
+n_scf_kpoints=8
+n_spins=1
+n_bands=44
+units=hartree_and_ev_columns
+paired_qsgw_bundle=/home/bhj/ai-runs/librpa-qsgw-gate-a-symmetry-bundle-20260720-v3
+paired_qsgw_bundle_dataset_sha256=869f4fd922dc1085af2cc02644f2a65e5b462237fde6428eed5a46143e833690
+acceptance_scope=historical_bundle_upstream_candidate_parity_only
