@@ -1,0 +1,36 @@
+{
+  "diagonalization_eigenvalue_max_abs_ha": 1.5916157281026244e-12,
+  "diagonalization_offdiagonal_max_abs_ha": 7.389644451905042e-13,
+  "fixed_basis_wfc_rotation_relative_frobenius": 0.0,
+  "hermiticity_max_abs_ha": 8.51955812610286e-06,
+  "input_efermi_max_abs_ha": 0.0,
+  "input_eigenvalue_max_abs_ha": 8.881784197001252e-16,
+  "input_occupation_max_abs": 0.0,
+  "iterations": [
+    0,
+    1
+  ],
+  "matrix_block_count": 8,
+  "matrix_dimensions": [
+    44
+  ],
+  "none_mixer_max_abs_ha": 0.0,
+  "passed": false,
+  "qsgw_contract_version": 6,
+  "qsgw_input_contract_sha256": "7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7",
+  "raw_h_closure_max_abs_ha": 8.519558093667001e-06,
+  "raw_h_closure_relative_frobenius": 4.447157099356966e-09,
+  "rotation_unitarity_max_abs": 4.551914400963142e-15,
+  "schema": "librpa-qsgw-iter1-v6-invariants-v1",
+  "semantic_first_self_energy": "trace_iteration_1_channel_0",
+  "semantic_iteration_zero": "immutable_initial_state",
+  "tolerances": {
+    "closure_max_abs_ha": 1e-10,
+    "closure_relative_frobenius": 1e-08,
+    "eigenvalue_ha": 1e-10,
+    "initial_state": 1e-10,
+    "invariant": 1e-10
+  },
+  "trace_eigenvalue_max_abs_ha": 1.8189894035458565e-12,
+  "trace_summary_electron_count_max_abs": 0.0
+}

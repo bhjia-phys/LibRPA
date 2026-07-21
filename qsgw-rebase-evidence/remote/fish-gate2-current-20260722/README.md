@@ -32,3 +32,8 @@ successful run writes `GREEN_CONFIRMED`; any failure writes `FAILED`.
 
 This gate does not establish multi-round legacy/current parity, Hartree,
 `qsgw_band`, or H_QSGW cut correctness. Those remain separate gates.
+
+The accepted observer-only recovery for the completed numerical run is in
+`2ad6b353-postcheck-v1/`. The source run remains preserved with its original
+`FAILED` marker because the pre-correction observer applied full-matrix
+Hermiticity to the non-authoritative EXX lower triangle.
