@@ -28,6 +28,12 @@ uses the append-only symmetry `stru_out` and its derived contract. The input
 view validator requires those to be the only SHA256 differences and requires
 the contracts to differ only in the bound `stru_out` hash.
 
+Both views also expose the same eight `s1k*_nao.txt` symlink aliases to the
+frozen `sks1k*_nao.txt` overlap matrices. This is required because the legacy
+reader constructs the `sks` filename but only opens its older `s1k` fallback.
+The runner rejects any legacy overlap-file warning instead of accepting the
+reader's identity-matrix fallback.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.

@@ -273,8 +273,17 @@ while IFS= read -r -d '' input; do
   ln -s "$common_target" "$candidate_input_view/$name"
 done < <(find "$input_overlay" -mindepth 1 -maxdepth 1 -print0)
 
-test "$(find "$legacy_input_view" -maxdepth 1 -type l | wc -l)" -eq 57
-test "$(find "$candidate_input_view" -maxdepth 1 -type l | wc -l)" -eq 57
+for ik in {1..8}; do
+  source_name=sks1k${ik}_nao.txt
+  alias_name=s1k${ik}_nao.txt
+  source_target=$(readlink -f "$candidate_input_view/$source_name")
+  test "$(head -n 1 "$source_target" | tr -d '[:space:]')" = 44
+  ln -s "$source_target" "$legacy_input_view/$alias_name"
+  ln -s "$source_target" "$candidate_input_view/$alias_name"
+done
+
+test "$(find "$legacy_input_view" -maxdepth 1 -type l | wc -l)" -eq 65
+test "$(find "$candidate_input_view" -maxdepth 1 -type l | wc -l)" -eq 65
 "$python" -B "$run_root/tools/validate_gate_a_input_views_v1.py" \
   "$legacy_input_view" "$candidate_input_view" \
   "$run_root/input-view-validation.json" \
@@ -324,6 +333,7 @@ frozen_physical_input_source=$input_overlay
 legacy_input_view=$legacy_input_view
 candidate_input_view=$candidate_input_view
 reader_metadata_differences=qsgw_input.contract,stru_out
+shared_legacy_reader_aliases=s1k1-s1k8_to_sks1k1-sks1k8
 common_physical_file_sha256_identical=true
 legacy_input_contract_sha256=$source_contract_sha
 candidate_input_contract_sha256=$overlay_contract_sha
@@ -433,6 +443,7 @@ frozen_physical_input_source=$input_overlay
 legacy_input_view=$legacy_input_view
 candidate_input_view=$candidate_input_view
 reader_metadata_differences=qsgw_input.contract,stru_out
+shared_legacy_reader_aliases=s1k1-s1k8_to_sks1k1-sks1k8
 common_physical_file_sha256_identical=true
 legacy_input_contract_sha256=$source_contract_sha
 candidate_input_contract_sha256=$overlay_contract_sha
@@ -460,6 +471,8 @@ EOF
   grep -Fqx '# use_symmetry_exx 1' "$legacy_run/qsgw_oracle_matrices.dat"
   grep -Fqx '# use_shrink_abfs 1' "$legacy_run/qsgw_oracle_matrices.dat"
   grep -Fq 'libRPA finished successfully' "$legacy_run/librpa.stdout"
+  ! grep -Eq 'S matrix file not found|Failed to process new format file' \
+    "$legacy_run/librpa.stderr"
   test "$(awk 'NF && $1 !~ /^#/ {last=$1} END {print last}' \
     "$legacy_run/homo_lumo_vs_iterations.dat")" = "$target_iter"
 
@@ -627,6 +640,7 @@ frozen_physical_input_source=$input_overlay
 legacy_input_view=$legacy_input_view
 candidate_input_view=$candidate_input_view
 reader_metadata_differences=qsgw_input.contract,stru_out
+shared_legacy_reader_aliases=s1k1-s1k8_to_sks1k1-sks1k8
 common_physical_file_sha256_identical=true
 legacy_input_contract_sha256=$source_contract_sha
 candidate_input_contract_sha256=$overlay_contract_sha
