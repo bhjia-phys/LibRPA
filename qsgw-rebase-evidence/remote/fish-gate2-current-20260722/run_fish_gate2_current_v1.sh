@@ -52,10 +52,10 @@ vxc_source=$RUNNER_SOURCE/$gate1_dir/vxc_out
 vxc_provenance_source=$RUNNER_SOURCE/$gate1_dir/VXC_SOURCE_PROVENANCE.txt
 
 expected_compare_sha=40eb6e8f61353d5ff08e1d4892a3ed09c2931dcee2d2854829e580f3d6692a8d
-expected_validate_sha=31519c1b0a2d6d17dfb1f2bc38b4c28b95897638109f251c8b0a4829107293c3
-expected_fixture_sha=686c2bff3558d12228eb79e3a93cd9a1ebb760e0e1587cb9205623f1f220268f
+expected_validate_sha=e6871fc4b8c5519df89c39cf005f3ca2dc8f03713ea2848a5224676a9386eeb2
+expected_fixture_sha=14524959b4774f3a87e965ec03715e5185c99efa6bef62c6083b9539c0483be7
 expected_compare_test_sha=7aafb90b1765082891528d6db9d2d220583e0df69315151efb420f48b800d8bf
-expected_validate_test_sha=dd72cc67540bd6b7550502f234bd4cb0e013cab0b7ac7e234950749bf29de94a
+expected_validate_test_sha=e0910205e35a6f01f729d2369c57060d9b1c7970c0a2a7f0147a7380fa5786fe
 expected_contract_builder_sha=5791d893cd3d1cf2771d0ba7883911db153c243ace3d3ac9a1c2f8384145bd29
 expected_contract_builder_test_sha=6bab5f704147079994254b5e47631b2f99b8f20df64e2da7b621257336010117
 expected_cmp_qsgw_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
@@ -431,6 +431,13 @@ assert invariants["raw_h_closure_max_abs_ha"] <= 1.0e-10
 assert invariants["raw_h_closure_relative_frobenius"] <= 1.0e-8
 assert invariants["none_mixer_max_abs_ha"] <= 1.0e-10
 assert invariants["hermiticity_max_abs_ha"] <= 1.0e-10
+assert set(invariants["component_hermiticity_max_abs_ha"]) == {
+    "vxc_dft", "exx", "vc"
+}
+assert all(
+    value >= 0.0
+    for value in invariants["component_hermiticity_max_abs_ha"].values()
+)
 assert invariants["rotation_unitarity_max_abs"] <= 1.0e-10
 assert invariants["diagonalization_offdiagonal_max_abs_ha"] <= 1.0e-10
 assert invariants["diagonalization_eigenvalue_max_abs_ha"] <= 1.0e-10
@@ -486,6 +493,7 @@ qsgw_iter1_invariants_sha256=$(sha256sum "$run_root/qsgw-iter1-invariants.json" 
 qsgw_iter1_g0w0_sigc_comparison_sha256=$(sha256sum "$run_root/qsgw-iter1-vs-upstream-g0w0-sigc.json" | awk '{print $1}')
 semantic_iteration_zero=immutable_initial_state
 semantic_first_self_energy=trace_iteration_1_channel_0
+hamiltonian_closure=legacy_upper_triangle_authoritative
 sigc_block_count=48
 sigc_max_abs_tolerance_ha=1e-10
 sigc_relative_frobenius_tolerance=1e-10
