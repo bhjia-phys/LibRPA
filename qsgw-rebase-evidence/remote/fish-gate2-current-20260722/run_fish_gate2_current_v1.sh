@@ -31,6 +31,7 @@ dataset=$bundle/dataset
 expected_dataset_manifest_sha=869f4fd922dc1085af2cc02644f2a65e5b462237fde6428eed5a46143e833690
 expected_bundle_manifest_sha=b3be3227d0aea82492e92085340d567b47a6ba3ebb0976e1f23d542e9d5db648
 expected_contract_sha=5b90f7314d7231e0d1cc3d272957e26b9aa89d9b204c71d0378d1940098f0d46
+expected_overlay_contract_sha=7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7
 expected_vxc_manifest_sha=714af7a617cdf971651a21e2b599819b7a53f9eac6b76cf8e3ead8c9a4890179
 
 gate2_dir=qsgw-rebase-evidence/remote/fish-gate2-current-20260722
@@ -40,6 +41,8 @@ validate_source=$RUNNER_SOURCE/$gate2_dir/validate_qsgw_iter1_v6.py
 fixture_source=$RUNNER_SOURCE/$gate2_dir/gate2_test_fixture_v1.py
 compare_test_source=$RUNNER_SOURCE/$gate2_dir/test_compare_qsgw_iter1_g0w0_v1.py
 validate_test_source=$RUNNER_SOURCE/$gate2_dir/test_validate_qsgw_iter1_v6.py
+contract_builder_source=$RUNNER_SOURCE/$gate2_dir/build_qsgw_contract_overlay_v1.py
+contract_builder_test_source=$RUNNER_SOURCE/$gate2_dir/test_build_qsgw_contract_overlay_v1.py
 cmp_qsgw_source=$RUNNER_SOURCE/regression_tests/backend/comparisons/cmp_qsgw.py
 stru_builder_source=$RUNNER_SOURCE/$gate1_dir/build_stru_symmetry_overlay_v1.py
 stru_builder_test_source=$RUNNER_SOURCE/$gate1_dir/test_build_stru_symmetry_overlay_v1.py
@@ -53,6 +56,8 @@ expected_validate_sha=31519c1b0a2d6d17dfb1f2bc38b4c28b95897638109f251c8b0a482910
 expected_fixture_sha=686c2bff3558d12228eb79e3a93cd9a1ebb760e0e1587cb9205623f1f220268f
 expected_compare_test_sha=7aafb90b1765082891528d6db9d2d220583e0df69315151efb420f48b800d8bf
 expected_validate_test_sha=dd72cc67540bd6b7550502f234bd4cb0e013cab0b7ac7e234950749bf29de94a
+expected_contract_builder_sha=5791d893cd3d1cf2771d0ba7883911db153c243ace3d3ac9a1c2f8384145bd29
+expected_contract_builder_test_sha=6bab5f704147079994254b5e47631b2f99b8f20df64e2da7b621257336010117
 expected_cmp_qsgw_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
 expected_stru_builder_sha=d90e22d671c9b5ade4b799d987dfa471d1c0b65747c96748cfbb832998938c80
 expected_stru_builder_test_sha=1ef3e79588c1c45e5ffb8ed93e99784cc7464c7683ff6c5518be4cbdeac1d57f
@@ -184,6 +189,8 @@ $validate_source $expected_validate_sha
 $fixture_source $expected_fixture_sha
 $compare_test_source $expected_compare_test_sha
 $validate_test_source $expected_validate_test_sha
+$contract_builder_source $expected_contract_builder_sha
+$contract_builder_test_source $expected_contract_builder_test_sha
 $cmp_qsgw_source $expected_cmp_qsgw_sha
 $stru_builder_source $expected_stru_builder_sha
 $stru_builder_test_source $expected_stru_builder_test_sha
@@ -212,6 +219,8 @@ cp "$validate_source" "$tool_dir/validate_qsgw_iter1_v6.py"
 cp "$fixture_source" "$tool_dir/gate2_test_fixture_v1.py"
 cp "$compare_test_source" "$tool_dir/test_compare_qsgw_iter1_g0w0_v1.py"
 cp "$validate_test_source" "$tool_dir/test_validate_qsgw_iter1_v6.py"
+cp "$contract_builder_source" "$tool_dir/build_qsgw_contract_overlay_v1.py"
+cp "$contract_builder_test_source" "$tool_dir/test_build_qsgw_contract_overlay_v1.py"
 cp "$cmp_qsgw_source" "$tool_dir/cmp_qsgw.py"
 cp "$stru_builder_source" "$tool_dir/build_stru_symmetry_overlay_v1.py"
 cp "$stru_builder_test_source" "$tool_dir/test_build_stru_symmetry_overlay_v1.py"
@@ -219,7 +228,8 @@ cp "$stru_tail_source" "$tool_dir/stru_symmetry_tail.dd421665.si444.txt"
 
 for path in "$dataset"/*; do
   test -f "$path"
-  if [[ $(basename "$path") == stru_out ]]; then
+  if [[ $(basename "$path") == stru_out || \
+        $(basename "$path") == qsgw_input.contract ]]; then
     continue
   fi
   ln -s "$path" "$overlay/$(basename "$path")"
@@ -238,8 +248,18 @@ cp "$vxc_source" "$overlay/vxc_out"
   2>"$run_root/stru-symmetry-overlay-builder.stderr"
 test "$(sha256sum "$overlay/stru_out" | awk '{print $1}')" = \
   "$expected_overlay_stru_sha"
-test "$(find "$overlay" -maxdepth 1 -type l | wc -l)" -eq 55
-test "$(find "$overlay" -maxdepth 1 -type f | wc -l)" -eq 2
+"$python" -B "$tool_dir/build_qsgw_contract_overlay_v1.py" \
+  "$dataset/qsgw_input.contract" \
+  "$dataset/stru_out" \
+  "$overlay/stru_out" \
+  "$overlay/qsgw_input.contract" \
+  "$run_root/qsgw-contract-overlay-validation.json" \
+  >"$run_root/qsgw-contract-overlay-builder.stdout" \
+  2>"$run_root/qsgw-contract-overlay-builder.stderr"
+test "$(sha256sum "$overlay/qsgw_input.contract" | awk '{print $1}')" = \
+  "$expected_overlay_contract_sha"
+test "$(find "$overlay" -maxdepth 1 -type l | wc -l)" -eq 54
+test "$(find "$overlay" -maxdepth 1 -type f | wc -l)" -eq 3
 (
   cd "$overlay"
   for path in *; do sha256sum "$path"; done
@@ -250,6 +270,7 @@ find "$overlay" -maxdepth 1 -type l -printf '%f -> %l\n' | \
 (
   cd "$tool_dir"
   CMP_QSGW="$tool_dir/cmp_qsgw.py" "$python" -B -m unittest -v \
+    test_build_qsgw_contract_overlay_v1.py \
     test_compare_qsgw_iter1_g0w0_v1.py \
     test_validate_qsgw_iter1_v6.py \
     >"$run_root/gate2-observer-unit-test.stdout" \
@@ -323,7 +344,8 @@ upstream_source_commit=$expected_upstream_commit
 gate1_accepted_provenance_sha256=$expected_gate1_provenance_sha
 gate1_source_manifest_sha256=$expected_gate1_source_manifest_sha
 dataset_manifest_sha256=$expected_dataset_manifest_sha
-qsgw_input_contract_sha256=$expected_contract_sha
+source_qsgw_input_contract_sha256=$expected_contract_sha
+overlay_qsgw_input_contract_sha256=$expected_overlay_contract_sha
 source_stru_out_sha256=$expected_source_stru_sha
 symmetry_tail_sha256=$expected_stru_tail_sha
 overlay_stru_out_sha256=$expected_overlay_stru_sha
@@ -360,7 +382,7 @@ for trace in qsgw_matrices.dat qsgw_eigenvalues.dat qsgw_iterations.dat; do
   grep -Fqx '# band disabled_stage1' "$run_dir/$trace"
   grep -Fqx '# h_qsgw_cut disabled_non_band' "$run_dir/$trace"
   grep -Fqx '# qsgw_mixer none' "$run_dir/$trace"
-  grep -Fqx "# qsgw_input_contract_sha256 $expected_contract_sha" "$run_dir/$trace"
+  grep -Fqx "# qsgw_input_contract_sha256 $expected_overlay_contract_sha" "$run_dir/$trace"
 done
 
 "$python" -B "$tool_dir/validate_qsgw_iter1_v6.py" \
@@ -402,6 +424,7 @@ with open(sys.argv[1], encoding="utf-8") as handle:
 assert invariants["passed"] is True
 assert invariants["qsgw_contract_version"] == 6
 assert invariants["iterations"] == [0, 1]
+assert invariants["qsgw_input_contract_sha256"] == "7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7"
 assert invariants["matrix_block_count"] == 8
 assert invariants["matrix_dimensions"] == [44]
 assert invariants["raw_h_closure_max_abs_ha"] <= 1.0e-10
@@ -422,6 +445,7 @@ with open(sys.argv[2], encoding="utf-8") as handle:
     sigc = json.load(handle)
 assert sigc["passed"] is True
 assert sigc["qsgw_contract_version"] == 6
+assert sigc["qsgw_input_contract_sha256"] == "7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7"
 assert sigc["iteration"] == 1
 assert sigc["channel"] == 0
 assert sigc["block_count"] == 48
@@ -450,7 +474,9 @@ gate1_source_manifest_sha256=$expected_gate1_source_manifest_sha
 gate1_upstream_g0w0_source=$gate1_source/upstream
 dataset=$dataset
 dataset_manifest_sha256=$expected_dataset_manifest_sha
-qsgw_input_contract_sha256=$expected_contract_sha
+source_qsgw_input_contract_sha256=$expected_contract_sha
+overlay_qsgw_input_contract_sha256=$expected_overlay_contract_sha
+qsgw_contract_overlay_validation_sha256=$(sha256sum "$run_root/qsgw-contract-overlay-validation.json" | awk '{print $1}')
 source_stru_out_sha256=$expected_source_stru_sha
 symmetry_tail_sha256=$expected_stru_tail_sha
 overlay_stru_out_sha256=$expected_overlay_stru_sha

@@ -19,8 +19,11 @@ diagonalization, fixed-basis wavefunction rotation, and all 48 SigmaC blocks.
 
 The runner binds the accepted Gate0 and Gate1 archives, candidate executable,
 frozen ABACUS bundle, physical `vxc_out`, dimensionless pinned-producer
-symmetry tail, overlay builder, formal regression parser, and all observers by
-SHA256. A successful run writes `GREEN_CONFIRMED`; any failure writes `FAILED`.
+symmetry tail, structure overlay builder, derived-contract builder, formal
+regression parser, and all observers by SHA256. The derived contract changes
+only the `reader_static ... stru_out` SHA so the strict QSGW preflight binds
+the composite structure; every other contract byte remains unchanged. A
+successful run writes `GREEN_CONFIRMED`; any failure writes `FAILED`.
 
 This gate does not establish multi-round legacy/current parity, Hartree,
 `qsgw_band`, or H_QSGW cut correctness. Those remain separate gates.
