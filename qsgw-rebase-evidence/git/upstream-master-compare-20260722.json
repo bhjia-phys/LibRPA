@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-07-21T18:37:20Z",
+  "repository_full_name": "minyez/LibRPA",
+  "source": "GitHub compare-commits connector",
+  "base": "42d3863c1d865194d382a085851d1e2e8a39764f",
+  "head_ref": "master",
+  "status": "identical",
+  "ahead_by": 0,
+  "behind_by": 0,
+  "total_commits": 0,
+  "base_commit": "42d3863c1d865194d382a085851d1e2e8a39764f",
+  "merge_base_commit": "42d3863c1d865194d382a085851d1e2e8a39764f",
+  "changed_files": [],
+  "compare_url": "https://github.com/minyez/LibRPA/compare/42d3863c1d865194d382a085851d1e2e8a39764f...master",
+  "conclusion": "The frozen upstream commit was the live master tip at observation time; no additional upstream commit required classification or rebase."
+}

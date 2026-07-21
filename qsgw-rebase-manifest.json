@@ -8,8 +8,8 @@
                        "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
                        "commits":  {
                                        "branch_head":  {
-                                                           "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                           "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                           "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        },
                                        "upstream_old":  {
                                                             "hash":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
@@ -24,27 +24,27 @@
                                                         "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
                                                     },
                                        "rebase_head":  {
-                                                           "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                           "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                           "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        }
                                    }
                    },
     "provenance":  {
                        "source":  {
-                                      "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                      "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                      "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                      "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                   },
                        "executable":  {
                                           "path":  null,
                                           "sha256":  null,
-                                          "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                          "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
+                                          "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                          "reference":  "pending: clean-candidate fish Gate 0"
                                       },
                        "dataset":  {
-                                       "id":  "si-k888-symmetry-inventory-supporting",
-                                       "path":  "/data/home/df_iopcas_bhj/ai-runs/si-qsgw-band0-k888-sym-shrink-headwing-iter1-20260514-173351",
-                                       "sha256":  null,
-                                       "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/dongfang-inventory-v2-failed"
+                                       "id":  "si-k444-symmetry-gate-a-v3-supporting",
+                                       "path":  "/home/bhj/ai-runs/librpa-qsgw-gate-a-symmetry-bundle-20260720-v3/dataset",
+                                       "sha256":  "869f4fd922dc1085af2cc02644f2a65e5b462237fde6428eed5a46143e833690",
+                                       "reference":  "qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/run_gate_a1_symmetry_nomix_miniter2_v6.sh"
                                    },
                        "inputs":  [
                                       {
@@ -115,18 +115,18 @@
                                "old_commit":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
                                "new_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                                "commit_list":  {
-                                                   "path":  "qsgw-rebase-evidence/git/upstream-commit-list.txt",
-                                                   "sha256":  "e324b6388cb0dc839f96f05ccffda6914e2189949f45d414bdda7010da8074e3",
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-commit-list-to-42d3863c.txt",
+                                                   "sha256":  "934b0ff99ba3e10c0fe6d227271839b1a4e4fa257fce2e13387f5381d0e2f2f6",
                                                    "reference":  "git rev-list --reverse upstream_old..upstream_new"
                                                },
                                "name_status":  {
-                                                   "path":  "qsgw-rebase-evidence/git/upstream-name-status.txt",
-                                                   "sha256":  "9af7c32b5c4b248189b4e28622b78176ec4e0dd5b00ca23999f5f9d9089c6bb4",
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-name-status-to-42d3863c.txt",
+                                                   "sha256":  "4cad7ac70c495aad15a93e47e7b08081bff784aadea9278adbd960400c4a792a",
                                                    "reference":  "git diff --name-status upstream_old..upstream_new"
                                                },
                                "hunk_inventory":  {
-                                                      "path":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
-                                                      "sha256":  "ebf25af84bf20f40271847b41da0e96d76d90527839769dcb47e51565b6547ea",
+                                                      "path":  "qsgw-rebase-evidence/git/upstream-hunk-inventory-to-42d3863c.json",
+                                                      "sha256":  "c3db1971982460bea5e19e11dd5ae669c61bab1793448758862491966b6292cb",
                                                       "reference":  "reviewed semantic hunk inventory with exact commit/change coverage"
                                                   },
                                "commit_hashes":  [
@@ -143,7 +143,23 @@
                                                      "a033ec4caec7cec4785b74d1998ec484deedf0b3",
                                                      "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
                                                      "14704c11c735069afd8c23e95a5f087731c3ce56",
-                                                     "1376ee4f45a7611a55c5b92c4ba41409d515bcea"
+                                                     "1376ee4f45a7611a55c5b92c4ba41409d515bcea",
+                                                     "293dacc5ff8a186d39f18d818a5d9c66d45f7968",
+                                                     "b66d528353aab6283fcdd3d0b5765dfd3816bd50",
+                                                     "b51273861f541985c2419c81ea1a031c668ddcc7",
+                                                     "2b34a92f13133ed587b6fa6d5f8946c4c6d74eed",
+                                                     "c3563afd82538d1f7283808470bdcf7f78a64a87",
+                                                     "be966e250ac5162774291ec33f4c608c9c25d390",
+                                                     "3ffe9ab8d35d8307ecc7ee20470118d6763fab89",
+                                                     "2df7b08bb0700147cded4097ddf35de12519d0d2",
+                                                     "12f43c38091db37f13c49965fffabd7b77acac74",
+                                                     "14261e285ec3b2db2db1d0445a3d233a37f4c0c7",
+                                                     "95c4c08009aa6752a6d386289abe1fb4358489ca",
+                                                     "eefa0682ad5e6796237a80edaabcbc75caab91c1",
+                                                     "deadd00853920e12653c9b336f8957a469d34efb",
+                                                     "9bb5fa4bc86b9bc3efca545bac2527d93fcf16b7",
+                                                     "51b9e08ef91a5e75edc2f5d443d28d5402e41f5e",
+                                                     "42d3863c1d865194d382a085851d1e2e8a39764f"
                                                  ],
                                "commit_change_map":  [
                                                          {
@@ -210,8 +226,7 @@
                                                          {
                                                              "commit":  "a033ec4caec7cec4785b74d1998ec484deedf0b3",
                                                              "change_ids":  [
-                                                                                "UP-KPARA-HEADWING-CONTRACT-001",
-                                                                                "U3-HEAD-MATRIX-GETTER-001"
+                                                                                "UP-KPARA-HEADWING-CONTRACT-001"
                                                                             ]
                                                          },
                                                          {
@@ -231,6 +246,102 @@
                                                              "change_ids":  [
                                                                                 "UP-REGRESSION-KPARA-001"
                                                                             ]
+                                                         },
+                                                         {
+                                                             "commit":  "293dacc5ff8a186d39f18d818a5d9c66d45f7968",
+                                                             "change_ids":  [
+                                                                                "UP-BN-GW-HEADWING-REGRESSION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "b66d528353aab6283fcdd3d0b5765dfd3816bd50",
+                                                             "change_ids":  [
+                                                                                "UP-EMPTY-RANK-WQ-RESTORE-TEST-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "b51273861f541985c2419c81ea1a031c668ddcc7",
+                                                             "change_ids":  [
+                                                                                "UP-BN-RPA-KPARA-REGRESSION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "2b34a92f13133ed587b6fa6d5f8946c4c6d74eed",
+                                                             "change_ids":  [
+                                                                                "UP-CS-WORLD-K-REDISTRIBUTION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "c3563afd82538d1f7283808470bdcf7f78a64a87",
+                                                             "change_ids":  [
+                                                                                "UP-HEADWING-TEST-DATA-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "be966e250ac5162774291ec33f4c608c9c25d390",
+                                                             "change_ids":  [
+                                                                                "UP-CS-ROTATION-BLOCK-128-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "3ffe9ab8d35d8307ecc7ee20470118d6763fab89",
+                                                             "change_ids":  [
+                                                                                "UP-WFC-KCOMM-2D-READ-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "2df7b08bb0700147cded4097ddf35de12519d0d2",
+                                                             "change_ids":  [
+                                                                                "UP-SYM-WFC-LOCAL-ROTATION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "12f43c38091db37f13c49965fffabd7b77acac74",
+                                                             "change_ids":  [
+                                                                                "UP-WFC-RECTANGULAR-REDISTRIBUTION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "14261e285ec3b2db2db1d0445a3d233a37f4c0c7",
+                                                             "change_ids":  [
+                                                                                "UP-WFC-VELOCITY-FULLBZ-PAIR-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "95c4c08009aa6752a6d386289abe1fb4358489ca",
+                                                             "change_ids":  [
+                                                                                "UP-WFC-BLOCK-CYCLIC-LAYOUT-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "eefa0682ad5e6796237a80edaabcbc75caab91c1",
+                                                             "change_ids":  [
+                                                                                "UP-REAL-DENSE-WC-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "deadd00853920e12653c9b336f8957a469d34efb",
+                                                             "change_ids":  [
+                                                                                "UP-LIH-REAL-WC-REGRESSION-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "9bb5fa4bc86b9bc3efca545bac2527d93fcf16b7",
+                                                             "change_ids":  [
+                                                                                "UP-DENSE-WC-MEMORY-LIFETIME-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "51b9e08ef91a5e75edc2f5d443d28d5402e41f5e",
+                                                             "change_ids":  [
+                                                                                "UP-REAL-WC-RESIDUAL-WARN-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                             "change_ids":  [
+                                                                                "UP-EPSILON-TEST-SPLIT-001"
+                                                                            ]
                                                          }
                                                      ],
                                "classified_change_ids":  [
@@ -246,10 +357,25 @@
                                                              "UP-REGRESSION-DIAGNOSTICS-001",
                                                              "UP-KBLACS-MF-OWNERSHIP-001",
                                                              "UP-KPARA-HEADWING-CONTRACT-001",
-                                                             "U3-HEAD-MATRIX-GETTER-001",
                                                              "UP-ATOM-BASIS-MAP-001",
                                                              "UP-COMMUNICATOR-OWNERSHIP-001",
-                                                             "UP-REGRESSION-KPARA-001"
+                                                             "UP-REGRESSION-KPARA-001",
+                                                             "UP-BN-GW-HEADWING-REGRESSION-001",
+                                                             "UP-EMPTY-RANK-WQ-RESTORE-TEST-001",
+                                                             "UP-BN-RPA-KPARA-REGRESSION-001",
+                                                             "UP-CS-WORLD-K-REDISTRIBUTION-001",
+                                                             "UP-HEADWING-TEST-DATA-001",
+                                                             "UP-CS-ROTATION-BLOCK-128-001",
+                                                             "UP-WFC-KCOMM-2D-READ-001",
+                                                             "UP-SYM-WFC-LOCAL-ROTATION-001",
+                                                             "UP-WFC-RECTANGULAR-REDISTRIBUTION-001",
+                                                             "UP-WFC-VELOCITY-FULLBZ-PAIR-001",
+                                                             "UP-WFC-BLOCK-CYCLIC-LAYOUT-001",
+                                                             "UP-REAL-DENSE-WC-001",
+                                                             "UP-LIH-REAL-WC-REGRESSION-001",
+                                                             "UP-DENSE-WC-MEMORY-LIFETIME-001",
+                                                             "UP-REAL-WC-RESIDUAL-WARN-001",
+                                                             "UP-EPSILON-TEST-SPLIT-001"
                                                          ],
                                "coverage_assertion":  "complete"
                            },
@@ -712,48 +838,6 @@
                                                   ]
                              },
                              {
-                                 "id":  "U3-HEAD-MATRIX-GETTER-001",
-                                 "commit":  "a033ec4caec7cec4785b74d1998ec484deedf0b3",
-                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
-                                 "classification":  "U3",
-                                 "effect_domain":  "shared_conflict",
-                                 "changed_paths":  [
-                                                       "src/core/dielecmodel.h"
-                                                   ],
-                                 "summary":  "the new full-BZ QSGW trace adapter needs a const view of the full head tensor after upstream cal_head; upstream exposes only a scalar derived vector",
-                                 "disposition":  "approved_shared_interface",
-                                 "semantic_audit":  {
-                                                        "api":  "changed",
-                                                        "matrix_layout":  "unchanged",
-                                                        "basis":  "unchanged",
-                                                        "units":  "unchanged",
-                                                        "normalization":  "unchanged",
-                                                        "mpi_ownership":  "unchanged",
-                                                        "k_point_weights":  "unchanged",
-                                                        "occupations":  "unchanged",
-                                                        "call_ordering":  "unchanged",
-                                                        "symmetry":  "unchanged",
-                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json"
-                                                    },
-                                 "benchmark_observer_ids":  [
-                                                                "g0w0-upstream-vs-rebased",
-                                                                "qsgw-iter0-vs-upstream"
-                                                            ],
-                                 "qsgw_adapter_observer_ids":  [
-
-                                                               ],
-                                 "approval_ids":  [
-                                                      "APPROVAL-U3-HEAD-MATRIX-GETTER-001"
-                                                  ],
-                                 "u3_impact_report":  {
-                                                          "formula_mapping":  "qsgw-rebase-evidence/impact/formula-to-code.md#f-head-tensor-read",
-                                                          "call_chain":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#call-chain",
-                                                          "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
-                                                          "affected_scope":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#numerical-and-abi-impact",
-                                                          "benchmark_design":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md#required-observers"
-                                                      }
-                             },
-                             {
                                  "id":  "UP-ATOM-BASIS-MAP-001",
                                  "commit":  "e238a7615235e604fa5fdc40e0ed7bde8f86be75",
                                  "commit_reference":  "qsgw-rebase-evidence/git/upstream-hunk-inventory.json",
@@ -855,6 +939,632 @@
                                                     },
                                  "benchmark_observer_ids":  [
                                                                 "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-BN-GW-HEADWING-REGRESSION-001",
+                                 "commit":  "293dacc5ff8a186d39f18d818a5d9c66d45f7968",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/refs/g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri/librpa/EXX_band_spin_1.dat",
+                                                       "regression_tests/refs/g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri/librpa/GW_band_spin_1.dat",
+                                                       "regression_tests/refs/g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri/librpa/librpa.out",
+                                                       "regression_tests/testcases/g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri/dataset.tar.gz",
+                                                       "regression_tests/testcases/g0w0_band_abacus_BN_headwing_sym_kpara_shrink_v1_libri/librpa/librpa.in",
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "Adds the BN symmetry+kpara GW head/wing regression outside src.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-EMPTY-RANK-WQ-RESTORE-TEST-001",
+                                 "commit":  "b66d528353aab6283fcdd3d0b5765dfd3816bd50",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Extends protected shared tests for empty-rank symmetry W(q) restoration.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-BN-RPA-KPARA-REGRESSION-001",
+                                 "commit":  "b51273861f541985c2419c81ea1a031c668ddcc7",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/refs/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.out",
+                                                       "regression_tests/testcases/rpa_abacus_BN_headwing_sym_shrink_v1_libri/librpa/librpa.in",
+                                                       "regression_tests/testsuite.xml"
+                                                   ],
+                                 "summary":  "Enables k parallelism in the BN symmetry RPA regression outside src.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-CS-WORLD-K-REDISTRIBUTION-001",
+                                 "commit":  "2b34a92f13133ed587b6fa6d5f8946c4c6d74eed",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/read_data.cpp",
+                                                       "src/api/dataset_helper.cpp",
+                                                       "src/api/dataset_helper.h",
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/dielecmodel.h"
+                                                   ],
+                                 "summary":  "Moves head/wing Cs Fourier and redistribution work to explicit world and k ownership.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEADWING-TEST-DATA-001",
+                                 "commit":  "c3563afd82538d1f7283808470bdcf7f78a64a87",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "regression_tests/testcases/g0w0_band_abacus_MnO2_nspin2_shrink_wing_libri/librpa/librpa.in",
+                                                       "src/test/CMakeLists.txt",
+                                                       "src/test/test_dataset.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Updates protected Dataset/head-wing tests and one regression input.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-CS-ROTATION-BLOCK-128-001",
+                                 "commit":  "be966e250ac5162774291ec33f4c608c9c25d390",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Changes the distributed rectangular block layout used for Cs symmetry rotation.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-WFC-KCOMM-2D-READ-001",
+                                 "commit":  "3ffe9ab8d35d8307ecc7ee20470118d6763fab89",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/main.cpp",
+                                                       "driver/read_data.cpp",
+                                                       "driver/reader_eigenvec.cpp",
+                                                       "driver/reader_eigenvec.h",
+                                                       "src/api/compute_exx.cpp",
+                                                       "src/api/compute_g0w0.cpp",
+                                                       "src/api/compute_rpa.cpp",
+                                                       "src/api/dataset.cpp",
+                                                       "src/api/dataset.h",
+                                                       "src/api/dataset_helper.cpp",
+                                                       "src/api/input.cpp",
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/exx.h",
+                                                       "src/core/gw.cpp",
+                                                       "src/core/gw.h",
+                                                       "src/core/meanfield_mpi.cpp",
+                                                       "src/mpi/base_blacs.cpp",
+                                                       "src/mpi/base_blacs.h",
+                                                       "src/test/test_blacs.cpp",
+                                                       "src/test/test_dataset.cpp",
+                                                       "src/test/test_meanfield_mpi.cpp"
+                                                   ],
+                                 "summary":  "Changes WFC reader, Dataset, EXX, and GW APIs to k-communicator 2D block ownership.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-SYM-WFC-LOCAL-ROTATION-001",
+                                 "commit":  "2df7b08bb0700147cded4097ddf35de12519d0d2",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp"
+                                                   ],
+                                 "summary":  "Restores symmetry rotation from the correct locally owned WFC block.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-WFC-RECTANGULAR-REDISTRIBUTION-001",
+                                 "commit":  "12f43c38091db37f13c49965fffabd7b77acac74",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/read_data.cpp",
+                                                       "driver/reader_eigenvec.cpp",
+                                                       "src/api/dataset.cpp",
+                                                       "src/api/dataset.h",
+                                                       "src/api/input.cpp",
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/gw.cpp",
+                                                       "src/core/meanfield_mpi.cpp",
+                                                       "src/core/meanfield_mpi.h",
+                                                       "src/test/test_dataset.cpp",
+                                                       "src/test/test_meanfield_mpi.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Introduces capped rectangular WFC redistribution descriptors after input.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-WFC-VELOCITY-FULLBZ-PAIR-001",
+                                 "commit":  "14261e285ec3b2db2db1d0445a3d233a37f4c0c7",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/dielecmodel.h",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Pairs full-BZ WFC and velocity members under the same symmetry transform.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "changed",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "changed",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-WFC-BLOCK-CYCLIC-LAYOUT-001",
+                                 "commit":  "95c4c08009aa6752a6d386289abe1fb4358489ca",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/reader_eigenvec.cpp",
+                                                       "src/api/dataset.cpp",
+                                                       "src/api/input.cpp",
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/exx.cpp",
+                                                       "src/core/gw.cpp",
+                                                       "src/core/meanfield_mpi.cpp",
+                                                       "src/core/meanfield_mpi.h",
+                                                       "src/test/test_dataset.cpp",
+                                                       "src/test/test_meanfield_mpi.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Accepts valid WFC block-cyclic layouts instead of requiring a dense-root shape.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REAL-DENSE-WC-001",
+                                 "commit":  "eefa0682ad5e6796237a80edaabcbc75caab91c1",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md",
+                                 "classification":  "U2",
+                                 "effect_domain":  "qsgw_adapter",
+                                 "changed_paths":  [
+                                                       "driver/inputfile.cpp",
+                                                       "src/core/epsilon.cpp",
+                                                       "src/core/epsilon.h",
+                                                       "src/core/gw.cpp",
+                                                       "src/test/test_rpa_headwing.cpp",
+                                                       "src/utils/dev_options.cpp",
+                                                       "src/utils/dev_options.h"
+                                                   ],
+                                 "summary":  "Adds an optional real-valued dense Wc CT/FT representation and shared GW path.",
+                                 "disposition":  "adapt_qsgw_only",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+                                                                   "qsgw-iter0-vs-upstream"
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-LIH-REAL-WC-REGRESSION-001",
+                                 "commit":  "deadd00853920e12653c9b336f8957a469d34efb",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "regression_tests/testcases/g0w0_band_aims_LiH_ZB_sym_libri/librpa/librpa.in"
+                                                   ],
+                                 "summary":  "Enables the real dense Wc developer option in the LiH regression input.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-DENSE-WC-MEMORY-LIFETIME-001",
+                                 "commit":  "9bb5fa4bc86b9bc3efca545bac2527d93fcf16b7",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/gw.cpp"
+                                                   ],
+                                 "summary":  "Releases each dense Wc time-point source map after LibRI tensor preparation.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-REAL-WC-RESIDUAL-WARN-001",
+                                 "commit":  "51b9e08ef91a5e75edc2f5d443d28d5402e41f5e",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/epsilon.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Warns on a finite real-Wc imaginary residual instead of aborting before projection.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-EPSILON-TEST-SPLIT-001",
+                                 "commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/test/CMakeLists.txt",
+                                                       "src/test/test_epsilon.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Splits epsilon tests from head-wing tests inside the protected src tree.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "unchanged",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
                                                             ],
                                  "qsgw_adapter_observer_ids":  [
 
@@ -1213,70 +1923,347 @@
                                                   ]
                                  },
                                  {
-                                     "formula_id":  "F-HEAD-TENSOR-READ",
-                                     "formula":  "A const view reads the already-computed head tensor without changing numerical state or call order.",
+                                     "formula_id":  "F-REFRESH-HEADWING-TEST-OBSERVERS",
+                                     "formula":  "Protected head-wing test refactors preserve the shared restoration formula.",
                                      "upstream_symbols":  [
-                                                              "diele_func::head",
-                                                              "diele_func::get_head_matrices"
+                                                              "restore_symmetry_dense_wq_map",
+                                                              "test_rpa_headwing"
                                                           ],
                                      "qsgw_symbols":  [
-                                                          "copy_head_tensor"
+                                                          "run_qsgw"
                                                       ],
                                      "upstream_change_ids":  [
-                                                                 "U3-HEAD-MATRIX-GETTER-001"
+                                                                 "UP-EMPTY-RANK-WQ-RESTORE-TEST-001",
+                                                                 "UP-HEADWING-TEST-DATA-001"
                                                              ],
                                      "upstream_commits":  [
-                                                              "a033ec4caec7cec4785b74d1998ec484deedf0b3"
+                                                              "b66d528353aab6283fcdd3d0b5765dfd3816bd50",
+                                                              "c3563afd82538d1f7283808470bdcf7f78a64a87"
                                                           ],
                                      "contract_before":  {
-                                                             "basis":  "private head Cartesian tensor",
-                                                             "shape":  "3x3 per frequency",
-                                                             "units":  "upstream dielectric units",
-                                                             "ownership":  "diele_func private",
+                                                             "basis":  "shared head-wing basis",
+                                                             "shape":  "unchanged",
+                                                             "units":  "dimensionless",
+                                                             "ownership":  "upstream test communicator",
                                                              "normalization":  "unchanged"
                                                          },
                                      "contract_after":  {
-                                                            "basis":  "const head Cartesian tensor view",
-                                                            "shape":  "3x3 per frequency",
-                                                            "units":  "upstream dielectric units",
-                                                            "ownership":  "read-only QSGW observer",
+                                                            "basis":  "shared head-wing basis",
+                                                            "shape":  "unchanged",
+                                                            "units":  "dimensionless",
+                                                            "ownership":  "upstream test communicator",
                                                             "normalization":  "unchanged"
                                                         },
-                                     "classification":  "U3",
-                                     "required_change":  "approved_shared_change",
+                                     "classification":  "U1",
+                                     "required_change":  "none",
                                      "benchmark_ids":  [
                                                            "g0w0-upstream-vs-rebased",
                                                            "qsgw-iter0-vs-upstream"
                                                        ],
                                      "evidence":  [
-                                                      "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.md"
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-CS-HEADWING-DISTRIBUTION",
+                                     "formula":  "Distributed Cs rotation and Fourier redistribution equal the full matrix transform with one owner per k block.",
+                                     "upstream_symbols":  [
+                                                              "read_Cs",
+                                                              "initialize_ds_Cs",
+                                                              "rotate_Cs_nao2mnk_kblacs"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-CS-WORLD-K-REDISTRIBUTION-001",
+                                                                 "UP-CS-ROTATION-BLOCK-128-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "2b34a92f13133ed587b6fa6d5f8946c4c6d74eed",
+                                                              "be966e250ac5162774291ec33f4c608c9c25d390"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "AO-product basis",
+                                                             "shape":  "legacy distributed Cs blocks",
+                                                             "units":  "basis-dependent coefficient",
+                                                             "ownership":  "local/subcommunicator ownership",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "AO-product basis",
+                                                            "shape":  "128-column rectangular Cs blocks",
+                                                            "units":  "basis-dependent coefficient",
+                                                            "ownership":  "world Fourier plus explicit k ownership",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "mpi-omp"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-WFC-DISTRIBUTED-READ-LAYOUT",
+                                     "formula":  "A block-cyclic WFC represents the same KS eigenvectors after reader and Dataset redistribution.",
+                                     "upstream_symbols":  [
+                                                              "read_eigenvectors",
+                                                              "Dataset",
+                                                              "MeanField",
+                                                              "Exx::build",
+                                                              "G0W0::build_spacetime"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw",
+                                                          "QsgwState"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-WFC-KCOMM-2D-READ-001",
+                                                                 "UP-WFC-RECTANGULAR-REDISTRIBUTION-001",
+                                                                 "UP-WFC-BLOCK-CYCLIC-LAYOUT-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "3ffe9ab8d35d8307ecc7ee20470118d6763fab89",
+                                                              "12f43c38091db37f13c49965fffabd7b77acac74",
+                                                              "95c4c08009aa6752a6d386289abe1fb4358489ca"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "KS eigenvector basis",
+                                                             "shape":  "dense-root or legacy distributed layout",
+                                                             "units":  "dimensionless",
+                                                             "ownership":  "legacy reader/global ownership",
+                                                             "normalization":  "orthonormal columns"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "KS eigenvector basis",
+                                                            "shape":  "valid capped rectangular block-cyclic layout",
+                                                            "units":  "dimensionless",
+                                                            "ownership":  "explicit k-communicator ownership",
+                                                            "normalization":  "orthonormal columns"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "mpi-omp"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-SYMMETRY-WFC-VELOCITY-PAIRING",
+                                     "formula":  "A full-BZ symmetry member uses its matched WFC and velocity under the same rotation and time-reversal operation.",
+                                     "upstream_symbols":  [
+                                                              "diele_func::cal_head_symmetric",
+                                                              "diele_func::cal_wing_symmetric"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw",
+                                                          "QsgwState"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-SYM-WFC-LOCAL-ROTATION-001",
+                                                                 "UP-WFC-VELOCITY-FULLBZ-PAIR-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "2df7b08bb0700147cded4097ddf35de12519d0d2",
+                                                              "14261e285ec3b2db2db1d0445a3d233a37f4c0c7"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "IBZ/full-BZ KS basis",
+                                                             "shape":  "independently selected WFC and velocity members",
+                                                             "units":  "Hartree and velocity units",
+                                                             "ownership":  "partially implicit local ownership",
+                                                             "normalization":  "upstream symmetry normalization"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "matched full-BZ KS basis",
+                                                            "shape":  "paired WFC and velocity symmetry members",
+                                                            "units":  "Hartree and velocity units",
+                                                            "ownership":  "explicit local member ownership",
+                                                            "normalization":  "upstream symmetry normalization"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream",
+                                                           "mpi-omp"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-REAL-DENSE-WC-CTFT",
+                                     "formula":  "For scalar Wc with a bounded imaginary residual, real dense CT/FT storage represents the real projection of the complex path.",
+                                     "upstream_symbols":  [
+                                                              "FT_Wc_freq_q_into",
+                                                              "CT_FT_Wc_freq_q_real",
+                                                              "G0W0::build_spacetime"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-REAL-DENSE-WC-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "eefa0682ad5e6796237a80edaabcbc75caab91c1"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "auxiliary product basis",
+                                                             "shape":  "complex dense Wc(R,tau)",
+                                                             "units":  "screened interaction",
+                                                             "ownership":  "distributed dense matrices",
+                                                             "normalization":  "1/Nk Fourier normalization"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "auxiliary product basis",
+                                                            "shape":  "optional real dense Wc(R,tau)",
+                                                            "units":  "screened interaction",
+                                                            "ownership":  "distributed dense matrices after collective residual check",
+                                                            "normalization":  "1/Nk Fourier normalization"
+                                                        },
+                                     "classification":  "U2",
+                                     "required_change":  "qsgw_adapter",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-DENSE-WC-LIFETIME",
+                                     "formula":  "Releasing a dense Wc source map after LibRI tensor preparation does not change the subsequent correlation self-energy.",
+                                     "upstream_symbols":  [
+                                                              "prepare_dense_wc_libri",
+                                                              "G0W0::build_spacetime"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-DENSE-WC-MEMORY-LIFETIME-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "9bb5fa4bc86b9bc3efca545bac2527d93fcf16b7"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "auxiliary product basis",
+                                                             "shape":  "dense Wc per time point",
+                                                             "units":  "screened interaction",
+                                                             "ownership":  "source maps retained after tensor preparation",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "auxiliary product basis",
+                                                            "shape":  "dense Wc per time point",
+                                                            "units":  "screened interaction",
+                                                            "ownership":  "source map released after tensor preparation",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-REAL-WC-RESIDUAL-POLICY",
+                                     "formula":  "The real dense Wc projection and its residual diagnostic do not alter the projected matrix formula.",
+                                     "upstream_symbols":  [
+                                                              "validate_dense_wc_real_residual"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-REAL-WC-RESIDUAL-WARN-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "51b9e08ef91a5e75edc2f5d443d28d5402e41f5e"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "auxiliary product basis",
+                                                             "shape":  "real projection of dense Wc",
+                                                             "units":  "screened interaction",
+                                                             "ownership":  "collective residual diagnostic",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "auxiliary product basis",
+                                                            "shape":  "real projection of dense Wc",
+                                                            "units":  "screened interaction",
+                                                            "ownership":  "collective residual diagnostic",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-EPSILON-TEST-SPLIT",
+                                     "formula":  "Moving epsilon test cases between test translation units leaves the shared epsilon implementation unchanged.",
+                                     "upstream_symbols":  [
+                                                              "test_epsilon",
+                                                              "test_rpa_headwing"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-EPSILON-TEST-SPLIT-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "42d3863c1d865194d382a085851d1e2e8a39764f"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "epsilon test basis",
+                                                             "shape":  "same test matrices",
+                                                             "units":  "dimensionless",
+                                                             "ownership":  "same test communicator",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "epsilon test basis",
+                                                            "shape":  "same test matrices",
+                                                            "units":  "dimensionless",
+                                                            "ownership":  "same test communicator",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
                                                   ]
                                  }
                              ],
     "shared_core_hunks":  [
-                              {
-                                  "id":  "SHARED-HEAD-GETTER-001",
-                                  "path":  "src/core/dielecmodel.h",
-                                  "symbols":  [
-                                                  "diele_func::head",
-                                                  "diele_func::get_head_matrices"
-                                              ],
-                                  "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
-                                  "upstream_change_id":  "U3-HEAD-MATRIX-GETTER-001",
-                                  "classification":  "U3",
-                                  "restores_old_implementation":  false,
-                                  "formula_map_ids":  [
-                                                          "F-HEAD-TENSOR-READ"
-                                                      ],
-                                  "benchmark_observer_ids":  [
-                                                                 "g0w0-upstream-vs-rebased",
-                                                                 "qsgw-iter0-vs-upstream"
-                                                             ],
-                                  "approval_ids":  [
-                                                       "APPROVAL-U3-HEAD-MATRIX-GETTER-001"
-                                                   ],
-                                  "status":  "approved"
-                              }
+
                           ],
     "gate_sequence":  [
                           "build-unit-upstream-regressions",
@@ -1360,14 +2347,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-g0w0",
                                                              "source":  {
-                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
+                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1429,14 +2416,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-iter0",
                                                              "source":  {
-                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
+                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1498,14 +2485,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-no-mixing",
                                                              "source":  {
-                                                                            "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2"
+                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -1855,13 +2842,13 @@
                               "default_experiment":  null,
                               "a":  {
                                         "source":  {
-                                                       "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                       "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                       "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                       "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                           "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -1929,13 +2916,13 @@
                                     },
                               "b":  {
                                         "source":  {
-                                                       "hash":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
-                                                       "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                       "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                       "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                                                           "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -2004,29 +2991,7 @@
                           }
                       ],
     "approvals":  [
-                      {
-                          "id":  "APPROVAL-U3-HEAD-MATRIX-GETTER-001",
-                          "type":  "user",
-                          "approved":  true,
-                          "scope":  "Only the exact five-line read-only diele_func::get_head_matrices getter in the U3 impact packet and the listed regression observers.",
-                          "approved_by":  "workspace user",
-                          "approved_at":  "2026-07-15T16:40:50+08:00",
-                          "evidence_reference":  "qsgw-rebase-evidence/impact/APPROVAL-U3-HEAD-MATRIX-GETTER-001.md",
-                          "candidate_diff":  "qsgw-rebase-evidence/impact/U3-head-matrix-readonly-getter.patch",
-                          "change_ids":  [
-                                             "U3-HEAD-MATRIX-GETTER-001"
-                                         ],
-                          "shared_core_hunk_ids":  [
-                                                       "SHARED-HEAD-GETTER-001"
-                                                   ],
-                          "formula_map_ids":  [
-                                                  "F-HEAD-TENSOR-READ"
-                                              ],
-                          "benchmark_ids":  [
-                                                "g0w0-upstream-vs-rebased",
-                                                "qsgw-iter0-vs-upstream"
-                                            ]
-                      }
+
                   ],
     "current_gate":  "build-unit-upstream-regressions",
     "verified_evidence":  [
@@ -2041,68 +3006,75 @@
                               "qsgw-rebase-evidence/validation/local-precommit-checks.md",
                               "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md",
                               "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/fish-full-ctest-v2",
-                              "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/dongfang-inventory-v2-failed"
+                              "qsgw-rebase-evidence/remote/dongfang-symmetry-k888-20260720/dongfang-inventory-v2-failed",
+                              "qsgw-rebase-evidence/validation/local-audit-20260721.md",
+                              "qsgw-rebase-evidence/remote/fish-reader-binding-20260720/v2-postcheck-v1",
+                              "qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720",
+                              "qsgw-rebase-evidence/validation/generate-layered-staging-plan.ps1",
+                              "qsgw-rebase-evidence/validation/layered-staging-plan-20260722.json",
+                              "qsgw-rebase-evidence/validation/verify-layered-staging-plan.ps1",
+                              "qsgw-rebase-evidence/git/upstream-master-compare-20260722.json",
+                              "qsgw-rebase-evidence/remote/fish-gate-d-current-20260721"
                           ],
     "open_issues":  [
                         {
-                            "id":  "ISSUE-QSGW-HEADWING-REACHABLE",
-                            "class_or_gate":  "qsgw-headwing-fail-fast",
-                            "blocker":  "QSGW parser and runtime still execute iterative head/wing.",
-                            "required":  "Reject QSGW replace_w_head/use_pyatb and remove runtime reachability without changing G0W0."
-                        },
-                        {
-                            "id":  "ISSUE-OBSOLETE-U3-GETTER",
-                            "class_or_gate":  "protected-diff",
-                            "blocker":  "The approved shared head getter is used only by excluded QSGW head/wing code.",
-                            "required":  "Remove the QSGW consumer and getter so shared numerical diff is zero."
-                        },
-                        {
-                            "id":  "ISSUE-BAND-NOT-FOURIER-WIRED",
-                            "class_or_gate":  "qsgw-band-operator-fourier",
-                            "blocker":  "The current qsgw_band loop separately evaluates band EXX/Sigma; operator_fourier is only called by headwing_update.",
-                            "required":  "Project the converged grid AO/real-space operator to immutable mf0_band."
+                            "id":  "ISSUE-REMOTE-GATE0",
+                            "class_or_gate":  "build-unit-upstream-regressions",
+                            "blocker":  "The current source has no immutable fish build or complete 63-test CTest result.",
+                            "required":  "Build the clean candidate on fish and pass exactly 63 tests with zero failed and zero Not Run."
                         },
                         {
                             "id":  "ISSUE-SYMMETRY-ORACLE",
                             "class_or_gate":  "abacus-symmetry-two-round",
-                            "blocker":  "No merge-before symmetry two-round oracle or three-way full-BZ comparison is frozen.",
-                            "required":  "Regenerate legacy oracle and compare two rounds per component, with miniter5 recommended for acceptance."
+                            "blocker":  "Historical capability evidence is not bound to the new clean candidate, and the compatibility harness is not raw legacy source.",
+                            "required":  "Run same-bundle no-mix miniter2 and linear-beta-0.2 miniter5 comparisons with explicit raw-source versus harness provenance."
                         },
                         {
                             "id":  "ISSUE-HARTREE-E2E",
                             "class_or_gate":  "hartree-no-symmetry-and-symmetry",
-                            "blocker":  "Hartree unit tests exist but no accepted two-round end-to-end gate exists.",
+                            "blocker":  "Hartree unit and formula tests pass, but no accepted clean-candidate two-round end-to-end gate exists.",
                             "required":  "Validate live density, charge, units, q=0 convention, Hermiticity, and legacy equivalence."
                         },
                         {
-                            "id":  "ISSUE-REGRESSION-DANGLING",
+                            "id":  "ISSUE-QSGW-BAND-E2E",
+                            "class_or_gate":  "qsgw-band-and-h-cut",
+                            "blocker":  "Operator Fourier, band output, CSR, cut, and current linear post-mix closure tests pass, but D0/D1 numerical artifacts are not accepted and no same-dataset legacy/current linear cut-ordering result exists.",
+                            "required":  "Compare uncut and cut modes 0/1/2 for H(k), H(R)/CSR, band eigenvalues, gaps, and PyATB export, including a controlled linear-mixing legacy/current run."
+                        },
+                        {
+                            "id":  "ISSUE-REGRESSION-PLACEHOLDERS",
                             "class_or_gate":  "formal-regression",
-                            "blocker":  "QSGW testsuite.xml entries reference missing testcase directories.",
-                            "required":  "Commit real ABACUS no-sym, ABACUS symmetry, and FHI-aims two-round cases with legacy references."
+                            "blocker":  "QSGW testsuite.xml entries are disabled historical placeholders with no committed oracle-backed dataset.",
+                            "required":  "Commit a small two-round ABACUS dataset and references before enabling formal cases."
                         }
                     ],
     "next_actions":  [
                          {
-                             "id":  "next-qsgw-headwing-fail-fast",
-                             "action":  "Make every QSGW head/wing request fail fast, remove the obsolete shared getter, then build and run the complete test suite.",
+                             "id":  "next-clean-candidate-gate0",
+                             "action":  "Run the 63-test fish Gate 0 for the immutable candidate when network access returns.",
                              "gate":  "build-unit-upstream-regressions",
                              "owner":  "rebase operator",
                              "status":  "ready"
                          }
                      ],
     "planning_state":  {
-                           "frozen_dirty_source":  true,
-                           "clean_candidate_available":  false,
-                           "u3_head_matrix_getter":  "approved_but_obsolete_remove_pending",
+                           "frozen_dirty_source":  false,
+                           "clean_candidate_available":  true,
+                           "u3_head_matrix_getter":  "removed_shared_diff_zero",
                            "provenance_policy":  "null means missing and must fail validation; no placeholder or synthetic hash is permitted",
-                           "crystal_symmetry_qsgw":  "required_not_yet_numerically_accepted",
-                           "qsgw_iterative_headwing":  "unsupported_fail_fast_pending",
-                           "qsgw_band_operator_fourier":  "not_wired",
-                           "formal_qsgw_regression":  "dangling_entries_no_committed_cases"
+                           "crystal_symmetry_qsgw":  "candidate_symmetry_parity_supporting_clean_candidate_iterative_gate_pending",
+                           "qsgw_iterative_headwing":  "unsupported_fail_fast_verified",
+                           "qsgw_band_operator_fourier":  "wired_unit_and_linear_postmix_observer_verified_remote_gate_pending",
+                           "formal_qsgw_regression":  "disabled_historical_placeholders_no_committed_cases",
+                           "hartree":  "unit_verified_remote_gate_pending",
+                           "expected_ctest_count":  63,
+                           "layered_staging_plan":  "388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed",
+                           "upstream_master_live_compare":  "42d3863c_identical_2026-07-21T18:37:20Z"
                        },
     "revised_scope":  {
-                          "effective_date":  "2026-07-20",
-                          "freeze_parent":  "7e11dd65050666a04361f2d2bd09c7b3aca81c9c",
+                          "effective_date":  "2026-07-21",
+                          "freeze_parent":  "b7273e13c77d5ea781f192cea3c4201710b6f9fa",
+                          "candidate_source":  "b0f928292618fb76a62039124d6b457c6ad564ee",
                           "upstream_base":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                           "no_sym_candidate":  "c27482016f70ece5a0e5ccad7199d93ac3f6ebf5",
                           "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
@@ -2117,6 +3089,6 @@
                                                          "qsgw_iterative_headwing",
                                                          "unvalidated_fhi_aims_symmetry"
                                                      ],
-                          "audit":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                          "audit":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                       }
 }
