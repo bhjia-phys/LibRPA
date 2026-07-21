@@ -8,7 +8,7 @@
                        "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
                        "commits":  {
                                        "branch_head":  {
-                                                           "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        },
                                        "upstream_old":  {
@@ -24,20 +24,20 @@
                                                         "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
                                                     },
                                        "rebase_head":  {
-                                                           "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        }
                                    }
                    },
     "provenance":  {
                        "source":  {
-                                      "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                      "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                       "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                   },
                        "executable":  {
                                           "path":  null,
                                           "sha256":  null,
-                                          "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                          "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                           "reference":  "pending: clean-candidate fish Gate 0"
                                       },
                        "dataset":  {
@@ -2347,13 +2347,13 @@
                                               "side_b":  {
                                                              "label":  "rebased-g0w0",
                                                              "source":  {
-                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                                 "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
@@ -2416,13 +2416,13 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-iter0",
                                                              "source":  {
-                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                                 "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
@@ -2485,13 +2485,13 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-no-mixing",
                                                              "source":  {
-                                                                            "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                            "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
                                                                                 "path":  null,
                                                                                 "sha256":  null,
-                                                                                "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                                                "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                                                 "reference":  "pending: clean-candidate fish Gate 0"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
@@ -2842,13 +2842,13 @@
                               "default_experiment":  null,
                               "a":  {
                                         "source":  {
-                                                       "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                       "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -2916,13 +2916,13 @@
                                     },
                               "b":  {
                                         "source":  {
-                                                       "hash":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                       "hash":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
                                                            "path":  null,
                                                            "sha256":  null,
-                                                           "source_commit":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                                                           "source_commit":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                                                            "reference":  "evidence/build/executable.sha256"
                                                        },
                                         "dataset":  {
@@ -3074,7 +3074,7 @@
     "revised_scope":  {
                           "effective_date":  "2026-07-21",
                           "freeze_parent":  "b7273e13c77d5ea781f192cea3c4201710b6f9fa",
-                          "candidate_source":  "b0f928292618fb76a62039124d6b457c6ad564ee",
+                          "candidate_source":  "4f38a3736555db6895bf2f39dc76b098a6510063",
                           "upstream_base":  "42d3863c1d865194d382a085851d1e2e8a39764f",
                           "no_sym_candidate":  "c27482016f70ece5a0e5ccad7199d93ac3f6ebf5",
                           "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
