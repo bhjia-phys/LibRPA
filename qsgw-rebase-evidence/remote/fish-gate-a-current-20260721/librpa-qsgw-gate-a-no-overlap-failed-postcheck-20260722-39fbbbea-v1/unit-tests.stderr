@@ -1,0 +1,9 @@
+test_accepts_equivalent_prefixes (__main__.OverlapDiagnosticTests.test_accepts_equivalent_prefixes) ... ok
+test_rejects_large_component_difference (__main__.OverlapDiagnosticTests.test_rejects_large_component_difference) ... ok
+test_rejects_state_rotation_change (__main__.OverlapDiagnosticTests.test_rejects_state_rotation_change) ... ok
+test_rejects_unexpected_contract_difference (__main__.OverlapDiagnosticTests.test_rejects_unexpected_contract_difference) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.001s
+
+OK

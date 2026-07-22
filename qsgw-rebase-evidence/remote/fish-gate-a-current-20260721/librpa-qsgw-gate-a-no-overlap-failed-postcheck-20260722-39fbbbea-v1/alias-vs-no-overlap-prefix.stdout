@@ -1,0 +1,118 @@
+{
+  "channel": 0,
+  "components": {
+    "electron_count": {
+      "count": 2,
+      "max_abs_diff": 0.0,
+      "passed": true,
+      "rms_diff": 0.0,
+      "tolerance": 1e-10
+    },
+    "exx": {
+      "count": 15488,
+      "max_abs_diff": 6.59383658785373e-12,
+      "passed": true,
+      "rms_diff": 6.716836748335098e-14,
+      "tolerance": 1e-08
+    },
+    "fermi_energy_ha": {
+      "count": 2,
+      "max_abs_diff": 8.185452315956354e-12,
+      "passed": true,
+      "rms_diff": 5.787988839691868e-12,
+      "tolerance": 1e-09
+    },
+    "gap_ha": {
+      "count": 2,
+      "max_abs_diff": 0.0,
+      "passed": true,
+      "rms_diff": 0.0,
+      "tolerance": 1e-09
+    },
+    "h0": {
+      "count": 15488,
+      "max_abs_diff": 0.0,
+      "passed": true,
+      "rms_diff": 0.0,
+      "tolerance": 1e-08
+    },
+    "mixed_h": {
+      "count": 15488,
+      "max_abs_diff": 1.2223608791828156e-09,
+      "passed": false,
+      "rms_diff": 1.7680135738017894e-11,
+      "tolerance": 1e-09
+    },
+    "occupation": {
+      "count": 704,
+      "max_abs_diff": 0.0,
+      "passed": true,
+      "rms_diff": 0.0,
+      "tolerance": 1e-12
+    },
+    "raw_h": {
+      "count": 15488,
+      "max_abs_diff": 1.2223608791828156e-09,
+      "passed": true,
+      "rms_diff": 1.7680135745181107e-11,
+      "tolerance": 1e-08
+    },
+    "sigma_c_iw": {
+      "count": 92928,
+      "max_abs_diff": 1.1679456911652401e-09,
+      "passed": true,
+      "rms_diff": 1.8083741423193855e-11,
+      "tolerance": 1e-08
+    },
+    "vc": {
+      "count": 15488,
+      "max_abs_diff": 1.2096279533579946e-09,
+      "passed": true,
+      "rms_diff": 1.7600761523928535e-11,
+      "tolerance": 1e-08
+    },
+    "vxc_dft": {
+      "count": 15488,
+      "max_abs_diff": 0.0,
+      "passed": true,
+      "rms_diff": 0.0,
+      "tolerance": 1e-08
+    }
+  },
+  "contract": {
+    "differences": {
+      "qsgw_max_iter": {
+        "new": 2,
+        "old": 1
+      },
+      "qsgw_min_iter": {
+        "new": 2,
+        "old": 1
+      }
+    },
+    "passed": false
+  },
+  "contract_mode": "oracle",
+  "iterations": [
+    0,
+    1
+  ],
+  "new_trace": "/home/bhj/ai-runs/librpa-qsgw-gate-a-current-20260722-1b5387e2-v1/no-mix-miniter2/legacy/qsgw_oracle_matrices.dat",
+  "old_trace": "/home/bhj/ai-runs/librpa-qsgw-gate-a-legacy-no-overlap-iter1-20260722-00517ab0-v1/legacy/qsgw_oracle_matrices.dat",
+  "optional_zero_velocity_rows_ignored": {
+    "new": 92928,
+    "old": 92928
+  },
+  "passed": false,
+  "state": {
+    "block_count": 16,
+    "eigenvalue_tolerance_ha": 1e-06,
+    "max_alignment_unitarity_residual": 2.7329137563505684e-16,
+    "max_eigenvalue_abs_diff_ha": 1.1059455573558807e-09,
+    "max_rotation_relative_residual": 5.032285510428775e-13,
+    "max_velocity_relative_residual": 0.0,
+    "max_wfc_relative_residual": 5.161513198944457e-14,
+    "passed": true,
+    "state_tolerance": 1e-10
+  }
+}

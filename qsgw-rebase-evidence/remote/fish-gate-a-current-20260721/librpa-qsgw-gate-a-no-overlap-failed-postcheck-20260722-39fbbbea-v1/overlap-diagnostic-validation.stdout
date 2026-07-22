@@ -1,0 +1,30 @@
+{
+  "component_max_abs_differences": {
+    "electron_count": 0.0,
+    "exx": 6.59383658785373e-12,
+    "fermi_energy_ha": 8.185452315956354e-12,
+    "gap_ha": 0.0,
+    "h0": 0.0,
+    "mixed_h": 1.2223608791828156e-09,
+    "occupation": 0.0,
+    "raw_h": 1.2223608791828156e-09,
+    "sigma_c_iw": 1.1679456911652401e-09,
+    "vc": 1.2096279533579946e-09,
+    "vxc_dft": 0.0
+  },
+  "conclusion": "overlap_alias_does_not_explain_rejected_prefix",
+  "expected_contract_differences": [
+    "qsgw_max_iter",
+    "qsgw_min_iter"
+  ],
+  "matrix_tolerance_ha": 2e-09,
+  "passed": true,
+  "schema": "librpa-qsgw-gate-a-overlap-diagnostic-v1",
+  "state_maxima": {
+    "max_alignment_unitarity_residual": 2.7329137563505684e-16,
+    "max_eigenvalue_abs_diff_ha": 1.1059455573558807e-09,
+    "max_rotation_relative_residual": 5.032285510428775e-13,
+    "max_velocity_relative_residual": 0.0,
+    "max_wfc_relative_residual": 5.161513198944457e-14
+  }
+}
