@@ -33,7 +33,7 @@ component_dir=$observer_run/legacy/librpa.d/qsgw_legacy_components/iter_00001
 python=$base/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/python
 
 expected_upstream_commit=42d3863c1d865194d382a085851d1e2e8a39764f
-expected_base_epsilon_sha=8808b8f9f468b1794688f6be8ca73edfa2ccd823396456a410212746fa501fff
+expected_base_epsilon_blob=11748e257ac8e63e66030fd7f0f0ea819f57e35b
 expected_patch_sha=8e1b0e5e38655ed555a55f1972e9c82289de403a5ba5f2d807b5f0772642ca25
 expected_legacy_failed_sha=acea8cb23bf445e18da415193e099532413036a0ce9c28393835b38fa1cc5ddf
 expected_legacy_input_sha=75c895f04642497b6578e9ec061cb29c7a1af8d6ae680eaddd8d0e7115b20b85
@@ -95,8 +95,8 @@ git clone --no-hardlinks "$RUNNER_SOURCE" "$diagnostic_source" \
   >"$run_root/clone.stdout" 2>"$run_root/clone.stderr"
 git -C "$diagnostic_source" checkout --detach "$RUNNER_COMMIT" \
   >"$run_root/checkout.stdout" 2>"$run_root/checkout.stderr"
-test "$(sha256sum "$diagnostic_source/src/core/epsilon.cpp" | awk '{print $1}')" = \
-  "$expected_base_epsilon_sha"
+test "$(git -C "$diagnostic_source" hash-object src/core/epsilon.cpp)" = \
+  "$expected_base_epsilon_blob"
 git -C "$diagnostic_source" apply --unidiff-zero --check "$patch_file"
 git -C "$diagnostic_source" apply --unidiff-zero "$patch_file"
 test "$(git -C "$diagnostic_source" diff --name-only)" = 'src/core/epsilon.cpp'
@@ -195,7 +195,7 @@ acceptance=false_diagnostic_only
 runner_commit=$RUNNER_COMMIT
 runner_sha256=$RUNNER_SHA256
 upstream_commit=$expected_upstream_commit
-base_epsilon_sha256=$expected_base_epsilon_sha
+base_epsilon_git_blob=$expected_base_epsilon_blob
 diagnostic_patch_sha256=$expected_patch_sha
 diagnostic_executable=$diagnostic_exe
 diagnostic_executable_sha256=$diagnostic_exe_sha
