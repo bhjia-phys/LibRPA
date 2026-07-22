@@ -76,6 +76,10 @@ class CurrentSymmetrySideRunnerTests(unittest.TestCase):
 
     def test_validates_every_iteration_and_state_invariant(self) -> None:
         self.assertIn("qsgw_write_iteration_matrices = true", self.source)
+        self.assertIn(
+            'cp "$closure_source" "$tool_dir/validate_qsgw_trace_closure_v3.py"',
+            self.source,
+        )
         self.assertIn("validate_qsgw_trace_closure.py", self.source)
         self.assertIn("validate_qsgw_fixed_basis.py", self.source)
         self.assertIn("validate_qsgw_initial_state.py", self.source)
