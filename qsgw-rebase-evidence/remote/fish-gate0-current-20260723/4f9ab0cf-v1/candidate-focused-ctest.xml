@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="10"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="0"
+	timestamp="2026-07-23T01:03:38"
+	>
+	<testcase name="test_qsgw_inputfile" classname="test_qsgw_inputfile" time="0.615513" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_abacus_csr" classname="test_qsgw_abacus_csr" time="0.026484" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_band_output" classname="test_qsgw_band_output" time="0.0284318" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_hamiltonian_cut" classname="test_qsgw_hamiltonian_cut" time="0.0271813" status="run">
+		<properties/>
+		<system-out>test_qsgw_hamiltonian_cut: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hamiltonian_mixing" classname="test_qsgw_hamiltonian_mixing" time="0.0251446" status="run">
+		<properties/>
+		<system-out>test_qsgw_hamiltonian_mixing: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_dump" classname="test_qsgw_hartree_dump" time="0.0306121" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_dump: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_workflow" classname="test_qsgw_hartree_workflow" time="0.0396927" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_workflow: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_operator_fourier" classname="test_qsgw_operator_fourier" time="0.0577087" status="run">
+		<properties/>
+		<system-out>test_qsgw_operator_fourier: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_sha256" classname="test_qsgw_sha256" time="0.0267817" status="run">
+		<properties/>
+		<system-out>test_qsgw_sha256: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_vxc_io" classname="test_qsgw_vxc_io" time="0.0616534" status="run">
+		<properties/>
+		<system-out>test_qsgw_vxc_io: all tests passed
+</system-out>
+	</testcase>
+</testsuite>

@@ -3,12 +3,12 @@
     "repository":  {
                        "path":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716",
                        "worktree":  "F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716",
-                       "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
+                       "branch":  "codex/qsgw-symmetry-no-headwing-67b-20260723",
                        "status_snapshot":  "qsgw-rebase-evidence/git/status.txt",
                        "remotes_snapshot":  "qsgw-rebase-evidence/git/remotes.txt",
                        "commits":  {
                                        "branch_head":  {
-                                                           "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                           "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        },
                                        "upstream_old":  {
@@ -16,29 +16,29 @@
                                                             "reference":  "qsgw-rebase-evidence/git/upstream-old.txt"
                                                         },
                                        "upstream_new":  {
-                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
-                                                            "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
+                                                            "hash":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                                                            "reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
                                                         },
                                        "qsgw_old":  {
                                                         "hash":  "cb2940201b1f44b1c38b90169048b7d060e44732",
                                                         "reference":  "qsgw-rebase-evidence/git/qsgw-old.txt"
                                                     },
                                        "rebase_head":  {
-                                                           "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                           "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                            "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                        }
                                    }
                    },
     "provenance":  {
                        "source":  {
-                                      "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                      "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                       "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                   },
                        "executable":  {
-                                          "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                          "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                          "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                          "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                          "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                          "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                          "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                          "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                       },
                        "dataset":  {
                                        "id":  "si-k444-symmetry-gate-a-v3-supporting",
@@ -113,20 +113,20 @@
                    },
     "upstream_inventory":  {
                                "old_commit":  "b484f2a9a252c8a7169c67e9781da6f9c07c310a",
-                               "new_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                               "new_commit":  "67b9888dac0d09870361398165d0b3c1acc931ff",
                                "commit_list":  {
-                                                   "path":  "qsgw-rebase-evidence/git/upstream-commit-list-to-42d3863c.txt",
-                                                   "sha256":  "934b0ff99ba3e10c0fe6d227271839b1a4e4fa257fce2e13387f5381d0e2f2f6",
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-commit-list-to-67b9888d.txt",
+                                                   "sha256":  "ee6e984c56648d378a367a6a6c5a89f0527ca2b234938dbbdc6f28a42330fe6b",
                                                    "reference":  "git rev-list --reverse upstream_old..upstream_new"
                                                },
                                "name_status":  {
-                                                   "path":  "qsgw-rebase-evidence/git/upstream-name-status-to-42d3863c.txt",
-                                                   "sha256":  "4cad7ac70c495aad15a93e47e7b08081bff784aadea9278adbd960400c4a792a",
+                                                   "path":  "qsgw-rebase-evidence/git/upstream-name-status-to-67b9888d.txt",
+                                                   "sha256":  "c0247eb8e985cef5e2a18a3ab4e0a179e63af968a4c09c47c4b26e7de315b100",
                                                    "reference":  "git diff --name-status upstream_old..upstream_new"
                                                },
                                "hunk_inventory":  {
-                                                      "path":  "qsgw-rebase-evidence/git/upstream-hunk-inventory-to-42d3863c.json",
-                                                      "sha256":  "c3db1971982460bea5e19e11dd5ae669c61bab1793448758862491966b6292cb",
+                                                      "path":  "qsgw-rebase-evidence/git/upstream-hunk-inventory-to-67b9888d.json",
+                                                      "sha256":  "cfa690f52f44e6412e38614994af18d7c44c2ce447788c583c52d3d673d48a73",
                                                       "reference":  "reviewed semantic hunk inventory with exact commit/change coverage"
                                                   },
                                "commit_hashes":  [
@@ -159,7 +159,14 @@
                                                      "deadd00853920e12653c9b336f8957a469d34efb",
                                                      "9bb5fa4bc86b9bc3efca545bac2527d93fcf16b7",
                                                      "51b9e08ef91a5e75edc2f5d443d28d5402e41f5e",
-                                                     "42d3863c1d865194d382a085851d1e2e8a39764f"
+                                                     "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                     "5e390487218a834e645b915f47006c969f440f0c",
+                                                     "e99cdf016f825dd531203512795ffe25d9670ea8",
+                                                     "85968a20b960f8d8be115ce72dcef312a45ac27c",
+                                                     "054df5b78034e2f9878f4348738ee09e3b59186c",
+                                                     "0b9bdedb2bdf5b60d469aa3bb8351ffb93b2ecfb",
+                                                     "bcf3e573bedce6b742bb70b4594b9db4f8ebfca0",
+                                                     "67b9888dac0d09870361398165d0b3c1acc931ff"
                                                  ],
                                "commit_change_map":  [
                                                          {
@@ -342,6 +349,48 @@
                                                              "change_ids":  [
                                                                                 "UP-EPSILON-TEST-SPLIT-001"
                                                                             ]
+                                                         },
+                                                         {
+                                                             "commit":  "5e390487218a834e645b915f47006c969f440f0c",
+                                                             "change_ids":  [
+                                                                                "UP-ELPA-DEVICE-ALLOC-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "e99cdf016f825dd531203512795ffe25d9670ea8",
+                                                             "change_ids":  [
+                                                                                "UP-DDLA-BUNDLE-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "85968a20b960f8d8be115ce72dcef312a45ac27c",
+                                                             "change_ids":  [
+                                                                                "UP-HEADWING-BODY-SOLVE-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "054df5b78034e2f9878f4348738ee09e3b59186c",
+                                                             "change_ids":  [
+                                                                                "UP-HEAD-RANK1-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "0b9bdedb2bdf5b60d469aa3bb8351ffb93b2ecfb",
+                                                             "change_ids":  [
+                                                                                "UP-DDLA-REVISION-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "bcf3e573bedce6b742bb70b4594b9db4f8ebfca0",
+                                                             "change_ids":  [
+                                                                                "UP-HEADWING-BODY-CLEANUP-67B-001"
+                                                                            ]
+                                                         },
+                                                         {
+                                                             "commit":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                                                             "change_ids":  [
+                                                                                "UP-DIELECTRIC-SOLVE-ERROR-67B-001"
+                                                                            ]
                                                          }
                                                      ],
                                "classified_change_ids":  [
@@ -375,7 +424,14 @@
                                                              "UP-LIH-REAL-WC-REGRESSION-001",
                                                              "UP-DENSE-WC-MEMORY-LIFETIME-001",
                                                              "UP-REAL-WC-RESIDUAL-WARN-001",
-                                                             "UP-EPSILON-TEST-SPLIT-001"
+                                                             "UP-EPSILON-TEST-SPLIT-001",
+                                                             "UP-ELPA-DEVICE-ALLOC-67B-001",
+                                                             "UP-DDLA-BUNDLE-67B-001",
+                                                             "UP-HEADWING-BODY-SOLVE-67B-001",
+                                                             "UP-HEAD-RANK1-67B-001",
+                                                             "UP-DDLA-REVISION-67B-001",
+                                                             "UP-HEADWING-BODY-CLEANUP-67B-001",
+                                                             "UP-DIELECTRIC-SOLVE-ERROR-67B-001"
                                                          ],
                                "coverage_assertion":  "complete"
                            },
@@ -1572,6 +1628,351 @@
                                  "approval_ids":  [
 
                                                   ]
+                             },
+                             {
+                                 "id":  "UP-ELPA-DEVICE-ALLOC-67B-001",
+                                 "commit":  "5e390487218a834e645b915f47006c969f440f0c",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/elpa/elpa_connector.cpp"
+                                                   ],
+                                 "summary":  "Adopts the current LibDDLA device allocation and free API in the ELPA connector.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-DDLA-BUNDLE-67B-001",
+                                 "commit":  "e99cdf016f825dd531203512795ffe25d9670ea8",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "CMakeLists.txt",
+                                                       "cmake/BuildBundledLibDDLA.cmake",
+                                                       "examples/build/linux_gcc_openmpi_openblas_cpuri_cuda_elpa.sh",
+                                                       "examples/build/linux_gcc_openmpi_openblas_cpuri_hip_elpa.sh",
+                                                       "examples/build/linux_gcc_openmpi_openblas_cudari_elpa.sh",
+                                                       "examples/build/linux_gcc_openmpi_openblas_hipri_elpa.sh",
+                                                       "src/CMakeLists.txt",
+                                                       "thirdparty/LibDDLA/.gitignore",
+                                                       "thirdparty/LibDDLA/CMakeLists.txt",
+                                                       "thirdparty/LibDDLA/README.md",
+                                                       "thirdparty/LibDDLA/include/ddla/ddla.h",
+                                                       "thirdparty/LibDDLA/include/ddla/ddla_connector.h",
+                                                       "thirdparty/LibDDLA/include/ddla/potrf.h",
+                                                       "thirdparty/LibDDLA/include/ddla/ptran.h",
+                                                       "thirdparty/LibDDLA/include/ddla/syrk.h",
+                                                       "thirdparty/LibDDLA/include/ddla/transport_block.h",
+                                                       "thirdparty/LibDDLA/include/ddla/trmm.h",
+                                                       "thirdparty/LibDDLA/install_scripts/install_cuda.sh",
+                                                       "thirdparty/LibDDLA/install_scripts/install_hip.sh",
+                                                       "thirdparty/LibDDLA/src/CMakeLists.txt",
+                                                       "thirdparty/LibDDLA/src/getrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/src/pdam.cpp",
+                                                       "thirdparty/LibDDLA/src/pgeadd.cpp",
+                                                       "thirdparty/LibDDLA/src/pgemm.cpp",
+                                                       "thirdparty/LibDDLA/src/pgesv.cpp",
+                                                       "thirdparty/LibDDLA/src/pgesv_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetf2.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetf2_kernels.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetf2_kernels.h",
+                                                       "thirdparty/LibDDLA/src/pgetf2_panel.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetrf.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetrf_bpiv.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetrs_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/src/potrf_bottom_right.cpp",
+                                                       "thirdparty/LibDDLA/src/potrf_bottom_right_internal.h",
+                                                       "thirdparty/LibDDLA/src/potrf_bottom_right_transform.cpp",
+                                                       "thirdparty/LibDDLA/src/potrf_bottom_right_transform.h",
+                                                       "thirdparty/LibDDLA/src/ppotrf.cpp",
+                                                       "thirdparty/LibDDLA/src/ppotrf_bottom_right.cpp",
+                                                       "thirdparty/LibDDLA/src/ppotrs.cpp",
+                                                       "thirdparty/LibDDLA/src/pswap.cpp",
+                                                       "thirdparty/LibDDLA/src/ptran.cpp",
+                                                       "thirdparty/LibDDLA/src/ptrtrs.cpp",
+                                                       "thirdparty/LibDDLA/src/transport_block.cpp",
+                                                       "thirdparty/LibDDLA/tests/CMakeLists.txt",
+                                                       "thirdparty/LibDDLA/tests/api_grid_test_common.h",
+                                                       "thirdparty/LibDDLA/tests/bench_pzgemm.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_factorizations_cuda.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_getrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_getrf_nopiv.sh",
+                                                       "thirdparty/LibDDLA/tests/benchmark_grid_options.h",
+                                                       "thirdparty/LibDDLA/tests/benchmark_pgemm.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_pgetf2.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_pgetrf.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_ppotrf_bottom_right.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_ptrtrs.cpp",
+                                                       "thirdparty/LibDDLA/tests/benchmark_pzgetrf_legacy.c",
+                                                       "thirdparty/LibDDLA/tests/run_benchmark_factorizations_cuda.sh",
+                                                       "thirdparty/LibDDLA/tests/run_benchmark_pzgetrf_legacy.sh",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_device_memory.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_getrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pdam.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgeadd.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgemm.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgesv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgesv_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetf2.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetf2_panel.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetrf.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetrf_bpiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetrs.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pgetrs_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_plapiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pposv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_ppotrf.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_ppotrf_bottom_right.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_ppotrs.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_pswap.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_ptran.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_ptrtrs.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_subcomm_lu.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_api_grid_transport_block.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_cuda.sh",
+                                                       "thirdparty/LibDDLA/tests/test_getrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_hip.sh",
+                                                       "thirdparty/LibDDLA/tests/test_pdam.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_pgesv_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_pgesv_nopiv.sh",
+                                                       "thirdparty/LibDDLA/tests/test_pgetrf_nopiv.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_pgetrf_nopiv.sh",
+                                                       "thirdparty/LibDDLA/tests/test_potrf_bottom_right.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_potrf_bottom_right_block.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_ptran.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_pzgemm.cpp",
+                                                       "thirdparty/LibDDLA/tests/test_sv_gemm_hermitian_positive.cpp"
+                                                   ],
+                                 "summary":  "Updates the bundled LibDDLA API, solvers, transport, device memory, and build integration.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "changed",
+                                                        "matrix_layout":  "changed",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "changed",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEADWING-BODY-SOLVE-67B-001",
+                                 "commit":  "85968a20b960f8d8be115ce72dcef312a45ac27c",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp",
+                                                       "src/core/dielecmodel.h",
+                                                       "src/core/epsilon.cpp",
+                                                       "src/test/test_rpa_headwing.cpp",
+                                                       "thirdparty/LibDDLA/src/pgetrs.cpp"
+                                                   ],
+                                 "summary":  "Forms the head-wing body inverse by solving B X = I with the upstream distributed solver.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEAD-RANK1-67B-001",
+                                 "commit":  "054df5b78034e2f9878f4348738ee09e3b59186c",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/epsilon.cpp",
+                                                       "src/test/test_rpa_headwing.cpp"
+                                                   ],
+                                 "summary":  "Applies the Gamma head correction as a rank-one update without rotating the full dielectric matrix.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "changed",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-DDLA-REVISION-67B-001",
+                                 "commit":  "0b9bdedb2bdf5b60d469aa3bb8351ffb93b2ecfb",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U0",
+                                 "effect_domain":  "none",
+                                 "changed_paths":  [
+                                                       "CMakeLists.txt"
+                                                   ],
+                                 "summary":  "Updates only the top-level bundled LibDDLA revision metadata.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "not_applicable",
+                                                        "matrix_layout":  "not_applicable",
+                                                        "basis":  "not_applicable",
+                                                        "units":  "not_applicable",
+                                                        "normalization":  "not_applicable",
+                                                        "mpi_ownership":  "not_applicable",
+                                                        "k_point_weights":  "not_applicable",
+                                                        "occupations":  "not_applicable",
+                                                        "call_ordering":  "not_applicable",
+                                                        "symmetry":  "not_applicable",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "build-upstream-regressions"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-HEADWING-BODY-CLEANUP-67B-001",
+                                 "commit":  "bcf3e573bedce6b742bb70b4594b9db4f8ebfca0",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/dielecmodel.cpp"
+                                                   ],
+                                 "summary":  "Removes redundant head-wing body-inverse allocation and setup.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
+                             },
+                             {
+                                 "id":  "UP-DIELECTRIC-SOLVE-ERROR-67B-001",
+                                 "commit":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                                 "commit_reference":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                                 "classification":  "U1",
+                                 "effect_domain":  "upstream_g0w0_inherited",
+                                 "changed_paths":  [
+                                                       "src/core/epsilon.cpp"
+                                                   ],
+                                 "summary":  "Reports a nonzero dielectric solve status as a runtime failure.",
+                                 "disposition":  "accept_upstream",
+                                 "semantic_audit":  {
+                                                        "api":  "unchanged",
+                                                        "matrix_layout":  "unchanged",
+                                                        "basis":  "unchanged",
+                                                        "units":  "unchanged",
+                                                        "normalization":  "unchanged",
+                                                        "mpi_ownership":  "unchanged",
+                                                        "k_point_weights":  "unchanged",
+                                                        "occupations":  "unchanged",
+                                                        "call_ordering":  "changed",
+                                                        "symmetry":  "unchanged",
+                                                        "evidence":  "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                    },
+                                 "benchmark_observer_ids":  [
+                                                                "g0w0-upstream-vs-rebased",
+                                                                "qsgw-iter0-vs-upstream"
+                                                            ],
+                                 "qsgw_adapter_observer_ids":  [
+
+                                                               ],
+                                 "approval_ids":  [
+
+                                                  ]
                              }
                          ],
     "formula_code_impacts":  [
@@ -2260,6 +2661,136 @@
                                      "evidence":  [
                                                       "qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md"
                                                   ]
+                                 },
+                                 {
+                                     "formula_id":  "F-DDLA-DEVICE-CONTRACT-67B",
+                                     "formula":  "A distributed device allocation, transfer, factorization, and solve preserves the matrix represented by its DDLA handle.",
+                                     "upstream_symbols":  [
+                                                              "LibDDLA",
+                                                              "deviceMalloc",
+                                                              "deviceFree"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-ELPA-DEVICE-ALLOC-67B-001",
+                                                                 "UP-DDLA-BUNDLE-67B-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "5e390487218a834e645b915f47006c969f440f0c",
+                                                              "e99cdf016f825dd531203512795ffe25d9670ea8"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "distributed solver basis",
+                                                             "shape":  "pre-67b DDLA buffers and API",
+                                                             "units":  "matrix-native units",
+                                                             "ownership":  "DDLA handle and MPI ownership",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "distributed solver basis",
+                                                            "shape":  "current DDLA buffers and API",
+                                                            "units":  "matrix-native units",
+                                                            "ownership":  "DDLA handle and MPI ownership",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "build-upstream-regressions",
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-HEADWING-BODY-INVERSE-67B",
+                                     "formula":  "The head-wing body inverse X is obtained from B X = I in the unchanged dielectric body basis.",
+                                     "upstream_symbols":  [
+                                                              "invert_headwing_body_with_identity_solve",
+                                                              "diele_func::get_body_inv",
+                                                              "diele_func::rewrite_eps"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-HEADWING-BODY-SOLVE-67B-001",
+                                                                 "UP-HEADWING-BODY-CLEANUP-67B-001",
+                                                                 "UP-DIELECTRIC-SOLVE-ERROR-67B-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "85968a20b960f8d8be115ce72dcef312a45ac27c",
+                                                              "bcf3e573bedce6b742bb70b4594b9db4f8ebfca0",
+                                                              "67b9888dac0d09870361398165d0b3c1acc931ff"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "dielectric body basis",
+                                                             "shape":  "explicit body inverse path",
+                                                             "units":  "dimensionless",
+                                                             "ownership":  "upstream distributed matrix ownership",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "dielectric body basis",
+                                                            "shape":  "identity solve with explicit failure reporting",
+                                                            "units":  "dimensionless",
+                                                            "ownership":  "upstream distributed matrix ownership",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "build-upstream-regressions",
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                  ]
+                                 },
+                                 {
+                                     "formula_id":  "F-GAMMA-HEAD-RANK1-67B",
+                                     "formula":  "epsilon is corrected by (H - x1^H epsilon x1) x1 x1^H in the original Coulomb representation.",
+                                     "upstream_symbols":  [
+                                                              "diele_func::rewrite_eps"
+                                                          ],
+                                     "qsgw_symbols":  [
+                                                          "run_qsgw"
+                                                      ],
+                                     "upstream_change_ids":  [
+                                                                 "UP-HEAD-RANK1-67B-001"
+                                                             ],
+                                     "upstream_commits":  [
+                                                              "054df5b78034e2f9878f4348738ee09e3b59186c"
+                                                          ],
+                                     "contract_before":  {
+                                                             "basis":  "rotated Coulomb basis",
+                                                             "shape":  "full rotate-correct-unrotate path",
+                                                             "units":  "dimensionless",
+                                                             "ownership":  "upstream dielectric ownership",
+                                                             "normalization":  "unchanged"
+                                                         },
+                                     "contract_after":  {
+                                                            "basis":  "original Coulomb representation",
+                                                            "shape":  "rank-one head correction",
+                                                            "units":  "dimensionless",
+                                                            "ownership":  "upstream dielectric ownership",
+                                                            "normalization":  "unchanged"
+                                                        },
+                                     "classification":  "U1",
+                                     "required_change":  "none",
+                                     "benchmark_ids":  [
+                                                           "build-upstream-regressions",
+                                                           "g0w0-upstream-vs-rebased",
+                                                           "qsgw-iter0-vs-upstream"
+                                                       ],
+                                     "evidence":  [
+                                                      "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md"
+                                                  ]
                                  }
                              ],
     "shared_core_hunks":  [
@@ -2311,57 +2842,57 @@
                            "artifacts":  [
                                              {
                                                  "id":  "build-log",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-build.stdout",
-                                                 "sha256":  "159ca67cc720cd1c085d5db78bd26f7da04347911a2c98aa410153d01e1339e7",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/candidate-build.stdout",
+                                                 "sha256":  "0bf5e5410bb9def9b8a9d26d2ad57e195f924a82f0c0d99ff1f5f4b5df209b3e",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "unit-results",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-ctest.xml",
-                                                 "sha256":  "eb53ea4c508a43d388e6f8e8f2434ab8a0dc2f8dcd486744ef8736fabf3152d5",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/candidate-ctest.xml",
+                                                 "sha256":  "7b6bab1f0d977b096ca51b4f069ddc703b1accb13752b5c13fc4638c33f2d502",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "upstream-regression-results",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/upstream-ctest.xml",
-                                                 "sha256":  "4d3c128151850302cb69f9ff709d37bc303c2414da2563d820eb5bf4bebbb934",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/upstream-ctest.xml",
+                                                 "sha256":  "c249dd1103367513071496612c5fd8e8f35868ca758b4ff89170acc3333474ad",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "focused-qsgw-results",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-focused-ctest.xml",
-                                                 "sha256":  "07d5122cb7f2043ddf7224b9e0ddea4989a845c66737569955ad90839a14b1dc",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/candidate-focused-ctest.xml",
+                                                 "sha256":  "66450c2829e5b332538236b2c7eafd342b37fb51a5625e63d571b19140bc475f",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "python-qsgw-results",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-python-tests.stdout",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/candidate-python-tests.stdout",
                                                  "sha256":  "8f475134935a1f99ed04d6f60d0ccbe78a8690df1357a3e5d3c8a5f1140c8e28",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "runtime-parameter-doc",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/candidate-runtime-parameters.md",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/candidate-runtime-parameters.md",
                                                  "sha256":  "bb9bec3cc9c798234f0b494c3ff2f0d490ce92f2882b43b6b7ee0ab880b78908",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "protected-diff",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/protected-diff.patch",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/protected-diff.patch",
                                                  "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "gate0-provenance",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt",
-                                                 "sha256":  "a2dade04eafdc6c1f5af9bf28c4fbbf5a54b4b31e393b05352b6941be69210a2",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt",
+                                                 "sha256":  "62a4026017c26b28f9c9503fb4c71a265345369db2a709b0f811a7000b5fd424",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              },
                                              {
                                                  "id":  "gate0-checksum-manifest",
-                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/OUTPUT_SHA256SUMS.txt",
-                                                 "sha256":  "4f65a0eb309c7d8bc4ee52a2e90ca1107c9688465234e6f45cbbdcfbbc60d274",
-                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/OUTPUT_SHA256SUMS.txt",
+                                                 "sha256":  "845d309c485d5fd8060a70faf57584aa1e6c44e267595ab15f4a2ec12417c5dd",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                              }
                                          ]
                        },
@@ -2382,14 +2913,14 @@
                                               "side_a":  {
                                                              "label":  "new-upstream-g0w0",
                                                              "source":  {
-                                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                                            "hash":  "67b9888dac0d09870361398165d0b3c1acc931ff",
                                                                             "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/chi0_main.exe",
-                                                                                "sha256":  "ae86432a32bdd9d2cc6e7d2f80f7e99e4de053329eb233c69d6e7e833aa006c3",
-                                                                                "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-upstream/chi0_main.exe",
+                                                                                "sha256":  "c2705015e2219c548ce6d6cfce93d32072b14391fbd651aab4e38c0bb125737c",
+                                                                                "source_commit":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2400,14 +2931,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-g0w0",
                                                              "source":  {
-                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                            "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                                                                "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2451,14 +2982,14 @@
                                               "side_a":  {
                                                              "label":  "new-upstream-g0w0",
                                                              "source":  {
-                                                                            "hash":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                                                                            "hash":  "67b9888dac0d09870361398165d0b3c1acc931ff",
                                                                             "reference":  "qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-upstream/chi0_main.exe",
-                                                                                "sha256":  "ae86432a32bdd9d2cc6e7d2f80f7e99e4de053329eb233c69d6e7e833aa006c3",
-                                                                                "source_commit":  "42d3863c1d865194d382a085851d1e2e8a39764f",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-upstream/chi0_main.exe",
+                                                                                "sha256":  "c2705015e2219c548ce6d6cfce93d32072b14391fbd651aab4e38c0bb125737c",
+                                                                                "source_commit":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2469,14 +3000,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-iter0",
                                                              "source":  {
-                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                            "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                                                                "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2538,14 +3069,14 @@
                                               "side_b":  {
                                                              "label":  "rebased-qsgw-no-mixing",
                                                              "source":  {
-                                                                            "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                                            "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                                             "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                                         },
                                                              "executable":  {
-                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                                                                "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                                                                "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                                                "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                                                                "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                                                                "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                                                                "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                                             },
                                                              "dataset_ref":  "provenance.dataset",
                                                              "input_refs":  [
@@ -2895,14 +3426,14 @@
                               "default_experiment":  null,
                               "a":  {
                                         "source":  {
-                                                       "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                       "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
-                                                           "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                                           "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                                           "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                           "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                                           "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                                           "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                        },
                                         "dataset":  {
                                                         "id":  null,
@@ -2969,14 +3500,14 @@
                                     },
                               "b":  {
                                         "source":  {
-                                                       "hash":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
+                                                       "hash":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
                                                        "reference":  "qsgw-rebase-evidence/validation/local-audit-20260721.md"
                                                    },
                                         "executable":  {
-                                                           "path":  "/tmp/librpa-qsgw-gate0-20260722-66bfe1cf-v1/build-candidate/chi0_main.exe",
-                                                           "sha256":  "b5f9ea21e15c583db47644d4f71513d79fb3a7e06ea65bfd3e891b61923f6c16",
-                                                           "source_commit":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt"
+                                                           "path":  "/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/chi0_main.exe",
+                                                           "sha256":  "77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47",
+                                                           "source_commit":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                                                           "reference":  "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt"
                                                        },
                                         "dataset":  {
                                                         "id":  null,
@@ -3068,7 +3599,10 @@
                               "qsgw-rebase-evidence/validation/verify-layered-staging-plan.ps1",
                               "qsgw-rebase-evidence/git/upstream-master-compare-20260722.json",
                               "qsgw-rebase-evidence/remote/fish-gate-d-current-20260721",
-                              "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1"
+                              "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1",
+                              "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
+                              "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1",
+                              "qsgw-rebase-evidence/git/upstream-master-ls-remote-20260723.json"
                           ],
     "open_issues":  [
                         {
@@ -3117,16 +3651,16 @@
                            "hartree":  "unit_verified_remote_gate_pending",
                            "expected_ctest_count":  63,
                            "layered_staging_plan":  "388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed",
-                           "upstream_master_live_compare":  "42d3863c_identical_2026-07-21T18:37:20Z",
+                           "upstream_master_live_compare":  "67b9888d_identical_2026-07-22T17:46:14Z",
                            "fish_gate0":  "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty"
                        },
     "revised_scope":  {
                           "effective_date":  "2026-07-21",
-                          "freeze_parent":  "b7273e13c77d5ea781f192cea3c4201710b6f9fa",
-                          "candidate_source":  "66bfe1cfd35c983222935d250039a8fe5c4b7af1",
-                          "upstream_base":  "42d3863c1d865194d382a085851d1e2e8a39764f",
+                          "freeze_parent":  "67b9888dac0d09870361398165d0b3c1acc931ff",
+                          "candidate_source":  "4f9ab0cfc90f54910158ab01a877581b080f136e",
+                          "upstream_base":  "67b9888dac0d09870361398165d0b3c1acc931ff",
                           "no_sym_candidate":  "c27482016f70ece5a0e5ccad7199d93ac3f6ebf5",
-                          "branch":  "codex/qsgw-symmetry-no-headwing-42d-20260720",
+                          "branch":  "codex/qsgw-symmetry-no-headwing-67b-20260723",
                           "supports_target":  [
                                                   "full_bz_no_crystal_symmetry",
                                                   "abacus_ibz_crystal_symmetry",

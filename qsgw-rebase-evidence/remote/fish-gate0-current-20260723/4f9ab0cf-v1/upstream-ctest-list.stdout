@@ -1,0 +1,43 @@
+Internal ctest changing into directory: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-upstream
+Test project /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-upstream
+  Test  #1: test_gx_minimax_grid
+  Test  #2: test_gx_tabulate_minimax
+  Test  #3: test_gx_minimax_sine_duality_error
+  Test  #4: test_gx_minimax_sine_duality_error_tikhonov
+  Test  #5: test_input_parser
+  Test  #6: test_analycont
+  Test  #7: test_atom
+  Test  #8: test_atomic_basis
+  Test  #9: test_base_utility
+  Test #10: test_blas_lapack
+  Test #11: test_complexmatrix
+  Test #12: test_fitting
+  Test #13: test_io
+  Test #14: test_symmetry_context
+  Test #15: test_arbitrary_float
+  Test #16: test_geometry
+  Test #17: test_lebedev_laikov
+  Test #18: test_libri_utils
+  Test #19: test_matrix
+  Test #20: test_matrix_m
+  Test #21: test_meanfield
+  Test #22: test_pbc
+  Test #23: test_profiler
+  Test #24: test_qpe_solver
+  Test #25: test_rsh
+  Test #26: test_symmetry
+  Test #27: test_timefreq
+  Test #28: test_vector3
+  Test #29: test_wigner_rotation
+  Test #30: test_atomic_basis_blacs
+  Test #31: test_base_mpi
+  Test #32: test_blacs
+  Test #33: test_dataset
+  Test #34: test_epsilon
+  Test #35: test_matrix_m_mpi
+  Test #36: test_meanfield_mpi
+  Test #37: test_kpoint_blacs_parallel_context
+  Test #38: test_rpa_headwing
+  Test #39: test_shared_memory_mpi
+
+Total Tests: 39

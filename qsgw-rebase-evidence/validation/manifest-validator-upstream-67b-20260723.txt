@@ -1,0 +1,44 @@
+INVALID qsgw-rebase-manifest.json
+ERROR E_HASH_PROVENANCE /benchmarks/3/definition/side_a/executable/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/a/comparator/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/a/dataset/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/a/environment/capture/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/a/inputs/0/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/b/comparator/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/b/dataset/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/b/environment/capture/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /control_pairs/0/b/inputs/0/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_HASH_PROVENANCE /provenance/inputs/0/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
+ERROR E_REFERENCE_PROVENANCE /control_pairs/0/a/dataset/reference: reference provenance is required
+ERROR E_REFERENCE_PROVENANCE /control_pairs/0/a/environment/capture/reference: reference provenance is required
+ERROR E_REFERENCE_PROVENANCE /control_pairs/0/b/dataset/reference: reference provenance is required
+ERROR E_REFERENCE_PROVENANCE /control_pairs/0/b/environment/capture/reference: reference provenance is required
+ERROR E_REQUIRED_STRING /benchmarks/3/definition/side_a/executable/path: missing nonempty path
+ERROR E_REQUIRED_STRING /control_pairs/0/a/comparator/name: missing nonempty name
+ERROR E_REQUIRED_STRING /control_pairs/0/a/comparator/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/a/dataset/id: missing nonempty id
+ERROR E_REQUIRED_STRING /control_pairs/0/a/dataset/path: missing nonempty path
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/compiler/name: missing nonempty name
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/compiler/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/host: missing nonempty host
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/libraries/0/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/mpi/implementation: missing nonempty implementation
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/mpi/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/a/environment/os: missing nonempty os
+ERROR E_REQUIRED_STRING /control_pairs/0/b/comparator/name: missing nonempty name
+ERROR E_REQUIRED_STRING /control_pairs/0/b/comparator/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/b/dataset/id: missing nonempty id
+ERROR E_REQUIRED_STRING /control_pairs/0/b/dataset/path: missing nonempty path
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/compiler/name: missing nonempty name
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/compiler/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/host: missing nonempty host
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/libraries/0/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/mpi/implementation: missing nonempty implementation
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/mpi/version: missing nonempty version
+ERROR E_REQUIRED_STRING /control_pairs/0/b/environment/os: missing nonempty os
+ERROR E_REQUIRED_STRING /provenance/environment/compiler/name: missing nonempty name
+ERROR E_REQUIRED_STRING /provenance/environment/compiler/version: missing nonempty version
+ERROR E_REQUIRED_STRING /provenance/environment/libraries/0/version: missing nonempty version
+ERROR E_REQUIRED_STRING /provenance/environment/mpi/implementation: missing nonempty implementation
+ERROR E_REQUIRED_STRING /provenance/environment/mpi/version: missing nonempty version
+ERROR E_REQUIRED_STRING /provenance/inputs/0/path: missing nonempty path

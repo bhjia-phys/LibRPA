@@ -7,10 +7,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $utf8 = [System.Text.UTF8Encoding]::new($false)
-$frozenParent = 'b7273e13c77d5ea781f192cea3c4201710b6f9fa'
-$upstream = '42d3863c1d865194d382a085851d1e2e8a39764f'
+$upstream = '67b9888dac0d09870361398165d0b3c1acc931ff'
+$frozenParent = $upstream
 $noSymCandidate = 'c27482016f70ece5a0e5ccad7199d93ac3f6ebf5'
-$branch = 'codex/qsgw-symmetry-no-headwing-42d-20260720'
+$branch = 'codex/qsgw-symmetry-no-headwing-67b-20260723'
 
 function Set-Property {
     param($Object, [string]$Name, $Value)
@@ -73,6 +73,24 @@ function Assert-ChecksumManifest {
     }
 }
 
+function Get-LfTextSha256 {
+    param([string]$Path)
+
+    $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Path))
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(
+        $text.Replace("`r`n", "`n")
+    )
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return (($sha.ComputeHash($bytes) | ForEach-Object {
+            $_.ToString('x2')
+        }) -join '')
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($CandidateSourceCommit)) {
     $candidateSource = @(Invoke-GitLines @('rev-parse', 'HEAD'))[0]
 }
@@ -95,12 +113,12 @@ $hasCleanCandidate = $candidateSource -ne $frozenParent
 
 if ([string]::IsNullOrWhiteSpace($Gate0Evidence)) {
     $Gate0Evidence = Join-Path $Repository (
-        'qsgw-rebase-evidence\remote\fish-gate0-current-20260721\66bfe1cf-v1'
+        'qsgw-rebase-evidence\remote\fish-gate0-current-20260723\4f9ab0cf-v1'
     )
 }
 $gate0 = $null
 $gate0Reference =
-    'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/PROVENANCE.txt'
+    'qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/PROVENANCE.txt'
 if (Test-Path -LiteralPath $Gate0Evidence -PathType Container) {
     $green = Join-Path $Gate0Evidence 'GREEN_CONFIRMED'
     $failed = Join-Path $Gate0Evidence 'FAILED'
@@ -115,7 +133,7 @@ if (Test-Path -LiteralPath $Gate0Evidence -PathType Container) {
     Assert-ChecksumManifest -Root $Gate0Evidence -ChecksumFile $checksumPath
     $gate0 = Read-KeyValueFile -Path $provenancePath
     $expectedGate0 = @{
-        gate = 'fish_gate0_current_v1'
+        gate = 'fish_gate0_current_v2'
         acceptance = 'true'
         upstream_commit = $upstream
         candidate_commit = $candidateSource
@@ -132,9 +150,9 @@ if (Test-Path -LiteralPath $Gate0Evidence -PathType Container) {
         }
     }
     $runnerPath = Join-Path $Repository (
-        'qsgw-rebase-evidence\remote\fish-gate0-current-20260721\run_fish_gate0_current_v1.sh'
+        'qsgw-rebase-evidence\remote\fish-gate0-current-20260723\run_fish_gate0_current_v2.sh'
     )
-    $runnerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $runnerPath).Hash.ToLowerInvariant()
+    $runnerHash = Get-LfTextSha256 -Path $runnerPath
     if ($runnerHash -ne $gate0.runner_sha256) {
         throw "Gate 0 runner hash mismatch: $runnerHash"
     }
@@ -231,7 +249,7 @@ $data.repository.commits.rebase_head.reference =
     'qsgw-rebase-evidence/validation/local-audit-20260721.md'
 $data.repository.commits.upstream_new.hash = $upstream
 $data.repository.commits.upstream_new.reference =
-    'qsgw-rebase-evidence/impact/revised-goal-audit-20260720.md'
+    'qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md'
 
 $data.provenance.source.hash = $candidateSource
 $data.provenance.source.reference =
@@ -426,7 +444,7 @@ if ($gate0) {
     $buildArtifacts = @()
     foreach ($spec in $artifactSpecs) {
         $relative =
-            'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1/' +
+            'qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1/' +
             $spec[1]
         $record = [pscustomobject][ordered]@{
             id = $spec[0]
@@ -447,6 +465,8 @@ $refreshAuditEarly =
     'qsgw-rebase-evidence/git/upstream-refresh-1376ee4f-to-95c4c080.md'
 $refreshAuditLate =
     'qsgw-rebase-evidence/git/upstream-refresh-95c4c080-to-42d3863c.md'
+$refreshAuditCurrent =
+    'qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md'
 $refreshSpecs = @(
     [pscustomobject]@{
         id = 'UP-BN-GW-HEADWING-REGRESSION-001'
@@ -591,6 +611,69 @@ $refreshSpecs = @(
         semantic_changes = @()
         symbols = @('test_epsilon', 'test_rpa_headwing')
         evidence = $refreshAuditLate
+    },
+    [pscustomobject]@{
+        id = 'UP-ELPA-DEVICE-ALLOC-67B-001'
+        commit = '5e390487218a834e645b915f47006c969f440f0c'
+        classification = 'U1'
+        summary = 'Adopts the current LibDDLA device allocation and free API in the ELPA connector.'
+        semantic_changes = @('api', 'call_ordering')
+        symbols = @('deviceMalloc', 'deviceFree')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-DDLA-BUNDLE-67B-001'
+        commit = 'e99cdf016f825dd531203512795ffe25d9670ea8'
+        classification = 'U1'
+        summary = 'Updates the bundled LibDDLA API, solvers, transport, device memory, and build integration.'
+        semantic_changes = @('api', 'matrix_layout', 'mpi_ownership', 'call_ordering')
+        symbols = @('LibDDLA', 'deviceMalloc', 'deviceFree')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-HEADWING-BODY-SOLVE-67B-001'
+        commit = '85968a20b960f8d8be115ce72dcef312a45ac27c'
+        classification = 'U1'
+        summary = 'Forms the head-wing body inverse by solving B X = I with the upstream distributed solver.'
+        semantic_changes = @('call_ordering')
+        symbols = @('invert_headwing_body_with_identity_solve', 'diele_func::get_body_inv')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-HEAD-RANK1-67B-001'
+        commit = '054df5b78034e2f9878f4348738ee09e3b59186c'
+        classification = 'U1'
+        summary = 'Applies the Gamma head correction as a rank-one update without rotating the full dielectric matrix.'
+        semantic_changes = @('basis', 'call_ordering')
+        symbols = @('diele_func::rewrite_eps')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-DDLA-REVISION-67B-001'
+        commit = '0b9bdedb2bdf5b60d469aa3bb8351ffb93b2ecfb'
+        classification = 'U0'
+        summary = 'Updates only the top-level bundled LibDDLA revision metadata.'
+        semantic_changes = @()
+        symbols = @()
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-HEADWING-BODY-CLEANUP-67B-001'
+        commit = 'bcf3e573bedce6b742bb70b4594b9db4f8ebfca0'
+        classification = 'U1'
+        summary = 'Removes redundant head-wing body-inverse allocation and setup.'
+        semantic_changes = @('call_ordering')
+        symbols = @('diele_func::get_body_inv', 'diele_func::rewrite_eps')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        id = 'UP-DIELECTRIC-SOLVE-ERROR-67B-001'
+        commit = '67b9888dac0d09870361398165d0b3c1acc931ff'
+        classification = 'U1'
+        summary = 'Reports a nonzero dielectric solve status as a runtime failure.'
+        semantic_changes = @('call_ordering')
+        symbols = @('invert_headwing_body_with_identity_solve')
+        evidence = $refreshAuditCurrent
     }
 )
 
@@ -755,6 +838,42 @@ $formulaSpecs = @(
         after = New-FormulaContract 'epsilon test basis' 'same test matrices' 'dimensionless' 'same test communicator' 'unchanged'
         benchmark_ids = @('g0w0-upstream-vs-rebased', 'qsgw-iter0-vs-upstream')
         evidence = $refreshAuditLate
+    },
+    [pscustomobject]@{
+        formula_id = 'F-DDLA-DEVICE-CONTRACT-67B'
+        formula = 'A distributed device allocation, transfer, factorization, and solve preserves the matrix represented by its DDLA handle.'
+        upstream_symbols = @('LibDDLA', 'deviceMalloc', 'deviceFree')
+        qsgw_symbols = @('run_qsgw')
+        change_ids = @('UP-ELPA-DEVICE-ALLOC-67B-001', 'UP-DDLA-BUNDLE-67B-001')
+        classification = 'U1'
+        before = New-FormulaContract 'distributed solver basis' 'pre-67b DDLA buffers and API' 'matrix-native units' 'DDLA handle and MPI ownership' 'unchanged'
+        after = New-FormulaContract 'distributed solver basis' 'current DDLA buffers and API' 'matrix-native units' 'DDLA handle and MPI ownership' 'unchanged'
+        benchmark_ids = @('build-upstream-regressions', 'g0w0-upstream-vs-rebased', 'qsgw-iter0-vs-upstream')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        formula_id = 'F-HEADWING-BODY-INVERSE-67B'
+        formula = 'The head-wing body inverse X is obtained from B X = I in the unchanged dielectric body basis.'
+        upstream_symbols = @('invert_headwing_body_with_identity_solve', 'diele_func::get_body_inv', 'diele_func::rewrite_eps')
+        qsgw_symbols = @('run_qsgw')
+        change_ids = @('UP-HEADWING-BODY-SOLVE-67B-001', 'UP-HEADWING-BODY-CLEANUP-67B-001', 'UP-DIELECTRIC-SOLVE-ERROR-67B-001')
+        classification = 'U1'
+        before = New-FormulaContract 'dielectric body basis' 'explicit body inverse path' 'dimensionless' 'upstream distributed matrix ownership' 'unchanged'
+        after = New-FormulaContract 'dielectric body basis' 'identity solve with explicit failure reporting' 'dimensionless' 'upstream distributed matrix ownership' 'unchanged'
+        benchmark_ids = @('build-upstream-regressions', 'g0w0-upstream-vs-rebased', 'qsgw-iter0-vs-upstream')
+        evidence = $refreshAuditCurrent
+    },
+    [pscustomobject]@{
+        formula_id = 'F-GAMMA-HEAD-RANK1-67B'
+        formula = 'epsilon is corrected by (H - x1^H epsilon x1) x1 x1^H in the original Coulomb representation.'
+        upstream_symbols = @('diele_func::rewrite_eps')
+        qsgw_symbols = @('run_qsgw')
+        change_ids = @('UP-HEAD-RANK1-67B-001')
+        classification = 'U1'
+        before = New-FormulaContract 'rotated Coulomb basis' 'full rotate-correct-unrotate path' 'dimensionless' 'upstream dielectric ownership' 'unchanged'
+        after = New-FormulaContract 'original Coulomb representation' 'rank-one head correction' 'dimensionless' 'upstream dielectric ownership' 'unchanged'
+        benchmark_ids = @('build-upstream-regressions', 'g0w0-upstream-vs-rebased', 'qsgw-iter0-vs-upstream')
+        evidence = $refreshAuditCurrent
     }
 )
 
@@ -825,12 +944,12 @@ $data.upstream_inventory.classified_change_ids = @(
 $data.upstream_inventory.coverage_assertion = 'complete'
 
 $gitEvidenceDir = Join-Path $Repository 'qsgw-rebase-evidence\git'
-$commitListRelative = 'qsgw-rebase-evidence/git/upstream-commit-list-to-42d3863c.txt'
-$nameStatusRelative = 'qsgw-rebase-evidence/git/upstream-name-status-to-42d3863c.txt'
-$hunkInventoryRelative = 'qsgw-rebase-evidence/git/upstream-hunk-inventory-to-42d3863c.json'
-$commitListPath = Join-Path $gitEvidenceDir 'upstream-commit-list-to-42d3863c.txt'
-$nameStatusPath = Join-Path $gitEvidenceDir 'upstream-name-status-to-42d3863c.txt'
-$hunkInventoryPath = Join-Path $gitEvidenceDir 'upstream-hunk-inventory-to-42d3863c.json'
+$commitListRelative = 'qsgw-rebase-evidence/git/upstream-commit-list-to-67b9888d.txt'
+$nameStatusRelative = 'qsgw-rebase-evidence/git/upstream-name-status-to-67b9888d.txt'
+$hunkInventoryRelative = 'qsgw-rebase-evidence/git/upstream-hunk-inventory-to-67b9888d.json'
+$commitListPath = Join-Path $gitEvidenceDir 'upstream-commit-list-to-67b9888d.txt'
+$nameStatusPath = Join-Path $gitEvidenceDir 'upstream-name-status-to-67b9888d.txt'
+$hunkInventoryPath = Join-Path $gitEvidenceDir 'upstream-hunk-inventory-to-67b9888d.json'
 
 [System.IO.File]::WriteAllText(
     $commitListPath,
@@ -849,7 +968,7 @@ $hunkInventory = Get-Content -Raw -Encoding UTF8 -LiteralPath $baseHunkInventory
     ConvertFrom-Json
 $hunkInventory.upstream_new = $upstream
 $hunkInventory.scope_note =
-    'Complete frozen b484f2a9..42d3863c semantic inventory. QSGW inherits upstream shared GW/EXX/symmetry numerics; current protected shared diff is zero.'
+    'Complete frozen b484f2a9..67b9888d semantic inventory. QSGW inherits upstream shared GW/EXX/symmetry numerics; current protected shared diff is zero.'
 $retainedHunkCommits = @($hunkInventory.commits |
     Where-Object { $_.commit -notin $refreshCommits } |
     ForEach-Object {
@@ -930,6 +1049,8 @@ $verified = @($data.verified_evidence) + @(
     'qsgw-rebase-evidence/validation/verify-layered-staging-plan.ps1',
     'qsgw-rebase-evidence/validation/layered-staging-plan-20260722.json',
     'qsgw-rebase-evidence/git/upstream-master-compare-20260722.json',
+    'qsgw-rebase-evidence/git/upstream-master-ls-remote-20260723.json',
+    'qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md',
     'qsgw-rebase-evidence/remote/fish-reader-binding-20260720/v2-postcheck-v1',
     'qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720',
     'qsgw-rebase-evidence/remote/fish-gate-d-current-20260721'
@@ -938,7 +1059,7 @@ $data.verified_evidence = @($verified | Select-Object -Unique)
 if ($gate0) {
     $data.verified_evidence = @(
         @($data.verified_evidence) +
-        'qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1'
+        'qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1'
     ) | Select-Object -Unique
 }
 
@@ -1040,7 +1161,7 @@ Set-Property -Object $data.planning_state -Name 'fish_gate0' -Value $(if ($gate0
     'pending'
 })
 Set-Property -Object $data.planning_state -Name 'formal_qsgw_regression' -Value 'disabled_historical_placeholders_no_committed_cases'
-Set-Property -Object $data.planning_state -Name 'upstream_master_live_compare' -Value '42d3863c_identical_2026-07-21T18:37:20Z'
+Set-Property -Object $data.planning_state -Name 'upstream_master_live_compare' -Value '67b9888d_identical_2026-07-22T17:46:14Z'
 Set-Property -Object $data.planning_state -Name 'layered_staging_plan' -Value '388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed'
 
 Set-Property $data 'revised_scope' ([pscustomobject]@{

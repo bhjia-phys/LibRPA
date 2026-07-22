@@ -129,6 +129,12 @@ The immutable fish build at `66bfe1cf` passed exactly 63/63 candidate CTests
 with zero failed and zero Not Run. Its 52-file checksum archive is committed
 under `qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1`.
 
+After upstream advanced to `67b9888d`, Gate 0 was repeated for rebased product
+source `4f9ab0cf`. The immutable fish run again passed 39/39 upstream CTests,
+63/63 candidate CTests, 10/10 focused QSGW CTests, and 29/29 Python tests, with
+an empty protected shared diff. Its checksum-verified archive is committed
+under `qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1`.
+
 Two Windows-only portability defects were found and fixed during this audit:
 
 1. `sha256_file` used a 1 MiB stack buffer and overflowed the default Windows
@@ -176,9 +182,10 @@ parity remain pending.
 
 | Gate | Requirement | Current status |
 |---|---|---|
-| Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | ACCEPTED at `66bfe1cf`; upstream 39/39, candidate 63/63, focused 10/10, protected diff empty |
-| A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | candidate executable and fish build toolchain frozen; numerical-run environment and same-input bundle still pending |
-| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | historical capability evidence only; clean-candidate rerun pending |
+| Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | ACCEPTED at upstream `67b9888d` / product `4f9ab0cf`; upstream 39/39, candidate 63/63, focused 10/10, Python 29/29, protected diff empty |
+| Gate 1 | byte-identical symmetry-reduced Si k444 G0W0 upstream/candidate comparison | current `67b9888d` / `4f9ab0cf` run active on fish; no terminal marker yet |
+| A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | legacy, candidate, Gate 0, observer, and same-input bundle hashes frozen by the formal A1 v2 runner |
+| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | formal runner preflight passed; an out-of-order pre-run was terminated and is not accepted; rerun follows Gate 1 |
 | A2 | candidate symmetry-on versus full-BZ comparison including weights, rotations, phases, time reversal, and Hermiticity | eigenvalue parity passed as supporting evidence; component gate pending |
 | B0-B2 | clean pinned ABACUS build and independently frozen no-sym/sym bundles | symmetry producer provenance partly frozen; pinned no-sym/full-BZ producer, observer, contract, and immutable Hartree-bundle runners pass 19 local tests; their dongfang jobs and resulting bundle are pending |
 | C0 | k888 29-to-512 symmetry mapping | pending; must not block k444 core conclusion |
@@ -203,30 +210,25 @@ curated two-round bundle would create a false regression claim.
 
 ## Open Issues
 
-1. Produce clean layered commits from the audited dirty source. The approved
-   Git index write is currently blocked by the platform approval quota until
-   2026-07-25 15:02 local time; no workaround is permitted.
-2. Run fish Gate 0 for the clean candidate and archive compiler/build/CTest
-   provenance.
-3. Rerun A1/A2 from iteration 0 on the same Si k444 bundle for legacy and the
+1. Complete and archive the active fish Gate 1 G0W0 comparison for upstream
+   `67b9888d` and candidate product source `4f9ab0cf`.
+2. Rerun A1/A2 from iteration 0 on the same Si k444 bundle for legacy and the
    clean candidate.
-4. Produce the pinned no-sym/full-BZ ABACUS bundle. Run current physical-default
+3. Produce the pinned no-sym/full-BZ ABACUS bundle. Run current physical-default
    Hartree C1 and band/cut D0-D1 separately from the corrected legacy
    truncated/legacy-normalization parity gate.
-5. Resolve the mode-1/mode-2 linear-mixing compatibility question with a
+4. Resolve the mode-1/mode-2 linear-mixing compatibility question with a
    controlled legacy/current run. Legacy initializes the mixer from uncut
    `H_KS0` and does not reapply the cut after mixing; current `qsgw_band`
    initializes from the cut Hamiltonian and treats the cut as an exact
    post-mixing constraint. The current-only linear Gate D runner verifies the
    latter closure and rejects the legacy ordering synthetically, but it is not
    a substitute for the required same-dataset legacy/current numerical run.
-6. Import a genuinely small, immutable, two-round ABACUS regression dataset.
+5. Import a genuinely small, immutable, two-round ABACUS regression dataset.
 
 ## Next Action
 
-The manifest audit and exact five-layer staging plan are complete. When Git
-index approval returns, rerun the plan in `-Check` mode, stage only each
-layer's listed paths, create the five commits, and regenerate the manifest
-against the Layer 4 source commit. When network access returns, push those
-exact commits, run fish Gate 0, assemble the Hartree bundle, and then start
-the clean-candidate A/C/D numerical gates.
+Finish the active fish Gate 1 G0W0 A/B run and verify its immutable output
+manifest. If green, archive the evidence and launch formal A1 with a fresh run
+tag. Do not reuse the terminated pre-run or the known-invalid legacy
+symmetry-on/exact847 path as acceptance evidence.

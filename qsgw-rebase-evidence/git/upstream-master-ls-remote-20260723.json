@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-07-22T17:46:14Z",
+  "repository": "git@github.com:minyez/LibRPA.git",
+  "source": "git ls-remote upstream-ssh refs/heads/master",
+  "head_ref": "refs/heads/master",
+  "head_commit": "67b9888dac0d09870361398165d0b3c1acc931ff",
+  "rebased_upstream_commit": "67b9888dac0d09870361398165d0b3c1acc931ff",
+  "status": "identical",
+  "conclusion": "The rebased upstream commit was the live master tip at observation time."
+}

@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="63"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="9"
+	timestamp="2026-07-23T01:03:29"
+	>
+	<testcase name="test_gx_minimax_grid" classname="test_gx_minimax_grid" time="0.455011" status="run">
+		<properties/>
+		<system-out>============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
+collected 1 item
+
+test_gx_minimax_grid.py Binary source: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/thirdparty/greenX/bin/test_gx_minimax_grid.exe
+.Testdir: /tmp/pytest-of-bhj/pytest-125/test_get_grids_and_weights0
+
+
+=============================== warnings summary ===============================
+../../../../../../../home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1
+  /home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools&lt;81.
+  ...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_gx_tabulate_minimax" classname="test_gx_tabulate_minimax" time="6.39781" status="run">
+		<properties/>
+		<system-out>============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
+collected 1 item
+
+test_gx_tabulate_minimax.py Binary source: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/thirdparty/greenX/bin/gx_tabulate_grids.exe
+.Testdir: /tmp/pytest-of-bhj/pytest-128/test_tabulate_gx_minimax_grid0
+
+
+=============================== warnings summary ===============================
+../../../../../../../home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1
+  /home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools&lt;81...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_gx_minimax_sine_duality_error" classname="test_gx_minimax_sine_duality_error" time="8.22056" status="run">
+		<properties/>
+		<system-out>============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
+collected 1 item
+
+test_gx_minimax_sine_duality_error.py Binary source: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/thirdparty/greenX/bin/test_gx_minimax_duality_error.exe
+.Testdir: /tmp/pytest-of-bhj/pytest-127/test_gx_minimax_duality_error0
+
+
+=============================== warnings summary ===============================
+../../../../../../../home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1
+  /home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package o...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_gx_minimax_sine_duality_error_tikhonov" classname="test_gx_minimax_sine_duality_error_tikhonov" time="8.41531" status="run">
+		<properties/>
+		<system-out>============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
+rootdir: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
+collected 1 item
+
+test_gx_minimax_sine_duality_error_tikhonov.py Binary source: /tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate/thirdparty/greenX/bin/test_gx_minimax_duality_error.exe
+.Testdir: /tmp/pytest-of-bhj/pytest-126/test_gx_minimax_duality_error0
+
+
+=============================== warnings summary ===============================
+../../../../../../../home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1
+  /home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/lib/python3.13/site-packages/pygreenx/__init__.py:1: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this ...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_input_parser" classname="test_input_parser" time="0.0118822" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_inputfile" classname="test_qsgw_inputfile" time="0.600956" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_analycont" classname="test_analycont" time="0.0275042" status="run">
+		<properties/>
+		<system-out>Input x: [(0,1),(0,2),(0,3),(0,4),(0,5),(0,6)](v6)
+Input y: [(0.4,-0.2),(0.5,0),(0.4,0.2),(0.25,0.25),(0.153846,0.230769),(0.1,0.2)](v6)
+Reference: (0.5,-0.5)
+     Test: (0.5,-0.5)
+Reference derivative: (0,-0.5)
+     Test derivative: (2.77556e-17,-0.5)
+</system-out>
+	</testcase>
+	<testcase name="test_atom" classname="test_atom" time="0.0141084" status="run">
+		<properties/>
+		<system-out>8
+1
+0 3
+1 1
+</system-out>
+	</testcase>
+	<testcase name="test_atomic_basis" classname="test_atomic_basis" time="0.0276879" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_base_utility" classname="test_base_utility" time="0.0243931" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_blas_lapack" classname="test_blas_lapack" time="0.0565542" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_complexmatrix" classname="test_complexmatrix" time="0.0596697" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_correlation_potential" classname="test_qsgw_correlation_potential" time="0.0253178" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_convergence" classname="test_qsgw_convergence" time="0.0282218" status="run">
+		<properties/>
+		<system-out>test_qsgw_convergence: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_effective_hamiltonian" classname="test_qsgw_effective_hamiltonian" time="0.0265698" status="run">
+		<properties/>
+		<system-out>test_qsgw_effective_hamiltonian: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_fitting" classname="test_fitting" time="0.0249381" status="run">
+		<properties/>
+		<system-out>Fitted params: 0.500000
+Fitted params: 1.500000
+Fitted params: 2.000000
+Fitted params: -2.000000
+</system-out>
+	</testcase>
+	<testcase name="test_io" classname="test_io" time="0.0264473" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_symmetry_context" classname="test_symmetry_context" time="0.0876485" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_arbitrary_float" classname="test_arbitrary_float" time="0.0262115" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_geometry" classname="test_geometry" time="0.0265976" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_lebedev_laikov" classname="test_lebedev_laikov" time="0.0265035" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_libri_utils" classname="test_libri_utils" time="0.0268802" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_matrix" classname="test_matrix" time="0.059874" status="run">
+		<properties/>
+		<system-out>
+ a
+nr = 2, nc = 2
+ 2.00000e+00 0.00000e+00
+ 0.00000e+00 1.00000e+00
+
+ sq_a
+nr = 2, nc = 2
+ 4.00000e+00 0.00000e+00
+ 0.00000e+00 1.00000e+00
+
+ a
+nr = 2, nc = 2
+ 0.00000e+00 1.00000e+00
+ 1.00000e+00 0.00000e+00
+
+ sq_a
+nr = 2, nc = 2
+ 1.00000e+00 2.23711e-17
+ 2.23711e-17 1.00000e+00
+</system-out>
+	</testcase>
+	<testcase name="test_matrix_m" classname="test_matrix_m" time="0.0585121" status="run">
+		<properties/>
+		<system-out>Matrix (set column-major)
+0.000000 1.000000 0.000000
+2.000000 0.000000 0.000000
+Determinant = -2.000000
+Matrix (swap to row-major)
+0.000000 1.000000 0.000000
+2.000000 0.000000 0.000000
+Determinant = -2.000000
+Mat1
+1.000000 2.000000
+2.000000 -1.000000
+Mat2
+2.000000 0.000000 -1.000000
+1.000000 -1.000000 0.000000
+Mat1*Mat2
+4.000000 -2.000000 -1.000000
+3.000000 1.000000 -2.000000
+Run test_power_hemat
+hemat
+(3.099272,0.000000) (1.381210,-0.791286) (0.770551,-1.091865) (-0.036193,-1.094479) (0.748007,0.062834) (0.187241,-0.352360) (0.390096,-1.707159) (1.454131,-0.685368)
+(1.381210,0.791286) (1.541081,0.000000) (0.744723,-0.113845) (-0.221411,-0.620927) (0.531626,-0.073718) (-0.392183,-0.329735) (0.611107,-0.904372) (0.410185,-0.027510)
+(0.770551,1.091865) (0.744723,0.113845) (2.437989,0.000000) (1.351495,-0.583954) (-0.614856,-0.730687) (1.343826,-0.453889) (1.580187,-0.162989) (0.500529,0.729931)
+(-0.036193,1.094479) (-0.221411,0.620927) (1.351495,0.583954) (1.631802,0.000000) (-0.429718,-0.416701) (1.419570,0.16...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_meanfield" classname="test_meanfield" time="0.0622437" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_pbc" classname="test_pbc" time="0.026268" status="run">
+		<properties/>
+		<system-out>i=0: x -1, y -1, z -1
+i=1: x -1, y -1, z 0
+i=2: x -1, y 0, z -1
+i=3: x -1, y 0, z 0
+i=4: x 0, y -1, z -1
+i=5: x 0, y -1, z 0
+i=6: x 0, y 0, z -1
+i=7: x 0, y 0, z 0
+ R: x -1, y -1, z -1
+-R: x 1, y 1, z 1
+</system-out>
+	</testcase>
+	<testcase name="test_profiler" classname="test_profiler" time="0.0154707" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_abacus_csr" classname="test_qsgw_abacus_csr" time="0.0276724" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_band_output" classname="test_qsgw_band_output" time="0.0267243" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_fixed_basis" classname="test_qsgw_fixed_basis" time="0.0580077" status="run">
+		<properties/>
+		<system-out>test_qsgw_fixed_basis: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hamiltonian_cut" classname="test_qsgw_hamiltonian_cut" time="0.0269292" status="run">
+		<properties/>
+		<system-out>test_qsgw_hamiltonian_cut: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hamiltonian_mixing" classname="test_qsgw_hamiltonian_mixing" time="0.0414351" status="run">
+		<properties/>
+		<system-out>test_qsgw_hamiltonian_mixing: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_density" classname="test_qsgw_hartree_density" time="0.0410054" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_density: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_dump" classname="test_qsgw_hartree_dump" time="0.0290212" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_dump: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_kernel" classname="test_qsgw_hartree_kernel" time="0.0275363" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_kernel: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_route" classname="test_qsgw_hartree_route" time="0.0142109" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_route: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_hartree_workflow" classname="test_qsgw_hartree_workflow" time="0.0413903" status="run">
+		<properties/>
+		<system-out>test_qsgw_hartree_workflow: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_input_contract" classname="test_qsgw_input_contract" time="0.0312409" status="run">
+		<properties/>
+		<system-out>test_qsgw_input_contract: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_iteration_trace" classname="test_qsgw_iteration_trace" time="0.0266286" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_qsgw_mixing" classname="test_qsgw_mixing" time="0.0376991" status="run">
+		<properties/>
+		<system-out>test_qsgw_mixing: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_occupation" classname="test_qsgw_occupation" time="0.0261917" status="run">
+		<properties/>
+		<system-out>test_qsgw_occupation: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_operator_fourier" classname="test_qsgw_operator_fourier" time="0.0617805" status="run">
+		<properties/>
+		<system-out>test_qsgw_operator_fourier: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_projection_target" classname="test_qsgw_projection_target" time="0.0258467" status="run">
+		<properties/>
+		<system-out>test_qsgw_projection_target: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_sha256" classname="test_qsgw_sha256" time="0.0286393" status="run">
+		<properties/>
+		<system-out>test_qsgw_sha256: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_vxc_io" classname="test_qsgw_vxc_io" time="0.067644" status="run">
+		<properties/>
+		<system-out>test_qsgw_vxc_io: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qpe_solver" classname="test_qpe_solver" time="0.0251486" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_rsh" classname="test_rsh" time="0.0592806" status="run">
+		<properties/>
+		<system-out>#
+# c 3 3
+ 0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00 -1.000000000000000e+00  0.000000000000000e+00
+ 0.000000000000000e+00  0.000000000000000e+00  1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00
+ 1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00
+
+#
+# c 3 3
+ 1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00
+ 0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00 -1.000000000000000e+00  0.000000000000000e+00
+ 0.000000000000000e+00  0.000000000000000e+00  1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00
+
+</system-out>
+	</testcase>
+	<testcase name="test_symmetry" classname="test_symmetry" time="0.0366671" status="run">
+		<properties/>
+		<system-out>map_inv.return_lattice[1] (        -1,        -1,        -1)
+map_c41z.return_lattice[1] (        -1,         0,         0)
+map_row.return_lattice[1] (         0,         0,        -1)
+map_col.return_lattice[1] (         0,        -1,         0)
+</system-out>
+	</testcase>
+	<testcase name="test_timefreq" classname="test_timefreq" time="1.14133" status="run">
+		<properties/>
+		<system-out>Available time-frequency grids: 7
+[0.0311438,0.0977957,0.178327,0.28473,0.433589,0.649095,0.96764,1.44509,2.16852,3.27587,4.99017,7.68538,12.0353,19.4469,33.8347,74.3469](v16)
+[0.0630021,0.0718602,0.0911671,0.124354,0.177322,0.259638,0.386573,0.58252,0.886801,1.36406,2.12471,3.37227,5.54159,9.8287,21.0726,79.1127](v16)
+[0.00580365,0.0312574,0.0800538,0.15836,0.277453,0.4564,0.725401,1.1301,1.73779,2.64685,4.0008,6.01026,8.99009,13.4336,20.2039,31.2847](v16)
+[0.0149693,0.0364147,0.0621745,0.0962716,0.145037,0.217822,0.327686,0.492767,0.738792,1.1029,1.63952,2.43076,3.60851,5.41396,8.41104,14.7647](v16)
+Residual: 0.00219829
+Residual: 4.26208e+06
+Residual (regulation): 5438.69
+</system-out>
+	</testcase>
+	<testcase name="test_vector3" classname="test_vector3" time="0.0269236" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_wigner_rotation" classname="test_wigner_rotation" time="0.0623202" status="run">
+		<properties/>
+		<system-out>(    1.5708,         0,         0)
+</system-out>
+	</testcase>
+	<testcase name="test_atomic_basis_blacs" classname="test_atomic_basis_blacs" time="0.589793" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_base_mpi" classname="test_base_mpi" time="0.578542" status="run">
+		<properties/>
+		<system-out>myid 1: item 0: (0 1) item 1 (1 2)
+myid 1: item 0: (0 -1) item 1 (2 -1)
+myid 2: item 0: (1 1)
+myid 2: item 0: (1 -2)
+myid 3: item 0: (-1 2)
+myid 3: item 0: (1 -1)
+myid 0: item 0: (-1 1) item 1 (0 2)
+myid 0: item 0: (0 -2) item 1 (2 -2)
+</system-out>
+	</testcase>
+	<testcase name="test_blacs" classname="test_blacs" time="0.605423" status="run">
+		<properties/>
+		<system-out>ArrayDesc: ICTXT 0 ID 0 PCOOR (0,0) GSIZE (10,10) LSIZE (5,5) DUMMY? F
+ArrayDesc: ICTXT 0 ID 1 PCOOR (0,1) GSIZE (10,10) LSIZE (5,5) DUMMY? F
+ArrayDesc: ICTXT 0 ID 2 PCOOR (1,0) GSIZE (10,10) LSIZE (5,5) DUMMY? F
+ArrayDesc: ICTXT 0 ID 3 PCOOR (1,1) GSIZE (10,10) LSIZE (5,5) DUMMY? F
+r0 c0 row(m)=-1
+r0 c0 col(n)=-1
+r0 c1 row(m)=-1
+r0 c1 col(n)=-1
+r1 c0 row(m)=-1
+r1 c0 col(n)=-1
+r1 c1 row(m)=-1
+r1 c1 col(n)=-1
+</system-out>
+	</testcase>
+	<testcase name="test_dataset" classname="test_dataset" time="0.638962" status="run">
+		<properties/>
+		<system-out>BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+BLACS environment of 2D Coulomb matrices is restored
+</system-out>
+	</testcase>
+	<testcase name="test_epsilon" classname="test_epsilon" time="0.646127" status="run">
+		<properties/>
+		<system-out>Converting Wc(q) -&gt; W(R)
+Task    0: distributing 12 {I, J, R} on 1 threads
+Task    1: distributing 12 {I, J, R} on 1 threads
+Task    2: distributing 12 {I, J, R} on 1 threads
+Task    3: distributing 12 {I, J, R} on 1 threads
+Done converting Wc q -&gt; R
+Converting Wc(q) -&gt; W(R)
+GW symmetry accumulates full `W(R)` directly from IBZ q-stars
+Done converting Wc q -&gt; R
+Converting Wc(q) -&gt; W(R)
+Task    0: distributing 12 {I, J, R} on 1 threads
+Task    1: distributing 0 {I, J, R} on 1 threads
+Task    2: distributing 0 {I, J, R} on 1 threads
+Task    3: distributing 0 {I, J, R} on 1 threads
+Done converting Wc q -&gt; R
+Converting Wc(q) -&gt; W(R)
+GW symmetry accumulates full `W(R)` directly from IBZ q-stars
+Done converting Wc q -&gt; R
+Converting Wc q,w -&gt; R,t
+Done converting Wc(q,w) -&gt; Wc(R,w)
+Converting Wc q,w -&gt; R,t
+Done converting Wc(q,w) -&gt; Wc(R,w)
+Converting Wc(q,w) -&gt; W(R,t)
+Converting Wc q,w -&gt; R,t
+Done converting Wc(q,w) -&gt; Wc(R,w)
+Done converting Wc q,w -&gt; R,t
+Converting Wc(q,w) -&gt; real W(R,t)
+Converting Wc q,w -&gt; R,t
+D...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_distributed_matrix" classname="test_qsgw_distributed_matrix" time="0.56133" status="run">
+		<properties/>
+		<system-out>test_qsgw_distributed_matrix: all tests passed
+</system-out>
+	</testcase>
+	<testcase name="test_qsgw_fixed_basis_mpi" classname="test_qsgw_fixed_basis_mpi" time="0.620453" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_matrix_m_mpi" classname="test_matrix_m_mpi" time="1.60265" status="run">
+		<properties/>
+		<system-out>use power_hemat_blacs
+mat global at pid_src 2
+(1.416161,0.000000) (-0.378728,0.484032) (0.421829,-0.341145) (-0.111771,-0.306369) (0.355236,-0.051226) (0.046407,-0.137999)
+(-0.378728,-0.484032) (1.159969,-0.000000) (-0.060530,-0.173525) (-0.081627,-0.466013) (0.175987,-0.564534) (0.144638,0.734565)
+(0.421829,0.341145) (-0.060530,0.173525) (0.722804,0.000000) (0.045809,-0.217464) (0.618528,0.443604) (-0.352212,0.138105)
+(-0.111771,0.306369) (-0.081627,0.466013) (0.045809,0.217464) (0.883696,0.000000) (0.410732,0.494846) (-0.460270,0.208508)
+(0.355236,0.051226) (0.175987,0.564534) (0.618528,-0.443604) (0.410732,-0.494846) (2.135153,-0.000000) (-0.798816,0.877384)
+(0.046407,0.137999) (0.144638,-0.734565) (-0.352212,-0.138105) (-0.460270,-0.208508) (-0.798816,-0.877384) (1.482217,0.000000)
+mat gathered at pid_src 2
+(1.416161,0.000000) (-0.378728,0.484032) (0.421829,-0.341145) (-0.111771,-0.306369) (0.355236,-0.051226) (0.046407,-0.137999)
+(-0.378728,-0.484032) (1.159969,-0.000000) (-0.060530,-0.173525) (-0.081627...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="test_meanfield_mpi" classname="test_meanfield_mpi" time="0.708007" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="test_kpoint_blacs_parallel_context" classname="test_kpoint_blacs_parallel_context" time="0.636566" status="run">
+		<properties/>
+		<system-out>0 0 0 [0,2](v2)
+1 0 1 [0,2](v2)
+2 1 0 [1,3](v2)
+3 1 1 [1,3](v2)
+0 0 0 [0,2](v2)
+1 1 0 [1,3](v2)
+2 0 1 [0,2](v2)
+3 1 1 [1,3](v2)
+</system-out>
+	</testcase>
+	<testcase name="test_rpa_headwing" classname="test_rpa_headwing" time="0.69742" status="run">
+		<properties/>
+		<system-out>Head k matrix (iomega=0): route=full_bz ik=0 k=( 0.000000000000, 0.000000000000, 0.000000000000)
+( 1.60000000e-02, 0.00000000e+00) ( 3.20000000e-02, 0.00000000e+00) ( 4.80000000e-02, 0.00000000e+00)
+( 3.20000000e-02, 0.00000000e+00) ( 6.40000000e-02, 0.00000000e+00) ( 9.60000000e-02, 0.00000000e+00)
+( 4.80000000e-02, 0.00000000e+00) ( 9.60000000e-02, 0.00000000e+00) ( 1.44000000e-01, 0.00000000e+00)
+</system-out>
+	</testcase>
+	<testcase name="test_shared_memory_mpi" classname="test_shared_memory_mpi" time="0.580278" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+</testsuite>
