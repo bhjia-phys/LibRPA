@@ -114,6 +114,9 @@ test "$(git -C "$candidate_source" rev-parse HEAD)" = "$expected_candidate_commi
 test -z "$(git -C "$candidate_source" status --porcelain)"
 test "$(sha256sum "$input_overlay/qsgw_input.contract" | awk '{print $1}')" = \
   "$expected_overlay_contract_sha"
+test ! -e "$legacy_dataset/vxc_out"
+! grep -Eq '^role [0-9a-f]{64} vxc_out$' \
+  "$input_overlay/qsgw_input.contract"
 
 mkdir -p "$candidate" "$tools_dir"
 "$python" - "$legacy_dataset" "$input_overlay" \
@@ -134,7 +137,10 @@ def digest(path):
             value.update(block)
     return value.hexdigest()
 
-excluded = {"qsgw_input.contract", "stru_out"}
+# vxc_out is an unbound G0W0 diagonal-Vxc reader file. QSGW reads the
+# contract-bound full-matrix qsgw_vxc_scf.manifest instead; that manifest and
+# every matrix it binds are checked below like all other QSGW reader inputs.
+excluded = {"qsgw_input.contract", "stru_out", "vxc_out"}
 rows = []
 for entry in sorted(candidate.iterdir(), key=lambda path: path.name):
     if entry.name in excluded:
@@ -216,6 +222,7 @@ cat >"$run_root/PARAMETER_MAPPING.txt" <<'EOF'
 comparison=exact847_iteration1_checkpoint_to_current_qsgw_one_update
 legacy_status=failed_after_iteration1_checkpoint
 iterations=0:1
+excluded_unbound_reader_file=vxc_out
 crystal_symmetry=on_ibz_8_to_full_bz_64
 mixing=legacy_direct,candidate_none_direct
 headwing=off
@@ -261,6 +268,7 @@ legacy_commit=8476213f66c68efb43404713eacbd04966820f26
 legacy_checkpoint_iteration=1
 legacy_run_is_green=false
 target_iteration=1
+candidate_extra_vxc_out_role=unbound_g0w0_reader_not_used_by_task_qsgw
 LIBRI_DETERMINISTIC_REDUCTION_requested=1
 LIBRI_DETERMINISTIC_REDUCTION_binary_support=unverified
 started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
