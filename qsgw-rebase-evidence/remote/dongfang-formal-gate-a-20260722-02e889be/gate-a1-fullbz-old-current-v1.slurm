@@ -52,7 +52,7 @@ expected_closure_adapter_sha=97494001b8824f86508e353edc4e73f97d7befc179c84222107
 expected_closure_sha=ee9a3d1479f1cfd5cf0621f072d82470070910e5a914de021543c4f8bcadd469
 expected_fixed_sha=0b3e5f1c7833e541f27882d25ec8c8b3ab01a658311bdbd331eb26106290c5a1
 expected_initial_sha=725919900d32045bed29744d7a864e72fcfd660da60f0fedf57453900f27fc9b
-expected_closure_test_sha=64428228923ea4ace7ef54cf8a4e5ceefc7258011f2f5fc6863db1e7b9e29fb
+expected_closure_test_sha=64428228923ea4ace7ef54cf8a4e5ceef8c7258011f2f5fc6863db1e7b9e29fb
 expected_initial_test_sha=3617af57bb6bc93810ce178197b119ae00315f9dd61f2ae6c8226de449e35955
 expected_current_parser_sha=9f83e07780bc832864abf68f3a2d82ee5238d8c13eaa2b568f68d9cf91269401
 
@@ -135,7 +135,10 @@ current_parser_source=$candidate_source/regression_tests/backend/comparisons/cmp
 
 while read -r path expected
 do
-  test "$(sha256sum "$path" | awk '{print $1}')" = "$expected"
+  actual=$(sha256sum "$path" | awk '{print $1}')
+  printf 'observer_sha256=%s actual=%s expected=%s\n' \
+    "$path" "$actual" "$expected"
+  test "$actual" = "$expected"
 done <<EOF
 $adapter_source $expected_adapter_sha
 $adapter_test_source $expected_adapter_test_sha
