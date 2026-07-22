@@ -36,12 +36,14 @@ expected_bundle_output_sha=d16cb9df89de56895e9533a9f2253ea8ec0b4f8ea6f7b027b659f
 expected_dataset_manifest_sha=9f47e5c85dc9c697e808270a602da473d70654c4a2bfa98af47fb1d495680c7e
 expected_contract_sha=053e5e108af6afc48e92650585fe1fe7536cce147bc96439b6bd7274c4d012ed
 expected_vxc_manifest_sha=545e595eab871410b4e06e46c6d4394d82f6d46fa46eb08e572a0546763a3ed4
+expected_base_comparator_sha=c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebbc
 expected_closure_adapter_sha=900f42f1917e4c2a80962e78b80a7226411981fc21923509983e55fa9afbdbfa
 expected_closure_sha=4a5de94e6dbf590dded4a6ecd140aa4227fa61ffa0e73af17ec0f388610cffaf
 expected_fixed_sha=569ecb1366bc6dd4584216bd42ac55905a4848b1a0b1bdf96c6236c782de7cb2
 expected_initial_sha=6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d4868a
 expected_closure_test_sha=38de02fabc0dde41911e5152b0b08a9987b312b0cea29c69396bb9e392e9c745
 expected_initial_test_sha=82634e292a8fc1eb5ed454360ea2367e06687f0547da6503291c850a00e5b339
+expected_current_parser_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
 runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a23-current-symmetry-side-v1.sh
 normalizer_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/normalize_qsgw_v6_self_traces_v1.py
 normalizer_test_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_normalize_qsgw_v6_self_traces_v1.py
@@ -137,12 +139,14 @@ test "$(sha256sum "$normalizer_source" | awk '{print $1}')" = "$normalizer_sha"
 test "$(sha256sum "$normalizer_test_source" | awk '{print $1}')" = \
   "$normalizer_test_sha"
 closure_adapter_source=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721/compare_qsgw_component_traces_v6_adapter.py
+base_comparator_source=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/compare_qsgw_component_traces-v4-c3daf072.py
 observer_root=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/observer-tools-v1
 closure_source=$observer_root/validate_qsgw_trace_closure.py
 fixed_source=$observer_root/validate_qsgw_fixed_basis.py
 initial_source=$observer_root/validate_qsgw_initial_state.py
 closure_test_source=$observer_root/test_validate_qsgw_trace_closure-v3-38de02fa.py
 initial_test_source=$observer_root/test_validate_qsgw_initial_state-v1.py
+current_parser_source=$candidate_source/regression_tests/backend/comparisons/cmp_qsgw.py
 
 while read -r path expected
 do
@@ -151,17 +155,21 @@ do
     "$path" "$actual" "$expected"
   test "$actual" = "$expected"
 done <<EOF
+$base_comparator_source $expected_base_comparator_sha
 $closure_adapter_source $expected_closure_adapter_sha
 $closure_source $expected_closure_sha
 $fixed_source $expected_fixed_sha
 $initial_source $expected_initial_sha
 $closure_test_source $expected_closure_test_sha
 $initial_test_source $expected_initial_test_sha
+$current_parser_source $expected_current_parser_sha
 EOF
 
 cp "$normalizer_source" "$tool_dir/normalize_qsgw_v6_self_traces_v1.py"
 cp "$normalizer_test_source" "$tool_dir/test_normalize_qsgw_v6_self_traces_v1.py"
+cp "$base_comparator_source" "$tool_dir/compare_qsgw_component_traces_v4.py"
 cp "$closure_adapter_source" "$tool_dir/compare_qsgw_component_traces.py"
+cp "$current_parser_source" "$tool_dir/cmp_qsgw_v6.py"
 cp "$closure_source" "$tool_dir/validate_qsgw_trace_closure.py"
 cp "$closure_source" "$tool_dir/validate_qsgw_trace_closure_v3.py"
 cp "$fixed_source" "$tool_dir/validate_qsgw_fixed_basis.py"

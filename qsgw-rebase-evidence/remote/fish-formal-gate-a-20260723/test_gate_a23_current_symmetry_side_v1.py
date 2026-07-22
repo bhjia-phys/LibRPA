@@ -80,6 +80,14 @@ class CurrentSymmetrySideRunnerTests(unittest.TestCase):
             'cp "$closure_source" "$tool_dir/validate_qsgw_trace_closure_v3.py"',
             self.source,
         )
+        self.assertIn(
+            'cp "$base_comparator_source" "$tool_dir/compare_qsgw_component_traces_v4.py"',
+            self.source,
+        )
+        self.assertIn(
+            'cp "$current_parser_source" "$tool_dir/cmp_qsgw_v6.py"',
+            self.source,
+        )
         self.assertIn("validate_qsgw_trace_closure.py", self.source)
         self.assertIn("validate_qsgw_fixed_basis.py", self.source)
         self.assertIn("validate_qsgw_initial_state.py", self.source)
