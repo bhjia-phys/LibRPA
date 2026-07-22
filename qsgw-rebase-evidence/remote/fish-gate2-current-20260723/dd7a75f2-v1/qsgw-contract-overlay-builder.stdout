@@ -1,0 +1,14 @@
+{
+  "changed_byte_count": 62,
+  "first_changed_byte": 1452,
+  "last_changed_byte": 1515,
+  "output_contract_sha256": "7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7",
+  "output_length_bytes": 3760,
+  "overlay_stru_out_sha256": "e756fd9551bfa9df748473880259ba019de904867c1aaff126b1b3a9c51a8873",
+  "passed": true,
+  "replacement_count": 1,
+  "schema": "librpa-qsgw-input-contract-stru-overlay-v1",
+  "source_contract_sha256": "5b90f7314d7231e0d1cc3d272957e26b9aa89d9b204c71d0378d1940098f0d46",
+  "source_stru_out_sha256": "5d943ee64376bc4e3315cc7ae779a1a91785b42e515290d37dacd78147947b5a",
+  "unchanged_except_stru_sha256": true
+}

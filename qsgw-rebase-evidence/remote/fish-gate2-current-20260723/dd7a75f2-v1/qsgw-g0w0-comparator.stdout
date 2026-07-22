@@ -1,0 +1,40 @@
+{
+  "block_count": 48,
+  "channel": 0,
+  "exact_block_count": 0,
+  "frequency_count": 6,
+  "frequency_ha": [
+    0.010284145744339373,
+    0.03949850874950617,
+    0.10701079928241293,
+    0.30471379167125867,
+    1.0081108835940904,
+    4.4169269784671865
+  ],
+  "g0w0_sigc_manifest_sha256": "6347f53f0a45d2d4955e94488bd3b2d252cbffe746f5eba55ad291771566d32c",
+  "iteration": 1,
+  "kpoint_count": 8,
+  "matrix_dimensions": [
+    44
+  ],
+  "max_abs_difference_ha": 2.7994974373643978e-11,
+  "max_abs_location": [
+    0,
+    0,
+    0,
+    40,
+    40
+  ],
+  "max_abs_tolerance_ha": 1e-10,
+  "passed": true,
+  "qsgw_contract_version": 6,
+  "qsgw_input_contract_sha256": "7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7",
+  "qsgw_trace_sha256": "64cf0e2712697f7cabc4350aa9b28ac6cda9d1a51a5a20189dc3db2ed708b382",
+  "relative_frobenius_difference": 2.1289455429165035e-11,
+  "relative_frobenius_tolerance": 1e-10,
+  "schema": "librpa-qsgw-iter1-vs-upstream-g0w0-sigc-v1",
+  "semantic_first_self_energy": "trace_iteration_1_channel_0",
+  "semantic_iteration_zero": "immutable_initial_state",
+  "source": "kgrid",
+  "spin_count": 1
+}

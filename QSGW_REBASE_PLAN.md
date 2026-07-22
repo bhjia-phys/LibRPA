@@ -4,7 +4,7 @@ Status: `in_progress`
 
 Manifest: `qsgw-rebase-manifest.json`
 
-Current gate: `local-audit-and-versioned-runner-preparation-before-layered-commit`
+Current gate: `solid-qsgw-no-mixing-old-vs-new`
 
 ## Scope
 
@@ -26,17 +26,16 @@ validation. G0W0 head/wing remains upstream-owned and unchanged.
 | Field | Value |
 |---|---|
 | Worktree | `F:/AI_Workspace/Theoretical-Physics/.sisyphus/drafts/_scratch/LibRPA-qsgw-independent-upstream-95c4-20260716` |
-| Branch | `codex/qsgw-symmetry-no-headwing-42d-20260720` |
-| Executable candidate source | `66bfe1cfd35c983222935d250039a8fe5c4b7af1` |
-| Frozen upstream | `42d3863c1d865194d382a085851d1e2e8a39764f` |
+| Branch | `codex/qsgw-symmetry-no-headwing-67b-20260723` |
+| Executable candidate source | `4f9ab0cfc90f54910158ab01a877581b080f136e` |
+| Frozen upstream | `67b9888dac0d09870361398165d0b3c1acc931ff` |
 | Legacy source | raw `8476213` archive plus the separately recorded compatibility harness |
 | ABACUS producer | `dd4216653386d32f79e3219f3ea5dd2d229c1c5a` |
 | Candidate state | clean executable source; later branch commits contain evidence metadata only |
-| Live upstream comparison | GitHub compare at `2026-07-21T18:37:20Z`: `master` identical to `42d3863c`, 0 ahead/behind |
+| Live upstream comparison | direct `git ls-remote` on `2026-07-23`: `master` remains `67b9888d` |
 
-`42d3863c` remains the frozen base and was also the live master tip at the
-recorded comparison time. Repeat the comparison immediately before opening the
-PR.
+`67b9888d` is the frozen base and remained the live master tip at the latest
+recorded comparison. Repeat the comparison immediately before opening the PR.
 
 ## Upstream Refresh, 2026-07-23
 
@@ -144,6 +143,16 @@ failed and is bound by its full source manifest; the accepted postcheck uses a
 `2e-10` SigmaC tolerance, still 50 times tighter than the project `1e-8`
 matrix contract.
 
+The current-candidate QSGW first-self-energy Gate 2 is also accepted through
+immutable fish run `20260723-dd7a75f2-v1`. Starting from the same immutable
+iteration-zero state, all 48 SigmaC blocks agree with accepted upstream G0W0:
+the maximum absolute and relative Frobenius differences are
+`2.7994974373643978e-11 Ha` and `2.1289455429165035e-11`. The fixed-basis wave
+function rotation and none-mixer residual are exactly zero, while Hamiltonian
+closure is `2.2737367544323206e-13 Ha`. The archive keeps every regular run
+file in a checksum-pinned tarball and independently verifies the archived
+22 MiB matrix trace.
+
 Two Windows-only portability defects were found and fixed during this audit:
 
 1. `sha256_file` used a 1 MiB stack buffer and overflowed the default Windows
@@ -193,8 +202,9 @@ parity remain pending.
 |---|---|---|
 | Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | ACCEPTED at upstream `67b9888d` / product `4f9ab0cf`; upstream 39/39, candidate 63/63, focused 10/10, Python 29/29, protected diff empty |
 | Gate 1 | byte-identical symmetry-reduced Si k444 G0W0 upstream/candidate comparison | ACCEPTED at `36d74369-recovery-v1`; 48 SigmaC blocks and 2816 QP states pass, source failure and postcheck provenance remain separate |
+| Gate 2 | current QSGW first self-energy versus accepted upstream G0W0 from the same iteration-zero state | ACCEPTED at `20260723-dd7a75f2-v1`; 48 SigmaC blocks pass at `2.80e-11 Ha`, fixed basis and none mixer are exact, Hamiltonian closure is `2.27e-13 Ha` |
 | A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | legacy, candidate, Gate 0, observer, and same-input bundle hashes frozen by the formal A1 v2 runner |
-| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | formal runner is rebound to accepted Gate 1; an out-of-order pre-run was terminated and remains rejected; fresh run follows the current QSGW-first-self-energy gate |
+| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | Gate 2 is accepted; bind its provenance into the formal runner, then launch a fresh run. The out-of-order pre-run remains rejected |
 | A2 | candidate symmetry-on versus full-BZ comparison including weights, rotations, phases, time reversal, and Hermiticity | eigenvalue parity passed as supporting evidence; component gate pending |
 | B0-B2 | clean pinned ABACUS build and independently frozen no-sym/sym bundles | symmetry producer provenance partly frozen; pinned no-sym/full-BZ producer, observer, contract, and immutable Hartree-bundle runners pass 19 local tests; their dongfang jobs and resulting bundle are pending |
 | C0 | k888 29-to-512 symmetry mapping | pending; must not block k444 core conclusion |
@@ -219,25 +229,23 @@ curated two-round bundle would create a false regression claim.
 
 ## Open Issues
 
-1. Rerun current QSGW first self-energy against the accepted upstream G0W0
-   matrices for upstream `67b9888d` and product source `4f9ab0cf`.
-2. Rerun A1/A2 from iteration 0 on the same Si k444 bundle for legacy and the
+1. Rerun A1/A2 from iteration 0 on the same Si k444 bundle for legacy and the
    clean candidate.
-3. Produce the pinned no-sym/full-BZ ABACUS bundle. Run current physical-default
+2. Produce the pinned no-sym/full-BZ ABACUS bundle. Run current physical-default
    Hartree C1 and band/cut D0-D1 separately from the corrected legacy
    truncated/legacy-normalization parity gate.
-4. Resolve the mode-1/mode-2 linear-mixing compatibility question with a
+3. Resolve the mode-1/mode-2 linear-mixing compatibility question with a
    controlled legacy/current run. Legacy initializes the mixer from uncut
    `H_KS0` and does not reapply the cut after mixing; current `qsgw_band`
    initializes from the cut Hamiltonian and treats the cut as an exact
    post-mixing constraint. The current-only linear Gate D runner verifies the
    latter closure and rejects the legacy ordering synthetically, but it is not
    a substitute for the required same-dataset legacy/current numerical run.
-5. Import a genuinely small, immutable, two-round ABACUS regression dataset.
+4. Import a genuinely small, immutable, two-round ABACUS regression dataset.
 
 ## Next Action
 
-Prepare and run the current-candidate QSGW first-self-energy versus accepted
-upstream G0W0 observer on fish. If green, launch formal A1 with a fresh run tag.
-Do not reuse the terminated pre-run or the known-invalid legacy
-symmetry-on/exact847 path as acceptance evidence.
+Bind accepted Gate 2 into the formal A1 runner, verify its tests and clean
+checkout hash on fish, and launch A1 with a fresh run tag. Do not reuse the
+terminated pre-run or the known-invalid legacy symmetry-on/exact847 path as
+acceptance evidence.

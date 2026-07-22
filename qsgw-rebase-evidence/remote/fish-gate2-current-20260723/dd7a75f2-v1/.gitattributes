@@ -1,0 +1,8 @@
+* -text
+candidate-qsgw/** -text
+input-overlay/** -text
+tools/** -text
+*.tar.gz -diff
+candidate-qsgw/librpa.stdout -diff
+candidate-qsgw/librpa_para_nprocs_1_myid_0.out -diff
+oneapi-setvars.stdout -diff

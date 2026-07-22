@@ -1,0 +1,25 @@
+{
+  "atom_fractional_max_abs": 5.650432599924038e-06,
+  "atom_tolerance": 1e-05,
+  "convention": "row",
+  "grid": [
+    4,
+    4,
+    4
+  ],
+  "identity_count": 1,
+  "legacy_payload_tokens": 24,
+  "metric_max_abs": 0.0,
+  "metric_tolerance": 1e-10,
+  "n_full_kpoints": 64,
+  "n_scf_kpoints": 8,
+  "n_symops": 48,
+  "output_path": "/home/bhj/ai-runs/librpa-qsgw-gate2-current-20260723-dd7a75f2-v1/input-overlay/stru_out",
+  "output_sha256": "e756fd9551bfa9df748473880259ba019de904867c1aaff126b1b3a9c51a8873",
+  "source_path": "/home/bhj/ai-runs/librpa-qsgw-gate-a-symmetry-bundle-20260720-v3/dataset/stru_out",
+  "source_prefix_byte_identical": true,
+  "source_sha256": "5d943ee64376bc4e3315cc7ae779a1a91785b42e515290d37dacd78147947b5a",
+  "status": "PASS",
+  "tail_path": "/home/bhj/ai-runs/librpa-qsgw-gate2-current-20260723-dd7a75f2-v1/tools/stru_symmetry_tail.dd421665.si444.txt",
+  "tail_sha256": "9863bfb6be3234e0ea050f45d7b2245f5529e357a6f87567998632fc3461ed8e"
+}

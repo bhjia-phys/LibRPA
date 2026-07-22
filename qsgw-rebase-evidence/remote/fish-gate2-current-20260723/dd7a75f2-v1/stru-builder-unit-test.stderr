@@ -1,0 +1,9 @@
+test_appends_validated_symmetry_tail (test_build_stru_symmetry_overlay_v1.OverlayTests.test_appends_validated_symmetry_tail) ... ok
+test_rejects_operation_that_breaks_atom_mapping (test_build_stru_symmetry_overlay_v1.OverlayTests.test_rejects_operation_that_breaks_atom_mapping) ... ok
+test_rejects_operation_that_breaks_lattice_metric (test_build_stru_symmetry_overlay_v1.OverlayTests.test_rejects_operation_that_breaks_lattice_metric) ... ok
+test_rejects_source_with_existing_symmetry_block (test_build_stru_symmetry_overlay_v1.OverlayTests.test_rejects_source_with_existing_symmetry_block) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+OK

@@ -3,7 +3,8 @@ param(
     [string]$Manifest = (Join-Path $Repository 'qsgw-rebase-manifest.json'),
     [string]$CandidateSourceCommit = '',
     [string]$Gate0Evidence = '',
-    [string]$Gate1Evidence = ''
+    [string]$Gate1Evidence = '',
+    [string]$Gate2Evidence = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,9 +47,16 @@ function Read-KeyValueFile {
 }
 
 function Assert-ChecksumManifest {
-    param([string]$Root, [string]$ChecksumFile)
+    param(
+        [string]$Root,
+        [string]$ChecksumFile,
+        [string[]]$AllowedMissing = @()
+    )
 
     $rootFull = [IO.Path]::GetFullPath($Root)
+    $missing = [Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::Ordinal
+    )
     foreach ($line in Get-Content -LiteralPath $ChecksumFile) {
         if ($line -notmatch '^([0-9a-f]{64})  (.+)$') {
             throw "Malformed checksum row: $line"
@@ -65,11 +73,54 @@ function Assert-ChecksumManifest {
             throw "Checksum path escapes evidence root: $relative"
         }
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            if ($relative -in $AllowedMissing) {
+                $null = $missing.Add($relative)
+                continue
+            }
             throw "Evidence checksum target is missing: $relative"
         }
         $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
         if ($actual -ne $expected) {
             throw "Evidence checksum mismatch for ${relative}: $actual"
+        }
+    }
+    foreach ($relative in $AllowedMissing) {
+        if (-not $missing.Contains($relative)) {
+            throw "Expected archive-only checksum target was not missing: $relative"
+        }
+    }
+}
+
+function Assert-TarMemberHash {
+    param(
+        [string]$Archive,
+        [string]$Member,
+        [string]$ExpectedSha256
+    )
+
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'librpa-gate2-' + [guid]::NewGuid().ToString('N')
+    )
+    $null = New-Item -ItemType Directory -Path $tempRoot
+    try {
+        & tar -xzf $Archive -C $tempRoot ("./" + $Member)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to extract $Member from Gate 2 archive"
+        }
+        $extracted = Join-Path $tempRoot ($Member.Replace('/', '\'))
+        if (-not (Test-Path -LiteralPath $extracted -PathType Leaf)) {
+            throw "Gate 2 archive member is missing after extraction: $Member"
+        }
+        $actual = (
+            Get-FileHash -Algorithm SHA256 -LiteralPath $extracted
+        ).Hash.ToLowerInvariant()
+        if ($actual -ne $ExpectedSha256) {
+            throw "Gate 2 archive member checksum mismatch for ${Member}: $actual"
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $tempRoot -PathType Container) {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force
         }
     }
 }
@@ -233,6 +284,103 @@ if (Test-Path -LiteralPath $Gate1Evidence -PathType Container) {
     ).Hash.ToLowerInvariant()
     if ($sourceManifestHash -ne $gate1.source_run_manifest_sha256) {
         throw "Gate 1 source manifest hash mismatch: $sourceManifestHash"
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($Gate2Evidence)) {
+    $Gate2Evidence = Join-Path $Repository (
+        'qsgw-rebase-evidence\remote\fish-gate2-current-20260723\dd7a75f2-v1'
+    )
+}
+$gate2 = $null
+$gate2Reference =
+    'qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt'
+if (Test-Path -LiteralPath $Gate2Evidence -PathType Container) {
+    $green = Join-Path $Gate2Evidence 'GREEN_CONFIRMED'
+    $failed = Join-Path $Gate2Evidence 'FAILED'
+    $provenancePath = Join-Path $Gate2Evidence 'PROVENANCE.txt'
+    $checksumPath = Join-Path $Gate2Evidence 'OUTPUT_SHA256SUMS.txt'
+    $archiveManifestPath = Join-Path $Gate2Evidence 'ARCHIVE_SHA256SUMS.txt'
+    $archivePath = Join-Path $Gate2Evidence (
+        'librpa-qsgw-gate2-current-20260723-dd7a75f2-v1-files.tar.gz'
+    )
+    if (-not (Test-Path -LiteralPath $green -PathType Leaf) -or
+        (Test-Path -LiteralPath $failed) -or
+        -not (Test-Path -LiteralPath $provenancePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $checksumPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $archiveManifestPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
+        throw 'Gate 2 evidence is incomplete or contains FAILED'
+    }
+    Assert-ChecksumManifest -Root $Gate2Evidence `
+        -ChecksumFile $archiveManifestPath
+    Assert-ChecksumManifest -Root $Gate2Evidence `
+        -ChecksumFile $checksumPath `
+        -AllowedMissing @('candidate-qsgw/qsgw_matrices.dat')
+    Assert-TarMemberHash -Archive $archivePath `
+        -Member 'candidate-qsgw/qsgw_matrices.dat' `
+        -ExpectedSha256 '64cf0e2712697f7cabc4350aa9b28ac6cda9d1a51a5a20189dc3db2ed708b382'
+
+    $gate2 = Read-KeyValueFile -Path $provenancePath
+    $expectedGate2 = @{
+        gate = 'fish_gate2_current_qsgw_first_self_energy_v2'
+        acceptance = 'true'
+        runner_commit = 'dd7a75f22cb4ce114a82bc720fe11f60377044ae'
+        upstream_commit = $upstream
+        candidate_commit = $candidateSource
+        candidate_executable_sha256 = '77ab964e15f0cdfee05ad54cf5b9da4ad9e4e3ac1f6990c4b50e8f0a55a29b47'
+        gate0_provenance_sha256 = '62a4026017c26b28f9c9503fb4c71a265345369db2a709b0f811a7000b5fd424'
+        gate1_accepted_provenance_sha256 = '880115845b7cb5a983885613a1b2325607bb269836f681b0af5051b8f9d74d0d'
+        gate1_accepted_output_manifest_sha256 = '74a3453c46df34e7b0ec8430260cd47182e6d3d01a409f4a313dc976948a127f'
+        gate1_source_manifest_sha256 = '22840e6cf84d18526f05283231c47eb0a1784c58764f4387a7391c1f50aa5155'
+        qsgw_iter1_invariants_sha256 = '116035f4a52a81fa2ed69bd2906958ea67435a829ab7dd49e770997c5115b534'
+        qsgw_iter1_g0w0_sigc_comparison_sha256 = 'f117c50decde276181c3fa9a1b44c27026a63b6e80754d8ebf99a30f7a97faf8'
+        semantic_iteration_zero = 'immutable_initial_state'
+        semantic_first_self_energy = 'trace_iteration_1_channel_0'
+        sigc_block_count = '48'
+        symmetry = 'exx_on_gw_on_rpa_on'
+        headwing = 'off'
+        hartree = 'off'
+        band = 'off'
+        mixing = 'none'
+        iterations = '0:1'
+    }
+    foreach ($key in $expectedGate2.Keys) {
+        if ($gate2[$key] -ne $expectedGate2[$key]) {
+            throw "Gate 2 provenance mismatch for ${key}: $($gate2[$key])"
+        }
+    }
+    $runnerPath = Join-Path $Repository (
+        'qsgw-rebase-evidence\remote\fish-gate2-current-20260723\run_fish_gate2_current_v2.sh'
+    )
+    $runnerHash = Get-LfTextSha256 -Path $runnerPath
+    if ($runnerHash -ne $gate2.runner_sha256) {
+        throw "Gate 2 runner hash mismatch: $runnerHash"
+    }
+
+    $comparisonPath = Join-Path $Gate2Evidence (
+        'qsgw-iter1-vs-upstream-g0w0-sigc.json'
+    )
+    $comparison = Get-Content -Raw -Encoding UTF8 -LiteralPath $comparisonPath |
+        ConvertFrom-Json
+    if (-not $comparison.passed -or
+        $comparison.block_count -ne 48 -or
+        $comparison.iteration -ne 1 -or
+        $comparison.semantic_iteration_zero -ne 'immutable_initial_state' -or
+        $comparison.semantic_first_self_energy -ne 'trace_iteration_1_channel_0' -or
+        $comparison.max_abs_difference_ha -gt 1e-10 -or
+        $comparison.relative_frobenius_difference -gt 1e-10) {
+        throw 'Gate 2 QSGW versus G0W0 comparison did not satisfy acceptance'
+    }
+    $invariantsPath = Join-Path $Gate2Evidence 'qsgw-iter1-invariants.json'
+    $invariants = Get-Content -Raw -Encoding UTF8 -LiteralPath $invariantsPath |
+        ConvertFrom-Json
+    if (-not $invariants.passed -or
+        $invariants.none_mixer_max_abs_ha -ne 0 -or
+        $invariants.fixed_basis_wfc_rotation_relative_frobenius -ne 0 -or
+        $invariants.raw_h_closure_max_abs_ha -gt 1e-10 -or
+        $invariants.hermiticity_max_abs_ha -gt 1e-10) {
+        throw 'Gate 2 fixed-basis or Hamiltonian invariants did not satisfy acceptance'
     }
 }
 
@@ -561,6 +709,37 @@ if ($gate1) {
     }
     $gate1Benchmark.status = 'accepted'
     $gate1Benchmark.artifacts = @($gate1Artifacts)
+}
+if ($gate2) {
+    $gate2Benchmark = @(
+        $data.benchmarks | Where-Object { $_.id -eq 'qsgw-iter0-vs-upstream' }
+    )[0]
+    $artifactSpecs = @(
+        @('upstream-g0w0-tensor', 'gate1-SOURCE_RUN_SHA256SUMS.txt'),
+        @('qsgw-iter0-tensor', 'librpa-qsgw-gate2-current-20260723-dd7a75f2-v1-files.tar.gz'),
+        @('iteration-zero-comparison', 'qsgw-iter1-vs-upstream-g0w0-sigc.json'),
+        @('adapter-contract-comparison', 'qsgw-iter1-invariants.json'),
+        @('gate2-provenance', 'PROVENANCE.txt'),
+        @('gate2-output-manifest', 'OUTPUT_SHA256SUMS.txt'),
+        @('gate2-archive-manifest', 'ARCHIVE_SHA256SUMS.txt')
+    )
+    $gate2Artifacts = @()
+    foreach ($spec in $artifactSpecs) {
+        $relative =
+            'qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/' +
+            $spec[1]
+        $record = [pscustomobject][ordered]@{
+            id = $spec[0]
+            path = $null
+            sha256 = $null
+            reference = $null
+        }
+        Set-HashedArtifact -Record $record -RelativePath $relative `
+            -Reference $gate2Reference
+        $gate2Artifacts += $record
+    }
+    $gate2Benchmark.status = 'accepted'
+    $gate2Benchmark.artifacts = @($gate2Artifacts)
 }
 $data.upstream_inventory.new_commit = $upstream
 
@@ -1140,7 +1319,9 @@ Set-HashedArtifact `
     -RelativePath $hunkInventoryRelative `
     -Reference 'reviewed semantic hunk inventory with exact commit/change coverage'
 
-$data.current_gate = if ($gate1) {
+$data.current_gate = if ($gate2) {
+    'solid-qsgw-no-mixing-old-vs-new'
+} elseif ($gate1) {
     'qsgw-iter0-vs-upstream-g0w0'
 } elseif ($gate0) {
     'g0w0-upstream-vs-rebased'
@@ -1173,6 +1354,12 @@ if ($gate1) {
         'qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1'
     ) | Select-Object -Unique
 }
+if ($gate2) {
+    $data.verified_evidence = @(
+        @($data.verified_evidence) +
+        'qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1'
+    ) | Select-Object -Unique
+}
 
 $openIssues = @(
     [pscustomobject]@{
@@ -1186,6 +1373,12 @@ $openIssues = @(
         class_or_gate = 'g0w0-upstream-vs-rebased'
         blocker = 'The current upstream/candidate G0W0 comparison has no accepted immutable fish evidence.'
         required = 'Run and archive the byte-identical-input upstream versus candidate G0W0 comparison.'
+    },
+    [pscustomobject]@{
+        id = 'ISSUE-REMOTE-GATE2'
+        class_or_gate = 'qsgw-iter0-vs-upstream-g0w0'
+        blocker = 'The current QSGW first self-energy has no accepted immutable comparison against upstream G0W0.'
+        required = 'Run and archive the fixed-basis first-self-energy comparison and structural invariants.'
     },
     [pscustomobject]@{
         id = 'ISSUE-SYMMETRY-ORACLE'
@@ -1222,6 +1415,11 @@ if ($gate1) {
         $openIssues | Where-Object { $_.id -ne 'ISSUE-REMOTE-GATE1' }
     )
 }
+if ($gate2) {
+    $openIssues = @(
+        $openIssues | Where-Object { $_.id -ne 'ISSUE-REMOTE-GATE2' }
+    )
+}
 if (-not $hasCleanCandidate) {
     $cleanCandidateIssue = [pscustomobject]@{
         id = 'ISSUE-CLEAN-CANDIDATE'
@@ -1233,7 +1431,18 @@ if (-not $hasCleanCandidate) {
 }
 $data.open_issues = @($openIssues)
 
-if ($gate1) {
+if ($gate2) {
+    $data.next_actions = @(
+        [pscustomobject]@{
+            id = 'next-formal-a1'
+            action = 'Bind accepted Gate 2 and run fresh legacy-full-BZ versus current-full-BZ none-miniter2 and linear-beta-0.2-miniter5 comparisons on fish.'
+            gate = 'solid-qsgw-no-mixing-old-vs-new'
+            owner = 'rebase operator'
+            status = 'ready'
+        }
+    )
+}
+elseif ($gate1) {
     $data.next_actions = @(
         [pscustomobject]@{
             id = 'next-qsgw-iter0-g0w0'
@@ -1295,6 +1504,11 @@ Set-Property -Object $data.planning_state -Name 'fish_gate0' -Value $(if ($gate0
 })
 Set-Property -Object $data.planning_state -Name 'fish_gate1' -Value $(if ($gate1) {
     'accepted_sigc_48_qp_2816_source_outputs_immutable_postcheck'
+} else {
+    'pending'
+})
+Set-Property -Object $data.planning_state -Name 'fish_gate2' -Value $(if ($gate2) {
+    'accepted_first_self_energy_48_sigc_fixed_basis_and_closure'
 } else {
     'pending'
 })

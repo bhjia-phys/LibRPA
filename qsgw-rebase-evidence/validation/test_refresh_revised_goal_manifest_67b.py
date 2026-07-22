@@ -38,6 +38,10 @@ class RefreshManifest67bTest(unittest.TestCase):
             "fish-gate1-current-20260723\\36d74369-recovery-v1",
             "gate = 'fish_gate1_current_g0w0_ab_recovery_v2'",
             "recover_fish_gate1_current_v2.sh",
+            "[string]$Gate2Evidence = ''",
+            "fish-gate2-current-20260723\\dd7a75f2-v1",
+            "gate = 'fish_gate2_current_qsgw_first_self_energy_v2'",
+            "run_fish_gate2_current_v2.sh",
         )
         for value in expected:
             self.assertIn(value, self.script)
@@ -46,6 +50,17 @@ class RefreshManifest67bTest(unittest.TestCase):
         self.assertIn("function Get-LfTextSha256", self.script)
         self.assertIn('$text.Replace("`r`n", "`n")', self.script)
         self.assertIn("$runnerHash = Get-LfTextSha256", self.script)
+
+    def test_gate2_archive_only_matrix_is_verified_fail_closed(self):
+        expected = (
+            "function Assert-TarMemberHash",
+            "-AllowedMissing @('candidate-qsgw/qsgw_matrices.dat')",
+            "-Member 'candidate-qsgw/qsgw_matrices.dat'",
+            "64cf0e2712697f7cabc4350aa9b28ac6cda9d1a51a5a20189dc3db2ed708b382",
+            "Expected archive-only checksum target was not missing",
+        )
+        for value in expected:
+            self.assertIn(value, self.script)
 
     def test_manifest_has_complete_current_inventory(self):
         commits = self.manifest["repository"]["commits"]
@@ -97,7 +112,23 @@ class RefreshManifest67bTest(unittest.TestCase):
             }.issubset({artifact["id"] for artifact in gate1["artifacts"]})
         )
         self.assertEqual(
-            self.manifest["current_gate"], "qsgw-iter0-vs-upstream-g0w0"
+            self.manifest["planning_state"]["fish_gate2"],
+            "accepted_first_self_energy_48_sigc_fixed_basis_and_closure",
+        )
+        gate2 = self.manifest["benchmarks"][2]
+        self.assertEqual(gate2["id"], "qsgw-iter0-vs-upstream")
+        self.assertEqual(gate2["status"], "accepted")
+        self.assertTrue(
+            {
+                "upstream-g0w0-tensor",
+                "qsgw-iter0-tensor",
+                "iteration-zero-comparison",
+                "adapter-contract-comparison",
+                "gate2-provenance",
+            }.issubset({artifact["id"] for artifact in gate2["artifacts"]})
+        )
+        self.assertEqual(
+            self.manifest["current_gate"], "solid-qsgw-no-mixing-old-vs-new"
         )
 
 

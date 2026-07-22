@@ -1,0 +1,20 @@
+test_duplicate_stru_rows_are_rejected (test_build_qsgw_contract_overlay_v1.ContractOverlayTests.test_duplicate_stru_rows_are_rejected) ... ok
+test_identical_source_and_overlay_are_rejected (test_build_qsgw_contract_overlay_v1.ContractOverlayTests.test_identical_source_and_overlay_are_rejected) ... ok
+test_missing_stru_row_is_rejected (test_build_qsgw_contract_overlay_v1.ContractOverlayTests.test_missing_stru_row_is_rejected) ... ok
+test_single_hash_replacement_passes (test_build_qsgw_contract_overlay_v1.ContractOverlayTests.test_single_hash_replacement_passes) ... ok
+test_source_stru_hash_mismatch_is_rejected (test_build_qsgw_contract_overlay_v1.ContractOverlayTests.test_source_stru_hash_mismatch_is_rejected) ... ok
+test_contract_mismatch_is_rejected (test_compare_qsgw_iter1_g0w0_v1.ComparatorTests.test_contract_mismatch_is_rejected) ... ok
+test_exact_pair_passes (test_compare_qsgw_iter1_g0w0_v1.ComparatorTests.test_exact_pair_passes) ... ok
+test_large_difference_fails (test_compare_qsgw_iter1_g0w0_v1.ComparatorTests.test_large_difference_fails) ... ok
+test_missing_g0w0_block_is_rejected (test_compare_qsgw_iter1_g0w0_v1.ComparatorTests.test_missing_g0w0_block_is_rejected) ... ok
+test_small_difference_passes (test_compare_qsgw_iter1_g0w0_v1.ComparatorTests.test_small_difference_passes) ... ok
+test_exx_lower_triangle_noise_uses_legacy_upper_triangle (test_validate_qsgw_iter1_v6.ValidatorTests.test_exx_lower_triangle_noise_uses_legacy_upper_triangle) ... ok
+test_input_contract_hash_mismatch_is_rejected (test_validate_qsgw_iter1_v6.ValidatorTests.test_input_contract_hash_mismatch_is_rejected) ... ok
+test_raw_h_closure_corruption_fails (test_validate_qsgw_iter1_v6.ValidatorTests.test_raw_h_closure_corruption_fails) ... ok
+test_symmetry_contract_mismatch_is_rejected (test_validate_qsgw_iter1_v6.ValidatorTests.test_symmetry_contract_mismatch_is_rejected) ... ok
+test_valid_first_update_passes (test_validate_qsgw_iter1_v6.ValidatorTests.test_valid_first_update_passes) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.101s
+
+OK

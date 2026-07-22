@@ -3076,9 +3076,50 @@
                            "depends_on":  [
 
                                           ],
-                           "status":  "planned",
+                           "status":  "accepted",
                            "artifacts":  [
-
+                                             {
+                                                 "id":  "upstream-g0w0-tensor",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/gate1-SOURCE_RUN_SHA256SUMS.txt",
+                                                 "sha256":  "22840e6cf84d18526f05283231c47eb0a1784c58764f4387a7391c1f50aa5155",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "qsgw-iter0-tensor",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/librpa-qsgw-gate2-current-20260723-dd7a75f2-v1-files.tar.gz",
+                                                 "sha256":  "a4b5658dc4cb08999f84e939c96a0f7f14294cd9dc2ff06e85b731fe98d8aa62",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "iteration-zero-comparison",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/qsgw-iter1-vs-upstream-g0w0-sigc.json",
+                                                 "sha256":  "f117c50decde276181c3fa9a1b44c27026a63b6e80754d8ebf99a30f7a97faf8",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "adapter-contract-comparison",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/qsgw-iter1-invariants.json",
+                                                 "sha256":  "116035f4a52a81fa2ed69bd2906958ea67435a829ab7dd49e770997c5115b534",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate2-provenance",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt",
+                                                 "sha256":  "26c771fdedbf8d423c5dc07b9eadd6e6a1d2234c62919c36918fa5461fca34d0",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate2-output-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/OUTPUT_SHA256SUMS.txt",
+                                                 "sha256":  "48dc9063d56de58b21cd77243ea56e127cfe79013b66728f6a9913ff36ac3dee",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate2-archive-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/ARCHIVE_SHA256SUMS.txt",
+                                                 "sha256":  "1db966f82548954c66df3c04651b37762f7da1ff5266e555c58a17ef8b32d5c3",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1/PROVENANCE.txt"
+                                             }
                                          ]
                        },
                        {
@@ -3624,7 +3665,7 @@
     "approvals":  [
 
                   ],
-    "current_gate":  "qsgw-iter0-vs-upstream-g0w0",
+    "current_gate":  "solid-qsgw-no-mixing-old-vs-new",
     "verified_evidence":  [
                               "qsgw-rebase-evidence/git/status.txt",
                               "qsgw-rebase-evidence/git/protected-src-inventory.json",
@@ -3650,7 +3691,8 @@
                               "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
                               "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1",
                               "qsgw-rebase-evidence/git/upstream-master-ls-remote-20260723.json",
-                              "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1"
+                              "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1",
+                              "qsgw-rebase-evidence/remote/fish-gate2-current-20260723/dd7a75f2-v1"
                           ],
     "open_issues":  [
                         {
@@ -3680,9 +3722,9 @@
                     ],
     "next_actions":  [
                          {
-                             "id":  "next-qsgw-iter0-g0w0",
-                             "action":  "Run current QSGW first-self-energy versus accepted upstream G0W0, then launch formal A1.",
-                             "gate":  "qsgw-iter0-vs-upstream-g0w0",
+                             "id":  "next-formal-a1",
+                             "action":  "Bind accepted Gate 2 and run fresh legacy-full-BZ versus current-full-BZ none-miniter2 and linear-beta-0.2-miniter5 comparisons on fish.",
+                             "gate":  "solid-qsgw-no-mixing-old-vs-new",
                              "owner":  "rebase operator",
                              "status":  "ready"
                          }
@@ -3701,7 +3743,8 @@
                            "layered_staging_plan":  "388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed",
                            "upstream_master_live_compare":  "67b9888d_identical_2026-07-22T17:46:14Z",
                            "fish_gate0":  "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty",
-                           "fish_gate1":  "accepted_sigc_48_qp_2816_source_outputs_immutable_postcheck"
+                           "fish_gate1":  "accepted_sigc_48_qp_2816_source_outputs_immutable_postcheck",
+                           "fish_gate2":  "accepted_first_self_energy_48_sigc_fixed_basis_and_closure"
                        },
     "revised_scope":  {
                           "effective_date":  "2026-07-21",
