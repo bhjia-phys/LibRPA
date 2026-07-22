@@ -37,6 +37,7 @@ current = load(CURRENT_PATH, "current_under_test")
 def legacy_header(
     beta: str = "1", symmetry: str = "1", n_params: str = "-1",
     final_iteration: str = "2",
+    use_shrink_abfs: str = "1",
 ) -> str:
     return """# qsgw_contract_version 4
 # oracle_kind legacy_scheme_a
@@ -61,7 +62,7 @@ def legacy_header(
 # n_params_anacon_resample -1
 # anacon_nfreq -1
 # anacon_tfgrids_type -101
-# use_shrink_abfs 1
+# use_shrink_abfs {use_shrink_abfs}
 # use_fullcoul_exx 0
 # use_fullcoul_eps 1
 # use_fullcoul_wc 0
@@ -73,6 +74,7 @@ def legacy_header(
         symmetry=symmetry,
         n_params=n_params,
         final_iteration=final_iteration,
+        use_shrink_abfs=use_shrink_abfs,
     )
 
 
@@ -99,6 +101,7 @@ class AdapterContractTests(unittest.TestCase):
         legacy_beta: float, current_beta: float,
         final_iteration: int = 2,
         allow_legacy_iteration_prefix: bool = False,
+        expected_legacy_use_shrink_abfs: bool = True,
     ):
         return adapter._validate_actual_contracts(
             base_module=base,
@@ -110,6 +113,7 @@ class AdapterContractTests(unittest.TestCase):
             expected_legacy_beta=legacy_beta,
             expected_current_beta=current_beta,
             allow_legacy_iteration_prefix=allow_legacy_iteration_prefix,
+            expected_legacy_use_shrink_abfs=expected_legacy_use_shrink_abfs,
         )
 
     def test_none_contract_passes(self):
@@ -164,6 +168,19 @@ class AdapterContractTests(unittest.TestCase):
                 legacy_header(symmetry="0"), current_header(),
                 "none", 1.0, 0.2,
             )
+
+    def test_full_abf_legacy_contract_requires_explicit_opt_in(self):
+        with self.assertRaisesRegex(ValueError, "contract mismatch"):
+            self.validate(
+                legacy_header(use_shrink_abfs="0"), current_header(),
+                "none", 1.0, 0.2,
+            )
+        result = self.validate(
+            legacy_header(use_shrink_abfs="0"), current_header(),
+            "none", 1.0, 0.2,
+            expected_legacy_use_shrink_abfs=False,
+        )
+        self.assertFalse(result["legacy_use_shrink_abfs"])
 
     def test_wrong_current_mode_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "contract mismatch"):

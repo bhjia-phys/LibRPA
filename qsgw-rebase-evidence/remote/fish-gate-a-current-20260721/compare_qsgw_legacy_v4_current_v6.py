@@ -83,6 +83,7 @@ def _validate_actual_contracts(
     expected_legacy_beta: float,
     expected_current_beta: float,
     allow_legacy_iteration_prefix: bool = False,
+    expected_legacy_use_shrink_abfs: bool = True,
 ) -> dict[str, object]:
     legacy = base_module.parse_contract(legacy_text, "legacy v4 trace")
     declared_min_iteration = int(legacy["qsgw_min_iter"])
@@ -130,7 +131,9 @@ def _validate_actual_contracts(
             "replace_w_head": "0",
             "option_dielect_func": "0",
             "nfreq": "6",
-            "use_shrink_abfs": "1",
+            "use_shrink_abfs": (
+                "1" if expected_legacy_use_shrink_abfs else "0"
+            ),
             "use_fullcoul_exx": "0",
             "use_fullcoul_eps": "1",
             "use_fullcoul_wc": "0",
@@ -189,6 +192,7 @@ def _validate_actual_contracts(
         ),
         "legacy_declared_n_params_anacon": declared_n_params,
         "legacy_effective_n_params_anacon": effective_n_params,
+        "legacy_use_shrink_abfs": expected_legacy_use_shrink_abfs,
         "current_input_contract": reference["qsgw_input_contract"],
         "current_input_contract_sha256": reference[
             "qsgw_input_contract_sha256"
@@ -275,6 +279,9 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         expected_legacy_beta=args.expected_legacy_beta,
         expected_current_beta=args.expected_current_beta,
         allow_legacy_iteration_prefix=args.allow_legacy_iteration_prefix,
+        expected_legacy_use_shrink_abfs=bool(
+            args.expected_legacy_use_shrink_abfs
+        ),
     )
     normalized_legacy, normalized_current = _normalized_for_frozen_aligner(
         legacy_text,
@@ -382,6 +389,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-mode", choices=("none", "linear"), required=True)
     parser.add_argument("--expected-legacy-beta", type=float, required=True)
     parser.add_argument("--expected-current-beta", type=float, required=True)
+    parser.add_argument(
+        "--expected-legacy-use-shrink-abfs",
+        choices=(0, 1),
+        type=int,
+        default=1,
+    )
     parser.add_argument("--allow-legacy-iteration-prefix", action="store_true")
     parser.add_argument("--frequency-tolerance", type=float, default=1.0e-10)
     parser.add_argument(

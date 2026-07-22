@@ -86,7 +86,7 @@ $base_comparator c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebb
 $closure 4a5de94e6dbf590dded4a6ecd140aa4227fa61ffa0e73af17ec0f388610cffaf
 $fixed 569ecb1366bc6dd4584216bd42ac55905a4848b1a0b1bdf96c6236c782de7cb2
 $initial 6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d4868a
-$adapter 279fa6221f4384c9caf8e6999f1fdc6238f7b7c9cace6c49d73ecce3ece5f457
+$adapter 8ffa4a125f3b95b25b2f64abd50f9ad119d52c4c8f89a8233e2208670d15541a
 $summary a156d2a46d67bab73d22c91609cbe66cb3dc6e991e42bdd7407bec5a17554698
 $parser f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
 EOF
@@ -135,6 +135,7 @@ set +e
   --current-contract-parser "$run_root/tools/cmp_qsgw_v6.py" \
   --iterations 0:1 --expected-mode none \
   --expected-legacy-beta 1 --expected-current-beta 0.2 \
+  --expected-legacy-use-shrink-abfs 0 \
   --frequency-tolerance 1e-10 --matrix-max-abs-tolerance-ha 1e-8 \
   --matrix-relative-tolerance 1e-8 --eigenvalue-tolerance-ha 1e-6 \
   --gap-tolerance-ev 1e-5 --degeneracy-tolerance-ha 1e-8 \
