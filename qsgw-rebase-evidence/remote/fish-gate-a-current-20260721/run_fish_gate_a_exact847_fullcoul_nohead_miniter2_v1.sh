@@ -158,7 +158,7 @@ export LIBRPA_WCFQ_DUMP=1
 export LD_LIBRARY_PATH="$legacy_build/src:$legacy_build/qsgw:${LD_LIBRARY_PATH:-}"
 
 cat >"$run_root/PROVENANCE.txt" <<EOF
-gate=gate_a1_exact847_scheme_a_legacy_fullcoul_nohead_shrinkchi_off_miniter2_v2
+gate=gate_a1_exact847_scheme_a_legacy_fullcoul_nohead_shrinkchi_off_miniter2_v3
 acceptance=pending_legacy_runtime
 legacy_role=corrected_multi_iteration_oracle_harness_not_raw_historical_binary
 legacy_commit=8476213f66c68efb43404713eacbd04966820f26
@@ -176,6 +176,8 @@ mixing=direct_update_none
 headwing=off
 hartree=off
 use_shrink_chi=false
+gf_R_threshold_effective=1e-12_cli_override
+gf_R_threshold_runtime_log=rounded_to_six_decimal_places
 h_qsgw_cut=off_mode0
 band=enabled_by_legacy_qsgw_band0_but_not_a_gate_observer
 nfreq=16
@@ -212,7 +214,7 @@ for raw in stdout.read_text().splitlines():
 expected_numeric = {
     "nfreq": 16,
     "n_params_anacon": 16,
-    "gf_R_threshold": 1.0e-12,
+    "gf_R_threshold": 0.0,
     "vq_threshold": 0.0,
     "sqrt_coulomb_threshold": 0.0,
     "libri_chi0_threshold_C": 1.0e-4,
@@ -228,15 +230,14 @@ expected_text = {
     "task": "qsgw_band0",
     "tfgrids_type": "minimax",
     "parallel_routing": "libri",
-    "replace_w_head": "false",
-    "use_scalapack_gw_wc": "true",
-    "use_shrink_abfs": "true",
-    "use_shrink_chi": "false",
-    "use_fullcoul_exx": "true",
-    "use_fullcoul_eps": "true",
-    "use_fullcoul_wc": "false",
-    "use_abacus_exx_symmetry": "true",
-    "use_abacus_gw_symmetry": "true",
+    "replace_w_head": "F",
+    "use_scalapack_gw_wc": "T",
+    "use_shrink_abfs": "T",
+    "use_shrink_chi": "F",
+    "use_fullcoul_exx": "T",
+    "use_fullcoul_wc": "F",
+    "use_abacus_exx_symmetry": "T",
+    "use_abacus_gw_symmetry": "T",
 }
 for key, expected in expected_numeric.items():
     if key not in observed:
@@ -253,6 +254,15 @@ for key, expected in expected_text.items():
             f"{observed.get(key)!r} != {expected!r}"
         )
 output.write_text(json.dumps({
+    "limitations": {
+        "gf_R_threshold": (
+            "effective 1e-12 CLI override is logged as 0.000000 by exact847"
+        ),
+        "use_fullcoul_eps": (
+            "exact847 task_qsgw_band0 does not publish this parsed flag; "
+            "the screened-interaction call uses full Vq for epsilon directly"
+        ),
+    },
     "numeric_parameters": {
         key: float(observed[key]) for key in sorted(expected_numeric)
     },
@@ -328,5 +338,5 @@ touch "$run_root/RUN_GREEN"
 )
 touch "$run_root/COMPLETE"
 
-echo GATE_A1_EXACT847_SCHEME_A_LEGACY_FULLCOUL_NOHEAD_SHRINKCHI_OFF_MINITER2_V2=PASS
+echo GATE_A1_EXACT847_SCHEME_A_LEGACY_FULLCOUL_NOHEAD_SHRINKCHI_OFF_MINITER2_V3=PASS
 cat "$run_root/iteration-audit.json"
