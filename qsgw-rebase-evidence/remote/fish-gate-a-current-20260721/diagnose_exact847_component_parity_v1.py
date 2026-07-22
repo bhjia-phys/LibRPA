@@ -212,11 +212,22 @@ def diagonal(values: np.ndarray) -> np.ndarray:
     return np.diagonal(values, axis1=-2, axis2=-1)
 
 
-def scalar_metrics(reference: np.ndarray, observed: np.ndarray) -> dict[str, float]:
+def scalar_metrics(reference: np.ndarray, observed: np.ndarray) -> dict[str, object]:
     difference = observed - reference
+    flat_index = int(np.argmax(np.abs(difference)))
+    spin, kpoint, band = np.unravel_index(flat_index, difference.shape)
+    value = difference[spin, kpoint, band]
     return {
         "max_abs_ha": float(np.max(np.abs(difference))),
         "rms_ha": float(np.sqrt(np.mean(np.abs(difference) ** 2))),
+        "maximum_difference": {
+            "spin": int(spin),
+            "kpoint": int(kpoint),
+            "band": int(band),
+            "real_ha": float(value.real),
+            "imag_ha": float(value.imag),
+            "abs_ha": float(abs(value)),
+        },
     }
 
 
@@ -227,18 +238,28 @@ def analyze(
 ) -> dict[str, object]:
     legacy_h = checkpoint.legacy.hermitize_legacy_upper(legacy_raw.copy())
     base = components["h0"] - components["vxc_dft"] + components["exx"]
+    base_upper = checkpoint.legacy.hermitize_legacy_upper(base.copy())
     candidate_raw = components["raw_h"]
     candidate_vc = components["vc"]
-    implied_legacy_vc = legacy_h - base
-    raw_closure = base + candidate_vc - candidate_raw
-    target = legacy_h - base
-    denominator = float(np.vdot(candidate_vc.ravel(), candidate_vc.ravel()).real)
+    candidate_vc_upper = checkpoint.legacy.hermitize_legacy_upper(
+        candidate_vc.copy()
+    )
+    implied_legacy_vc = legacy_h - base_upper
+    assembled_upper = checkpoint.legacy.hermitize_legacy_upper(
+        (base + candidate_vc).copy()
+    )
+    raw_closure = assembled_upper - candidate_raw
+    target = legacy_h - base_upper
+    denominator = float(
+        np.vdot(candidate_vc_upper.ravel(), candidate_vc_upper.ravel()).real
+    )
     best_scale = (
-        float(np.vdot(candidate_vc.ravel(), target.ravel()).real) / denominator
+        float(np.vdot(candidate_vc_upper.ravel(), target.ravel()).real)
+        / denominator
         if denominator > 0.0
         else 0.0
     )
-    best_scaled = base + best_scale * candidate_vc
+    best_scaled = base_upper + best_scale * candidate_vc_upper
 
     legacy_eigenvalues, _ = checkpoint.legacy.eigensystem(legacy_raw)
     candidate_eigenvalues, _ = checkpoint.legacy.eigensystem(candidate_raw)
@@ -251,7 +272,8 @@ def analyze(
         "schema": SCHEMA,
         "diagnostic_complete": True,
         "candidate_raw_closure": {
-            **matrix_metrics(candidate_raw, base + candidate_vc),
+            "semantics": "upper_triangle_hermitized",
+            **matrix_metrics(candidate_raw, assembled_upper),
             "maximum_residual": maximum_location(raw_closure),
         },
         "legacy_checkpoint": {
@@ -280,9 +302,9 @@ def analyze(
                     np.max(np.abs(candidate_eigenvalues - legacy_eigenvalues))
                 ),
             },
-            "base_without_vc": matrix_metrics(legacy_h, base),
+            "base_without_vc": matrix_metrics(legacy_h, base_upper),
             "candidate_vc_vs_legacy_implied_vc": matrix_metrics(
-                implied_legacy_vc, candidate_vc
+                implied_legacy_vc, candidate_vc_upper
             ),
             "best_real_vc_scale": best_scale,
             "best_scaled_vc_hamiltonian": matrix_metrics(legacy_h, best_scaled),
@@ -295,6 +317,7 @@ def analyze(
             }
             for name, values in {
                 **components,
+                "candidate_vc_upper": candidate_vc_upper,
                 "legacy_implied_vc": implied_legacy_vc,
             }.items()
         },

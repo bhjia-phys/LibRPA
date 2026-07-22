@@ -64,12 +64,14 @@ current_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-current-20260
 tools_dir=$run_root/tools
 mkdir -p "$tools_dir"
 cp "$0" "$run_root/"
+observer_sha256=$(sha256sum \
+  "$current_dir/diagnose_exact847_component_parity_v1.py" | awk '{print $1}')
 cp "$current_dir/diagnose_exact847_component_parity_v1.py" "$tools_dir/"
 cp "$current_dir/compare_legacy_h0_candidate_trace_v2.py" "$tools_dir/"
 cp "$symmetry_dir/compare_legacy_h0_candidate_trace_v1.py" "$tools_dir/"
 cp "$symmetry_dir/compare_legacy_band0_native_outputs_v1.py" "$tools_dir/"
 test "$(sha256sum "$tools_dir/diagnose_exact847_component_parity_v1.py" | awk '{print $1}')" = \
-  e943471dad91b02c5a269a28aa80c2b4142e4535d2050b4540f9f8a8c0f269eb
+  "$observer_sha256"
 
 PYTHONPATH="$tools_dir" "$python" -B \
   "$tools_dir/diagnose_exact847_component_parity_v1.py" \
@@ -85,6 +87,7 @@ gate=gate_a1_exact847_component_diagnostic_v1
 acceptance=false_diagnostic_only
 runner_commit=$RUNNER_COMMIT
 runner_sha256=$RUNNER_SHA256
+observer_sha256=$observer_sha256
 legacy_run=$legacy_run
 legacy_run_is_green=false
 legacy_checkpoint_iteration=1
