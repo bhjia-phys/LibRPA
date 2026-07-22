@@ -142,6 +142,15 @@ artifact and all numerical outputs by SHA256, completes the component and
 current-versus-diagnostic comparisons without rerunning LibRPA, and emits only
 `POSTCHECK_COMPLETE`.
 
+The postcheck completed in
+`librpa-qsgw-gate-a1-exact847-legacy-wr-postcheck-20260722-ca010863-v1`.
+Restoring the old generic route increased the exact847 `SigcRF` mismatch from
+`5.02e-4 Ha` to `1.05e-3 Ha` and the relative Frobenius mismatch from
+`5.17e-3` to `1.04e-2`. It therefore rejects the hypothesis that upstream
+commit `318e3e42` alone caused the exact847 difference. See
+`EXACT847_LEGACY_WR_DIAGNOSTIC_20260722.md`; Gate A1 remains pending while the
+old ABACUS-specific accumulator and pre-transform `Wc(q)` are inspected.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
