@@ -101,6 +101,17 @@ difference, but EXX differs by `218.85 Ha`, SigmaC by `4.05e4 Ha`, Vc by
 `1.56e4 Ha`, and eigenvalues by `1.92e4 Ha`. This isolates the divergence to
 the symmetry/full-ABF EXX/GW path rather than the frozen KS input.
 
+`run_fish_exact847_legacy_sigcrf_projection_probe_v1.sh` isolates the next
+boundary without rebuilding the dielectric response. It SHA-binds the 16
+`SigcRF` files produced by the usable exact847 shrink-chi-off iteration-1
+prefix, asks the accepted current executable to read those real-space
+matrices, and compares the resulting fixed-basis `SigmaC(iw)` against the
+instrumented exact847 component oracle. The run is always diagnostic-only.
+`classify_exact847_sigma_projection_probe_v1.py` reports whether the current
+reader plus k-local BLACS projection reproduces the legacy projected Sigma;
+success localizes the remaining mismatch to real-space Sigma construction,
+while failure leaves the reader/projection boundary implicated.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
