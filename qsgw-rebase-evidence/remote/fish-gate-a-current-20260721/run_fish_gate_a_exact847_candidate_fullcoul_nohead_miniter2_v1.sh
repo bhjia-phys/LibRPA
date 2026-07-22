@@ -345,6 +345,79 @@ sha256sum "$candidate/librpa.in" "$input_overlay/qsgw_input.contract" \
     >librpa.stdout 2>librpa.stderr
   printf 'completed_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>runtime.txt
 )
+"$python" - "$candidate/librpa.stdout" \
+  "$run_root/candidate-runtime-parameter-audit.json" <<'PY'
+import json
+import pathlib
+import sys
+
+stdout = pathlib.Path(sys.argv[1])
+output = pathlib.Path(sys.argv[2])
+
+observed = {}
+for raw in stdout.read_text().splitlines():
+    if " = " not in raw:
+        continue
+    key, value = raw.strip().split(" = ", 1)
+    observed[key] = value
+
+expected_numeric = {
+    "nfreq": 16,
+    "n_params_anacon": 16,
+    "gf_R_threshold": 1.0e-12,
+    "vq_threshold": 0.0,
+    "sqrt_coulomb_threshold": 0.0,
+    "libri_chi0_threshold_C": 1.0e-4,
+    "libri_chi0_threshold_G": 1.0e-5,
+    "libri_exx_threshold_C": 1.0e-4,
+    "libri_exx_threshold_D": 1.0e-4,
+    "libri_exx_threshold_V": 1.0e-1,
+    "libri_g0w0_threshold_C": 1.0e-5,
+    "libri_g0w0_threshold_G": 1.0e-5,
+    "libri_g0w0_threshold_Wc": 1.0e-6,
+}
+expected_text = {
+    "task": "qsgw",
+    "parallel_routing": "libri",
+    "replace_w_head": "false",
+    "use_scalapack_gw_wc": "true",
+    "use_shrink_abfs": "true",
+    "use_shrink_chi": "false",
+    "use_fullcoul_exx": "true",
+    "use_fullcoul_eps": "true",
+    "use_fullcoul_wc": "false",
+    "use_symmetry_exx": "true",
+    "use_symmetry_gw": "true",
+    "use_symmetry_rpa": "true",
+}
+
+for key, expected in expected_numeric.items():
+    if key not in observed:
+        raise AssertionError(f"runtime parameter is missing: {key}")
+    value = float(observed[key])
+    if value != float(expected):
+        raise AssertionError(
+            f"runtime parameter mismatch for {key}: {value} != {expected}"
+        )
+for key, expected in expected_text.items():
+    if observed.get(key) != expected:
+        raise AssertionError(
+            f"runtime parameter mismatch for {key}: "
+            f"{observed.get(key)!r} != {expected!r}"
+        )
+
+output.write_text(json.dumps({
+    "numeric_parameters": {
+        key: float(observed[key]) for key in sorted(expected_numeric)
+    },
+    "text_parameters": {
+        key: observed[key] for key in sorted(expected_text)
+    },
+    "passed": True,
+}, indent=2, sort_keys=True) + "\n")
+PY
+grep -Fq '"passed": true' \
+  "$run_root/candidate-runtime-parameter-audit.json"
 grep -Fq 'QSGW iteration 1:' "$candidate/librpa.stdout"
 grep -Fq 'QSGW iteration 2:' "$candidate/librpa.stdout"
 grep -Fq 'QSGW completed iterations: 2' "$candidate/librpa.stdout"
