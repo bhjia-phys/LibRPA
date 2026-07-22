@@ -21,10 +21,13 @@ legacy_bundle=$base/librpa-qsgw-gate-a-symmetry-band0-bundle-20260720-v2
 legacy_dataset=$legacy_bundle/dataset
 gate0=$base/librpa-qsgw-gate0-20260722-66bfe1cf-v1
 gate2=$base/librpa-qsgw-gate2-current-20260722-aca53374-v1
-input_overlay=$gate2/input-overlay
+source_input_overlay=$gate2/input-overlay
+input_overlay=$run_root/input-overlay-state-basis
 candidate=$run_root/candidate
 tools_dir=$run_root/tools
 python=/home/bhj/ai-runs/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/python
+symmetry_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720
+current_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721
 
 expected_upstream_commit=42d3863c1d865194d382a085851d1e2e8a39764f
 expected_candidate_commit=66bfe1cfd35c983222935d250039a8fe5c4b7af1
@@ -112,13 +115,44 @@ test "$(sha256sum "$candidate_exe" | awk '{print $1}')" = \
   "$expected_candidate_exe_sha"
 test "$(git -C "$candidate_source" rev-parse HEAD)" = "$expected_candidate_commit"
 test -z "$(git -C "$candidate_source" status --porcelain)"
-test "$(sha256sum "$input_overlay/qsgw_input.contract" | awk '{print $1}')" = \
+test "$(sha256sum "$source_input_overlay/qsgw_input.contract" | awk '{print $1}')" = \
   "$expected_overlay_contract_sha"
 test ! -e "$legacy_dataset/vxc_out"
 ! grep -Eq '^role [0-9a-f]{64} vxc_out$' \
-  "$input_overlay/qsgw_input.contract"
+  "$source_input_overlay/qsgw_input.contract"
 
-mkdir -p "$candidate" "$tools_dir"
+mkdir -p "$candidate" "$tools_dir" "$input_overlay"
+for entry in "$source_input_overlay"/*; do
+  name=$(basename "$entry")
+  case "$name" in
+    qsgw_input.contract|qsgw_vxc_scf.manifest) continue ;;
+  esac
+  ln -s "$entry" "$input_overlay/$name"
+done
+cp "$current_dir/upgrade_exact847_vxc_manifest_state_basis_v1.py" \
+  "$tools_dir/upgrade_exact847_vxc_manifest_state_basis_v1.py"
+"$python" -B "$tools_dir/upgrade_exact847_vxc_manifest_state_basis_v1.py" \
+  "$source_input_overlay/qsgw_input.contract" \
+  "$source_input_overlay/qsgw_vxc_scf.manifest" \
+  "$input_overlay/qsgw_input.contract" \
+  "$input_overlay/qsgw_vxc_scf.manifest" \
+  "$run_root/vxc-state-basis-upgrade.json" \
+  >"$run_root/vxc-state-basis-upgrade.stdout"
+corrected_overlay_contract_sha=$(sha256sum \
+  "$input_overlay/qsgw_input.contract" | awk '{print $1}')
+corrected_vxc_manifest_sha=$(sha256sum \
+  "$input_overlay/qsgw_vxc_scf.manifest" | awk '{print $1}')
+grep -Fqx 'basis state' "$input_overlay/qsgw_vxc_scf.manifest"
+grep -Fqx 'gauge mf0_state' "$input_overlay/qsgw_vxc_scf.manifest"
+grep -Fq '"passed": true' "$run_root/vxc-state-basis-upgrade.json"
+grep -Fq "$corrected_vxc_manifest_sha" "$input_overlay/qsgw_input.contract"
+
+oracle_source=$symmetry_dir/oracle-source-audit-v1/exact847/task_qsgw_band_0.cpp
+grep -Fq 'ABACUS out_mat_xc writes the Vxc matrix in KS-orbital representation;' \
+  "$oracle_source"
+grep -Fq 'the filename still contains "nao" for historical reasons.' \
+  "$oracle_source"
+
 "$python" - "$legacy_dataset" "$input_overlay" \
   "$run_root/shared-reader-input-audit.json" <<'PY'
 import hashlib
@@ -138,9 +172,15 @@ def digest(path):
     return value.hexdigest()
 
 # vxc_out is an unbound G0W0 diagonal-Vxc reader file. QSGW reads the
-# contract-bound full-matrix qsgw_vxc_scf.manifest instead; that manifest and
-# every matrix it binds are checked below like all other QSGW reader inputs.
-excluded = {"qsgw_input.contract", "stru_out", "vxc_out"}
+# contract-bound full-matrix qsgw_vxc_scf.manifest instead. The corrected
+# manifest metadata is audited by the upgrader; every matrix payload still has
+# to match the legacy reader bundle byte for byte below.
+excluded = {
+    "qsgw_input.contract",
+    "qsgw_vxc_scf.manifest",
+    "stru_out",
+    "vxc_out",
+}
 rows = []
 for entry in sorted(candidate.iterdir(), key=lambda path: path.name):
     if entry.name in excluded:
@@ -159,8 +199,6 @@ output.write_text(json.dumps({
 }, indent=2, sort_keys=True) + "\n")
 PY
 
-symmetry_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720
-current_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721
 for tool in \
   "$symmetry_dir/compare_legacy_band0_native_outputs_v1.py" \
   "$symmetry_dir/compare_legacy_h0_candidate_trace_v1.py" \
@@ -171,6 +209,12 @@ for tool in \
   test -f "$tool"
   cp "$tool" "$tools_dir/$(basename "$tool")"
 done
+cp "$symmetry_dir/observer-tools-v1/compare_qsgw_component_traces.py" \
+  "$tools_dir/compare_qsgw_component_traces_v4.py"
+cp "$RUNNER_SOURCE/regression_tests/backend/comparisons/cmp_qsgw.py" \
+  "$tools_dir/cmp_qsgw_v6.py"
+cp "$current_dir/compare_qsgw_component_traces_v6_adapter.py" \
+  "$tools_dir/compare_qsgw_component_traces.py"
 
 cat >"$candidate/librpa.in" <<EOF
 task = qsgw
@@ -223,6 +267,11 @@ comparison=exact847_iteration1_checkpoint_to_current_qsgw_one_update
 legacy_status=failed_after_iteration1_checkpoint
 iterations=0:1
 excluded_unbound_reader_file=vxc_out
+corrected_metadata_file=qsgw_vxc_scf.manifest
+vxc_manifest_old_basis=nao
+vxc_manifest_old_gauge=ao_bloch
+vxc_manifest_new_basis=state
+vxc_manifest_new_gauge=mf0_state
 crystal_symmetry=on_ibz_8_to_full_bz_64
 mixing=legacy_direct,candidate_none_direct
 headwing=off
@@ -251,7 +300,6 @@ export OPENBLAS_NUM_THREADS=32
 export OMP_PROC_BIND=spread
 export OMP_PLACES=cores
 export I_MPI_PIN_DOMAIN=omp
-export LIBRI_DETERMINISTIC_REDUCTION=1
 export LD_LIBRARY_PATH="$candidate_build/src:${LD_LIBRARY_PATH:-}"
 
 cat >"$run_root/PROVENANCE.txt" <<EOF
@@ -269,8 +317,12 @@ legacy_checkpoint_iteration=1
 legacy_run_is_green=false
 target_iteration=1
 candidate_extra_vxc_out_role=unbound_g0w0_reader_not_used_by_task_qsgw
-LIBRI_DETERMINISTIC_REDUCTION_requested=1
-LIBRI_DETERMINISTIC_REDUCTION_binary_support=unverified
+source_overlay_contract_sha256=$expected_overlay_contract_sha
+corrected_overlay_contract_sha256=$corrected_overlay_contract_sha
+corrected_vxc_manifest_sha256=$corrected_vxc_manifest_sha
+vxc_metadata_upgrade_report_sha256=$(sha256sum "$run_root/vxc-state-basis-upgrade.json" | awk '{print $1}')
+exact847_oracle_source_sha256=$(sha256sum "$oracle_source" | awk '{print $1}')
+deterministic_reduction_env=not_exported_no_binary_implementation
 started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
@@ -289,7 +341,7 @@ for trace in qsgw_matrices.dat qsgw_eigenvalues.dat qsgw_iterations.dat; do
   grep -Fqx '# qsgw_contract_version 6' "$candidate/$trace"
   grep -Fqx '# fixed_basis immutable_mf0' "$candidate/$trace"
   grep -Fqx '# qsgw_mixer none' "$candidate/$trace"
-  grep -Fqx "# qsgw_input_contract_sha256 $expected_overlay_contract_sha" \
+  grep -Fqx "# qsgw_input_contract_sha256 $corrected_overlay_contract_sha" \
     "$candidate/$trace"
 done
 
