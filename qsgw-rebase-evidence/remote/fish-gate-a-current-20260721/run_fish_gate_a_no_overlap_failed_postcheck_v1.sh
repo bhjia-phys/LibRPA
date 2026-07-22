@@ -13,7 +13,7 @@ alias_trace=/home/bhj/ai-runs/librpa-qsgw-gate-a-current-20260722-1b5387e2-v1/no
 no_overlap_trace=$failed_run/legacy/qsgw_oracle_matrices.dat
 tool_source=$source_root/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721
 base_comparator=$source_root/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/compare_qsgw_component_traces-v4-c3daf072.py
-python=${PYTHON:-python3}
+python=${PYTHON:-$(command -v python3)}
 
 expected_failed_sha=b57edd98b17ac66a73da27a0d5b604e695c3455e88c2e7cb0851d0f50221cec9
 expected_trace_sha=c3a8907e397c010be535d5d3a8526470c6353fa390f3f70ee2149ae7eb5fbeda
