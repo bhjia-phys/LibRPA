@@ -112,6 +112,14 @@ reader plus k-local BLACS projection reproduces the legacy projected Sigma;
 success localizes the remaining mismatch to real-space Sigma construction,
 while failure leaves the reader/projection boundary implicated.
 
+That projection probe completed successfully in
+`librpa-qsgw-gate-a1-exact847-legacy-sigcrf-projection-probe-20260722-2962fcd1-v1`:
+the projected Sigma maximum difference is `2.73e-10 Ha` and the relative
+Frobenius difference is `1.34e-10`. The reader/projection boundary is therefore
+closed. `run_fish_exact847_current_sigcrf_compare_v1.sh` performs the next
+full-compute control and uses `compare_exact847_sigcrf_v1.py` to compare every
+frequency and real-space AO block before fixed-basis projection.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
