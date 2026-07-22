@@ -33,6 +33,23 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
         self.assertIn("CANDIDATE_EXE_SHA256", self.source)
         self.assertIn("gate=fish_gate0_current_v2", self.source)
 
+    def test_requires_accepted_gate1_before_numerics(self):
+        self.assertIn("GATE1_PROVENANCE_SHA256", self.source)
+        self.assertIn("gate=fish_gate1_current_g0w0_ab_v2", self.source)
+        self.assertIn('test -e "$candidate_gate1/GREEN_CONFIRMED"', self.source)
+        self.assertIn('test ! -e "$candidate_gate1/FAILED"', self.source)
+        self.assertIn(
+            'sha256sum --check --quiet OUTPUT_SHA256SUMS.txt', self.source
+        )
+
+    def test_binds_runner_checkout_and_writes_failure_marker(self):
+        self.assertIn("RUNNER_SOURCE", self.source)
+        self.assertIn('git -C "$RUNNER_SOURCE" rev-parse HEAD', self.source)
+        self.assertIn('git -C "$RUNNER_SOURCE" status --porcelain', self.source)
+        self.assertIn('>"$run_root/FAILED"', self.source)
+        self.assertIn('touch "$run_root/GREEN_CONFIRMED"', self.source)
+        self.assertIn("run_succeeded=1", self.source)
+
     def test_runs_both_required_iteration_and_mixing_modes(self):
         self.assertIn("run_mode no-mix-miniter2 2 1 none 0.2", self.source)
         self.assertIn(

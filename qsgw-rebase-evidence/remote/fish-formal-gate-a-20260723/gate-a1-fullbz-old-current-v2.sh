@@ -4,13 +4,16 @@ trap 'status=$?; printf "ERROR line=%s status=%s command=%s\n" \
   "$LINENO" "$status" "$BASH_COMMAND" >&2' ERR
 
 : "${RUNNER_COMMIT:?RUNNER_COMMIT must identify this committed runner}"
+: "${RUNNER_SOURCE:?RUNNER_SOURCE must be a clean checkout at RUNNER_COMMIT}"
 : "${RUNNER_SHA256:?RUNNER_SHA256 must identify this exact runner}"
 : "${GATE0_PROVENANCE_SHA256:?GATE0_PROVENANCE_SHA256 must bind accepted Gate 0}"
+: "${GATE1_PROVENANCE_SHA256:?GATE1_PROVENANCE_SHA256 must bind accepted Gate 1}"
 : "${CANDIDATE_EXE_SHA256:?CANDIDATE_EXE_SHA256 must bind the Gate 0 executable}"
 : "${RUN_TAG:?RUN_TAG must make the run directory immutable}"
 test "${#RUNNER_COMMIT}" = 40
 test "${#RUNNER_SHA256}" = 64
 test "${#GATE0_PROVENANCE_SHA256}" = 64
+test "${#GATE1_PROVENANCE_SHA256}" = 64
 test "${#CANDIDATE_EXE_SHA256}" = 64
 case "$RUN_TAG" in
   *[!A-Za-z0-9._-]*|'') echo "RUN_TAG contains unsafe characters" >&2; exit 2 ;;
@@ -23,6 +26,7 @@ old_runtime=$root/legacy
 old_build=$old_runtime/old/build
 old_exe=$old_build/chi0_main.exe
 candidate_gate0=/home/bhj/ai-runs/librpa-qsgw-gate0-20260723-4f9ab0cf-v1
+candidate_gate1=/home/bhj/ai-runs/librpa-qsgw-gate1-current-20260723-4f9ab0cf-g0w0-v2
 candidate_source=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/candidate
 candidate_build=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
 candidate_exe=$candidate_build/chi0_main.exe
@@ -51,8 +55,26 @@ expected_initial_sha=6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d
 expected_closure_test_sha=38de02fabc0dde41911e5152b0b08a9987b312b0cea29c69396bb9e392e9c745
 expected_initial_test_sha=82634e292a8fc1eb5ed454360ea2367e06687f0547da6503291c850a00e5b339
 expected_current_parser_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
+runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a1-fullbz-old-current-v2.sh
+
+run_succeeded=0
+record_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ $run_succeeded -ne 1 && -d ${run_root:-/nonexistent} ]]; then
+    printf 'failed_utc=%s\nexit_code=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" >"$run_root/FAILED"
+  fi
+  exit "$rc"
+}
+trap record_exit EXIT
 
 test ! -e "$run_root"
+test -d "$RUNNER_SOURCE/.git"
+test "$(git -C "$RUNNER_SOURCE" rev-parse HEAD)" = "$RUNNER_COMMIT"
+test -z "$(git -C "$RUNNER_SOURCE" status --porcelain)"
+test "$(git -C "$RUNNER_SOURCE" show "$RUNNER_COMMIT:$runner_relative" | \
+  sha256sum | awk '{print $1}')" = "$RUNNER_SHA256"
 test -e "$common_root/COMPLETE"
 test -e "$candidate_gate0/GREEN_CONFIRMED"
 test ! -e "$candidate_gate0/FAILED"
@@ -91,6 +113,20 @@ test "$(sha256sum "$candidate_exe" | awk '{print $1}')" = \
 )
 test "$(git -C "$candidate_source" rev-parse HEAD)" = "$expected_candidate_commit"
 test -z "$(git -C "$candidate_source" status --porcelain)"
+
+printf 'preflight=candidate_gate1_provenance\n'
+test -e "$candidate_gate1/GREEN_CONFIRMED"
+test ! -e "$candidate_gate1/FAILED"
+test "$(sha256sum "$candidate_gate1/PROVENANCE.txt" | awk '{print $1}')" = \
+  "$GATE1_PROVENANCE_SHA256"
+grep -Fqx 'gate=fish_gate1_current_g0w0_ab_v2' "$candidate_gate1/PROVENANCE.txt"
+grep -Fqx 'acceptance=true' "$candidate_gate1/PROVENANCE.txt"
+grep -Fqx "upstream_commit=$expected_upstream_commit" "$candidate_gate1/PROVENANCE.txt"
+grep -Fqx "candidate_commit=$expected_candidate_commit" "$candidate_gate1/PROVENANCE.txt"
+(
+  cd "$candidate_gate1"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
 
 printf 'preflight=common_input_bundle\n'
 test "$(sha256sum "$common_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
@@ -498,6 +534,8 @@ candidate_executable=$candidate_exe
 candidate_executable_sha256=$CANDIDATE_EXE_SHA256
 candidate_gate0=$candidate_gate0
 candidate_gate0_provenance_sha256=$GATE0_PROVENANCE_SHA256
+candidate_gate1=$candidate_gate1
+candidate_gate1_provenance_sha256=$GATE1_PROVENANCE_SHA256
 dataset=$input_dir
 dataset_manifest_sha256=$expected_common_dataset_manifest_sha
 input_contract_sha256=$expected_common_contract_sha
@@ -561,4 +599,6 @@ sha256sum \
 )
 touch "$run_root/COMPLETE"
 touch "$run_root/GREEN_CONFIRMED"
+run_succeeded=1
+trap - EXIT
 printf 'GREEN_CONFIRMED %s\n' "$run_root"
