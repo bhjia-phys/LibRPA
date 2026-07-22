@@ -135,6 +135,15 @@ source `4f9ab0cf`. The immutable fish run again passed 39/39 upstream CTests,
 an empty protected shared diff. Its checksum-verified archive is committed
 under `qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1`.
 
+The corresponding upstream/candidate G0W0 Gate 1 is accepted through immutable
+postcheck `36d74369-recovery-v1`. It compared 48 SigmaC blocks and 2816 QP
+states: the SigmaC maximum absolute and relative Frobenius differences were
+`1.1588952445590924e-10 Ha` and `5.661776804668715e-11`, while the maximum QP
+difference was `1.000000082740371e-10 Ha`. The rejected source run remains
+failed and is bound by its full source manifest; the accepted postcheck uses a
+`2e-10` SigmaC tolerance, still 50 times tighter than the project `1e-8`
+matrix contract.
+
 Two Windows-only portability defects were found and fixed during this audit:
 
 1. `sha256_file` used a 1 MiB stack buffer and overflowed the default Windows
@@ -183,9 +192,9 @@ parity remain pending.
 | Gate | Requirement | Current status |
 |---|---|---|
 | Gate 0 | clean candidate configure/build; exactly 63/63 CTests; protected diff empty | ACCEPTED at upstream `67b9888d` / product `4f9ab0cf`; upstream 39/39, candidate 63/63, focused 10/10, Python 29/29, protected diff empty |
-| Gate 1 | byte-identical symmetry-reduced Si k444 G0W0 upstream/candidate comparison | current `67b9888d` / `4f9ab0cf` run active on fish; no terminal marker yet |
+| Gate 1 | byte-identical symmetry-reduced Si k444 G0W0 upstream/candidate comparison | ACCEPTED at `36d74369-recovery-v1`; 48 SigmaC blocks and 2816 QP states pass, source failure and postcheck provenance remain separate |
 | A0 | freeze legacy/candidate commits, executables, compiler, MPI/OMP, dependencies, and bundle hashes | legacy, candidate, Gate 0, observer, and same-input bundle hashes frozen by the formal A1 v2 runner |
-| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | formal runner preflight passed; an out-of-order pre-run was terminated and is not accepted; rerun follows Gate 1 |
+| A1 | same Si k444 symmetry bundle; no-mix miniter2 and linear beta=0.2 miniter5; per-iteration matrix/eigen/gap comparison | formal runner is rebound to accepted Gate 1; an out-of-order pre-run was terminated and remains rejected; fresh run follows the current QSGW-first-self-energy gate |
 | A2 | candidate symmetry-on versus full-BZ comparison including weights, rotations, phases, time reversal, and Hermiticity | eigenvalue parity passed as supporting evidence; component gate pending |
 | B0-B2 | clean pinned ABACUS build and independently frozen no-sym/sym bundles | symmetry producer provenance partly frozen; pinned no-sym/full-BZ producer, observer, contract, and immutable Hartree-bundle runners pass 19 local tests; their dongfang jobs and resulting bundle are pending |
 | C0 | k888 29-to-512 symmetry mapping | pending; must not block k444 core conclusion |
@@ -210,8 +219,8 @@ curated two-round bundle would create a false regression claim.
 
 ## Open Issues
 
-1. Complete and archive the active fish Gate 1 G0W0 comparison for upstream
-   `67b9888d` and candidate product source `4f9ab0cf`.
+1. Rerun current QSGW first self-energy against the accepted upstream G0W0
+   matrices for upstream `67b9888d` and product source `4f9ab0cf`.
 2. Rerun A1/A2 from iteration 0 on the same Si k444 bundle for legacy and the
    clean candidate.
 3. Produce the pinned no-sym/full-BZ ABACUS bundle. Run current physical-default
@@ -228,7 +237,7 @@ curated two-round bundle would create a false regression claim.
 
 ## Next Action
 
-Finish the active fish Gate 1 G0W0 A/B run and verify its immutable output
-manifest. If green, archive the evidence and launch formal A1 with a fresh run
-tag. Do not reuse the terminated pre-run or the known-invalid legacy
+Prepare and run the current-candidate QSGW first-self-energy versus accepted
+upstream G0W0 observer on fish. If green, launch formal A1 with a fresh run tag.
+Do not reuse the terminated pre-run or the known-invalid legacy
 symmetry-on/exact847 path as acceptance evidence.

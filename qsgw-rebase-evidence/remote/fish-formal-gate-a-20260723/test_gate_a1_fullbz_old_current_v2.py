@@ -35,7 +35,13 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
 
     def test_requires_accepted_gate1_before_numerics(self):
         self.assertIn("GATE1_PROVENANCE_SHA256", self.source)
-        self.assertIn("gate=fish_gate1_current_g0w0_ab_v2", self.source)
+        self.assertIn(
+            "librpa-qsgw-gate1-current-postcheck-20260723-36d74369-v1",
+            self.source,
+        )
+        self.assertIn(
+            "gate=fish_gate1_current_g0w0_ab_recovery_v2", self.source
+        )
         self.assertIn('test -e "$candidate_gate1/GREEN_CONFIRMED"', self.source)
         self.assertIn('test ! -e "$candidate_gate1/FAILED"', self.source)
         self.assertIn(

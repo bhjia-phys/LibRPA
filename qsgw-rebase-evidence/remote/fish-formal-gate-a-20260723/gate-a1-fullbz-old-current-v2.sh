@@ -26,7 +26,7 @@ old_runtime=$root/legacy
 old_build=$old_runtime/old/build
 old_exe=$old_build/chi0_main.exe
 candidate_gate0=/home/bhj/ai-runs/librpa-qsgw-gate0-20260723-4f9ab0cf-v1
-candidate_gate1=/home/bhj/ai-runs/librpa-qsgw-gate1-current-20260723-4f9ab0cf-g0w0-v2
+candidate_gate1=/home/bhj/ai-runs/librpa-qsgw-gate1-current-postcheck-20260723-36d74369-v1
 candidate_source=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/candidate
 candidate_build=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
 candidate_exe=$candidate_build/chi0_main.exe
@@ -119,7 +119,7 @@ test -e "$candidate_gate1/GREEN_CONFIRMED"
 test ! -e "$candidate_gate1/FAILED"
 test "$(sha256sum "$candidate_gate1/PROVENANCE.txt" | awk '{print $1}')" = \
   "$GATE1_PROVENANCE_SHA256"
-grep -Fqx 'gate=fish_gate1_current_g0w0_ab_v2' "$candidate_gate1/PROVENANCE.txt"
+grep -Fqx 'gate=fish_gate1_current_g0w0_ab_recovery_v2' "$candidate_gate1/PROVENANCE.txt"
 grep -Fqx 'acceptance=true' "$candidate_gate1/PROVENANCE.txt"
 grep -Fqx "upstream_commit=$expected_upstream_commit" "$candidate_gate1/PROVENANCE.txt"
 grep -Fqx "candidate_commit=$expected_candidate_commit" "$candidate_gate1/PROVENANCE.txt"

@@ -1,0 +1,12 @@
+test_cli_writes_report_before_returning_threshold_failure (test_compare_g0w0_sigc_dump_directories.DirectoryComparisonTests.test_cli_writes_report_before_returning_threshold_failure) ... ok
+test_exact_directories_pass_and_count_exact_blocks (test_compare_g0w0_sigc_dump_directories.DirectoryComparisonTests.test_exact_directories_pass_and_count_exact_blocks) ... ok
+test_reports_global_maximum_values_location_and_percentiles (test_compare_g0w0_sigc_dump_directories.DirectoryComparisonTests.test_reports_global_maximum_values_location_and_percentiles) ... ok
+test_accepts_qp_roundoff_with_exact_input_columns (test_compare_energy_qp_v1.EnergyQpComparatorTests.test_accepts_qp_roundoff_with_exact_input_columns) ... ok
+test_rejects_changed_ks_energy (test_compare_energy_qp_v1.EnergyQpComparatorTests.test_rejects_changed_ks_energy) ... ok
+test_rejects_changed_state_key (test_compare_energy_qp_v1.EnergyQpComparatorTests.test_rejects_changed_state_key) ... ok
+test_rejects_qp_difference_above_tolerance (test_compare_energy_qp_v1.EnergyQpComparatorTests.test_rejects_qp_difference_above_tolerance) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.170s
+
+OK

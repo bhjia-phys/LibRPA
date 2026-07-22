@@ -26,7 +26,7 @@ class RefreshManifest67bTest(unittest.TestCase):
         cls.script = SCRIPT.read_text(encoding="utf-8")
         cls.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
-    def test_script_binds_current_upstream_branch_and_gate0(self):
+    def test_script_binds_current_upstream_branch_and_gates(self):
         expected = (
             f"$upstream = '{UPSTREAM}'",
             "$frozenParent = $upstream",
@@ -34,6 +34,10 @@ class RefreshManifest67bTest(unittest.TestCase):
             "fish-gate0-current-20260723\\4f9ab0cf-v1",
             "gate = 'fish_gate0_current_v2'",
             "run_fish_gate0_current_v2.sh",
+            "[string]$Gate1Evidence = ''",
+            "fish-gate1-current-20260723\\36d74369-recovery-v1",
+            "gate = 'fish_gate1_current_g0w0_ab_recovery_v2'",
+            "recover_fish_gate1_current_v2.sh",
         )
         for value in expected:
             self.assertIn(value, self.script)
@@ -61,7 +65,7 @@ class RefreshManifest67bTest(unittest.TestCase):
                 "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
             )
 
-    def test_manifest_has_current_formula_impacts_and_gate0(self):
+    def test_manifest_has_current_formula_impacts_and_gates(self):
         formula_ids = {
             item["formula_id"] for item in self.manifest["formula_code_impacts"]
         }
@@ -76,7 +80,25 @@ class RefreshManifest67bTest(unittest.TestCase):
             self.manifest["planning_state"]["fish_gate0"],
             "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty",
         )
-        self.assertEqual(self.manifest["current_gate"], "g0w0-upstream-vs-rebased")
+        self.assertEqual(
+            self.manifest["planning_state"]["fish_gate1"],
+            "accepted_sigc_48_qp_2816_source_outputs_immutable_postcheck",
+        )
+        gate1 = self.manifest["benchmarks"][1]
+        self.assertEqual(gate1["id"], "g0w0-upstream-vs-rebased")
+        self.assertEqual(gate1["status"], "accepted")
+        self.assertTrue(
+            {
+                "upstream-g0w0-log",
+                "rebased-g0w0-log",
+                "g0w0-comparison",
+                "gate1-provenance",
+                "gate1-source-manifest",
+            }.issubset({artifact["id"] for artifact in gate1["artifacts"]})
+        )
+        self.assertEqual(
+            self.manifest["current_gate"], "qsgw-iter0-vs-upstream-g0w0"
+        )
 
 
 if __name__ == "__main__":

@@ -2959,9 +2959,56 @@
                            "depends_on":  [
 
                                           ],
-                           "status":  "planned",
+                           "status":  "accepted",
                            "artifacts":  [
-
+                                             {
+                                                 "id":  "upstream-g0w0-log",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/source-run/upstream/librpa.stdout",
+                                                 "sha256":  "84771ad7b3fa8d28531f360c627bba49a11822f283bc4560c0f03c480b827bda",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "rebased-g0w0-log",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/source-run/candidate/librpa.stdout",
+                                                 "sha256":  "5119d537ebf6e34bad5327900ff65b3b0c0b6ad815684700a7318740e274b413",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "g0w0-comparison",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/g0w0-comparison.json",
+                                                 "sha256":  "218d80ac9595b86d1c4e087018f4302eca13b3b8a5c2aa906f9b55211378894e",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "energy-qp-comparison",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/energy-qp-comparison.json",
+                                                 "sha256":  "0b1871506593070ea313a88b37088792accd29155cc9f53ac28e10727e2dde46",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate1-provenance",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt",
+                                                 "sha256":  "880115845b7cb5a983885613a1b2325607bb269836f681b0af5051b8f9d74d0d",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate1-output-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/OUTPUT_SHA256SUMS.txt",
+                                                 "sha256":  "74a3453c46df34e7b0ec8430260cd47182e6d3d01a409f4a313dc976948a127f",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate1-source-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/SOURCE_RUN_SHA256SUMS.txt",
+                                                 "sha256":  "22840e6cf84d18526f05283231c47eb0a1784c58764f4387a7391c1f50aa5155",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             },
+                                             {
+                                                 "id":  "gate1-source-archive-manifest",
+                                                 "path":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/SOURCE_ARCHIVE_SHA256SUMS.txt",
+                                                 "sha256":  "3ea23bd4610a13931d2e0f19c0a2e362502b6389fc30339badc89d132c61b813",
+                                                 "reference":  "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1/PROVENANCE.txt"
+                                             }
                                          ]
                        },
                        {
@@ -3577,7 +3624,7 @@
     "approvals":  [
 
                   ],
-    "current_gate":  "g0w0-upstream-vs-rebased",
+    "current_gate":  "qsgw-iter0-vs-upstream-g0w0",
     "verified_evidence":  [
                               "qsgw-rebase-evidence/git/status.txt",
                               "qsgw-rebase-evidence/git/protected-src-inventory.json",
@@ -3602,7 +3649,8 @@
                               "qsgw-rebase-evidence/remote/fish-gate0-current-20260721/66bfe1cf-v1",
                               "qsgw-rebase-evidence/git/upstream-refresh-42d3863c-to-67b9888d.md",
                               "qsgw-rebase-evidence/remote/fish-gate0-current-20260723/4f9ab0cf-v1",
-                              "qsgw-rebase-evidence/git/upstream-master-ls-remote-20260723.json"
+                              "qsgw-rebase-evidence/git/upstream-master-ls-remote-20260723.json",
+                              "qsgw-rebase-evidence/remote/fish-gate1-current-20260723/36d74369-recovery-v1"
                           ],
     "open_issues":  [
                         {
@@ -3632,9 +3680,9 @@
                     ],
     "next_actions":  [
                          {
-                             "id":  "next-g0w0-direct-ab",
-                             "action":  "Run byte-identical-input upstream versus candidate G0W0 direct A/B on fish.",
-                             "gate":  "g0w0-upstream-vs-rebased",
+                             "id":  "next-qsgw-iter0-g0w0",
+                             "action":  "Run current QSGW first-self-energy versus accepted upstream G0W0, then launch formal A1.",
+                             "gate":  "qsgw-iter0-vs-upstream-g0w0",
                              "owner":  "rebase operator",
                              "status":  "ready"
                          }
@@ -3652,7 +3700,8 @@
                            "expected_ctest_count":  63,
                            "layered_staging_plan":  "388_candidate_137_excluded_zero_unclassified_five_layer_dry_run_passed",
                            "upstream_master_live_compare":  "67b9888d_identical_2026-07-22T17:46:14Z",
-                           "fish_gate0":  "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty"
+                           "fish_gate0":  "accepted_39_upstream_63_candidate_10_focused_protected_diff_empty",
+                           "fish_gate1":  "accepted_sigc_48_qp_2816_source_outputs_immutable_postcheck"
                        },
     "revised_scope":  {
                           "effective_date":  "2026-07-21",

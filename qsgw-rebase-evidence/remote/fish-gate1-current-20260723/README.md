@@ -23,3 +23,9 @@ exact, and the QP maximum difference was `1.000000082740371e-10 Ha`.
 remains 50 times tighter than the project matrix contract of `1e-8`; the
 source run stays failed and is bound byte-for-byte through
 `SOURCE_RUN_SHA256SUMS.txt`.
+
+The accepted recovery is archived under `36d74369-recovery-v1`. Its 15-file
+output manifest verifies, and `SOURCE_ARCHIVE_SHA256SUMS.txt` preserves the
+rejected source marker, controlled input, and both upstream/candidate logs.
+Every archived source hash is also present in the recovery-generated full
+source-run manifest; the rejected source outputs were not modified.

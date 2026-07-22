@@ -1,4 +1,4 @@
-INVALID qsgw-rebase-manifest.json
+INVALID F:\AI_Workspace\Theoretical-Physics\.sisyphus\drafts\_scratch\LibRPA-qsgw-independent-upstream-95c4-20260716\qsgw-rebase-manifest.json
 ERROR E_HASH_PROVENANCE /benchmarks/3/definition/side_a/executable/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
 ERROR E_HASH_PROVENANCE /control_pairs/0/a/comparator/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters
 ERROR E_HASH_PROVENANCE /control_pairs/0/a/dataset/sha256: sha256 must contain exactly 64 lowercase hexadecimal characters

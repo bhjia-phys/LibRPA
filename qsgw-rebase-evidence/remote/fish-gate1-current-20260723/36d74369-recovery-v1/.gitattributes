@@ -1,0 +1,4 @@
+* -text
+source-run/** -text
+tools/** -text
+source-run/*/librpa.stdout -diff
