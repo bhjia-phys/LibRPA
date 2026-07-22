@@ -10,7 +10,9 @@
 #SBATCH --output=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-formal-gate-a-20260722-02e889be/logs/gate-a1-fullbz-%j.out
 #SBATCH --error=/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-formal-gate-a-20260722-02e889be/logs/gate-a1-fullbz-%j.err
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "ERROR line=%s status=%s command=%s\n" \
+  "$LINENO" "$status" "$BASH_COMMAND" >&2' ERR
 
 : "${RUNNER_COMMIT:?submit with RUNNER_COMMIT=<40-hex commit>}"
 test "${#RUNNER_COMMIT}" = 40
@@ -62,6 +64,7 @@ test -x "$candidate_exe"
 mkdir -p "$tool_dir"
 cp "$0" "$run_root/gate-a1-fullbz-old-current-v1.slurm"
 
+printf 'preflight=legacy_provenance\n'
 test "$(sha256sum "$old_exe" | awk '{print $1}')" = \
   "$expected_old_exe_sha"
 test "$(sha256sum "$old_build/build-provenance.txt" | awk '{print $1}')" = \
@@ -69,6 +72,7 @@ test "$(sha256sum "$old_build/build-provenance.txt" | awk '{print $1}')" = \
 grep -Fqx "old_oracle_commit=$expected_old_commit" \
   "$old_build/build-provenance.txt"
 
+printf 'preflight=candidate_build_provenance\n'
 test "$(sha256sum "$candidate_exe" | awk '{print $1}')" = \
   "$expected_candidate_exe_sha"
 test "$(sha256sum "$candidate_build/SHA256SUMS.txt" | awk '{print $1}')" = \
@@ -89,11 +93,13 @@ grep -Fqx "source_archive_sha256=$expected_source_archive_sha" \
   cd "$candidate_build"
   sha256sum --check --quiet SHA256SUMS.txt
 )
+printf 'preflight=candidate_source_manifest\n'
 (
   cd "$candidate_source_parent"
   sha256sum --check --quiet "$candidate_build/source-files.sha256"
 )
 
+printf 'preflight=common_input_bundle\n'
 test "$(sha256sum "$common_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
   "$expected_common_dataset_manifest_sha"
 test "$(sha256sum "$common_root/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
@@ -114,6 +120,7 @@ grep -Fqx 'headwing_update none' "$input_dir/qsgw_input.contract"
 grep -Fqx 'hartree_update off' "$input_dir/qsgw_input.contract"
 grep -Fqx 'band_update off' "$input_dir/qsgw_input.contract"
 
+printf 'preflight=observer_tools\n'
 adapter_source=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721/compare_qsgw_legacy_v4_current_v6.py
 adapter_test_source=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721/test_compare_qsgw_legacy_v4_current_v6.py
 base_comparator_source=$candidate_source/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720/compare_qsgw_component_traces-v4-c3daf072.py
@@ -162,6 +169,7 @@ cp "$common_root/OUTPUT_SHA256SUMS.txt" "$run_root/common-input-OUTPUT_SHA256SUM
 cp "$common_root/PROVENANCE.txt" "$run_root/common-input-PROVENANCE.txt"
 cp "$input_dir/qsgw_input.contract" "$run_root/qsgw_input.contract"
 
+printf 'preflight=observer_unit_tests\n'
 PYTHONPATH="$tool_dir" "$python" -B "$adapter_test_source" \
   >"$run_root/adapter-unit-test.stdout" \
   2>"$run_root/adapter-unit-test.stderr"
@@ -211,6 +219,7 @@ mode_1=legacy_linear_beta_1_direct_vs_current_none_miniter2
 mode_2=legacy_linear_beta_0.2_vs_current_linear_beta_0.2_miniter5
 EOF
 
+printf 'numerics=begin\n'
 run_mode() {
   local mode_name=$1
   local target_iter=$2
