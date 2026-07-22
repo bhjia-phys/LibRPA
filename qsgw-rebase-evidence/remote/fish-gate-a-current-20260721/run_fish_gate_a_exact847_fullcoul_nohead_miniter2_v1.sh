@@ -79,6 +79,7 @@ printf '%s\n' "$RUNNER_SHA256" >"$run_root/runner-sha256.txt"
 cat >"$work/librpa.in" <<'EOF'
 task = qsgw_band0
 nfreq = 16
+tfgrid_type = minimax
 n_params_anacon = 16
 option_dielect_func = 0
 replace_w_head = f
@@ -87,7 +88,9 @@ use_scalapack_ecrpa = t
 parallel_routing = libri
 vq_threshold = 0
 sqrt_coulomb_threshold = 0
+gf_R_threshold = 1e-12
 use_shrink_abfs = t
+use_shrink_chi = f
 use_abacus_exx_symmetry = t
 use_abacus_gw_symmetry = t
 use_fullcoul_exx = t
@@ -116,6 +119,7 @@ EOF
 
 cat >"$run_root/PARAMETER_MAPPING.txt" <<EOF
 diagnostic=restore_historical_full_coulomb_exx_and_frequency_grid
+contract=direct_shrinked_cs_chi0
 legacy_commit=8476213f66c68efb43404713eacbd04966820f26
 legacy_patch=scheme_a_occupation_only
 iterations=0:$target_iter
@@ -127,8 +131,10 @@ headwing=off
 hartree=off
 h_qsgw_cut=off_mode0
 nfreq=16
-n_params_anacon=all_16_points
+n_params_anacon=16
 use_shrink_abfs=true
+use_shrink_chi=false
+gf_R_threshold=1e-12
 use_fullcoul_exx=true
 use_fullcoul_eps=true
 use_fullcoul_wc=false
@@ -152,7 +158,7 @@ export LIBRPA_WCFQ_DUMP=1
 export LD_LIBRARY_PATH="$legacy_build/src:$legacy_build/qsgw:${LD_LIBRARY_PATH:-}"
 
 cat >"$run_root/PROVENANCE.txt" <<EOF
-gate=gate_a1_exact847_scheme_a_legacy_fullcoul_nohead_miniter2_v1
+gate=gate_a1_exact847_scheme_a_legacy_fullcoul_nohead_shrinkchi_off_miniter2_v2
 acceptance=pending_legacy_runtime
 legacy_role=corrected_multi_iteration_oracle_harness_not_raw_historical_binary
 legacy_commit=8476213f66c68efb43404713eacbd04966820f26
@@ -169,6 +175,7 @@ crystal_symmetry=on_ibz_8_to_full_bz_64
 mixing=direct_update_none
 headwing=off
 hartree=off
+use_shrink_chi=false
 h_qsgw_cut=off_mode0
 band=enabled_by_legacy_qsgw_band0_but_not_a_gate_observer
 nfreq=16
@@ -187,6 +194,75 @@ sha256sum "$work/librpa.in" "$dataset/qsgw_input.contract" \
     >librpa.stdout 2>librpa.stderr
   printf 'completed_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>runtime.txt
 )
+
+python3 - "$work/librpa.stdout" "$run_root/runtime-parameter-audit.json" <<'PY'
+import json
+import pathlib
+import sys
+
+stdout = pathlib.Path(sys.argv[1])
+output = pathlib.Path(sys.argv[2])
+observed = {}
+for raw in stdout.read_text().splitlines():
+    if " = " not in raw:
+        continue
+    key, value = raw.strip().split(" = ", 1)
+    observed[key] = value
+
+expected_numeric = {
+    "nfreq": 16,
+    "n_params_anacon": 16,
+    "gf_R_threshold": 1.0e-12,
+    "vq_threshold": 0.0,
+    "sqrt_coulomb_threshold": 0.0,
+    "libri_chi0_threshold_C": 1.0e-4,
+    "libri_chi0_threshold_G": 1.0e-5,
+    "libri_exx_threshold_C": 1.0e-4,
+    "libri_exx_threshold_D": 1.0e-4,
+    "libri_exx_threshold_V": 1.0e-1,
+    "libri_g0w0_threshold_C": 1.0e-5,
+    "libri_g0w0_threshold_G": 1.0e-5,
+    "libri_g0w0_threshold_Wc": 1.0e-6,
+}
+expected_text = {
+    "task": "qsgw_band0",
+    "tfgrids_type": "minimax",
+    "parallel_routing": "libri",
+    "replace_w_head": "false",
+    "use_scalapack_gw_wc": "true",
+    "use_shrink_abfs": "true",
+    "use_shrink_chi": "false",
+    "use_fullcoul_exx": "true",
+    "use_fullcoul_eps": "true",
+    "use_fullcoul_wc": "false",
+    "use_abacus_exx_symmetry": "true",
+    "use_abacus_gw_symmetry": "true",
+}
+for key, expected in expected_numeric.items():
+    if key not in observed:
+        raise AssertionError(f"runtime parameter is missing: {key}")
+    value = float(observed[key])
+    if value != float(expected):
+        raise AssertionError(
+            f"runtime parameter mismatch for {key}: {value} != {expected}"
+        )
+for key, expected in expected_text.items():
+    if observed.get(key) != expected:
+        raise AssertionError(
+            f"runtime parameter mismatch for {key}: "
+            f"{observed.get(key)!r} != {expected!r}"
+        )
+output.write_text(json.dumps({
+    "numeric_parameters": {
+        key: float(observed[key]) for key in sorted(expected_numeric)
+    },
+    "text_parameters": {
+        key: observed[key] for key in sorted(expected_text)
+    },
+    "passed": True,
+}, indent=2, sort_keys=True) + "\n")
+PY
+grep -Fq '"passed": true' "$run_root/runtime-parameter-audit.json"
 
 grep -Fq 'Task work begins: qsgw_band0' "$work/librpa.stdout"
 grep -Fq 'QSGW band0: max_iterations = 2' "$work/librpa.stdout"
@@ -234,7 +310,7 @@ PY
 
 for iteration in 1 2; do
   checkpoint="$work/librpa.d/qsgw_checkpoints/iter_$(printf '%05d' "$iteration")"
-  test -f "$checkpoint/meta.txt"
+  test -f "$checkpoint/checkpoint.meta"
   test "$(find "$checkpoint" -maxdepth 1 \
     -name 'H0_GW_spin_01_k_*.bin' -type f | wc -l)" -eq 8
 done
@@ -252,5 +328,5 @@ touch "$run_root/RUN_GREEN"
 )
 touch "$run_root/COMPLETE"
 
-echo GATE_A1_EXACT847_SCHEME_A_LEGACY_FULLCOUL_NOHEAD_MINITER2_V1=PASS
+echo GATE_A1_EXACT847_SCHEME_A_LEGACY_FULLCOUL_NOHEAD_SHRINKCHI_OFF_MINITER2_V2=PASS
 cat "$run_root/iteration-audit.json"

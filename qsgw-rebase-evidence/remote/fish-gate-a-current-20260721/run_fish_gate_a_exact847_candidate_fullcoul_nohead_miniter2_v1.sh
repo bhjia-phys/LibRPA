@@ -14,7 +14,7 @@ esac
 
 base=/home/bhj/ai-runs
 run_root=$base/$RUN_ID
-legacy_run=$base/librpa-qsgw-gate-a1-exact847-fullcoul-nohead-miniter2-20260722-6a85c7fc-v1
+legacy_run=$base/librpa-qsgw-gate-a1-exact847-fullcoul-nohead-shrinkchi-off-miniter2-20260722-v2
 legacy_work=$legacy_run/legacy
 legacy_checkpoints=$legacy_work/librpa.d/qsgw_checkpoints
 legacy_bundle=$base/librpa-qsgw-gate-a-symmetry-band0-bundle-20260720-v2
