@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from compare_qsgw_component_traces_v4 import *  # noqa: F403
+from compare_qsgw_component_traces_v4 import _matrix_groups as _matrix_groups
 from compare_qsgw_component_traces_v4 import parse_contract as _parse_legacy
 from cmp_qsgw_v6 import _parse_contract as _parse_current
 

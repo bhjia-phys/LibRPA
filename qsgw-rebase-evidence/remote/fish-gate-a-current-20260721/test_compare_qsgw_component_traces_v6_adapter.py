@@ -55,12 +55,19 @@ class CurrentV6ClosureAdapterTest(unittest.TestCase):
                 / "observer-tools-v1"
                 / "validate_qsgw_trace_closure-v3-4a5de94e.py"
             ),
+            "validate_qsgw_fixed_basis.py": (
+                cls.root.parent
+                / "fish-gate-a-symmetry-20260720"
+                / "observer-tools-v1"
+                / "validate_qsgw_fixed_basis.py"
+            ),
         }
         for name, source in sources.items():
             shutil.copyfile(source, cls.tool_dir / name)
         sys.path.insert(0, str(cls.tool_dir))
         cls.adapter = importlib.import_module("compare_qsgw_component_traces")
         cls.closure = importlib.import_module("validate_qsgw_trace_closure")
+        cls.fixed_basis = importlib.import_module("validate_qsgw_fixed_basis")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -70,6 +77,7 @@ class CurrentV6ClosureAdapterTest(unittest.TestCase):
             "compare_qsgw_component_traces_v4",
             "cmp_qsgw_v6",
             "validate_qsgw_trace_closure",
+            "validate_qsgw_fixed_basis",
         ):
             sys.modules.pop(name, None)
         shutil.rmtree(cls.tool_dir)
@@ -88,6 +96,10 @@ class CurrentV6ClosureAdapterTest(unittest.TestCase):
         )
         self.assertEqual(closure_contract["qsgw_contract_version"], 6)
         self.assertEqual(closure_contract["task"], "qsgw")
+        self.assertIs(
+            self.fixed_basis._matrix_groups,
+            self.adapter._matrix_groups,
+        )
 
     def test_preserves_hartree_and_band_semantics(self) -> None:
         text = CURRENT_HEADER.replace(
