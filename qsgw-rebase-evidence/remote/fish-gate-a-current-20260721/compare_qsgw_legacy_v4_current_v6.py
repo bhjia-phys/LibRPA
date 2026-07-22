@@ -82,8 +82,38 @@ def _validate_actual_contracts(
     expected_mode: str,
     expected_legacy_beta: float,
     expected_current_beta: float,
+    allow_legacy_iteration_prefix: bool = False,
 ) -> dict[str, object]:
     legacy = base_module.parse_contract(legacy_text, "legacy v4 trace")
+    declared_min_iteration = int(legacy["qsgw_min_iter"])
+    declared_max_iteration = int(legacy["qsgw_max_iter"])
+    if declared_min_iteration != declared_max_iteration:
+        raise ValueError(
+            "legacy v4 trace: qsgw_min_iter and qsgw_max_iter differ"
+        )
+    if allow_legacy_iteration_prefix:
+        if declared_max_iteration < final_iteration:
+            raise ValueError(
+                "legacy v4 trace: declared iteration bound is shorter than "
+                "the selected prefix"
+            )
+    elif declared_max_iteration != final_iteration:
+        raise ValueError(
+            "legacy v4 trace: declared iteration bound differs from the "
+            "selected final iteration"
+        )
+
+    declared_n_params = int(legacy["n_params_anacon"])
+    effective_n_params = (
+        int(legacy["nfreq"])
+        if declared_n_params == -1
+        else declared_n_params
+    )
+    if effective_n_params != int(legacy["nfreq"]):
+        raise ValueError(
+            "legacy v4 trace: analytic continuation does not use all "
+            "available frequency points"
+        )
     _require_values(
         legacy,
         {
@@ -92,8 +122,6 @@ def _validate_actual_contracts(
             "fixed_basis": "immutable_reference",
             "qsgw_mixer": "linear",
             "qsgw_mixing_beta": expected_legacy_beta,
-            "qsgw_min_iter": str(final_iteration),
-            "qsgw_max_iter": str(final_iteration),
             "starting_vxc": "dft_only",
             "vxc_basis": "fixed_state",
             "qsgw_update_hartree": "0",
@@ -102,7 +130,6 @@ def _validate_actual_contracts(
             "replace_w_head": "0",
             "option_dielect_func": "0",
             "nfreq": "6",
-            "n_params_anacon": "-1",
             "use_shrink_abfs": "1",
             "use_fullcoul_exx": "0",
             "use_fullcoul_eps": "1",
@@ -154,6 +181,14 @@ def _validate_actual_contracts(
         "legacy_effective_beta": expected_legacy_beta,
         "current_configured_beta": expected_current_beta,
         "final_iteration": final_iteration,
+        "legacy_declared_final_iteration": declared_max_iteration,
+        "legacy_iteration_selection": (
+            "prefix"
+            if declared_max_iteration > final_iteration
+            else "exact"
+        ),
+        "legacy_declared_n_params_anacon": declared_n_params,
+        "legacy_effective_n_params_anacon": effective_n_params,
         "current_input_contract": reference["qsgw_input_contract"],
         "current_input_contract_sha256": reference[
             "qsgw_input_contract_sha256"
@@ -239,6 +274,7 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         expected_mode=args.expected_mode,
         expected_legacy_beta=args.expected_legacy_beta,
         expected_current_beta=args.expected_current_beta,
+        allow_legacy_iteration_prefix=args.allow_legacy_iteration_prefix,
     )
     normalized_legacy, normalized_current = _normalized_for_frozen_aligner(
         legacy_text,
@@ -259,7 +295,7 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         degeneracy_tolerance_ha=args.degeneracy_tolerance_ha,
         state_tolerance=args.state_tolerance,
         expected_legacy_use_fullcoul_exx=False,
-        allow_iteration_prefix=False,
+        allow_iteration_prefix=args.allow_legacy_iteration_prefix,
     )
     if "contract" in numeric:
         numeric["normalized_contract_check"] = numeric.pop("contract")
@@ -346,6 +382,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-mode", choices=("none", "linear"), required=True)
     parser.add_argument("--expected-legacy-beta", type=float, required=True)
     parser.add_argument("--expected-current-beta", type=float, required=True)
+    parser.add_argument("--allow-legacy-iteration-prefix", action="store_true")
     parser.add_argument("--frequency-tolerance", type=float, default=1.0e-10)
     parser.add_argument(
         "--matrix-max-abs-tolerance-ha", type=float, default=1.0e-8

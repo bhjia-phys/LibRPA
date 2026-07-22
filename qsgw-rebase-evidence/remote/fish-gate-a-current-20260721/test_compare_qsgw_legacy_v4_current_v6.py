@@ -34,7 +34,10 @@ base = load(BASE_PATH, "base_under_test")
 current = load(CURRENT_PATH, "current_under_test")
 
 
-def legacy_header(beta: str = "1", symmetry: str = "1") -> str:
+def legacy_header(
+    beta: str = "1", symmetry: str = "1", n_params: str = "-1",
+    final_iteration: str = "2",
+) -> str:
     return """# qsgw_contract_version 4
 # oracle_kind legacy_scheme_a
 # oracle_source_commit 7a7ff17f
@@ -42,8 +45,8 @@ def legacy_header(beta: str = "1", symmetry: str = "1") -> str:
 # fixed_basis immutable_reference
 # qsgw_mixer linear
 # qsgw_mixing_beta {beta}
-# qsgw_min_iter 2
-# qsgw_max_iter 2
+# qsgw_min_iter {final_iteration}
+# qsgw_max_iter {final_iteration}
 # starting_vxc dft_only
 # vxc_basis fixed_state
 # qsgw_update_hartree 0
@@ -54,7 +57,7 @@ def legacy_header(beta: str = "1", symmetry: str = "1") -> str:
 # replace_w_head 0
 # option_dielect_func 0
 # nfreq 6
-# n_params_anacon -1
+# n_params_anacon {n_params}
 # n_params_anacon_resample -1
 # anacon_nfreq -1
 # anacon_tfgrids_type -101
@@ -65,7 +68,12 @@ def legacy_header(beta: str = "1", symmetry: str = "1") -> str:
 # constants_choice internal
 # ac_policy direct_pade
 # iter channel component spin kpoint frequency_index frequency_Ha row column real_value imag_value
-""".format(beta=beta, symmetry=symmetry)
+""".format(
+        beta=beta,
+        symmetry=symmetry,
+        n_params=n_params,
+        final_iteration=final_iteration,
+    )
 
 
 def current_header(mode: str = "none", beta: str = "0.2") -> str:
@@ -89,16 +97,19 @@ class AdapterContractTests(unittest.TestCase):
     def validate(
         self, legacy: str, now: str, mode: str,
         legacy_beta: float, current_beta: float,
+        final_iteration: int = 2,
+        allow_legacy_iteration_prefix: bool = False,
     ):
         return adapter._validate_actual_contracts(
             base_module=base,
             current_module=current,
             legacy_text=legacy,
             current_texts=(("matrix", now), ("eigen", now), ("iteration", now)),
-            final_iteration=2,
+            final_iteration=final_iteration,
             expected_mode=mode,
             expected_legacy_beta=legacy_beta,
             expected_current_beta=current_beta,
+            allow_legacy_iteration_prefix=allow_legacy_iteration_prefix,
         )
 
     def test_none_contract_passes(self):
@@ -114,6 +125,38 @@ class AdapterContractTests(unittest.TestCase):
             "linear", 0.2, 0.2,
         )
         self.assertTrue(result["passed"])
+
+    def test_legacy_literal_nfreq_is_effectively_all_points(self):
+        result = self.validate(
+            legacy_header(n_params="6"), current_header(),
+            "none", 1.0, 0.2,
+        )
+        self.assertEqual(result["legacy_declared_n_params_anacon"], 6)
+        self.assertEqual(result["legacy_effective_n_params_anacon"], 6)
+
+    def test_legacy_iteration_prefix_is_explicit(self):
+        result = self.validate(
+            legacy_header(final_iteration="2"), current_header(),
+            "none", 1.0, 0.2,
+            final_iteration=1,
+            allow_legacy_iteration_prefix=True,
+        )
+        self.assertEqual(result["legacy_iteration_selection"], "prefix")
+
+    def test_legacy_iteration_prefix_requires_opt_in(self):
+        with self.assertRaisesRegex(ValueError, "iteration bound differs"):
+            self.validate(
+                legacy_header(final_iteration="2"), current_header(),
+                "none", 1.0, 0.2,
+                final_iteration=1,
+            )
+
+    def test_non_all_point_legacy_pade_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "does not use all"):
+            self.validate(
+                legacy_header(n_params="4"), current_header(),
+                "none", 1.0, 0.2,
+            )
 
     def test_wrong_legacy_symmetry_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "contract mismatch"):

@@ -28,11 +28,18 @@ uses the append-only symmetry `stru_out` and its derived contract. The input
 view validator requires those to be the only SHA256 differences and requires
 the contracts to differ only in the bound `stru_out` hash.
 
-Both views also expose the same eight `s1k*_nao.txt` symlink aliases to the
-frozen `sks1k*_nao.txt` overlap matrices. This is required because the legacy
-reader constructs the `sks` filename but only opens its older `s1k` fallback.
-The runner rejects any legacy overlap-file warning instead of accepting the
-reader's identity-matrix fallback.
+The v3 overlap aliases are now rejected evidence. The historical fixed-KS
+basis QSGW path intentionally used the legacy reader's identity fallback;
+forcing the AO `sks` matrices through the old `s1k` fallback changed the
+calculation and produced a spurious approximately `-2.9e4 eV` iteration-1
+frontier. A successor runner must remove those aliases and record the expected
+legacy warning instead of treating it as a missing physical input.
+
+`run_fish_gate_a_failed_prefix_postcheck_v1.sh` is a diagnostic-only recovery
+for that rejected run. It compares the common `iter0:1` prefix with the
+accepted current Gate2 trace, treats legacy `n_params_anacon=6` as equivalent
+to all six frequency points, and records per-component magnitudes. It never
+promotes the rejected run to an oracle.
 
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
