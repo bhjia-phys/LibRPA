@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=qsgw-a1-fullbz
-#SBATCH --partition=48cp2
+#SBATCH --partition=p1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --cpus-per-task=12
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=0
 #SBATCH --exclusive
 #SBATCH --time=04:00:00
@@ -215,8 +215,8 @@ use_shrink_abfs=false
 use_fullcoul_exx=false
 use_fullcoul_eps=true
 use_fullcoul_wc=false
-mpi_ranks=4
-omp_threads=12
+mpi_ranks=${SLURM_NTASKS:-unknown}
+omp_threads=${SLURM_CPUS_PER_TASK:-unknown}
 deterministic_reduction=1
 mode_1=legacy_linear_beta_1_direct_vs_current_none_miniter2
 mode_2=legacy_linear_beta_0.2_vs_current_linear_beta_0.2_miniter5
