@@ -115,15 +115,14 @@ cmake -S "$diagnostic_source" -B "$diagnostic_build" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_CXX_COMPILER=mpiicpx \
   -DCMAKE_Fortran_COMPILER=mpiifx \
-  -DENABLE_DOCS=OFF \
-  -DENABLE_DRIVER=ON \
-  -DENABLE_FORTRAN_BIND=OFF \
-  -DENABLE_TEST=OFF \
-  -DENABLE_UNITTESTS=OFF \
-  -DUSE_CMAKE_INC=OFF \
-  -DUSE_EXTERNAL_GREENX=OFF \
-  -DUSE_GREENX_API=ON \
-  -DUSE_LIBRI=ON \
+  -DMPI_CXX_COMPILER=mpiicpx \
+  -DMPI_Fortran_COMPILER=mpiifx \
+  -DLIBRPA_ENABLE_DRIVER=ON \
+  -DLIBRPA_USE_LIBRI=ON \
+  -DLIBRPA_ENABLE_TEST=OFF \
+  -DLIBRPA_ENABLE_FORTRAN_BIND=OFF \
+  -DLIBRPA_USE_CMAKE_INC=OFF \
+  -DLIBRPA_USE_EXTERNAL_GREENX=OFF \
   >"$run_root/configure.stdout" \
   2>"$run_root/configure.stderr"
 cmake --build "$diagnostic_build" -j 32 \
