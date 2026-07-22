@@ -38,6 +38,33 @@ validation. G0W0 head/wing remains upstream-owned and unchanged.
 recorded comparison time. Repeat the comparison immediately before opening the
 PR.
 
+## Upstream Refresh, 2026-07-23
+
+The live upstream `master` advanced from `42d3863c` to `67b9888d`. The
+candidate history was replayed without text conflicts on the preserved branch
+`codex/qsgw-symmetry-no-headwing-67b-20260723`; the pre-refresh branch remains
+at `314b5c19`. The rebased product source is `4f9ab0cfc90f54910158ab01a877581b080f136e`.
+
+The protected shared numerical diff against `67b9888d` is empty for
+`src/core`, `src/api`, and the upstream G0W0 task sources. No old dielectric,
+head/wing, DDLA, ELPA, GW, or EXX implementation was restored by QSGW.
+
+| Commit | Class | Disposition and QSGW reachability |
+|---|---|---|
+| `5e390487` | U1 | Accept the upstream ELPA device allocation/free contract unchanged; observe build and inherited diagonalization paths. |
+| `e99cdf01` | U1 | Accept the bundled LibDDLA API, implementation, and build integration unchanged; QSGW reaches it only through upstream shared solvers. |
+| `85968a20` | U1 | Accept the head/wing body inverse identity-solve implementation and its internal API unchanged. Active QSGW head/wing remains fail-fast. |
+| `054df5b7` | U1 | Accept the Gamma head rank-one correction without Coulomb-basis rotation unchanged. It is owned and tested by upstream G0W0. |
+| `0b9bdedb` | U0 | Accept the bundled LibDDLA revision metadata update unchanged. |
+| `bcf3e573` | U1 | Accept removal of redundant shared head/wing body setup unchanged. |
+| `67b9888d` | U1 | Accept dielectric solve failure reporting unchanged. |
+
+There are no U2 adapter migrations, U3 shared-core conflicts, or U4 QSGW
+formula changes in this refresh. The numerical implications are nevertheless
+material for upstream G0W0 head/wing, so all prior Gate 0 and head/wing results
+remain historical evidence only. The binding sequence is now: fish Gate 0 on
+`67b9888d`/`4f9ab0cf`, upstream-versus-candidate G0W0, and then formal A1-A3.
+
 ## Ownership Boundary
 
 - Upstream owns shared G0W0, GW, EXX, chi0, epsilon, symmetry, LibRI, MPI, and
