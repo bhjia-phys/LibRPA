@@ -85,6 +85,17 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
         self.assertIn("qsgw_update_hartree = false", self.source)
         self.assertIn("replace_w_head = false", self.source)
 
+    def test_uses_each_implementation_native_gap_trace(self):
+        self.assertIn(
+            'test -s "$legacy_run/homo_lumo_vs_iterations.dat"', self.source
+        )
+        self.assertNotIn(
+            'test -s "$candidate_run/homo_lumo_vs_iterations.dat"',
+            self.source,
+        )
+        self.assertIn('test -s "$candidate_run/qsgw_eigenvalues.dat"', self.source)
+        self.assertIn('test -s "$candidate_run/qsgw_iterations.dat"', self.source)
+
     def test_runs_directly_on_fish_with_fixed_parallelism(self):
         self.assertIn("mpi_ranks=4", self.source)
         self.assertIn("omp_threads=12", self.source)

@@ -429,7 +429,6 @@ EOF
   test -s "$candidate_run/qsgw_matrices.dat"
   test -s "$candidate_run/qsgw_eigenvalues.dat"
   test -s "$candidate_run/qsgw_iterations.dat"
-  test -s "$candidate_run/homo_lumo_vs_iterations.dat"
   grep -Fq 'libRPA finished successfully' "$candidate_run/librpa.stdout"
   for trace in qsgw_matrices.dat qsgw_eigenvalues.dat qsgw_iterations.dat
   do
