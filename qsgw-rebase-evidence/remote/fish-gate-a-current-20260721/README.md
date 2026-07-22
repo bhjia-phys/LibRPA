@@ -41,6 +41,11 @@ accepted current Gate2 trace, treats legacy `n_params_anacon=6` as equivalent
 to all six frequency points, and records per-component magnitudes. It never
 promotes the rejected run to an oracle.
 
+`run_fish_gate_a_legacy_no_overlap_iter1_v1.sh` reruns only the historical
+compatibility harness through iteration 1 with no `s1k` aliases. It requires
+the eight expected identity-fallback warnings and compares every common trace
+component against the SHA-bound accepted current Gate2 trajectory.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
