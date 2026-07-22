@@ -1,0 +1,397 @@
+{
+  "groups": [
+    {
+      "channel": 0,
+      "component": "electron_count",
+      "count": 1,
+      "frobenius": 8.0,
+      "iteration": 0,
+      "max_abs": 8.0,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93312,
+        "real": 8.0,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "fermi_energy_ha",
+      "count": 1,
+      "frobenius": 0.243670666760322,
+      "iteration": 0,
+      "max_abs": 0.243670666760322,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93311,
+        "real": 0.243670666760322,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "gap_ha",
+      "count": 1,
+      "frobenius": 0.02539767700628803,
+      "iteration": 0,
+      "max_abs": 0.02539767700628803,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93313,
+        "real": 0.02539767700628803,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "h0",
+      "count": 15488,
+      "frobenius": 39.07483760232898,
+      "iteration": 0,
+      "max_abs": 6.952366685355419,
+      "max_location": {
+        "column": 43,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 1966,
+        "real": 6.952366685355419,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "occupation",
+      "count": 352,
+      "frobenius": 1.8561553006146871,
+      "iteration": 0,
+      "max_abs": 0.75,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 4,
+        "line": 93135,
+        "real": 0.75,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "velocity_x",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_y",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_z",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "vxc_dft",
+      "count": 15488,
+      "frobenius": 5419.96512714195,
+      "iteration": 0,
+      "max_abs": 1948.047259752979,
+      "max_location": {
+        "column": 43,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -8.526512829121202e-14,
+        "kpoint": 2,
+        "line": 21326,
+        "real": -1948.047259752979,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "wfc_spinor0",
+      "count": 15488,
+      "frobenius": 286.24313381479976,
+      "iteration": 0,
+      "max_abs": 44.34462678950857,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 32767,
+        "real": -44.34462678950857,
+        "row": 40,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "electron_count",
+      "count": 1,
+      "frobenius": 8.0,
+      "iteration": 1,
+      "max_abs": 8.0,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 325987,
+        "real": 8.0,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "exx",
+      "count": 15488,
+      "frobenius": 584.0964357117192,
+      "iteration": 1,
+      "max_abs": 327.7648712643241,
+      "max_location": {
+        "column": 40,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -0.0,
+        "kpoint": 0,
+        "line": 188042,
+        "real": -327.7648712643241,
+        "row": 40,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "fermi_energy_ha",
+      "count": 1,
+      "frobenius": 90.51930143244732,
+      "iteration": 1,
+      "max_abs": 90.51930143244732,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 325986,
+        "real": -90.51930143244732,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "gap_ha",
+      "count": 1,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "mixed_h",
+      "count": 15488,
+      "frobenius": 36268.959461521124,
+      "iteration": 1,
+      "max_abs": 11925.41503549921,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 234551,
+        "real": -11925.41503549921,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "occupation",
+      "count": 352,
+      "frobenius": 1.764449276686638,
+      "iteration": 1,
+      "max_abs": 0.75,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 4,
+        "line": 325810,
+        "real": 0.75,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "raw_h",
+      "count": 15488,
+      "frobenius": 36268.959461521124,
+      "iteration": 1,
+      "max_abs": 11925.41503549921,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 219063,
+        "real": -11925.41503549921,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "rotation_u",
+      "count": 15488,
+      "frobenius": 18.761663039293676,
+      "iteration": 1,
+      "max_abs": 0.9375658509562773,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 7,
+        "line": 263638,
+        "real": -0.9375658509562773,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "sigma_c_iw",
+      "count": 92928,
+      "frobenius": 162004.14492487657,
+      "iteration": 1,
+      "max_abs": 41767.907710790474,
+      "max_location": {
+        "column": 40,
+        "frequency_ha": 4.416926978467187,
+        "frequency_index": 5,
+        "imag": -24777.41693030379,
+        "kpoint": 0,
+        "line": 104794,
+        "real": -33624.956874307,
+        "row": 40,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "vc",
+      "count": 15488,
+      "frobenius": 36160.52654387536,
+      "iteration": 1,
+      "max_abs": 12893.38313720789,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 203575,
+        "real": -12893.38313720789,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "velocity_x",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_y",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_z",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "wfc_spinor0",
+      "count": 15488,
+      "frobenius": 286.24313381479936,
+      "iteration": 1,
+      "max_abs": 38.37674856516432,
+      "max_location": {
+        "column": 22,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -4.728474011347527,
+        "kpoint": 2,
+        "line": 269424,
+        "real": -38.08433226351557,
+        "row": 42,
+        "spin": 0
+      }
+    }
+  ],
+  "passed": true,
+  "schema": "librpa-qsgw-trace-component-summary-v1",
+  "selected_iterations": [
+    0,
+    1
+  ],
+  "source": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-iter1-20260722-398e354d-v1/shrink-off-no-mix-iter1/legacy/qsgw_oracle_matrices.dat"
+}

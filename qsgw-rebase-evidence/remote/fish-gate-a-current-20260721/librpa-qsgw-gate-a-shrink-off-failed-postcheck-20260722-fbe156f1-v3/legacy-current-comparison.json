@@ -1,0 +1,204 @@
+{
+  "actual_contract": {
+    "band": "off",
+    "current_configured_beta": 0.2,
+    "current_input_contract": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/input-views/candidate/qsgw_input.full.contract",
+    "current_input_contract_sha256": "5f7ebe1dfc4d4b18d374f80787b5450745478d469681ac6cf93c99b06c828bc1",
+    "current_version": 6,
+    "final_iteration": 1,
+    "fixed_basis_mapping": "immutable_reference_to_immutable_mf0",
+    "hartree": "off",
+    "headwing": "off",
+    "legacy_declared_final_iteration": 1,
+    "legacy_declared_n_params_anacon": 6,
+    "legacy_effective_beta": 1.0,
+    "legacy_effective_n_params_anacon": 6,
+    "legacy_iteration_selection": "exact",
+    "legacy_role": "compatibility_harness_not_raw_source",
+    "legacy_use_shrink_abfs": false,
+    "legacy_version": 4,
+    "mixer": "none",
+    "passed": true,
+    "symmetry": "legacy_exx_on_gw_on_to_current_exx_on_gw_on_rpa_on"
+  },
+  "contract_mode": "legacy_v4_to_current_v6",
+  "current_eigenvalues": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/shrink-off-candidate-recovery-iter1/candidate/qsgw_eigenvalues.dat",
+  "current_iterations": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/shrink-off-candidate-recovery-iter1/candidate/qsgw_iterations.dat",
+  "current_matrix": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/shrink-off-candidate-recovery-iter1/candidate/qsgw_matrices.dat",
+  "header_normalization": {
+    "current": {
+      "qsgw_contract_version": "5",
+      "qsgw_mixer": "none",
+      "symmetry": "unsupported_full_bz_only"
+    },
+    "legacy": {
+      "n_params_anacon": "6",
+      "qsgw_mixing_beta": "1",
+      "use_shrink_abfs": "0",
+      "use_symmetry_exx": "0",
+      "use_symmetry_gw": "0"
+    },
+    "reason": "reuse frozen v4-v5 numerical row alignment after independent v4-v6 contract validation",
+    "scope": "contract_headers_only_numeric_rows_unchanged"
+  },
+  "legacy_matrix": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-iter1-20260722-398e354d-v1/shrink-off-no-mix-iter1/legacy/qsgw_oracle_matrices.dat",
+  "numeric_alignment": {
+    "channel": 0,
+    "components": {
+      "exx": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 218.8536963430106,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 0.638899902090383,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "h0": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 0.0,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 0.0,
+        "passed": true,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "mixed_h": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 15641.087536879646,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 1.1134318176488511,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "occupation": {
+        "block_count": 16,
+        "element_count": 704,
+        "max_abs_diff_ha": 0.3125,
+        "max_abs_tolerance_ha": 1e-12,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 0.7071067811865475,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "raw_h": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 15641.087536879646,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 1.1134318176488511,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "sigma_c_iw": {
+        "block_count": 48,
+        "element_count": 92928,
+        "max_abs_diff_ha": 40481.592834388444,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 8.881784197001252e-16,
+        "max_relative_frobenius": 1.1274448621190563,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "vc": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 15629.503980510694,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 1.1046815404149142,
+        "passed": false,
+        "relative_frobenius_tolerance": 1e-08
+      },
+      "vxc_dft": {
+        "block_count": 8,
+        "element_count": 15488,
+        "max_abs_diff_ha": 3.866297849666164e-12,
+        "max_abs_tolerance_ha": 1e-08,
+        "max_frequency_abs_diff_ha": 0.0,
+        "max_relative_frobenius": 2.5839946364531677e-15,
+        "passed": true,
+        "relative_frobenius_tolerance": 1e-08
+      }
+    },
+    "contract_mode": "legacy_v4_to_current_v5",
+    "eigenvalues": {
+      "count": 704,
+      "max_current_matrix_vs_trace_abs_diff_ha": 4.547473508864641e-12,
+      "max_old_matrix_vs_current_matrix_abs_diff_ha": 19182.060457269647,
+      "max_old_vs_current_abs_diff_ha": 19182.060457269643,
+      "passed": false,
+      "tolerance_ha": 1e-06
+    },
+    "ignored_legacy_components": [
+      "velocity_x",
+      "velocity_y",
+      "velocity_z",
+      "fermi_energy_ha",
+      "electron_count",
+      "gap_ha"
+    ],
+    "iterations": [
+      0,
+      1
+    ],
+    "normalized_contract_check": {
+      "current_input_contract": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/input-views/candidate/qsgw_input.full.contract",
+      "current_input_contract_sha256": "5f7ebe1dfc4d4b18d374f80787b5450745478d469681ac6cf93c99b06c828bc1",
+      "current_version": 5,
+      "declared_final_iteration": 1,
+      "direct_update_mapping": "legacy_linear_beta_1_to_current_none",
+      "fixed_basis_mapping": "immutable_reference_to_immutable_mf0",
+      "iteration_selection_mode": "exact",
+      "legacy_declared_use_fullcoul_exx": false,
+      "legacy_effective_hamiltonian_semantics": "upper_triangle_authoritative",
+      "old_version": 4,
+      "passed": true,
+      "selected_final_iteration": 1
+    },
+    "passed": false,
+    "scalars": {
+      "electron_count_tolerance": 1e-10,
+      "fermi_tolerance_ha": 1e-06,
+      "gap_tolerance_ev": 1e-05,
+      "max_electron_count_abs_diff": 0.0,
+      "max_fermi_abs_diff_ha": 58.11256280154789,
+      "max_gap_abs_diff_ev": 1.1102230246251565e-16,
+      "passed": false
+    },
+    "state": {
+      "block_count": 16,
+      "eigenvalue_tolerance_ha": 1e-06,
+      "max_alignment_unitarity_residual": 2.889295915308204e-16,
+      "max_eigenvalue_abs_diff_ha": 19182.060457269647,
+      "max_rotation_relative_residual": 1.3506941042833849,
+      "max_velocity_relative_residual": 0.0,
+      "max_wfc_relative_residual": 1.2993381643849942,
+      "passed": false,
+      "state_tolerance": 1e-10
+    }
+  },
+  "passed": false,
+  "tool_provenance": {
+    "base_comparator": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3/tools/base_comparator.py",
+    "base_comparator_sha256": "c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebbc",
+    "current_contract_parser": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3/tools/cmp_qsgw_v6.py",
+    "current_contract_parser_sha256": "f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb"
+  },
+  "v5_self_validator_inputs": {
+    "eigenvalues": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3/current-v5-self-eigenvalues.dat",
+    "eigenvalues_sha256": "52b1252154885bf994f41f20672a7116987bd669fa6982ecbceef33ead4c93f7",
+    "iterations": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3/current-v5-self-iterations.dat",
+    "iterations_sha256": "09eccbb414fcdcf34a76eb31b3918bca9527f7e4e525d54eef18986ab8e56521",
+    "matrix": "/home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3/current-v5-self-matrices.dat",
+    "matrix_sha256": "058305fb070785c7957b0d4dc314e14d5be7080cbb3a9afe2e0e10c85e317fbf",
+    "qsgw_contract_version": "5",
+    "scope": "contract_headers_only_numeric_rows_unchanged",
+    "symmetry": "input_kstar_live"
+  }
+}

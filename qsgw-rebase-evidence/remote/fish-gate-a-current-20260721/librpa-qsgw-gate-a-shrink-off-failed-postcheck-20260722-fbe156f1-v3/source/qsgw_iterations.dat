@@ -1,0 +1,16 @@
+# qsgw_contract_version 6
+# fixed_basis immutable_mf0
+# live_update eigenvalues_wfc
+# velocity disabled_stage1
+# headwing disabled_stage1
+# symmetry exx_on_gw_on_rpa_on
+# hartree disabled_stage1
+# band disabled_stage1
+# h_qsgw_cut disabled_non_band
+# qsgw_input_contract /home/bhj/ai-runs/librpa-qsgw-gate-a-shrink-off-candidate-recovery-20260722-07785fa4-v1/input-views/candidate/qsgw_input.full.contract
+# qsgw_input_contract_sha256 5f7ebe1dfc4d4b18d374f80787b5450745478d469681ac6cf93c99b06c828bc1
+# qsgw_mixer none
+# qsgw_mixing_beta 0.20000000000000001
+# iter max_delta_eV residual_l2_Ha residual_max_Ha efermi_eV gap_eV electron_count requested_mode applied_mode beta fallback rcond coefficient_l1 coefficient_count converged coefficients fallback_reason
+0 0.00000000000000000e+00 0.00000000000000000e+00 0.00000000000000000e+00 6.48708563549855466e+00 6.91105998768951846e-01 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none
+1 1.90108294035818893e+05 1.11876734479919432e+04 5.05408311575679818e+03 -8.81832281858184729e+02 0.00000000000000000e+00 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none

@@ -1,0 +1,11 @@
+{
+  "efermi_max_abs_difference_ha": 0.0,
+  "efermi_tolerance_ha": 1e-12,
+  "input_efermi_ha": 0.238396,
+  "occupation_max_abs_difference": 0.0,
+  "occupation_normalization": "band_out_occupation_divided_by_n_kpoints",
+  "occupation_state_count": 352,
+  "occupation_tolerance": 1e-12,
+  "passed": true,
+  "trace_iteration_zero_efermi_ha": 0.238396
+}

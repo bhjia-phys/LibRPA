@@ -1,0 +1,19 @@
+{
+  "channel": 0,
+  "diagonalization_eigenvalue_max_abs_ha": 1.3642420526593924e-11,
+  "diagonalization_offdiagonal_max_abs_ha": 1.723267564972542e-12,
+  "eigenvalue_tolerance_ha": 1e-10,
+  "fixed_basis_wfc_rotation_relative_frobenius": 0.0,
+  "input_eigenvalue_max_abs_ha": 8.881784197001252e-16,
+  "invariant_tolerance": 1e-10,
+  "iterations": [
+    0,
+    1
+  ],
+  "matrix_block_count": 8,
+  "passed": true,
+  "qsgw_contract_version": 5,
+  "qsgw_input_contract_sha256": "5f7ebe1dfc4d4b18d374f80787b5450745478d469681ac6cf93c99b06c828bc1",
+  "rotation_unitarity_max_abs": 4.773959005888173e-15,
+  "trace_eigenvalue_max_abs_ha": 4.547473508864641e-12
+}

@@ -92,6 +92,15 @@ completed candidate traces, derives the frontier from `qsgw_iterations.dat`,
 runs all matrix/state observers, and archives the old/new mismatch without
 rerunning LibRPA.
 
+The accepted diagnostic archive is
+`librpa-qsgw-gate-a-shrink-off-failed-postcheck-20260722-fbe156f1-v3`.
+Both traces pass their own closure and Hermiticity checks, and the current
+trace passes fixed-basis, initial-state, and electron-count checks. Cross-run
+comparison keeps `h0` identical and finds only `3.9e-12 Ha` maximum Vxc_DFT
+difference, but EXX differs by `218.85 Ha`, SigmaC by `4.05e4 Ha`, Vc by
+`1.56e4 Ha`, and eigenvalues by `1.92e4 Ha`. This isolates the divergence to
+the symmetry/full-ABF EXX/GW path rather than the frozen KS input.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
