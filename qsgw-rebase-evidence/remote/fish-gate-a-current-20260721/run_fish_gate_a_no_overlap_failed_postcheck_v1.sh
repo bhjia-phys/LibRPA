@@ -94,7 +94,7 @@ set +e
   2>"$run_root/alias-vs-no-overlap-prefix.stderr"
 comparison_exit_code=$?
 set -e
-test "$comparison_exit_code" -eq 1
+test "$comparison_exit_code" -eq 2
 printf '%s\n' "$comparison_exit_code" >"$run_root/comparison-exit-code.txt"
 
 "$python" -B "$run_root/tools/validate_gate_a_overlap_diagnostic_v1.py" \
