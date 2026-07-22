@@ -64,6 +64,10 @@ def raw_stru(second_atom: float = 2.55, translation: float = 0.25) -> str:
     )
 
 
+def raw_fullbz_stru() -> str:
+    return "\n".join(raw_stru().splitlines()[:9]) + "\n"
+
+
 class BuildPhysicalStruOverlayTests(unittest.TestCase):
     def test_rebuilds_lattice_and_reciprocal_while_preserving_payload(self) -> None:
         module = load_module()
@@ -104,6 +108,21 @@ class BuildPhysicalStruOverlayTests(unittest.TestCase):
         module = load_module()
         with self.assertRaisesRegex(ValueError, "atom mapping"):
             module.build_text(INPUT_STRU, raw_stru(translation=0.2))
+
+    def test_accepts_absent_symmetry_only_for_explicit_fullbz_mode(self) -> None:
+        module = load_module()
+        with self.assertRaisesRegex(ValueError, "missing symmetry block"):
+            module.build_text(INPUT_STRU, raw_fullbz_stru())
+
+        output, result = module.build_text(
+            INPUT_STRU, raw_fullbz_stru(), require_symmetry=False
+        )
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["symmetry_operation_count"], 0)
+        self.assertEqual(result["symmetry_convention"], "absent")
+        self.assertEqual(
+            output.splitlines()[6:], raw_fullbz_stru().splitlines()[6:]
+        )
 
 
 if __name__ == "__main__":

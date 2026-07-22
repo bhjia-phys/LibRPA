@@ -215,7 +215,7 @@ def _parse_input_stru(text: str) -> dict[str, object]:
     }
 
 
-def _parse_source(text: str) -> dict[str, object]:
+def _parse_source(text: str, require_symmetry: bool) -> dict[str, object]:
     lines = text.splitlines(keepends=True)
     if len(lines) < 8:
         raise ValueError("source stru_out: truncated")
@@ -262,7 +262,15 @@ def _parse_source(text: str) -> dict[str, object]:
     while position < len(lines) and not _clean(lines[position]):
         position += 1
     if position >= len(lines):
-        raise ValueError("source stru_out: missing symmetry block")
+        if require_symmetry:
+            raise ValueError("source stru_out: missing symmetry block")
+        return {
+            "lines": lines,
+            "atoms": atoms,
+            "operations": [],
+            "symmetry_operation_count": 0,
+            "symmetry_convention": "absent",
+        }
     header = _clean(lines[position]).split()
     if len(header) != 2:
         raise ValueError("source stru_out: malformed symmetry header")
@@ -305,6 +313,7 @@ def _parse_source(text: str) -> dict[str, object]:
         "atoms": atoms,
         "operations": operations,
         "symmetry_operation_count": symmetry_count,
+        "symmetry_convention": "row",
     }
 
 
@@ -325,9 +334,10 @@ def build_text(
     atom_tolerance: float = 1.0e-10,
     reciprocal_tolerance: float = 1.0e-12,
     symmetry_tolerance: float = 1.0e-10,
+    require_symmetry: bool = True,
 ) -> tuple[str, dict[str, object]]:
     input_data = _parse_input_stru(input_stru_text)
-    source_data = _parse_source(source_text)
+    source_data = _parse_source(source_text, require_symmetry)
     lattice = input_data["lattice"]
     input_atoms = input_data["atoms"]
     source_atoms = source_data["atoms"]
@@ -424,7 +434,7 @@ def build_text(
         "lattice_constant_bohr": input_data["lattice_constant_bohr"],
         "atom_count": len(input_atoms),
         "symmetry_operation_count": source_data["symmetry_operation_count"],
-        "symmetry_convention": "row",
+        "symmetry_convention": source_data["symmetry_convention"],
         "atom_cartesian_tolerance_bohr": atom_tolerance,
         "atom_cartesian_max_abs_bohr": atom_cartesian_max_abs,
         "reciprocal_closure_tolerance": reciprocal_tolerance,
@@ -444,11 +454,15 @@ def build_overlay(
     source: Path,
     output: Path,
     report: Path,
+    *,
+    require_symmetry: bool = True,
 ) -> dict[str, object]:
     input_bytes = input_stru.read_bytes()
     source_bytes = source.read_bytes()
     output_text, result = build_text(
-        input_bytes.decode("utf-8"), source_bytes.decode("utf-8")
+        input_bytes.decode("utf-8"),
+        source_bytes.decode("utf-8"),
+        require_symmetry=require_symmetry,
     )
     output.write_text(output_text, encoding="utf-8", newline="\n")
     result.update(
@@ -472,12 +486,14 @@ def main() -> int:
     parser.add_argument("source_stru_out", type=Path)
     parser.add_argument("output_stru_out", type=Path)
     parser.add_argument("report", type=Path)
+    parser.add_argument("--allow-no-symmetry", action="store_true")
     args = parser.parse_args()
     result = build_overlay(
         args.input_stru,
         args.source_stru_out,
         args.output_stru_out,
         args.report,
+        require_symmetry=not args.allow_no_symmetry,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
