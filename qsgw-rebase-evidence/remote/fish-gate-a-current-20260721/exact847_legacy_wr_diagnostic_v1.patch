@@ -1,0 +1,241 @@
+diff --git a/src/core/epsilon.cpp b/src/core/epsilon.cpp
+index 11748e25..13d15d92 100644
+--- a/src/core/epsilon.cpp
++++ b/src/core/epsilon.cpp
+@@ -382,3 +382,99 @@ static librpa_int::symmetry_atom_block_matrix_map_t gather_symmetry_ibz_blocks_c
+-static abf_rspace_dense_block_map_t allocate_symmetry_full_wr_storage(
+-    const std::set<std::pair<atom_t, atom_t>>& target_atom_pairs,
+-    const std::vector<Vector3_Order<int>>& Rlist,
++static librpa_int::symmetry_irreducible_sector_t filter_symmetry_irreducible_sector_by_rlist(
++    const librpa_int::symmetry_irreducible_sector_t& irreducible_sector,
++    const std::vector<Vector3_Order<int>>& Rlist)
++{
++    librpa_int::symmetry_irreducible_sector_t filtered_sector;
++    const std::set<Vector3_Order<int>> requested_rset(Rlist.begin(), Rlist.end());
++    for (const auto& pair_Rs : irreducible_sector)
++    {
++        for (const auto& R_array : pair_Rs.second)
++        {
++            const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
++            if (requested_rset.count(R) != 0)
++            {
++                filtered_sector[pair_Rs.first].insert(R_array);
++            }
++        }
++    }
++    return filtered_sector;
++}
++
++static std::set<std::pair<atom_t, atom_t>> build_symmetry_irreducible_target_atom_pairs(
++    const librpa_int::symmetry_irreducible_sector_t& irreducible_sector)
++{
++    std::set<std::pair<atom_t, atom_t>> target_atom_pairs;
++    for (const auto& pair_Rs : irreducible_sector)
++    {
++        if (!pair_Rs.second.empty())
++        {
++            target_atom_pairs.insert(pair_Rs.first);
++        }
++    }
++    return target_atom_pairs;
++}
++
++struct SymmetryIrreducibleWRPlan
++{
++    bool available = false;
++    librpa_int::symmetry_irreducible_sector_t local_irreducible_sector;
++    librpa_int::symmetry_rspace_sector_stars_t local_sector_stars;
++    std::set<std::pair<atom_t, atom_t>> local_irreducible_pairs;
++    std::vector<librpa_int::SymmetryKStarGridMappingEntry> kstar_grid_mapping;
++};
++
++static SymmetryIrreducibleWRPlan build_symmetry_irreducible_wr_plan(
++    const librpa_int::SymmetryContext& ctx,
++    const std::set<std::pair<atom_t, atom_t>>& local_target_pairs,
++    const std::vector<Vector3_Order<int>>& Rlist)
++{
++    SymmetryIrreducibleWRPlan plan;
++    const auto filtered_sector =
++        filter_symmetry_irreducible_sector_by_rlist(ctx.irreducible_sector, Rlist);
++    if (filtered_sector.empty())
++    {
++        return plan;
++    }
++
++    for (const auto& pair_star : ctx.rspace_sector_stars)
++    {
++        const auto& ir_pair = pair_star.first;
++        const auto filtered_pair_iter = filtered_sector.find(ir_pair);
++        if (filtered_pair_iter == filtered_sector.end())
++        {
++            continue;
++        }
++        for (const auto& R_members : pair_star.second)
++        {
++            if (filtered_pair_iter->second.count(
++                    {R_members.first.x, R_members.first.y, R_members.first.z}) == 0)
++            {
++                continue;
++            }
++            std::vector<librpa_int::SymmetryRSpaceRestoreMember> local_members;
++            for (const auto& restore_member : R_members.second)
++            {
++                if (local_target_pairs.count(restore_member.full_atom_pair) != 0)
++                {
++                    local_members.push_back(restore_member);
++                }
++            }
++            if (local_members.empty())
++            {
++                continue;
++            }
++
++            plan.local_sector_stars[ir_pair][R_members.first] = std::move(local_members);
++            plan.local_irreducible_sector[ir_pair].insert(
++                {R_members.first.x, R_members.first.y, R_members.first.z});
++        }
++    }
++
++    plan.local_irreducible_pairs =
++        build_symmetry_irreducible_target_atom_pairs(plan.local_irreducible_sector);
++    plan.kstar_grid_mapping = ctx.kstar_grid_mapping;
++    plan.available = true;
++    return plan;
++}
++
++static abf_rspace_dense_block_map_t allocate_symmetry_irreducible_wr_storage(
++    const librpa_int::symmetry_irreducible_sector_t& irreducible_sector,
+@@ -388 +484 @@ static abf_rspace_dense_block_map_t allocate_symmetry_full_wr_storage(
+-    for (const auto& atom_pair : target_atom_pairs)
++    for (const auto& pair_Rs : irreducible_sector)
+@@ -390,2 +486,2 @@ static abf_rspace_dense_block_map_t allocate_symmetry_full_wr_storage(
+-        const auto atom_i = atom_pair.first;
+-        const auto atom_j = atom_pair.second;
++        const auto atom_i = pair_Rs.first.first;
++        const auto atom_j = pair_Rs.first.second;
+@@ -394 +490 @@ static abf_rspace_dense_block_map_t allocate_symmetry_full_wr_storage(
+-        for (const auto& R : Rlist)
++        for (const auto& R_array : pair_Rs.second)
+@@ -395,0 +492 @@ static abf_rspace_dense_block_map_t allocate_symmetry_full_wr_storage(
++            const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
+@@ -419,0 +517,55 @@ static abf_rspace_complex_block_map_t convert_dense_rspace_blocks_to_row_major(
++static abf_rspace_dense_block_map_t restore_symmetry_abf_rspace_dense_blocks(
++    const abf_rspace_dense_block_map_t& tensors_ir,
++    const librpa_int::SymmetryContext& symmetry_ctx,
++    const std::vector<SpeciesBasisLayout>& abf_layouts,
++    const librpa_int::symmetry_rspace_sector_stars_t& sector_stars)
++{
++    abf_rspace_dense_block_map_t tensors_full;
++    for (const auto& i_entry : tensors_ir)
++    {
++        const auto ir_I = static_cast<atom_t>(i_entry.first);
++        for (const auto& jr_entry : i_entry.second)
++        {
++            const auto ir_J = static_cast<atom_t>(jr_entry.first);
++            const auto pair_iter = sector_stars.find({ir_I, ir_J});
++            if (pair_iter == sector_stars.end())
++            {
++                throw std::runtime_error(
++                    "Failed to match an irreducible W(R) atom pair with the symmetry restore map");
++            }
++            for (const auto& R_matrix : jr_entry.second)
++            {
++                const auto& ir_R = R_matrix.first;
++                const auto star_iter = pair_iter->second.find(ir_R);
++                if (star_iter == pair_iter->second.end())
++                {
++                    std::ostringstream oss;
++                    oss << "Failed to match an irreducible W(R) block with the symmetry restore map"
++                        << " for I=" << ir_I << " J=" << ir_J << " R=(" << ir_R.x << ","
++                        << ir_R.y << "," << ir_R.z << ")";
++                    throw std::runtime_error(oss.str());
++                }
++
++                for (const auto& restore_member : star_iter->second)
++                {
++                    ComplexMatrix w_full = librpa_int::rotate_symmetry_rspace_block(
++                        symmetry_ctx, abf_layouts, restore_member.isym, ir_I, ir_J, R_matrix.second);
++                    auto& target =
++                        tensors_full[restore_member.full_atom_pair.first]
++                                    [restore_member.full_atom_pair.second][restore_member.full_R];
++                    if (target.c == nullptr)
++                    {
++                        target = std::move(w_full);
++                    }
++                    else
++                    {
++                        throw std::runtime_error(
++                            "Duplicate full-sector W(R) block appears during symmetry restore");
++                    }
++                }
++            }
++        }
++    }
++    return tensors_full;
++}
++
+@@ -430 +582 @@ static std::complex<double> build_ft_wq_phase(const PeriodicBoundaryData& pbc,
+-static bool can_use_symmetry_qstar_wr_restore(
++static bool can_use_symmetry_irreducible_sector_wr_restore(
+@@ -444 +596 @@ static bool can_use_symmetry_qstar_wr_restore(
+-           && !ctx.kstar_grid_mapping.empty()
++           && !pbc.map_irk_ks.empty()
+@@ -528 +680,2 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-    if (ctx.kstar_grid_mapping.empty())
++    const auto plan = build_symmetry_irreducible_wr_plan(ctx, local_target_pairs, Rlist);
++    if (!plan.available)
+@@ -532,2 +685,2 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-    auto blocks_by_R_full =
+-        allocate_symmetry_full_wr_storage(local_target_pairs, Rlist, atom_nabf);
++    auto blocks_by_R_ir =
++        allocate_symmetry_irreducible_wr_storage(plan.local_irreducible_sector, atom_nabf);
+@@ -539 +692 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-    for (const auto& star_mapping : ctx.kstar_grid_mapping)
++    for (const auto& star_mapping : plan.kstar_grid_mapping)
+@@ -549 +702 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-        if (local_target_pairs.empty() || blocks_ibz.empty())
++        if (blocks_ibz.empty())
+@@ -554 +707 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-            librpa_int::build_symmetry_upper_atom_pair_closure(star, local_target_pairs);
++            librpa_int::build_symmetry_upper_atom_pair_closure(star, plan.local_irreducible_pairs);
+@@ -566 +719 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-            const Vector3_Order<double> raw_q_bz_target_frac =
++            const Vector3_Order<double> q_bz_target_frac =
+@@ -571,2 +723,0 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-            const Vector3_Order<double> q_bz_target_frac =
+-                restrict_fractional_coordinate(raw_q_bz_target_frac);
+@@ -578 +729 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-                    member.time_reversal, &local_target_pairs, &q_bz_target_frac);
++                    member.time_reversal, &rotation_atom_pairs, &q_bz_target_frac);
+@@ -591 +742,5 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-            const Vector3_Order<double> q_internal{q_bz_target_frac * pbc.G};
++            const auto q_internal_from_full_grid = q_bz_target_frac * pbc.G;
++            const Vector3_Order<double> q_internal =
++                use_full_grid_member_targets
++                    ? Vector3_Order<double>{q_internal_from_full_grid}
++                    : star_mapping.member_q_bz_keys[imember];
+@@ -596 +751,8 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-                    for (const auto& R : Rlist)
++                    const auto sector_iter =
++                        plan.local_irreducible_sector.find({atom_i_pair.first, atom_j_pair.first});
++                    if (sector_iter == plan.local_irreducible_sector.end())
++                    {
++                        continue;
++                    }
++
++                    for (const auto& R_array : sector_iter->second)
+@@ -597,0 +760 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
++                        const Vector3_Order<int> R{R_array[0], R_array[1], R_array[2]};
+@@ -600 +763 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
+-                            blocks_by_R_full.at(atom_i_pair.first).at(atom_j_pair.first).at(R),
++                            blocks_by_R_ir.at(atom_i_pair.first).at(atom_j_pair.first).at(R),
+@@ -607,0 +771,3 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
++    const auto blocks_by_R_full =
++        restore_symmetry_abf_rspace_dense_blocks(
++            blocks_by_R_ir, ctx, abf_layouts, plan.local_sector_stars);
+@@ -4746 +4912 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
+-        && can_use_symmetry_qstar_wr_restore(
++        && can_use_symmetry_irreducible_sector_wr_restore(
+@@ -4750 +4916 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
+-            "GW symmetry accumulates full `W(R)` directly from IBZ q-stars\n");
++            "DIAGNOSTIC: GW symmetry accumulates irreducible-sector `W(R)` from IBZ q-stars\n");

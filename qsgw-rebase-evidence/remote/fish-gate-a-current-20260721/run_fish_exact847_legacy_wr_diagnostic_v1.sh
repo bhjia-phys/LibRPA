@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${RUNNER_COMMIT:?RUNNER_COMMIT must identify the clean runner checkout}"
+: "${RUNNER_SOURCE:?RUNNER_SOURCE must identify the clean runner checkout}"
+: "${RUNNER_SHA256:?RUNNER_SHA256 must identify this exact runner}"
+: "${RUN_ID:?RUN_ID must name a fresh immutable run directory}"
+
+[[ "$RUNNER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+[[ "$RUNNER_SHA256" =~ ^[0-9a-f]{64}$ ]]
+case "$RUN_ID" in
+  *[!A-Za-z0-9._-]*|'') echo "RUN_ID contains unsafe characters" >&2; exit 2 ;;
+esac
+
+base=/home/bhj/ai-runs
+run_root=$base/$RUN_ID
+diagnostic_root=/tmp/${RUN_ID}-source
+diagnostic_source=$diagnostic_root/source
+diagnostic_build=$diagnostic_root/build
+diagnostic_exe=$diagnostic_build/chi0_main.exe
+work=$run_root/diagnostic
+tools_dir=$run_root/tools
+current_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-current-20260721
+symmetry_dir=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-gate-a-symmetry-20260720
+patch_file=$current_dir/exact847_legacy_wr_diagnostic_v1.patch
+legacy_run=$base/librpa-qsgw-gate-a1-exact847-fullcoul-nohead-shrinkchi-off-miniter2-20260722-v3
+legacy_work=$legacy_run/legacy
+legacy_sigcrf=$legacy_work/librpa.d
+candidate_run=$base/librpa-qsgw-gate-a1-exact847-candidate-one-update-20260722-69c33c2f-v3
+input_overlay=$candidate_run/input-overlay-state-basis
+observer_run=$base/librpa-qsgw-gate-a1-exact847-component-observer-20260722-17720999-v1
+component_dir=$observer_run/legacy/librpa.d/qsgw_legacy_components/iter_00001
+python=$base/librpa-qsgw-gate0-20260715T1731-7d69a18c/venv/bin/python
+
+expected_upstream_commit=42d3863c1d865194d382a085851d1e2e8a39764f
+expected_base_epsilon_sha=8808b8f9f468b1794688f6be8ca73edfa2ccd823396456a410212746fa501fff
+expected_patch_sha=8e1b0e5e38655ed555a55f1972e9c82289de403a5ba5f2d807b5f0772642ca25
+expected_legacy_failed_sha=acea8cb23bf445e18da415193e099532413036a0ce9c28393835b38fa1cc5ddf
+expected_legacy_input_sha=75c895f04642497b6578e9ec061cb29c7a1af8d6ae680eaddd8d0e7115b20b85
+expected_component_tree_sha=e1065cedb703c2eba9ee32aca3303815e0c539553cebabb1c3b333eb9275f4e3
+
+run_succeeded=0
+record_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ $run_succeeded -ne 1 && -d ${run_root:-/nonexistent} ]]; then
+    printf 'failed_utc=%s\nexit_code=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" >"$run_root/FAILED"
+  fi
+  exit "$rc"
+}
+trap record_exit EXIT
+
+test ! -e "$run_root"
+test ! -e "$diagnostic_root"
+test -e "$RUNNER_SOURCE/.git"
+test "$(git -C "$RUNNER_SOURCE" rev-parse HEAD)" = "$RUNNER_COMMIT"
+test -z "$(git -C "$RUNNER_SOURCE" status --porcelain)"
+test "$(sha256sum "$0" | awk '{print $1}')" = "$RUNNER_SHA256"
+test -x "$python"
+test "$(sha256sum "$patch_file" | awk '{print $1}')" = "$expected_patch_sha"
+
+test -e "$legacy_run/FAILED"
+test ! -e "$legacy_run/COMPLETE"
+test "$(sha256sum "$legacy_run/FAILED" | awk '{print $1}')" = \
+  "$expected_legacy_failed_sha"
+test "$(sha256sum "$legacy_work/librpa.in" | awk '{print $1}')" = \
+  "$expected_legacy_input_sha"
+test "$(find "$legacy_sigcrf" -maxdepth 1 -type f -name 'SigcRF*' | wc -l)" -eq 16
+grep -Fqx 'use_shrink_chi = f' "$legacy_work/librpa.in"
+grep -Fqx 'output_gw_sigc_mat_rf = t' "$legacy_work/librpa.in"
+
+test -f "$input_overlay/qsgw_input.contract"
+grep -Fqx 'basis state' "$input_overlay/qsgw_vxc_scf.manifest"
+grep -Fqx 'gauge mf0_state' "$input_overlay/qsgw_vxc_scf.manifest"
+test -f "$component_dir/metadata.txt"
+component_tree_sha=$(
+  cd "$component_dir"
+  find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum \
+    | awk '{print $1}'
+)
+test "$component_tree_sha" = "$expected_component_tree_sha"
+
+mkdir -p "$run_root" "$tools_dir"
+cp "$0" "$run_root/"
+cp "$patch_file" "$run_root/"
+for tool in \
+  compare_exact847_sigcrf_v1.py \
+  compare_exact847_component_dump_v1.py; do
+  cp "$current_dir/$tool" "$tools_dir/$tool"
+done
+cp "$symmetry_dir/compare_legacy_band0_native_outputs_v1.py" "$tools_dir/"
+
+git clone --no-hardlinks "$RUNNER_SOURCE" "$diagnostic_source" \
+  >"$run_root/clone.stdout" 2>"$run_root/clone.stderr"
+git -C "$diagnostic_source" checkout --detach "$RUNNER_COMMIT" \
+  >"$run_root/checkout.stdout" 2>"$run_root/checkout.stderr"
+test "$(sha256sum "$diagnostic_source/src/core/epsilon.cpp" | awk '{print $1}')" = \
+  "$expected_base_epsilon_sha"
+git -C "$diagnostic_source" apply --unidiff-zero --check "$patch_file"
+git -C "$diagnostic_source" apply --unidiff-zero "$patch_file"
+test "$(git -C "$diagnostic_source" diff --name-only)" = 'src/core/epsilon.cpp'
+git -C "$diagnostic_source" diff --check
+git -C "$diagnostic_source" diff -- src/core/epsilon.cpp >"$run_root/applied-source.patch"
+grep -Fq 'DIAGNOSTIC: GW symmetry accumulates irreducible-sector' \
+  "$diagnostic_source/src/core/epsilon.cpp"
+
+set +u
+source /opt/intel/oneapi/setvars.sh --force \
+  >"$run_root/oneapi-setvars.stdout" \
+  2>"$run_root/oneapi-setvars.stderr"
+set -u
+
+cmake -S "$diagnostic_source" -B "$diagnostic_build" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_CXX_COMPILER=mpiicpx \
+  -DCMAKE_Fortran_COMPILER=mpiifx \
+  -DENABLE_DOCS=OFF \
+  -DENABLE_DRIVER=ON \
+  -DENABLE_FORTRAN_BIND=OFF \
+  -DENABLE_TEST=OFF \
+  -DENABLE_UNITTESTS=OFF \
+  -DUSE_CMAKE_INC=OFF \
+  -DUSE_EXTERNAL_GREENX=OFF \
+  -DUSE_GREENX_API=ON \
+  -DUSE_LIBRI=ON \
+  >"$run_root/configure.stdout" \
+  2>"$run_root/configure.stderr"
+cmake --build "$diagnostic_build" -j 32 \
+  >"$run_root/build.stdout" \
+  2>"$run_root/build.stderr"
+test -x "$diagnostic_exe"
+diagnostic_exe_sha=$(sha256sum "$diagnostic_exe" | awk '{print $1}')
+ldd "$diagnostic_exe" >"$run_root/diagnostic-ldd.txt"
+
+mkdir -p "$work"
+cat >"$work/librpa.in" <<EOF
+task = qsgw
+input_dir = $input_overlay/
+output_dir = ./
+constants_choice = internal
+nfreq = 16
+tfgrid_type = minimax
+n_params_anacon = 16
+n_params_anacon_resample = -1
+anacon_nfreq = -1
+parallel_routing = libri
+vq_threshold = 0
+sqrt_coulomb_threshold = 0
+gf_R_threshold = 1e-12
+libri_chi0_threshold_C = 1e-4
+libri_chi0_threshold_G = 1e-5
+libri_exx_threshold_V = 1e-1
+libri_exx_threshold_C = 1e-4
+libri_exx_threshold_D = 1e-4
+libri_g0w0_threshold_C = 1e-5
+libri_g0w0_threshold_G = 1e-5
+libri_g0w0_threshold_Wc = 1e-6
+use_scalapack_gw_wc = true
+output_gw_sigc_ks_mat_kf = false
+output_gw_sigc_mat_rf = true
+use_shrink_abfs = true
+use_shrink_chi = false
+use_pyatb = false
+replace_w_head = false
+option_dielect_func = 0
+use_fullcoul_exx = true
+use_fullcoul_eps = true
+use_fullcoul_wc = false
+use_symmetry_exx = true
+use_symmetry_gw = true
+use_symmetry_rpa = true
+use_kpara_scf_eigvec = false
+qsgw_input_contract = qsgw_input.contract
+qsgw_mixer = none
+qsgw_mixing_beta = 0.2
+qsgw_min_iter = 1
+qsgw_max_iter = 1
+qsgw_write_iteration_matrices = true
+qsgw_update_hartree = false
+qsgw_iterative_headwing = false
+EOF
+
+export OMP_NUM_THREADS=32
+export MKL_NUM_THREADS=32
+export OPENBLAS_NUM_THREADS=32
+export OMP_PROC_BIND=spread
+export OMP_PLACES=cores
+export I_MPI_PIN_DOMAIN=omp
+export LD_LIBRARY_PATH="$diagnostic_build/src:${LD_LIBRARY_PATH:-}"
+
+cat >"$run_root/PROVENANCE.txt" <<EOF
+gate=gate_a1_exact847_legacy_wr_diagnostic_v1
+acceptance=false_diagnostic_only
+runner_commit=$RUNNER_COMMIT
+runner_sha256=$RUNNER_SHA256
+upstream_commit=$expected_upstream_commit
+base_epsilon_sha256=$expected_base_epsilon_sha
+diagnostic_patch_sha256=$expected_patch_sha
+diagnostic_executable=$diagnostic_exe
+diagnostic_executable_sha256=$diagnostic_exe_sha
+legacy_sigcrf_source_run=$legacy_run
+legacy_component_observer_run=$observer_run
+legacy_component_tree_sha256=$component_tree_sha
+input_overlay=$input_overlay
+symmetry=on
+headwing=off
+hartree=off
+iteration=1
+started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+(
+  cd "$work"
+  printf 'started_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >runtime.txt
+  timeout 10800 mpirun -np 1 "$diagnostic_exe" \
+    >librpa.stdout 2>librpa.stderr
+  printf 'completed_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>runtime.txt
+)
+
+grep -Fq 'DIAGNOSTIC: GW symmetry accumulates irreducible-sector' "$work/librpa.stdout"
+grep -Fq 'QSGW iteration 1:' "$work/librpa.stdout"
+grep -Fq 'QSGW completed iterations: 1' "$work/librpa.stdout"
+grep -Fq 'libRPA finished successfully' "$work/librpa.stdout"
+test -s "$work/qsgw_matrices.dat"
+test "$(find "$work" -maxdepth 1 -type f -name 'SigcRF*' | wc -l)" -eq 16
+
+"$python" -B "$tools_dir/compare_exact847_sigcrf_v1.py" \
+  "$legacy_sigcrf" "$work" \
+  "$run_root/exact847-legacy-wr-sigcrf-comparison.json" \
+  >"$run_root/sigcrf-comparison.stdout" \
+  2>"$run_root/sigcrf-comparison.stderr"
+test ! -s "$run_root/sigcrf-comparison.stderr"
+grep -Fq '"diagnostic_complete": true' \
+  "$run_root/exact847-legacy-wr-sigcrf-comparison.json"
+
+PYTHONPATH="$tools_dir" "$python" -B \
+  "$tools_dir/compare_exact847_component_dump_v1.py" \
+  "$component_dir" "$work/qsgw_matrices.dat" \
+  "$run_root/exact847-legacy-wr-component-comparison.json" \
+  --iteration 1 --n-frequencies 16 --n-spins 1 --n-kpoints 8 --n-bands 44 \
+  >"$run_root/component-comparison.stdout" \
+  2>"$run_root/component-comparison.stderr"
+test ! -s "$run_root/component-comparison.stderr"
+grep -Fq '"diagnostic_complete": true' \
+  "$run_root/exact847-legacy-wr-component-comparison.json"
+
+cat >>"$run_root/PROVENANCE.txt" <<EOF
+diagnostic_trace_sha256=$(sha256sum "$work/qsgw_matrices.dat" | awk '{print $1}')
+sigcrf_comparison_sha256=$(sha256sum "$run_root/exact847-legacy-wr-sigcrf-comparison.json" | awk '{print $1}')
+component_comparison_sha256=$(sha256sum "$run_root/exact847-legacy-wr-component-comparison.json" | awk '{print $1}')
+completed_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+(
+  cd "$run_root"
+  find . -type f ! -name OUTPUT_SHA256SUMS.txt \
+    -print0 | LC_ALL=C sort -z | xargs -0 sha256sum >OUTPUT_SHA256SUMS.txt
+)
+touch "$run_root/DIAGNOSTIC_COMPLETE"
+run_succeeded=1

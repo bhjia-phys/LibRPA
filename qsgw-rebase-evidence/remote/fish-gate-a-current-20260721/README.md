@@ -120,6 +120,21 @@ closed. `run_fish_exact847_current_sigcrf_compare_v1.sh` performs the next
 full-compute control and uses `compare_exact847_sigcrf_v1.py` to compare every
 frequency and real-space AO block before fixed-basis projection.
 
+That full-compute control found a `5.02e-4 Ha` maximum and `5.17e-3` relative
+Frobenius difference in real-space Sigma. The mismatch is therefore upstream
+of the validated reader/projection boundary. The current runtime builds full
+`W(R)` directly from IBZ q-stars, whereas exact847 first accumulated only the
+irreducible real-space sectors and then restored the full map. This change was
+introduced by upstream commit `318e3e42`; it is not a QSGW adapter edit.
+
+`run_fish_exact847_legacy_wr_diagnostic_v1.sh` is a diagnostic-only A/B test.
+It clones the clean runner to a new `/tmp` source tree, applies the SHA-bound
+`exact847_legacy_wr_diagnostic_v1.patch` only to `src/core/epsilon.cpp`, builds
+a separate executable, reruns the same exact847 one-update input, and compares
+both `SigcRF` and fixed-basis component traces. The patch is never applied to
+the accepted branch or executable, and the run can only emit
+`DIAGNOSTIC_COMPLETE`, not `GREEN_CONFIRMED`.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
