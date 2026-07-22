@@ -59,6 +59,15 @@ miniter10 gate used `false`, while both rejected symmetry prefixes used
 `true`. No aggregate miniter2/miniter5 run is allowed until that factor is
 isolated.
 
+`run_fish_gate_a_shrink_off_iter1_v1.sh` performs that isolation. It reruns
+both the legacy compatibility harness and the Gate0 candidate through
+iteration 1 with symmetry enabled and `use_shrink_abfs=false` on both sides.
+It retains the historical identity-overlap fallback, requires exactly eight S
+and eight HF fallback warnings from the legacy reader, and compares EXX,
+SigmaC, Vc, raw/mixed QSGW matrices, eigenvalues, frontier levels, closure,
+Hermiticity, fixed-basis invariants, and electron count. This focused gate must
+pass before the aggregate miniter2/miniter5 runner is reconsidered.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
@@ -79,3 +88,14 @@ bash run_fish_gate_a_current_v3.sh
 
 A successful aggregate run has `GREEN_CONFIRMED`. Any failure records
 `FAILED` and leaves the immutable partial evidence in place.
+
+The focused shrink-off runner uses the same binding variables and a unique
+run tag:
+
+```bash
+RUNNER_COMMIT=<clean-runner-commit> \
+RUNNER_SOURCE=<clean-runner-checkout> \
+RUNNER_SHA256=<sha256-of-committed-shrink-off-runner> \
+RUN_TAG=<unique-tag> \
+bash run_fish_gate_a_shrink_off_iter1_v1.sh
+```
