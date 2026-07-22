@@ -514,6 +514,7 @@ python=$($python --version 2>&1)
 numpy=$($python -c 'import numpy; print(numpy.__version__)')
 slurm_job_id=$SLURM_JOB_ID
 slurm_node_list=$SLURM_JOB_NODELIST
+slurm_partition=${SLURM_JOB_PARTITION:-unknown}
 completed_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
