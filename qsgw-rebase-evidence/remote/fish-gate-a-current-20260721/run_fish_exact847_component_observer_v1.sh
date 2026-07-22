@@ -225,7 +225,10 @@ grep -Fq 'Task work begins: qsgw_band0' "$work/librpa.stdout"
 grep -Fq 'QSGW band0: max_iterations = 1' "$work/librpa.stdout"
 grep -Fq 'Iteration 1: HOMO =' "$work/librpa.stdout"
 grep -Fq 'libRPA finished successfully' "$work/librpa.stdout"
-test ! -s "$work/librpa.stderr"
+test "$(sha256sum "$work/librpa.stderr" | awk '{print $1}')" = \
+  0cb18c37eb3f24e1fe03482852987d5aa34220d9755b07af197c800486421d90
+test "$(grep -c '^HF file not found: hf_exchange_spin_01_kpt_' \
+  "$work/librpa.stderr")" -eq 8
 test "$(awk 'NF {last=$1} END {print last}' \
   "$work/homo_lumo_vs_iterations.dat")" = 1
 
