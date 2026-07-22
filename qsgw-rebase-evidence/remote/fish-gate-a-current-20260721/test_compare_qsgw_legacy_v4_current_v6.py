@@ -78,13 +78,17 @@ def legacy_header(
     )
 
 
-def current_header(mode: str = "none", beta: str = "0.2") -> str:
+def current_header(
+    mode: str = "none",
+    beta: str = "0.2",
+    symmetry: str = "exx_on_gw_on_rpa_on",
+) -> str:
     return """# qsgw_contract_version 6
 # fixed_basis immutable_mf0
 # live_update eigenvalues_wfc
 # velocity disabled_stage1
 # headwing disabled_stage1
-# symmetry exx_on_gw_on_rpa_on
+# symmetry {symmetry}
 # hartree disabled_stage1
 # band disabled_stage1
 # h_qsgw_cut disabled_non_band
@@ -92,7 +96,7 @@ def current_header(mode: str = "none", beta: str = "0.2") -> str:
 # qsgw_input_contract_sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 # qsgw_mixer {mode}
 # qsgw_mixing_beta {beta}
-""".format(mode=mode, beta=beta)
+""".format(mode=mode, beta=beta, symmetry=symmetry)
 
 
 class AdapterContractTests(unittest.TestCase):
@@ -102,6 +106,8 @@ class AdapterContractTests(unittest.TestCase):
         final_iteration: int = 2,
         allow_legacy_iteration_prefix: bool = False,
         expected_legacy_use_shrink_abfs: bool = True,
+        expected_legacy_symmetry: str = "on",
+        expected_current_symmetry: str = "on",
     ):
         return adapter._validate_actual_contracts(
             base_module=base,
@@ -112,6 +118,8 @@ class AdapterContractTests(unittest.TestCase):
             expected_mode=mode,
             expected_legacy_beta=legacy_beta,
             expected_current_beta=current_beta,
+            expected_legacy_symmetry=expected_legacy_symmetry,
+            expected_current_symmetry=expected_current_symmetry,
             allow_legacy_iteration_prefix=allow_legacy_iteration_prefix,
             expected_legacy_use_shrink_abfs=expected_legacy_use_shrink_abfs,
         )
@@ -129,6 +137,31 @@ class AdapterContractTests(unittest.TestCase):
             "linear", 0.2, 0.2,
         )
         self.assertTrue(result["passed"])
+
+    def test_full_bz_contract_passes(self):
+        result = self.validate(
+            legacy_header(symmetry="0"),
+            current_header(symmetry="exx_off_gw_off_rpa_off"),
+            "none",
+            1.0,
+            0.2,
+            expected_legacy_symmetry="off",
+            expected_current_symmetry="off",
+        )
+        self.assertEqual(result["symmetry_mapping"], "legacy_off_to_current_off")
+
+    def test_legacy_full_bz_to_current_symmetry_contract_passes(self):
+        result = self.validate(
+            legacy_header(symmetry="0"),
+            current_header(symmetry="exx_on_gw_on_rpa_on"),
+            "none",
+            1.0,
+            0.2,
+            expected_legacy_symmetry="off",
+            expected_current_symmetry="on",
+        )
+        self.assertEqual(result["legacy_symmetry"], "off")
+        self.assertEqual(result["current_symmetry"], "on")
 
     def test_legacy_literal_nfreq_is_effectively_all_points(self):
         result = self.validate(
@@ -167,6 +200,15 @@ class AdapterContractTests(unittest.TestCase):
             self.validate(
                 legacy_header(symmetry="0"), current_header(),
                 "none", 1.0, 0.2,
+            )
+
+    def test_wrong_current_symmetry_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "contract mismatch"):
+            self.validate(
+                legacy_header(symmetry="0"), current_header(),
+                "none", 1.0, 0.2,
+                expected_legacy_symmetry="off",
+                expected_current_symmetry="off",
             )
 
     def test_full_abf_legacy_contract_requires_explicit_opt_in(self):

@@ -82,9 +82,21 @@ def _validate_actual_contracts(
     expected_mode: str,
     expected_legacy_beta: float,
     expected_current_beta: float,
+    expected_legacy_symmetry: str,
+    expected_current_symmetry: str,
     allow_legacy_iteration_prefix: bool = False,
     expected_legacy_use_shrink_abfs: bool = True,
 ) -> dict[str, object]:
+    symmetry_switch = {"off": "0", "on": "1"}
+    current_symmetry_contract = {
+        "off": "exx_off_gw_off_rpa_off",
+        "on": "exx_on_gw_on_rpa_on",
+    }
+    if expected_legacy_symmetry not in symmetry_switch:
+        raise ValueError("expected legacy symmetry must be 'off' or 'on'")
+    if expected_current_symmetry not in current_symmetry_contract:
+        raise ValueError("expected current symmetry must be 'off' or 'on'")
+
     legacy = base_module.parse_contract(legacy_text, "legacy v4 trace")
     declared_min_iteration = int(legacy["qsgw_min_iter"])
     declared_max_iteration = int(legacy["qsgw_max_iter"])
@@ -126,8 +138,8 @@ def _validate_actual_contracts(
             "starting_vxc": "dft_only",
             "vxc_basis": "fixed_state",
             "qsgw_update_hartree": "0",
-            "use_symmetry_gw": "1",
-            "use_symmetry_exx": "1",
+            "use_symmetry_gw": symmetry_switch[expected_legacy_symmetry],
+            "use_symmetry_exx": symmetry_switch[expected_legacy_symmetry],
             "replace_w_head": "0",
             "option_dielect_func": "0",
             "nfreq": "6",
@@ -161,7 +173,7 @@ def _validate_actual_contracts(
             "live_update": "eigenvalues_wfc",
             "velocity": "disabled_stage1",
             "headwing": "disabled_stage1",
-            "symmetry": "exx_on_gw_on_rpa_on",
+            "symmetry": current_symmetry_contract[expected_current_symmetry],
             "hartree": "disabled_stage1",
             "band": "disabled_stage1",
             "h_qsgw_cut": "disabled_non_band",
@@ -176,7 +188,12 @@ def _validate_actual_contracts(
         "current_version": 6,
         "legacy_role": "compatibility_harness_not_raw_source",
         "fixed_basis_mapping": "immutable_reference_to_immutable_mf0",
-        "symmetry": "legacy_exx_on_gw_on_to_current_exx_on_gw_on_rpa_on",
+        "legacy_symmetry": expected_legacy_symmetry,
+        "current_symmetry": expected_current_symmetry,
+        "symmetry_mapping": (
+            f"legacy_{expected_legacy_symmetry}_to_"
+            f"current_{expected_current_symmetry}"
+        ),
         "headwing": "off",
         "hartree": "off",
         "band": "off",
@@ -278,6 +295,8 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         expected_mode=args.expected_mode,
         expected_legacy_beta=args.expected_legacy_beta,
         expected_current_beta=args.expected_current_beta,
+        expected_legacy_symmetry=args.expected_legacy_symmetry,
+        expected_current_symmetry=args.expected_current_symmetry,
         allow_legacy_iteration_prefix=args.allow_legacy_iteration_prefix,
         expected_legacy_use_shrink_abfs=bool(
             args.expected_legacy_use_shrink_abfs
@@ -345,6 +364,10 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         "numeric_alignment": numeric,
         "header_normalization": {
             "scope": "contract_headers_only_numeric_rows_unchanged",
+            "actual_symmetry": {
+                "legacy": args.expected_legacy_symmetry,
+                "current": args.expected_current_symmetry,
+            },
             "legacy": {
                 "qsgw_mixing_beta": "1",
                 "use_symmetry_gw": "0",
@@ -389,6 +412,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-mode", choices=("none", "linear"), required=True)
     parser.add_argument("--expected-legacy-beta", type=float, required=True)
     parser.add_argument("--expected-current-beta", type=float, required=True)
+    parser.add_argument(
+        "--expected-legacy-symmetry",
+        choices=("off", "on"),
+        required=True,
+    )
+    parser.add_argument(
+        "--expected-current-symmetry",
+        choices=("off", "on"),
+        required=True,
+    )
     parser.add_argument(
         "--expected-legacy-use-shrink-abfs",
         choices=(0, 1),
