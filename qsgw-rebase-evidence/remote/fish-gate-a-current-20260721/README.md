@@ -81,6 +81,17 @@ diagnostic evidence even when parity fails. It never writes `GREEN_CONFIRMED`;
 aggregate miniter2/miniter5 remains blocked until the legacy symmetry harness
 is repaired or replaced by a valid old symmetry oracle.
 
+The recovery candidate itself finished LibRPA successfully, but the runner
+stopped before observers because it incorrectly required the obsolete
+`homo_lumo_vs_iterations.dat` file. The contract-v6 iteration trace is the
+authoritative frontier output: full-ABF iter1 has about `1.90e5 eV` maximum
+eigenvalue change, `-881.8 eV` Fermi level, and zero gap. Thus both the legacy
+and current full-ABF symmetry paths are unstable and are not valid oracles.
+`run_fish_gate_a_shrink_off_candidate_failed_postcheck_v1.sh` SHA-binds the
+completed candidate traces, derives the frontier from `qsgw_iterations.dat`,
+runs all matrix/state observers, and archives the old/new mismatch without
+rerunning LibRPA.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
