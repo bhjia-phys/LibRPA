@@ -65,8 +65,21 @@ iteration 1 with symmetry enabled and `use_shrink_abfs=false` on both sides.
 It retains the historical identity-overlap fallback, requires exactly eight S
 and eight HF fallback warnings from the legacy reader, and compares EXX,
 SigmaC, Vc, raw/mixed QSGW matrices, eigenvalues, frontier levels, closure,
-Hermiticity, fixed-basis invariants, and electron count. This focused gate must
-pass before the aggregate miniter2/miniter5 runner is reconsidered.
+Hermiticity, fixed-basis invariants, and electron count. The run is rejected
+evidence: the legacy iteration-1 frontier remained pathological at about
+`-2.46e3 eV`, and the candidate correctly rejected the shrink-enabled contract
+because its `reader_static` role contained nine shrink-only files that the
+full-ABF driver did not read.
+
+`run_fish_gate_a_shrink_off_candidate_recovery_v1.sh` reuses the completed
+legacy trace read-only by SHA256 and regenerates the candidate contract with
+the existing IBZ contract builder in full-ABF mode. The derived contract has
+15 `reader_static` files, 26 total role files, full 64-point k-star coverage,
+and SHA256 `5f7ebe1d...`. The recovery archives candidate execution, component
+summaries, closure/fixed-basis checks, and the old/new numerical comparison as
+diagnostic evidence even when parity fails. It never writes `GREEN_CONFIRMED`;
+aggregate miniter2/miniter5 remains blocked until the legacy symmetry harness
+is repaired or replaced by a valid old symmetry oracle.
 
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
