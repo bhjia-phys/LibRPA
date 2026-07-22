@@ -105,6 +105,7 @@ test "$(awk 'NF && $1 !~ /^#/ {last=$1} END {print last}' \
 mkdir -p "$run_root/tools" "$run_root/source"
 cp "$0" "$run_root/"
 cp "$base_comparator" "$run_root/tools/base_comparator.py"
+cp "$base_comparator" "$run_root/tools/compare_qsgw_component_traces.py"
 cp "$closure" "$run_root/tools/validate_qsgw_trace_closure.py"
 cp "$fixed" "$run_root/tools/validate_qsgw_fixed_basis.py"
 cp "$initial" "$run_root/tools/validate_qsgw_initial_state.py"
