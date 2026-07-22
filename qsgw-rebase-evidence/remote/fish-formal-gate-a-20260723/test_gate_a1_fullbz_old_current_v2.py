@@ -48,6 +48,25 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
             'sha256sum --check --quiet OUTPUT_SHA256SUMS.txt', self.source
         )
 
+    def test_requires_accepted_gate2_before_numerics(self):
+        self.assertIn("GATE2_PROVENANCE_SHA256", self.source)
+        self.assertIn(
+            "librpa-qsgw-gate2-current-20260723-dd7a75f2-v1",
+            self.source,
+        )
+        self.assertIn(
+            "gate=fish_gate2_current_qsgw_first_self_energy_v2",
+            self.source,
+        )
+        self.assertIn('test -e "$candidate_gate2/GREEN_CONFIRMED"', self.source)
+        self.assertIn('test ! -e "$candidate_gate2/FAILED"', self.source)
+        self.assertIn("expected_gate2_output_manifest_sha", self.source)
+        self.assertIn("sigc_block_count=48", self.source)
+        self.assertIn("symmetry=exx_on_gw_on_rpa_on", self.source)
+        self.assertIn("mixing=none", self.source)
+        self.assertIn("candidate-gate2-PROVENANCE.txt", self.source)
+        self.assertIn("candidate-gate2-OUTPUT_SHA256SUMS.txt", self.source)
+
     def test_binds_runner_checkout_and_writes_failure_marker(self):
         self.assertIn("RUNNER_SOURCE", self.source)
         self.assertIn('git -C "$RUNNER_SOURCE" rev-parse HEAD', self.source)

@@ -8,12 +8,14 @@ trap 'status=$?; printf "ERROR line=%s status=%s command=%s\n" \
 : "${RUNNER_SHA256:?RUNNER_SHA256 must identify this exact runner}"
 : "${GATE0_PROVENANCE_SHA256:?GATE0_PROVENANCE_SHA256 must bind accepted Gate 0}"
 : "${GATE1_PROVENANCE_SHA256:?GATE1_PROVENANCE_SHA256 must bind accepted Gate 1}"
+: "${GATE2_PROVENANCE_SHA256:?GATE2_PROVENANCE_SHA256 must bind accepted Gate 2}"
 : "${CANDIDATE_EXE_SHA256:?CANDIDATE_EXE_SHA256 must bind the Gate 0 executable}"
 : "${RUN_TAG:?RUN_TAG must make the run directory immutable}"
 test "${#RUNNER_COMMIT}" = 40
 test "${#RUNNER_SHA256}" = 64
 test "${#GATE0_PROVENANCE_SHA256}" = 64
 test "${#GATE1_PROVENANCE_SHA256}" = 64
+test "${#GATE2_PROVENANCE_SHA256}" = 64
 test "${#CANDIDATE_EXE_SHA256}" = 64
 case "$RUN_TAG" in
   *[!A-Za-z0-9._-]*|'') echo "RUN_TAG contains unsafe characters" >&2; exit 2 ;;
@@ -27,6 +29,7 @@ old_build=$old_runtime/old/build
 old_exe=$old_build/chi0_main.exe
 candidate_gate0=/home/bhj/ai-runs/librpa-qsgw-gate0-20260723-4f9ab0cf-v1
 candidate_gate1=/home/bhj/ai-runs/librpa-qsgw-gate1-current-postcheck-20260723-36d74369-v1
+candidate_gate2=/home/bhj/ai-runs/librpa-qsgw-gate2-current-20260723-dd7a75f2-v1
 candidate_source=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/candidate
 candidate_build=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/build-candidate
 candidate_exe=$candidate_build/chi0_main.exe
@@ -41,6 +44,8 @@ expected_old_exe_sha=a1292eff5364565d5b7463596882580a9a758b6e0e3e600ac5dfe67113b
 expected_old_build_provenance_sha=8dfa0742e5618be14c27a96764ddf240af2ed8fc19662bac4d506bd44e77c96b
 expected_upstream_commit=67b9888dac0d09870361398165d0b3c1acc931ff
 expected_candidate_commit=4f9ab0cfc90f54910158ab01a877581b080f136e
+expected_gate1_output_manifest_sha=74a3453c46df34e7b0ec8430260cd47182e6d3d01a409f4a313dc976948a127f
+expected_gate2_output_manifest_sha=48dc9063d56de58b21cd77243ea56e127cfe79013b66728f6a9913ff36ac3dee
 expected_common_dataset_manifest_sha=df793f964077ca03de7ad4723975736d0d0fb85d7e548241f3a7a04677cc05f7
 expected_common_output_manifest_sha=3b7811c12df23a563e597cae2fb80f592c045d27c803a1afc7ead31d7d7439d4
 expected_common_provenance_sha=54e2a4b0f07883f4341d46e41a80fd8ae1ebac7e25d263699eda8819b00ce0d8
@@ -123,8 +128,44 @@ grep -Fqx 'gate=fish_gate1_current_g0w0_ab_recovery_v2' "$candidate_gate1/PROVEN
 grep -Fqx 'acceptance=true' "$candidate_gate1/PROVENANCE.txt"
 grep -Fqx "upstream_commit=$expected_upstream_commit" "$candidate_gate1/PROVENANCE.txt"
 grep -Fqx "candidate_commit=$expected_candidate_commit" "$candidate_gate1/PROVENANCE.txt"
+test "$(sha256sum "$candidate_gate1/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
+  "$expected_gate1_output_manifest_sha"
 (
   cd "$candidate_gate1"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
+
+printf 'preflight=candidate_gate2_provenance\n'
+test -e "$candidate_gate2/GREEN_CONFIRMED"
+test ! -e "$candidate_gate2/FAILED"
+test "$(sha256sum "$candidate_gate2/PROVENANCE.txt" | awk '{print $1}')" = \
+  "$GATE2_PROVENANCE_SHA256"
+test "$(sha256sum "$candidate_gate2/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
+  "$expected_gate2_output_manifest_sha"
+grep -Fqx 'gate=fish_gate2_current_qsgw_first_self_energy_v2' \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'acceptance=true' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "upstream_commit=$expected_upstream_commit" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "candidate_commit=$expected_candidate_commit" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "candidate_executable_sha256=$CANDIDATE_EXE_SHA256" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "gate0_provenance_sha256=$GATE0_PROVENANCE_SHA256" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "gate1_accepted_provenance_sha256=$GATE1_PROVENANCE_SHA256" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx "gate1_accepted_output_manifest_sha256=$expected_gate1_output_manifest_sha" \
+  "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'sigc_block_count=48' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'symmetry=exx_on_gw_on_rpa_on' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'headwing=off' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'hartree=off' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'band=off' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'mixing=none' "$candidate_gate2/PROVENANCE.txt"
+grep -Fqx 'iterations=0:1' "$candidate_gate2/PROVENANCE.txt"
+(
+  cd "$candidate_gate2"
   sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
 )
 
@@ -201,6 +242,16 @@ cp "$old_runtime/build-provenance.txt" "$run_root/old-build-provenance.txt"
 cp "$candidate_gate0/PROVENANCE.txt" "$run_root/candidate-gate0-PROVENANCE.txt"
 cp "$candidate_gate0/OUTPUT_SHA256SUMS.txt" \
   "$run_root/candidate-gate0-OUTPUT_SHA256SUMS.txt"
+cp "$candidate_gate1/PROVENANCE.txt" "$run_root/candidate-gate1-PROVENANCE.txt"
+cp "$candidate_gate1/OUTPUT_SHA256SUMS.txt" \
+  "$run_root/candidate-gate1-OUTPUT_SHA256SUMS.txt"
+cp "$candidate_gate2/PROVENANCE.txt" "$run_root/candidate-gate2-PROVENANCE.txt"
+cp "$candidate_gate2/OUTPUT_SHA256SUMS.txt" \
+  "$run_root/candidate-gate2-OUTPUT_SHA256SUMS.txt"
+cp "$candidate_gate2/qsgw-iter1-invariants.json" \
+  "$run_root/candidate-gate2-qsgw-iter1-invariants.json"
+cp "$candidate_gate2/qsgw-iter1-vs-upstream-g0w0-sigc.json" \
+  "$run_root/candidate-gate2-qsgw-iter1-vs-upstream-g0w0-sigc.json"
 cp "$common_root/DATASET_SHA256SUMS.txt" "$run_root/DATASET_SHA256SUMS.txt"
 cp "$common_root/OUTPUT_SHA256SUMS.txt" "$run_root/common-input-OUTPUT_SHA256SUMS.txt"
 cp "$common_root/PROVENANCE.txt" "$run_root/common-input-PROVENANCE.txt"
@@ -254,6 +305,7 @@ use_fullcoul_wc=false
 mpi_ranks=$mpi_ranks
 omp_threads=$omp_threads
 deterministic_reduction=1
+accepted_precondition_gate2=first_self_energy_vs_upstream_g0w0
 mode_1=legacy_linear_beta_1_direct_vs_current_none_miniter2
 mode_2=legacy_linear_beta_0.2_vs_current_linear_beta_0.2_miniter5
 EOF
@@ -518,6 +570,14 @@ run_mode linear-beta-0.2-miniter5 5 0.2 linear 0.2
   cd "$candidate_gate0"
   sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
 )
+(
+  cd "$candidate_gate1"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
+(
+  cd "$candidate_gate2"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
 sha256sum --check --quiet "$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt"
 
 cat >"$run_root/PROVENANCE.txt" <<EOF
@@ -536,6 +596,10 @@ candidate_gate0=$candidate_gate0
 candidate_gate0_provenance_sha256=$GATE0_PROVENANCE_SHA256
 candidate_gate1=$candidate_gate1
 candidate_gate1_provenance_sha256=$GATE1_PROVENANCE_SHA256
+candidate_gate1_output_manifest_sha256=$expected_gate1_output_manifest_sha
+candidate_gate2=$candidate_gate2
+candidate_gate2_provenance_sha256=$GATE2_PROVENANCE_SHA256
+candidate_gate2_output_manifest_sha256=$expected_gate2_output_manifest_sha
 dataset=$input_dir
 dataset_manifest_sha256=$expected_common_dataset_manifest_sha
 input_contract_sha256=$expected_common_contract_sha
@@ -579,6 +643,12 @@ sha256sum \
   "$run_root/old-build-provenance.txt" \
   "$run_root/candidate-gate0-PROVENANCE.txt" \
   "$run_root/candidate-gate0-OUTPUT_SHA256SUMS.txt" \
+  "$run_root/candidate-gate1-PROVENANCE.txt" \
+  "$run_root/candidate-gate1-OUTPUT_SHA256SUMS.txt" \
+  "$run_root/candidate-gate2-PROVENANCE.txt" \
+  "$run_root/candidate-gate2-OUTPUT_SHA256SUMS.txt" \
+  "$run_root/candidate-gate2-qsgw-iter1-invariants.json" \
+  "$run_root/candidate-gate2-qsgw-iter1-vs-upstream-g0w0-sigc.json" \
   "$run_root/DATASET_SHA256SUMS.txt" \
   "$run_root/common-input-OUTPUT_SHA256SUMS.txt" \
   "$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt" \
