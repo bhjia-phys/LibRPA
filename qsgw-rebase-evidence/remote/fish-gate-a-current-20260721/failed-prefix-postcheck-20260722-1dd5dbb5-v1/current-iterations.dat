@@ -1,0 +1,16 @@
+# qsgw_contract_version 6
+# fixed_basis immutable_mf0
+# live_update eigenvalues_wfc
+# velocity disabled_stage1
+# headwing disabled_stage1
+# symmetry exx_on_gw_on_rpa_on
+# hartree disabled_stage1
+# band disabled_stage1
+# h_qsgw_cut disabled_non_band
+# qsgw_input_contract /home/bhj/ai-runs/librpa-qsgw-gate2-current-20260722-aca53374-v1/input-overlay/qsgw_input.contract
+# qsgw_input_contract_sha256 7dcd3a99dc081f3321a709d84e8f29a4ffb35371c6170ba1cdb5a76a43ef1fe7
+# qsgw_mixer none
+# qsgw_mixing_beta 0.20000000000000001
+# iter max_delta_eV residual_l2_Ha residual_max_Ha efermi_eV gap_eV electron_count requested_mode applied_mode beta fallback rcond coefficient_l1 coefficient_count converged coefficients fallback_reason
+0 0.00000000000000000e+00 0.00000000000000000e+00 0.00000000000000000e+00 6.48708563549855466e+00 6.91105998768951846e-01 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none
+1 5.43032805820883441e+04 5.41920804946021235e+03 1.94883095855492661e+03 3.64176964976998974e-01 4.70971785643413288e+00 8.00000000000000000e+00 -1 -1 2.00000000000000011e-01 0 1.00000000000000000e+00 0.00000000000000000e+00 0 0 none none

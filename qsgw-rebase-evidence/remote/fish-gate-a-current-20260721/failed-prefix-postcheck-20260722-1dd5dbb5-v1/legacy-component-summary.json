@@ -1,0 +1,397 @@
+{
+  "groups": [
+    {
+      "channel": 0,
+      "component": "electron_count",
+      "count": 1,
+      "frobenius": 8.0,
+      "iteration": 0,
+      "max_abs": 8.0,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93312,
+        "real": 8.0,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "fermi_energy_ha",
+      "count": 1,
+      "frobenius": 0.243670666760322,
+      "iteration": 0,
+      "max_abs": 0.243670666760322,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93311,
+        "real": 0.243670666760322,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "gap_ha",
+      "count": 1,
+      "frobenius": 0.02539767700628803,
+      "iteration": 0,
+      "max_abs": 0.02539767700628803,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 93313,
+        "real": 0.02539767700628803,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "h0",
+      "count": 15488,
+      "frobenius": 39.07483760232898,
+      "iteration": 0,
+      "max_abs": 6.952366685355419,
+      "max_location": {
+        "column": 43,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 1966,
+        "real": 6.952366685355419,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "occupation",
+      "count": 352,
+      "frobenius": 1.8561553006146871,
+      "iteration": 0,
+      "max_abs": 0.75,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 4,
+        "line": 93135,
+        "real": 0.75,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "velocity_x",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_y",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_z",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 0,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "vxc_dft",
+      "count": 15488,
+      "frobenius": 5419.96512714195,
+      "iteration": 0,
+      "max_abs": 1948.047259752979,
+      "max_location": {
+        "column": 43,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -8.526512829121202e-14,
+        "kpoint": 2,
+        "line": 21326,
+        "real": -1948.047259752979,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "wfc_spinor0",
+      "count": 15488,
+      "frobenius": 286.24313381479976,
+      "iteration": 0,
+      "max_abs": 44.34462678950857,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 32767,
+        "real": -44.34462678950857,
+        "row": 40,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "electron_count",
+      "count": 1,
+      "frobenius": 8.0,
+      "iteration": 1,
+      "max_abs": 8.0,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 325987,
+        "real": 8.0,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "exx",
+      "count": 15488,
+      "frobenius": 684.3796546539363,
+      "iteration": 1,
+      "max_abs": 237.3291828493486,
+      "max_location": {
+        "column": 43,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 4.156675004196586e-13,
+        "kpoint": 2,
+        "line": 192049,
+        "real": 237.3291828493486,
+        "row": 43,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "fermi_energy_ha",
+      "count": 1,
+      "frobenius": 1073.565077248155,
+      "iteration": 1,
+      "max_abs": 1073.565077248155,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 325986,
+        "real": -1073.565077248155,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "gap_ha",
+      "count": 1,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "mixed_h",
+      "count": 15488,
+      "frobenius": 266039.3681104878,
+      "iteration": 1,
+      "max_abs": 103086.187591452,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 234551,
+        "real": -103086.187591452,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "occupation",
+      "count": 352,
+      "frobenius": 1.8582585934148133,
+      "iteration": 1,
+      "max_abs": 0.75,
+      "max_location": {
+        "column": 0,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 4,
+        "line": 325810,
+        "real": 0.75,
+        "row": 0,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "raw_h",
+      "count": 15488,
+      "frobenius": 266039.3681104878,
+      "iteration": 1,
+      "max_abs": 103086.187591452,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 219063,
+        "real": -103086.187591452,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "rotation_u",
+      "count": 15488,
+      "frobenius": 18.7616630392937,
+      "iteration": 1,
+      "max_abs": 0.9362687894114592,
+      "max_location": {
+        "column": 1,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -0.01090125332075323,
+        "kpoint": 2,
+        "line": 253827,
+        "real": 0.9362053240085938,
+        "row": 40,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "sigma_c_iw",
+      "count": 92928,
+      "frobenius": 912655.7991544285,
+      "iteration": 1,
+      "max_abs": 174870.85576119443,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 4.416926978467187,
+        "frequency_index": 5,
+        "imag": 105528.2175018024,
+        "kpoint": 0,
+        "line": 104839,
+        "real": 139440.3510664856,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "vc",
+      "count": 15488,
+      "frobenius": 268389.6584882083,
+      "iteration": 1,
+      "max_abs": 104288.9092799171,
+      "max_location": {
+        "column": 41,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": 0.0,
+        "kpoint": 0,
+        "line": 203575,
+        "real": -104288.9092799171,
+        "row": 41,
+        "spin": 0
+      }
+    },
+    {
+      "channel": 0,
+      "component": "velocity_x",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_y",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "velocity_z",
+      "count": 15488,
+      "frobenius": 0.0,
+      "iteration": 1,
+      "max_abs": 0.0,
+      "max_location": null
+    },
+    {
+      "channel": 0,
+      "component": "wfc_spinor0",
+      "count": 15488,
+      "frobenius": 286.24313381480084,
+      "iteration": 1,
+      "max_abs": 38.541944423695654,
+      "max_location": {
+        "column": 22,
+        "frequency_ha": 0.0,
+        "frequency_index": -1,
+        "imag": -2.072016318006122,
+        "kpoint": 0,
+        "line": 265596,
+        "real": 38.48620828734835,
+        "row": 43,
+        "spin": 0
+      }
+    }
+  ],
+  "passed": true,
+  "schema": "librpa-qsgw-trace-component-summary-v1",
+  "selected_iterations": [
+    0,
+    1
+  ],
+  "source": "/home/bhj/ai-runs/librpa-qsgw-gate-a-current-20260722-1b5387e2-v1/no-mix-miniter2/legacy/qsgw_oracle_matrices.dat"
+}
