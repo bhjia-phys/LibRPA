@@ -86,10 +86,13 @@ cp "$0" "$run_root/"
 cp "$patch_file" "$run_root/"
 for tool in \
   compare_exact847_sigcrf_v1.py \
-  compare_exact847_component_dump_v1.py; do
+  compare_exact847_component_dump_v1.py \
+  compare_legacy_h0_candidate_trace_v2.py \
+  diagnose_exact847_component_parity_v1.py; do
   cp "$current_dir/$tool" "$tools_dir/$tool"
 done
 cp "$symmetry_dir/compare_legacy_band0_native_outputs_v1.py" "$tools_dir/"
+cp "$symmetry_dir/compare_legacy_h0_candidate_trace_v1.py" "$tools_dir/"
 
 git clone --no-hardlinks "$RUNNER_SOURCE" "$diagnostic_source" \
   >"$run_root/clone.stdout" 2>"$run_root/clone.stderr"

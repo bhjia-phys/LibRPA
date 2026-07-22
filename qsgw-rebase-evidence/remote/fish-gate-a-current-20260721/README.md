@@ -135,6 +135,13 @@ both `SigcRF` and fixed-basis component traces. The patch is never applied to
 the accepted branch or executable, and the run can only emit
 `DIAGNOSTIC_COMPLETE`, not `GREEN_CONFIRMED`.
 
+The v3 executable completed one QSGW update and wrote all numerical outputs,
+but the runner lacked one transitive Python comparator dependency and stopped
+at postcheck. `run_fish_exact847_legacy_wr_postcheck_v1.sh` binds the failed
+artifact and all numerical outputs by SHA256, completes the component and
+current-versus-diagnostic comparisons without rerunning LibRPA, and emits only
+`POSTCHECK_COMPLETE`.
+
 `run_fish_gate_a_current_v2.sh` is retained as failed evidence. It must not be
 used because the legacy reader applies `stoi` to every trailing `stru_out`
 token and therefore cannot parse the candidate-only symmetry metadata tail.
