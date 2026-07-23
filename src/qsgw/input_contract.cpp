@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <set>
 #include <sstream>
@@ -59,6 +60,25 @@ int parse_integer(const std::string& value,
             "Invalid QSGW input-contract integer " + key + " in " +
             source_name);
     }
+}
+
+int read_pyatb_kpoint_count(const std::filesystem::path& kpoint_file,
+                            const int active_kpoints)
+{
+    std::ifstream input(kpoint_file);
+    int n_basis = 0;
+    int n_states = 0;
+    int n_spins = 0;
+    int source_kpoints = 0;
+    if (!(input >> n_basis >> n_states >> n_spins >> source_kpoints) ||
+        n_basis <= 0 || n_states <= 0 || n_spins <= 0 ||
+        source_kpoints < active_kpoints)
+    {
+        throw std::invalid_argument(
+            "QSGW cannot determine complete PyATB head-only k-point coverage from " +
+            kpoint_file.string());
+    }
+    return source_kpoints;
 }
 
 bool safe_relative_path(const std::string& value)
@@ -232,10 +252,14 @@ std::vector<std::filesystem::path> resolve_same_grid_velocity_paths(
         {
             const std::filesystem::path pyatb =
                 input / "pyatb_librpa_df";
-            paths.reserve(static_cast<std::size_t>(n_kpoints) + 3);
-            paths.push_back(pyatb / "k_path_info");
+            const std::filesystem::path pyatb_kpoints =
+                pyatb / "k_path_info";
+            const int source_kpoints =
+                read_pyatb_kpoint_count(pyatb_kpoints, n_kpoints);
+            paths.reserve(static_cast<std::size_t>(source_kpoints) + 3);
+            paths.push_back(pyatb_kpoints);
             paths.push_back(pyatb / "band_out");
-            for (int kpoint = 0; kpoint < n_kpoints; ++kpoint)
+            for (int kpoint = 0; kpoint < source_kpoints; ++kpoint)
             {
                 paths.push_back(
                     pyatb /

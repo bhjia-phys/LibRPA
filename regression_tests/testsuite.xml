@@ -529,7 +529,29 @@
   </group>
 
   <group name="QSGW staged regression gates" prefix="QSGW">
-    <labels note="QSGW CTest targets are registered in src/test/CMakeLists.txt. Full remote CTest and committed numerical reference datasets remain PR gates; the cases below preserve historical evidence only." />
+    <labels note="QSGW CTest targets are registered in src/test/CMakeLists.txt. Numerical cases use immutable producer inputs and iteration-level observers." />
+
+    <testcase name="Bulk silicon k333 fixed-SigcRF head-only adapter (aims input)"
+              directory="qsgw_aims_Si_k333_headonly_libri">
+      <labels refhash="e08f4a130df7661e9ac355b9be45fb2bf9c3ed01"
+              note="The committed one-iteration reference reads identical SigcRF files produced by the legacy implementation. The old-new adapter gate compares SigmaC, Vc, EXX, Hamiltonian, eigenvalues, and gap; legacy band output, converted H0, and full-compute Sigma are explicitly not oracles." />
+      <build require_libri="true" />
+      <run ntasks_enable="1"
+           nthreads_disable="none"
+      />
+      <validate name="QSGW fixed-basis matrices from legacy SigcRF"
+                file="librpa/qsgw_matrices.dat"
+                comparison="cmp_qsgw.matrix_trace(relative_tolerance=1e-8,absolute_tolerance=1e-10,hermiticity_tolerance=1e-10,unitarity_tolerance=1e-10,require_complete_trajectory=true)"
+      />
+      <validate name="QSGW eigenvalues on the fixed grid after one iteration"
+                file="librpa/qsgw_eigenvalues.dat"
+                comparison="cmp_qsgw.eigenvalue_trace(tolerance_ha=1e-6,coordinate_tolerance=1e-12)"
+      />
+      <validate name="QSGW one-iteration scalar summary"
+                file="librpa/qsgw_iterations.dat"
+                comparison="cmp_qsgw.iteration_summary(energy_tolerance_ev=1e-5,residual_tolerance_ha=1e-8,scalar_tolerance=1e-10,coefficient_tolerance=1e-12)"
+      />
+    </testcase>
 
     <testcase name="ABACUS Si k444 no-symmetry historical evidence (not a formal regression)"
               directory="qsgw_abacus_Si_k444_manual_gate3">

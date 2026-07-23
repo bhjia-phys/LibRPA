@@ -52,7 +52,7 @@ DriverParams::DriverParams():
     qsgw_min_iter(1),
     qsgw_max_iter(10),
     qsgw_band0_unoccupied_keep(10),
-    qsgw_band0_cut_mode(2),
+    qsgw_band0_cut_mode(0),
     qsgw_band0_cut_shift_ha(20.0),
     qsgw_export_hamiltonian_for_pyatb(false),
     qsgw_hr_export_full_mp_rgrid(false),

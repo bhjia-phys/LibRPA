@@ -1,10 +1,25 @@
+import hashlib
+import json
 from pathlib import Path
+import tarfile
 import xml.etree.ElementTree as ET
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QSGW_DRIVER = REPO_ROOT / "driver" / "tasks" / "qsgw.cpp"
 TESTSUITE = REPO_ROOT / "regression_tests" / "testsuite.xml"
+QSGW_HEAD_ONLY_CASE = (
+    REPO_ROOT
+    / "regression_tests"
+    / "testcases"
+    / "qsgw_aims_Si_k333_headonly_libri"
+)
+QSGW_HEAD_ONLY_REF = (
+    REPO_ROOT
+    / "regression_tests"
+    / "refs"
+    / "qsgw_aims_Si_k333_headonly_libri"
+)
 
 
 def function_body(source: str, signature: str) -> str:
@@ -19,6 +34,10 @@ def function_body(source: str, signature: str) -> str:
             if depth == 0:
                 return source[opening : index + 1]
     raise AssertionError(f"unterminated function: {signature}")
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_reduced_grid_symmetry_context_is_prepared_before_contract_validation() -> None:
@@ -36,6 +55,20 @@ def test_reduced_grid_symmetry_context_is_prepared_before_contract_validation() 
     prepare_call = runner.index("prepare_stage_one_symmetry_context(*dataset);")
     validate_call = runner.index("validate_stage_one_contract(")
     assert prepare_call < validate_call
+
+
+def test_qsgw_head_only_accepts_valid_symmetry_reduced_scf_input() -> None:
+    source = QSGW_DRIVER.read_text()
+    assert "QSGW iterative head-only currently requires a full-BZ SCF grid" not in source
+
+    refresh = function_body(source, "void refresh_qsgw_head_only(")
+    assert "dataset.p_headwing.reset();" in refresh
+    assert "initialize_ds_headwing(dataset, options, false);" in refresh
+
+    header = function_body(source, "void write_contract_header(")
+    assert '<< "# head "' in header
+    assert '<< "# wing disabled_stage1\\n"' in header
+    assert '<< "# headwing "' not in header
 
 
 def test_qsgw_band_rebuilds_static_operators_in_the_legacy_fixed_band_basis() -> None:
@@ -214,3 +247,78 @@ def test_qsgw_manual_evidence_is_not_advertised_as_formal_regression() -> None:
         assert labels is not None
         assert labels.get("disable") == "reference dataset not committed"
         assert "not a formal regression" in (testcase.get("name") or "")
+
+
+def test_qsgw_head_only_regression_uses_fixed_legacy_sigcrf_oracle() -> None:
+    source = TESTSUITE.read_text()
+    root = ET.fromstring(source)
+    cases = [
+        testcase
+        for testcase in root.findall(".//testcase")
+        if testcase.get("directory") == "qsgw_aims_Si_k333_headonly_libri"
+    ]
+    assert len(cases) == 1
+    labels = cases[0].find("labels")
+    assert labels is not None
+    assert labels.get("refhash") == "e08f4a130df7661e9ac355b9be45fb2bf9c3ed01"
+    note = labels.get("note") or ""
+    assert "reads identical SigcRF files produced by the legacy implementation" in note
+    assert "legacy band output" in note
+    assert "full-compute Sigma are explicitly not oracles" in note
+
+    settings = (
+        QSGW_HEAD_ONLY_CASE / "librpa" / "librpa.in"
+    ).read_text()
+    assert "task = qsgw" in settings
+    assert "restart_from_dir = ../dataset/sigcrf/" in settings
+    assert "read_sigc_mat_rf = true" in settings
+    assert "qsgw_mixer = none" in settings
+    assert "qsgw_min_iter = 1" in settings
+    assert "qsgw_max_iter = 1" in settings
+    assert "qsgw_band0_cut_mode = 0" in settings
+    assert "qsgw_write_iteration_matrices = true" in settings
+    assert "qsgw_update_hartree = false" in settings
+    assert "replace_w_head = true" in settings
+    assert "option_dielect_func = 4" in settings
+    assert "qsgw_iterative_headwing" not in settings
+
+
+def test_qsgw_head_only_dataset_contains_fixed_legacy_sigcrf() -> None:
+    archive = QSGW_HEAD_ONLY_CASE / "dataset.tar.gz"
+    assert archive.is_file()
+    assert sha256_file(archive) == (
+        "bc882cd32d703d6e840815c7e87ca33dfa2fc044fc1e8e4eadee7a5187e75ad3"
+    )
+
+    with tarfile.open(archive, "r:gz") as dataset:
+        names = set(dataset.getnames())
+    expected_sigcrf = {
+        f"dataset/sigcrf/SigcRF_ispin_00_s_00_iomega_{index:03d}_myid_00000.dat"
+        for index in range(6)
+    }
+    assert expected_sigcrf <= names
+    assert "dataset/oracle/legacy-current-fixed-sigcrf-comparison.json" in names
+    assert "dataset/oracle/ADAPTER_GATE_PROVENANCE.txt" in names
+    assert "dataset/REGRESSION_DATASET_PROVENANCE.txt" in names
+
+
+def test_qsgw_head_only_reference_is_bound_to_fixed_sigcrf_gate() -> None:
+    provenance = json.loads(
+        (QSGW_HEAD_ONLY_REF / "REFERENCE_PROVENANCE.json").read_text()
+    )
+    assert provenance["legacy_commit"] == (
+        "e08f4a130df7661e9ac355b9be45fb2bf9c3ed01"
+    )
+    assert provenance["oracle_scope"] == (
+        "qsgw_adapter_from_identical_legacy_sigcrf"
+    )
+    assert provenance["adapter_gate"]["passed"] is True
+    assert provenance["adapter_gate"]["report_sha256"] == (
+        "3bef75e6ede886c62a0a7a51f0f6c9c747d811396f8f67d952f0eb204b96825d"
+    )
+    assert provenance["contract"]["head"] == "on"
+    assert provenance["contract"]["wing"] == "off"
+    assert provenance["contract"]["hartree"] == "off"
+
+    for relative_path, expected in provenance["references"].items():
+        assert sha256_file(QSGW_HEAD_ONLY_REF / relative_path) == expected

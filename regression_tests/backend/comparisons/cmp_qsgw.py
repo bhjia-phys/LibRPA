@@ -31,6 +31,8 @@ CONTRACT_KEYS = frozenset((
     "fixed_basis",
     "live_update",
     "velocity",
+    "head",
+    "wing",
     "headwing",
     "symmetry",
     "hartree",
@@ -51,7 +53,6 @@ REQUIRED_CONTRACT_KEYS = frozenset((
     "fixed_basis",
     "live_update",
     "velocity",
-    "headwing",
     "symmetry",
     "hartree",
     "band",
@@ -653,6 +654,31 @@ def _parse_contract(text, label):
         raise ValueError("{}: unsupported QSGW contract version {}".format(
             label, version))
     values["qsgw_contract_version"] = version
+
+    if version == 5:
+        if "headwing" not in values:
+            raise ValueError(
+                "{}: missing QSGW contract keys ['headwing']".format(label))
+        if "head" in values or "wing" in values:
+            raise ValueError(
+                "{}: contract-v5 has split head/wing fields".format(label))
+    else:
+        if "headwing" in values:
+            raise ValueError(
+                "{}: contract-v6 has legacy headwing field; "
+                "use split head/wing fields".format(label))
+        missing_headwing = [
+            key for key in ("head", "wing") if key not in values
+        ]
+        if missing_headwing:
+            raise ValueError(
+                "{}: missing QSGW contract keys {}".format(
+                    label, missing_headwing))
+        if values["wing"] != "disabled_stage1":
+            raise ValueError(
+                "{}: contract-v6 enables unsupported iterative wing".format(
+                    label))
+        values["headwing"] = values["head"]
 
     expected = {
         "fixed_basis": "immutable_mf0",

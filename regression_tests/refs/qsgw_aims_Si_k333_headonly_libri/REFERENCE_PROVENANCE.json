@@ -1,0 +1,43 @@
+{
+  "schema": "librpa-qsgw-fixed-sigcrf-reference-v1",
+  "legacy_commit": "e08f4a130df7661e9ac355b9be45fb2bf9c3ed01",
+  "reference_generator_commit": "d18d65964cd34920e5efedaa0b6fb3a501255429",
+  "oracle_scope": "qsgw_adapter_from_identical_legacy_sigcrf",
+  "contract": {
+    "producer": "fhi-aims",
+    "system": "Si",
+    "kgrid": "3x3x3_full_bz",
+    "iterations": 1,
+    "fixed_basis": true,
+    "read_sigc_mat_rf": true,
+    "head": "on",
+    "wing": "off",
+    "hartree": "off",
+    "mixing": "none"
+  },
+  "adapter_gate": {
+    "report_sha256": "3bef75e6ede886c62a0a7a51f0f6c9c747d811396f8f67d952f0eb204b96825d",
+    "legacy_trace_sha256": "5df7d8987f855933b96385faa9175f29e8fccb1da0f94da7e3f87c01affbc5ba",
+    "max_sigma_c_abs_diff_ha": 2.987325641119426e-16,
+    "max_vc_abs_diff_ha": 2.718094900479903e-16,
+    "max_exx_abs_diff_ha": 9.111600364155515e-12,
+    "max_hamiltonian_abs_diff_ha": 7.072037027075491e-11,
+    "max_eigenvalue_abs_diff_ha": 9.161738034890732e-11,
+    "max_gap_abs_diff_ev": 8.638449955356009e-10,
+    "passed": true
+  },
+  "dataset_archive": {
+    "path": "../../testcases/qsgw_aims_Si_k333_headonly_libri/dataset.tar.gz",
+    "sha256": "bc882cd32d703d6e840815c7e87ca33dfa2fc044fc1e8e4eadee7a5187e75ad3"
+  },
+  "references": {
+    "librpa/qsgw_matrices.dat": "7d02276b9d46fc73d3c92dd73688dd75bb3e6e105fe107ae690d6a3c36acdb3b",
+    "librpa/qsgw_eigenvalues.dat": "59b068b93c73546d7ba8c51b3759e98f76a4681c9d6186b649fec6f845e786d6",
+    "librpa/qsgw_iterations.dat": "36392aebcef626221c15e30da3fe72b682cf89a19492445e625bf43bd7d20b42"
+  },
+  "rejected_oracles": {
+    "legacy_band_output": "toolchain-dependent and not numerically comparable",
+    "legacy_full_compute": "shared G0W0 Sigma changed independently of the QSGW adapter",
+    "converted_legacy_h0": "downstream artifact from the rejected full-compute path"
+  }
+}

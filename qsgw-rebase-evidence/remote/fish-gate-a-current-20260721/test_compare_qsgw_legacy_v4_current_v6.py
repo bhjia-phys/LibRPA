@@ -38,6 +38,7 @@ def legacy_header(
     beta: str = "1", symmetry: str = "1", n_params: str = "-1",
     final_iteration: str = "2",
     use_shrink_abfs: str = "1",
+    head: bool = False,
 ) -> str:
     return """# qsgw_contract_version 4
 # oracle_kind legacy_scheme_a
@@ -55,8 +56,8 @@ def legacy_header(
 # qsgw_hartree_normalization legacy_extra_inverse_nk
 # use_symmetry_gw {symmetry}
 # use_symmetry_exx {symmetry}
-# replace_w_head 0
-# option_dielect_func 0
+# replace_w_head {replace_w_head}
+# option_dielect_func {option_dielect_func}
 # nfreq 6
 # n_params_anacon {n_params}
 # n_params_anacon_resample -1
@@ -75,6 +76,8 @@ def legacy_header(
         n_params=n_params,
         final_iteration=final_iteration,
         use_shrink_abfs=use_shrink_abfs,
+        replace_w_head="1" if head else "0",
+        option_dielect_func="4" if head else "0",
     )
 
 
@@ -82,12 +85,16 @@ def current_header(
     mode: str = "none",
     beta: str = "0.2",
     symmetry: str = "exx_on_gw_on_rpa_on",
+    head: bool = False,
 ) -> str:
+    velocity = "fixed_basis_rotation" if head else "disabled_stage1"
+    head_contract = "scf_grid_analytic_live" if head else "disabled_stage1"
     return """# qsgw_contract_version 6
 # fixed_basis immutable_mf0
 # live_update eigenvalues_wfc
-# velocity disabled_stage1
-# headwing disabled_stage1
+# velocity {velocity}
+# head {head_contract}
+# wing disabled_stage1
 # symmetry {symmetry}
 # hartree disabled_stage1
 # band disabled_stage1
@@ -96,7 +103,13 @@ def current_header(
 # qsgw_input_contract_sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 # qsgw_mixer {mode}
 # qsgw_mixing_beta {beta}
-""".format(mode=mode, beta=beta, symmetry=symmetry)
+""".format(
+        mode=mode,
+        beta=beta,
+        symmetry=symmetry,
+        velocity=velocity,
+        head_contract=head_contract,
+    )
 
 
 class AdapterContractTests(unittest.TestCase):
@@ -108,6 +121,8 @@ class AdapterContractTests(unittest.TestCase):
         expected_legacy_use_shrink_abfs: bool = True,
         expected_legacy_symmetry: str = "on",
         expected_current_symmetry: str = "on",
+        expected_legacy_head: str = "off",
+        expected_current_head: str = "off",
     ):
         return adapter._validate_actual_contracts(
             base_module=base,
@@ -120,6 +135,8 @@ class AdapterContractTests(unittest.TestCase):
             expected_current_beta=current_beta,
             expected_legacy_symmetry=expected_legacy_symmetry,
             expected_current_symmetry=expected_current_symmetry,
+            expected_legacy_head=expected_legacy_head,
+            expected_current_head=expected_current_head,
             allow_legacy_iteration_prefix=allow_legacy_iteration_prefix,
             expected_legacy_use_shrink_abfs=expected_legacy_use_shrink_abfs,
         )
@@ -149,6 +166,18 @@ class AdapterContractTests(unittest.TestCase):
             expected_current_symmetry="off",
         )
         self.assertEqual(result["symmetry_mapping"], "legacy_off_to_current_off")
+
+    def test_head_on_contract_passes(self):
+        result = self.validate(
+            legacy_header(head=True),
+            current_header(head=True),
+            "none",
+            1.0,
+            0.2,
+            expected_legacy_head="on",
+            expected_current_head="on",
+        )
+        self.assertEqual(result["head_mapping"], "legacy_on_to_current_on")
 
     def test_legacy_full_bz_to_current_symmetry_contract_passes(self):
         result = self.validate(
@@ -239,6 +268,9 @@ class AdapterContractTests(unittest.TestCase):
         )
         self.assertIn("# qsgw_contract_version 5\n", current_traces[0])
         self.assertIn("# symmetry unsupported_full_bz_only\n", current_traces[0])
+        self.assertIn("# headwing disabled_stage1\n", current_traces[0])
+        self.assertNotIn("# head ", current_traces[0])
+        self.assertNotIn("# wing ", current_traces[0])
         self.assertIn(data, legacy)
         self.assertIn(data, current_traces[0])
         base._validate_legacy_current_contract(
@@ -257,8 +289,45 @@ class AdapterContractTests(unittest.TestCase):
         )
         self.assertIn("# qsgw_contract_version 5\n", normalized)
         self.assertIn("# symmetry input_kstar_live\n", normalized)
+        self.assertIn("# headwing disabled_stage1\n", normalized)
+        self.assertNotIn("# head ", normalized)
+        self.assertNotIn("# wing ", normalized)
         self.assertIn("# qsgw_mixer linear\n", normalized)
         self.assertIn(data, normalized)
+
+    def test_self_validator_normalization_preserves_live_head(self):
+        normalized = adapter._normalized_for_v5_self_validators(
+            current_header(head=True)
+        )
+        self.assertIn("# velocity fixed_basis_rotation\n", normalized)
+        self.assertIn("# headwing scf_grid_analytic_live\n", normalized)
+
+    def test_aims_ev_trace_is_rescaled_to_internal_constant(self):
+        aims_ha2ev = 27.2113845
+        value_ha = -65.0
+        trace = (
+            "# header\n"
+            "0 0 0 0 0 0 0 0 {:.17e}\n".format(value_ha * aims_ha2ev)
+        )
+        normalized = adapter._rescale_trace_ev_columns(
+            trace,
+            source_ha2ev=aims_ha2ev,
+            columns=(8,),
+        )
+        converted_ev = float(normalized.splitlines()[1].split()[8])
+        self.assertAlmostEqual(
+            converted_ev / adapter.INTERNAL_HA2EV,
+            value_ha,
+            places=13,
+        )
+
+    def test_invalid_ha2ev_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "current_ha2ev"):
+            adapter._rescale_trace_ev_columns(
+                "0 0\n",
+                source_ha2ev=0.0,
+                columns=(1,),
+            )
 
 
 if __name__ == "__main__":

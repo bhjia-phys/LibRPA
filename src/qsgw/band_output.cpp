@@ -67,8 +67,7 @@ const Matz& matrix_at(const SpinKMatrixMap& matrices,
 
 double checked_real(const cplxdb value, const char* label)
 {
-    if (!std::isfinite(value.real()) || !std::isfinite(value.imag()) ||
-        std::abs(value.imag()) > 1.0e-10)
+    if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
         throw std::invalid_argument(
             std::string("QSGW band output has invalid ") + label +
             " diagonal data");

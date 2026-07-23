@@ -410,9 +410,13 @@ void test_same_grid_velocity_paths_follow_reader_precedence()
         std::ofstream output(root / "pyatb_librpa_df" / "velocity_matrix");
         output << "pyatb";
     }
+    {
+        std::ofstream output(root / "pyatb_librpa_df" / "k_path_info");
+        output << "4 4 1 3\n";
+    }
     for (const char* name : {
-             "k_path_info", "band_out", "KS_eigenvector_0.dat",
-             "KS_eigenvector_1.dat"})
+             "band_out", "KS_eigenvector_0.dat",
+             "KS_eigenvector_1.dat", "KS_eigenvector_2.dat"})
     {
         std::ofstream output(root / "pyatb_librpa_df" / name);
         output << name;
@@ -421,7 +425,7 @@ void test_same_grid_velocity_paths_follow_reader_precedence()
     const auto abacus =
         resolve_same_grid_velocity_paths(QsgwProducer::Abacus,
                                          root.string(), 2);
-    assert(abacus.size() == 5);
+    assert(abacus.size() == 6);
     const std::filesystem::path pyatb =
         std::filesystem::absolute(root / "pyatb_librpa_df")
             .lexically_normal();
@@ -429,7 +433,8 @@ void test_same_grid_velocity_paths_follow_reader_precedence()
     assert(abacus[1] == pyatb / "band_out");
     assert(abacus[2] == pyatb / "KS_eigenvector_0.dat");
     assert(abacus[3] == pyatb / "KS_eigenvector_1.dat");
-    assert(abacus[4] == pyatb / "velocity_matrix");
+    assert(abacus[4] == pyatb / "KS_eigenvector_2.dat");
+    assert(abacus[5] == pyatb / "velocity_matrix");
 
     std::filesystem::remove(root / "pyatb_librpa_df" / "velocity_matrix");
     const auto abacus_root =

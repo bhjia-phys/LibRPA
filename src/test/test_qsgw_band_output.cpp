@@ -68,6 +68,7 @@ void test_legacy_band_columns_and_energy_components()
     vxc[0][1] = diagonal(0.2, 0.3);
     exx[0][0] = diagonal(-0.1, -0.05);
     exx[0][1] = diagonal(-0.1, -0.05);
+    exx[0][1](0, 0) += librpa_int::cplxdb(0.0, 0.25);
     const std::vector<Vector3_Order<double>> kpoints{
         {0.0, 0.0, 0.0}, {0.5, 0.0, 0.0}};
 
@@ -179,6 +180,17 @@ void test_invalid_band_output_contracts_are_rejected()
     SpinKMatrixMap nonfinite = matrices;
     nonfinite.at(0).at(0)(0, 0) =
         std::numeric_limits<double>::infinity();
+    assert_throws([&] {
+        std::ostringstream a;
+        std::ostringstream b;
+        std::ostringstream c;
+        write_qsgw_band_spin_tables(
+            a, b, c, live, reference, kpoints, nonfinite, matrices,
+            matrices, 0, 0.0);
+    });
+
+    nonfinite.at(0).at(0)(0, 0) = librpa_int::cplxdb(
+        0.0, std::numeric_limits<double>::infinity());
     assert_throws([&] {
         std::ostringstream a;
         std::ostringstream b;

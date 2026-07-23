@@ -500,11 +500,6 @@ void validate_stage_one_contract(
     }
     if (headwing_grid == HeadwingGridMode::ScfGrid)
     {
-        if (symmetry_reduced_scf_grid)
-        {
-            throw std::invalid_argument(
-                "QSGW iterative head-only currently requires a full-BZ SCF grid");
-        }
         validate_same_grid_velocity_binding(
             contract, contract_base, dataset.mf.get_n_kpoints());
     }
@@ -540,22 +535,15 @@ void validate_stage_one_contract(
 }
 
 void refresh_qsgw_head_only(librpa_int::Dataset& dataset,
-                            const librpa::Options& options,
-                            const MeanField& live)
+                            const librpa::Options& options)
 {
+    dataset.p_headwing.reset();
+    librpa_int::initialize_ds_headwing(dataset, options, false);
     if (!dataset.p_headwing)
     {
         throw std::invalid_argument(
-            "QSGW head-only object is not initialized");
+            "QSGW head-only object could not be refreshed");
     }
-    dataset.p_headwing->get_meanfield_df() = live;
-    dataset.p_headwing->init(
-        options.sqrt_coulomb_threshold, dataset.vq);
-    dataset.p_headwing->cal_head();
-    dataset.epsmacs_imagfreq =
-        dataset.p_headwing->get_head_vec();
-    dataset.omegas_imagfreq = dataset.tfg.get_freq_nodes();
-    dataset.p_headwing->test_head();
 }
 
 OperatorFourierResult project_grid_operator_to_band(
@@ -1193,7 +1181,7 @@ void run_qsgw_stage_one(const bool compute_band)
         dataset->invalidate_compute_objects();
         if (update_head && iteration > 1)
         {
-            refresh_qsgw_head_only(*dataset, opts, dataset->mf);
+            refresh_qsgw_head_only(*dataset, opts);
         }
         h.build_g0w0_sigma(opts);
         if (!dataset->p_exx || !dataset->p_g0w0)

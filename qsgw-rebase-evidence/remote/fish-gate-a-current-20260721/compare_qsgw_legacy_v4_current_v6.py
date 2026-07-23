@@ -18,6 +18,8 @@ import re
 from pathlib import Path
 from types import ModuleType
 
+INTERNAL_HA2EV = 27.211386245988
+
 
 def _load_module(path: Path, name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
@@ -84,6 +86,8 @@ def _validate_actual_contracts(
     expected_current_beta: float,
     expected_legacy_symmetry: str,
     expected_current_symmetry: str,
+    expected_legacy_head: str,
+    expected_current_head: str,
     allow_legacy_iteration_prefix: bool = False,
     expected_legacy_use_shrink_abfs: bool = True,
 ) -> dict[str, object]:
@@ -96,6 +100,22 @@ def _validate_actual_contracts(
         raise ValueError("expected legacy symmetry must be 'off' or 'on'")
     if expected_current_symmetry not in current_symmetry_contract:
         raise ValueError("expected current symmetry must be 'off' or 'on'")
+    head_switch = {
+        "off": ("0", "0"),
+        "on": ("1", "4"),
+    }
+    current_head_contract = {
+        "off": "disabled_stage1",
+        "on": "scf_grid_analytic_live",
+    }
+    current_velocity_contract = {
+        "off": "disabled_stage1",
+        "on": "fixed_basis_rotation",
+    }
+    if expected_legacy_head not in head_switch:
+        raise ValueError("expected legacy head must be 'off' or 'on'")
+    if expected_current_head not in current_head_contract:
+        raise ValueError("expected current head must be 'off' or 'on'")
 
     legacy = base_module.parse_contract(legacy_text, "legacy v4 trace")
     declared_min_iteration = int(legacy["qsgw_min_iter"])
@@ -140,8 +160,8 @@ def _validate_actual_contracts(
             "qsgw_update_hartree": "0",
             "use_symmetry_gw": symmetry_switch[expected_legacy_symmetry],
             "use_symmetry_exx": symmetry_switch[expected_legacy_symmetry],
-            "replace_w_head": "0",
-            "option_dielect_func": "0",
+            "replace_w_head": head_switch[expected_legacy_head][0],
+            "option_dielect_func": head_switch[expected_legacy_head][1],
             "nfreq": "6",
             "use_shrink_abfs": (
                 "1" if expected_legacy_use_shrink_abfs else "0"
@@ -171,8 +191,8 @@ def _validate_actual_contracts(
             "qsgw_contract_version": 6,
             "fixed_basis": "immutable_mf0",
             "live_update": "eigenvalues_wfc",
-            "velocity": "disabled_stage1",
-            "headwing": "disabled_stage1",
+            "velocity": current_velocity_contract[expected_current_head],
+            "headwing": current_head_contract[expected_current_head],
             "symmetry": current_symmetry_contract[expected_current_symmetry],
             "hartree": "disabled_stage1",
             "band": "disabled_stage1",
@@ -194,7 +214,13 @@ def _validate_actual_contracts(
             f"legacy_{expected_legacy_symmetry}_to_"
             f"current_{expected_current_symmetry}"
         ),
-        "headwing": "off",
+        "legacy_head": expected_legacy_head,
+        "current_head": expected_current_head,
+        "head_mapping": (
+            f"legacy_{expected_legacy_head}_to_"
+            f"current_{expected_current_head}"
+        ),
+        "wing": "off",
         "hartree": "off",
         "band": "off",
         "mixer": expected_mode,
@@ -233,8 +259,70 @@ def _rewrite_headers(text: str, replacements: dict[str, str]) -> str:
     return "\n".join(output) + ("\n" if text.endswith("\n") else "")
 
 
+def _normalize_current_v6_to_v5(
+    text: str,
+    *,
+    headwing: str,
+    velocity: str,
+    symmetry: str,
+    mixer: str | None = None,
+) -> str:
+    replacements = {
+        "qsgw_contract_version": "5",
+        "velocity": velocity,
+        "symmetry": symmetry,
+    }
+    if mixer is not None:
+        replacements["qsgw_mixer"] = mixer
+    rewritten = _rewrite_headers(text, replacements)
+    output: list[str] = []
+    head_seen = False
+    wing_seen = False
+    for line in rewritten.splitlines():
+        match = re.match(r"^(#\s*)(\S+)(?:\s+)(.*)$", line)
+        if match and match.group(2) == "head":
+            output.append(f"# headwing {headwing}")
+            head_seen = True
+        elif match and match.group(2) == "wing":
+            wing_seen = True
+        else:
+            output.append(line)
+    if not head_seen or not wing_seen:
+        raise ValueError("cannot normalize v6 trace without split head/wing headers")
+    return "\n".join(output) + ("\n" if text.endswith("\n") else "")
+
+
+def _rescale_trace_ev_columns(
+    text: str,
+    *,
+    source_ha2ev: float,
+    columns: tuple[int, ...],
+) -> str:
+    if not math.isfinite(source_ha2ev) or source_ha2ev <= 0.0:
+        raise ValueError("current_ha2ev must be finite and positive")
+    factor = INTERNAL_HA2EV / source_ha2ev
+    output: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            output.append(line)
+            continue
+        fields = stripped.split()
+        try:
+            for column in columns:
+                fields[column] = f"{float(fields[column]) * factor:.17e}"
+        except (IndexError, ValueError) as error:
+            raise ValueError(
+                f"cannot rescale trace eV columns at line {line_number}"
+            ) from error
+        output.append(" ".join(fields))
+    return "\n".join(output) + ("\n" if text.endswith("\n") else "")
+
+
 def _normalized_for_frozen_aligner(
-    legacy_text: str, current_texts: tuple[str, str, str]
+    legacy_text: str,
+    current_texts: tuple[str, str, str],
+    current_ha2ev: float = INTERNAL_HA2EV,
 ) -> tuple[str, tuple[str, str, str]]:
     normalized_legacy = _rewrite_headers(
         legacy_text,
@@ -242,31 +330,50 @@ def _normalized_for_frozen_aligner(
             "qsgw_mixing_beta": "1",
             "use_symmetry_gw": "0",
             "use_symmetry_exx": "0",
+            "replace_w_head": "0",
+            "option_dielect_func": "0",
             "n_params_anacon": "6",
             "use_shrink_abfs": "0",
         },
     )
-    normalized_current = tuple(
-        _rewrite_headers(
+    normalized_current_headers = tuple(
+        _normalize_current_v6_to_v5(
             text,
-            {
-                "qsgw_contract_version": "5",
-                "symmetry": "unsupported_full_bz_only",
-                "qsgw_mixer": "none",
-            },
+            headwing="disabled_stage1",
+            velocity="disabled_stage1",
+            symmetry="unsupported_full_bz_only",
+            mixer="none",
         )
         for text in current_texts
+    )
+    normalized_current = (
+        normalized_current_headers[0],
+        _rescale_trace_ev_columns(
+            normalized_current_headers[1],
+            source_ha2ev=current_ha2ev,
+            columns=(8,),
+        ),
+        _rescale_trace_ev_columns(
+            normalized_current_headers[2],
+            source_ha2ev=current_ha2ev,
+            columns=(1, 4, 5),
+        ),
     )
     return normalized_legacy, normalized_current
 
 
 def _normalized_for_v5_self_validators(text: str) -> str:
-    return _rewrite_headers(
+    contract_head = re.search(r"^#\s+head\s+(\S+)\s*$", text, re.MULTILINE)
+    contract_velocity = re.search(
+        r"^#\s+velocity\s+(\S+)\s*$", text, re.MULTILINE
+    )
+    if contract_head is None or contract_velocity is None:
+        raise ValueError("cannot normalize v6 self-validator trace headers")
+    return _normalize_current_v6_to_v5(
         text,
-        {
-            "qsgw_contract_version": "5",
-            "symmetry": "input_kstar_live",
-        },
+        headwing=contract_head.group(1),
+        velocity=contract_velocity.group(1),
+        symmetry="input_kstar_live",
     )
 
 
@@ -297,6 +404,8 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         expected_current_beta=args.expected_current_beta,
         expected_legacy_symmetry=args.expected_legacy_symmetry,
         expected_current_symmetry=args.expected_current_symmetry,
+        expected_legacy_head=args.expected_legacy_head,
+        expected_current_head=args.expected_current_head,
         allow_legacy_iteration_prefix=args.allow_legacy_iteration_prefix,
         expected_legacy_use_shrink_abfs=bool(
             args.expected_legacy_use_shrink_abfs
@@ -305,6 +414,7 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
     normalized_legacy, normalized_current = _normalized_for_frozen_aligner(
         legacy_text,
         (current_matrix_text, current_eigenvalue_text, current_iteration_text),
+        args.current_ha2ev,
     )
     numeric = base_module.compare_legacy_v4_current_v5(
         old_matrix_text=normalized_legacy,
@@ -341,6 +451,19 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
                 current_iteration_text,
             )
         )
+        normalized_self_traces = (
+            normalized_self_traces[0],
+            _rescale_trace_ev_columns(
+                normalized_self_traces[1],
+                source_ha2ev=args.current_ha2ev,
+                columns=(8,),
+            ),
+            _rescale_trace_ev_columns(
+                normalized_self_traces[2],
+                source_ha2ev=args.current_ha2ev,
+                columns=(1, 4, 5),
+            ),
+        )
         for path, text in zip(normalized_output_paths, normalized_self_traces):
             assert path is not None
             path.write_text(text, encoding="utf-8")
@@ -365,22 +488,38 @@ def compare(args: argparse.Namespace) -> dict[str, object]:
         "header_normalization": {
             "scope": "contract_headers_only_numeric_rows_unchanged",
             "actual_symmetry": {
-                "legacy": args.expected_legacy_symmetry,
-                "current": args.expected_current_symmetry,
-            },
+            "legacy": args.expected_legacy_symmetry,
+            "current": args.expected_current_symmetry,
+        },
+        "actual_head": {
+            "legacy": args.expected_legacy_head,
+            "current": args.expected_current_head,
+        },
             "legacy": {
                 "qsgw_mixing_beta": "1",
                 "use_symmetry_gw": "0",
                 "use_symmetry_exx": "0",
+                "replace_w_head": "0",
+                "option_dielect_func": "0",
                 "n_params_anacon": "6",
                 "use_shrink_abfs": "0",
             },
             "current": {
                 "qsgw_contract_version": "5",
                 "symmetry": "unsupported_full_bz_only",
+                "velocity": "disabled_stage1",
+                "head": "headwing disabled_stage1",
+                "wing": "removed",
                 "qsgw_mixer": "none",
             },
             "reason": "reuse frozen v4-v5 numerical row alignment after independent v4-v6 contract validation",
+        },
+        "unit_normalization": {
+            "scope": "current_eV_trace_columns_only",
+            "source_ha2ev": args.current_ha2ev,
+            "target_ha2ev": INTERNAL_HA2EV,
+            "factor": INTERNAL_HA2EV / args.current_ha2ev,
+            "matrix_rows_changed": False,
         },
         "v5_self_validator_inputs": normalized_outputs,
         "tool_provenance": {
@@ -423,6 +562,16 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
     )
     parser.add_argument(
+        "--expected-legacy-head",
+        choices=("off", "on"),
+        default="off",
+    )
+    parser.add_argument(
+        "--expected-current-head",
+        choices=("off", "on"),
+        default="off",
+    )
+    parser.add_argument(
         "--expected-legacy-use-shrink-abfs",
         choices=(0, 1),
         type=int,
@@ -442,6 +591,11 @@ def _parser() -> argparse.ArgumentParser:
         "--degeneracy-tolerance-ha", type=float, default=1.0e-8
     )
     parser.add_argument("--state-tolerance", type=float, default=1.0e-10)
+    parser.add_argument(
+        "--current-ha2ev",
+        type=float,
+        default=INTERNAL_HA2EV,
+    )
     return parser
 
 

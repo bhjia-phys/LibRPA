@@ -8,7 +8,8 @@ CONTRACT_HEADER = (
     "# fixed_basis immutable_mf0\n"
     "# live_update eigenvalues_wfc\n"
     "# velocity disabled_stage1\n"
-    "# headwing disabled_stage1\n"
+    "# head disabled_stage1\n"
+    "# wing disabled_stage1\n"
     "# symmetry unsupported_full_bz_only\n"
     "# hartree disabled_stage1\n"
     "# band disabled_stage1\n"
@@ -454,8 +455,8 @@ class TestQsgwIterationSummary(unittest.TestCase):
         self.assertIn("symmetry", msg)
 
         inconsistent_headwing = self._trace().replace(
-            "# headwing disabled_stage1",
-            "# headwing scf_grid_analytic_live",
+            "# head disabled_stage1",
+            "# head scf_grid_analytic_live",
         )
         passed, msg = self._compare(
             inconsistent_headwing, inconsistent_headwing
@@ -469,6 +470,37 @@ class TestQsgwIterationSummary(unittest.TestCase):
         passed, msg = self._compare(incomplete_hartree, incomplete_hartree)
         self.assertFalse(passed)
         self.assertIn("enabled Hartree", msg)
+
+    def test_contract_accepts_v5_headwing_metadata(self):
+        legacy = (
+            self._trace()
+            .replace("# qsgw_contract_version 6", "# qsgw_contract_version 5")
+            .replace(
+                "# head disabled_stage1\n# wing disabled_stage1",
+                "# headwing disabled_stage1",
+            )
+            .replace("# h_qsgw_cut disabled_non_band\n", "")
+        )
+
+        passed, msg = self._compare(legacy, legacy)
+
+        self.assertTrue(passed, msg)
+
+    def test_contract_v6_rejects_legacy_headwing_or_enabled_wing(self):
+        legacy_field = self._trace().replace(
+            "# head disabled_stage1\n# wing disabled_stage1",
+            "# headwing disabled_stage1",
+        )
+        passed, msg = self._compare(legacy_field, legacy_field)
+        self.assertFalse(passed)
+        self.assertIn("split head/wing", msg)
+
+        enabled_wing = self._trace().replace(
+            "# wing disabled_stage1", "# wing scf_grid_analytic_live"
+        )
+        passed, msg = self._compare(enabled_wing, enabled_wing)
+        self.assertFalse(passed)
+        self.assertIn("unsupported iterative wing", msg)
 
 
 if __name__ == "__main__":
