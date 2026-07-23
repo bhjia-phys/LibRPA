@@ -860,7 +860,6 @@ def _validate_matrix_trajectory(blocks, contract, label):
     hartree = contract["hartree"] == "delta_density"
     band = contract["band"] == "fixed_reference_rotation_live"
     independent_headwing = headwing == "independent_full_grid_analytic_live"
-    same_grid_headwing = headwing == "scf_grid_analytic_live"
 
     expected_channels = {0}
     if band:
@@ -898,10 +897,6 @@ def _validate_matrix_trajectory(blocks, contract, label):
 
         if channel in (0, 1):
             required = {"h0", "vxc_dft", "occupation"}
-            if channel == 0 and same_grid_headwing:
-                required.update({
-                    "head_tensor", "velocity_x", "velocity_y", "velocity_z",
-                })
         else:
             required = {
                 "h0", "occupation", "head_tensor",
@@ -940,11 +935,6 @@ def _validate_matrix_trajectory(blocks, contract, label):
                 }
                 if hartree:
                     required.add("delta_vh")
-                if channel == 0 and same_grid_headwing:
-                    required.update({
-                        "head_tensor", "velocity_x", "velocity_y",
-                        "velocity_z",
-                    })
             elif channel == 1:
                 required = {
                     "exx", "vc", "raw_h", "mixed_h", "rotation_u",

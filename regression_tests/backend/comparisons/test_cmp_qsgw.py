@@ -273,6 +273,35 @@ class TestQsgwMatrixTrace(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("missing required components", msg)
 
+    def test_same_grid_head_contract_uses_the_emitted_grid_trace_schema(self):
+        header = MATRIX_HEADER.replace(
+            "# velocity disabled_stage1",
+            "# velocity fixed_basis_rotation",
+        ).replace(
+            "# head disabled_stage1",
+            "# head scf_grid_analytic_live",
+        )
+        rows = [
+            matrix_rows("h0", [[1.0]], iteration=0),
+            matrix_rows("vxc_dft", [[-0.2]], iteration=0),
+            matrix_rows("wfc_spinor0", [[1.0]], iteration=0),
+            matrix_rows("occupation", [[1.0]], iteration=0),
+            matrix_rows("sigma_c_iw", [[0.1 + 0.02j]],
+                        frequency_index=0, frequency=0.25),
+            matrix_rows("exx", [[-0.3]]),
+            matrix_rows("vc", [[0.1]]),
+            matrix_rows("raw_h", [[0.6]]),
+            matrix_rows("mixed_h", [[0.52]]),
+            matrix_rows("rotation_u", [[1.0]]),
+            matrix_rows("wfc_spinor0", [[1.0]]),
+            matrix_rows("occupation", [[1.0]]),
+        ]
+        trace = header + "".join(rows)
+
+        passed, msg = self._compare(trace, trace)
+
+        self.assertTrue(passed, msg)
+
     def test_band_trajectory_accepts_legacy_direct_rotation_components(self):
         header = MATRIX_HEADER.replace(
             "# band disabled_stage1",
