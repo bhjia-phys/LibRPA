@@ -211,10 +211,24 @@ Useful `<validate>` attributes:
 
 ### QSGW trace comparisons
 
-QSGW regression cases should set `qsgw_write_iteration_matrices = true` and
-validate all three machine-readable traces. The QSGW comparison functions use
-the physical row keys rather than file order, reject missing or duplicate
-entries, and reject non-finite values:
+For a head-only, direct-update `qsgw_band` case, compare every band energy and
+the indirect gap at every committed iteration without making mixing-residual
+values part of the acceptance criterion:
+
+```xml
+<validate name="QSGW bands and indirect gaps by iteration"
+          file="librpa/QSGW_band_spin_*.dat"
+          comparison="cmp_qsgw.band_iterations(occupied_bands=4,energy_tolerance_ev=1e-4,gap_tolerance_ev=2e-4,coordinate_tolerance=1e-7)"
+/>
+```
+
+The reference directory fixes the required spin and iteration file set. The
+comparison also requires iteration numbers to start at one and be continuous.
+
+QSGW diagnostic cases that cover matrix or mixing internals should set
+`qsgw_write_iteration_matrices = true` and validate all three machine-readable
+traces. The QSGW comparison functions use the physical row keys rather than
+file order, reject missing or duplicate entries, and reject non-finite values:
 
 ```xml
 <validate name="QSGW iteration summary"

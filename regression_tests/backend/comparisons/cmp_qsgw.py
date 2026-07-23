@@ -2,7 +2,12 @@ import math
 import re
 
 
-__all__ = ["matrix_trace", "eigenvalue_trace", "iteration_summary"]
+__all__ = [
+    "band_iterations",
+    "matrix_trace",
+    "eigenvalue_trace",
+    "iteration_summary",
+]
 
 
 HA2EV = 27.211386245988
@@ -66,6 +71,104 @@ HERMITIAN_COMPONENTS = frozenset((
     "mixed_h",
     "projected_h",
 ))
+
+
+def band_iterations(occupied_bands, energy_tolerance_ev="1e-4",
+                    gap_tolerance_ev="2e-4",
+                    coordinate_tolerance="1e-7", precision="3"):
+    """Compare every QSGW band energy and indirect gap in each iteration."""
+    occupied_bands = int(occupied_bands)
+    if occupied_bands <= 0:
+        raise ValueError("occupied_bands must be positive")
+    energy_tolerance_ev = _positive_float(
+        energy_tolerance_ev, "energy_tolerance_ev", allow_zero=True)
+    gap_tolerance_ev = _positive_float(
+        gap_tolerance_ev, "gap_tolerance_ev", allow_zero=True)
+    coordinate_tolerance = _positive_float(
+        coordinate_tolerance, "coordinate_tolerance", allow_zero=True)
+    precision = int(precision)
+
+    def inner(test_files, reference_files):
+        try:
+            pairs = _paired_file_texts(test_files, reference_files)
+            trajectories = {}
+            maximum_coordinate = 0.0
+            maximum_energy = 0.0
+            maximum_gap = 0.0
+            maximum_location = None
+
+            for filename, test_text, reference_text in pairs:
+                spin, iteration = _parse_band_filename(filename)
+                trajectories.setdefault(spin, []).append(iteration)
+                test_rows = _parse_band_table(
+                    test_text, "test {}".format(filename))
+                reference_rows = _parse_band_table(
+                    reference_text, "reference {}".format(filename))
+                if len(test_rows) != len(reference_rows):
+                    return False, (
+                        "{}: k-point count mismatch: {} != {}"
+                        .format(filename, len(test_rows), len(reference_rows))
+                    )
+                test_bands = len(test_rows[0][1])
+                reference_bands = len(reference_rows[0][1])
+                if test_bands != reference_bands:
+                    return False, (
+                        "{}: band count mismatch: {} != {}"
+                        .format(filename, test_bands, reference_bands)
+                    )
+                if occupied_bands >= reference_bands:
+                    return False, (
+                        "{}: occupied band count {} is outside 1..{}"
+                        .format(filename, occupied_bands,
+                                reference_bands - 1)
+                    )
+
+                for kpoint, (test_row, reference_row) in enumerate(
+                        zip(test_rows, reference_rows)):
+                    coordinate_difference = max(
+                        abs(left - right)
+                        for left, right in zip(
+                            test_row[0], reference_row[0])
+                    )
+                    maximum_coordinate = max(
+                        maximum_coordinate, coordinate_difference)
+                    for band, (test_energy, reference_energy) in enumerate(
+                            zip(test_row[1], reference_row[1])):
+                        difference = abs(test_energy - reference_energy)
+                        if difference > maximum_energy:
+                            maximum_energy = difference
+                            maximum_location = (
+                                filename, kpoint + 1, band + 1)
+
+                test_gap = _band_gap(test_rows, occupied_bands)
+                reference_gap = _band_gap(reference_rows, occupied_bands)
+                maximum_gap = max(
+                    maximum_gap, abs(test_gap - reference_gap))
+
+            niterations = _validate_band_trajectories(trajectories)
+            message = (
+                "max abs band-energy diff = {:.{p}E} eV "
+                "(tol = {:.{p}E} eV), max gap diff = {:.{p}E} eV "
+                "(tol = {:.{p}E} eV), max k-point coordinate diff = "
+                "{:.{p}E} over {} iterations and {} spins"
+            ).format(
+                maximum_energy, energy_tolerance_ev,
+                maximum_gap, gap_tolerance_ev,
+                maximum_coordinate, niterations, len(trajectories),
+                p=precision)
+            if maximum_location is not None:
+                message += ", max at {} k-point {} band {}".format(
+                    *maximum_location)
+            passed = (
+                maximum_energy <= energy_tolerance_ev
+                and maximum_gap <= gap_tolerance_ev
+                and maximum_coordinate <= coordinate_tolerance
+            )
+            return passed, message
+        except (TypeError, ValueError) as error:
+            return False, str(error)
+
+    return inner
 
 
 def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
@@ -408,6 +511,87 @@ def _paired_file_texts(test_files, reference_files):
                       _single_text(test_files[filename], filename),
                       _single_text(reference_files[filename], filename)))
     return pairs
+
+
+def _parse_band_filename(filename):
+    basename = str(filename).replace("\\", "/").rsplit("/", 1)[-1]
+    match = re.fullmatch(
+        r"QSGW_band_spin_([1-9][0-9]*)_([1-9][0-9]*)\.dat",
+        basename)
+    if match is None:
+        raise ValueError("invalid QSGW band filename: {}".format(filename))
+    return int(match.group(1)), int(match.group(2))
+
+
+def _parse_band_table(text, label):
+    rows = []
+    n_bands = None
+    for line_number, raw in enumerate(text.splitlines(), 1):
+        fields = raw.split()
+        if not fields:
+            continue
+        if len(fields) < 6 or (len(fields) - 4) % 2 != 0:
+            raise ValueError(
+                "{}:{}: invalid QSGW band column count"
+                .format(label, line_number))
+        try:
+            index = int(fields[0])
+        except ValueError as error:
+            raise ValueError(
+                "{}:{}: invalid k-point index"
+                .format(label, line_number)) from error
+        if index != len(rows) + 1:
+            raise ValueError(
+                "{}:{}: non-contiguous k-point index"
+                .format(label, line_number))
+        row_n_bands = (len(fields) - 4) // 2
+        if n_bands is None:
+            n_bands = row_n_bands
+        elif row_n_bands != n_bands:
+            raise ValueError("{}: inconsistent band counts".format(label))
+        coordinate = tuple(_finite_float(value) for value in fields[1:4])
+        occupations = tuple(
+            _finite_float(fields[4 + 2 * band])
+            for band in range(row_n_bands))
+        energies = tuple(
+            _finite_float(fields[5 + 2 * band])
+            for band in range(row_n_bands))
+        if any(value < 0.0 for value in occupations):
+            raise ValueError(
+                "{}:{}: negative occupation".format(label, line_number))
+        rows.append((coordinate, energies))
+    if not rows:
+        raise ValueError("{}: empty QSGW band table".format(label))
+    return tuple(rows)
+
+
+def _band_gap(rows, occupied_bands):
+    valence_maximum = max(
+        energies[occupied_bands - 1] for _, energies in rows)
+    conduction_minimum = min(
+        energies[occupied_bands] for _, energies in rows)
+    return conduction_minimum - valence_maximum
+
+
+def _validate_band_trajectories(trajectories):
+    spins = sorted(trajectories)
+    if spins != list(range(1, spins[-1] + 1)):
+        raise ValueError(
+            "QSGW band spin indices are not continuous: {}".format(spins))
+    expected = None
+    for spin in spins:
+        iterations = sorted(trajectories[spin])
+        continuous = list(range(1, iterations[-1] + 1))
+        if iterations != continuous:
+            raise ValueError(
+                "QSGW band iterations are not continuous for spin {}: {}"
+                .format(spin, iterations))
+        if expected is None:
+            expected = iterations
+        elif iterations != expected:
+            raise ValueError(
+                "QSGW band iteration sets differ between spins")
+    return len(expected)
 
 
 def _single_text(raw, filename):

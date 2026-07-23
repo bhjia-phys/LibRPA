@@ -54,6 +54,89 @@ def matrix_rows(component, values, iteration=1, channel=0,
     return "".join(rows)
 
 
+def band_table(conduction_shift=0.0, valence_shift=0.0):
+    return (
+        "1 0.0 0.0 0.0 "
+        "2.0 {:.8f} 0.0 {:.8f} 0.0 2.00000000\n"
+        "2 0.5 0.0 0.0 "
+        "2.0 {:.8f} 0.0 {:.8f} 0.0 2.20000000\n"
+    ).format(
+        -1.0 + valence_shift,
+        0.5 + conduction_shift,
+        -0.8 + valence_shift,
+        0.4 + conduction_shift,
+    )
+
+
+class TestQsgwBandIterations(unittest.TestCase):
+
+    def _files(self, shifts=(0.0, 0.0)):
+        return {
+            "QSGW_band_spin_1_{}.dat".format(iteration):
+                band_table(conduction_shift=shift)
+            for iteration, shift in enumerate(shifts, 1)
+        }
+
+    def test_all_band_energies_and_indirect_gaps_pass_within_tolerance(self):
+        compare = cmp_qsgw.band_iterations(
+            occupied_bands="1",
+            energy_tolerance_ev="1e-4",
+            gap_tolerance_ev="2e-4",
+        )
+
+        passed, msg = compare(
+            self._files((5.0e-5, -5.0e-5)),
+            self._files(),
+        )
+
+        self.assertTrue(passed, msg)
+        self.assertIn("max abs band-energy diff", msg)
+        self.assertIn("max gap diff", msg)
+        self.assertIn("2 iterations", msg)
+
+    def test_any_band_energy_above_tolerance_fails(self):
+        compare = cmp_qsgw.band_iterations(
+            occupied_bands="1",
+            energy_tolerance_ev="1e-4",
+            gap_tolerance_ev="1e-3",
+        )
+
+        passed, msg = compare(
+            self._files((2.0e-4,)),
+            self._files((0.0,)),
+        )
+
+        self.assertFalse(passed)
+        self.assertIn("band-energy", msg)
+
+    def test_gap_above_tolerance_fails_without_mixing_diagnostics(self):
+        compare = cmp_qsgw.band_iterations(
+            occupied_bands="1",
+            energy_tolerance_ev="1e-3",
+            gap_tolerance_ev="1e-4",
+        )
+
+        passed, msg = compare(
+            self._files((2.0e-4,)),
+            self._files((0.0,)),
+        )
+
+        self.assertFalse(passed)
+        self.assertIn("gap", msg)
+
+    def test_iteration_files_must_start_at_one_and_be_continuous(self):
+        files = {
+            "QSGW_band_spin_1_1.dat": band_table(),
+            "QSGW_band_spin_1_3.dat": band_table(),
+        }
+        compare = cmp_qsgw.band_iterations(occupied_bands="1")
+
+        passed, msg = compare(files, files)
+
+        self.assertFalse(passed)
+        self.assertIn("continuous", msg)
+
+
 class TestQsgwMatrixTrace(unittest.TestCase):
 
     def _compare(self, test, reference, **kwargs):
