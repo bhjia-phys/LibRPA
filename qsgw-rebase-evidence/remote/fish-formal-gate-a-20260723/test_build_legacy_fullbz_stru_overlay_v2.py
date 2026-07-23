@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from build_legacy_fullbz_stru_overlay_v1 import OverlayError, build_overlay
+from build_legacy_fullbz_stru_overlay_v2 import OverlayError, build_overlay
 
 
 def sha256(path: Path) -> str:
@@ -40,7 +40,7 @@ class LegacyFullBzStruOverlayTests(unittest.TestCase):
 """
         (self.source / "stru_out").write_text(self.stru_text, encoding="ascii")
         (self.source / "band_out").write_text(
-            "2\n1\n1\n1\n0.0\n", encoding="ascii"
+            "2\n1\n2\n2\n0.0\n", encoding="ascii"
         )
         (self.source / "bz_sampling_out").write_text(
             """\
@@ -52,6 +52,30 @@ class LegacyFullBzStruOverlayTests(unittest.TestCase):
             encoding="ascii",
         )
         (self.source / "payload.bin").write_bytes(b"unchanged payload\n")
+        (self.source / "vxck1_nao.txt").write_text(
+            """\
+#------------------------------------------------------------------------
+# rows 2
+# columns 2
+#------------------------------------------------------------------------
+Row 1
+ (1.00000000e+00,0.00000000e+00) (2.00000000e+00,-5.00000000e-01)
+Row 2
+ (3.00000000e+00,0.00000000e+00)
+""",
+            encoding="ascii",
+        )
+        (self.source / "vxck2_nao.txt").write_text(
+            """\
+# rows 2
+# columns 2
+Row 1
+ (-1.00000000e+00,0.00000000e+00) (0.00000000e+00,2.50000000e-01)
+Row 2
+ (4.00000000e+00,0.00000000e+00)
+""",
+            encoding="ascii",
+        )
         self.manifest = self.root / "source" / "DATASET_SHA256SUMS.txt"
         self.write_manifest()
 
@@ -82,9 +106,32 @@ class LegacyFullBzStruOverlayTests(unittest.TestCase):
         self.assertEqual(report["status"], "PASS")
         self.assertEqual(report["n_kpoints"], 2)
         self.assertEqual(report["grid"], [2, 1, 1])
-        self.assertEqual(report["unchanged_files_hardlinked"], 3)
+        self.assertEqual(report["unchanged_files_hardlinked"], 5)
+        self.assertEqual(report["legacy_vxc_files_generated"], 2)
+        self.assertEqual(report["legacy_vxc_values_equal"], True)
+        self.assertEqual(
+            (self.output / "vxcs1k1_nao.txt").read_text(encoding="ascii"),
+            """\
+2
+(1.00000000e+00,0.00000000e+00) (2.00000000e+00,-5.00000000e-01)
+(3.00000000e+00,0.00000000e+00)
+""",
+        )
+        self.assertEqual(
+            (self.output / "vxcs1k2_nao.txt").read_text(encoding="ascii"),
+            """\
+2
+(-1.00000000e+00,0.00000000e+00) (0.00000000e+00,2.50000000e-01)
+(4.00000000e+00,0.00000000e+00)
+""",
+        )
+        self.assertFalse(
+            (self.output / "vxcs1k1_nao.txt").samefile(
+                self.source / "vxck1_nao.txt"
+            )
+        )
 
-        report_path = self.output.parent / "LEGACY_FULLBZ_STRU_OVERLAY.json"
+        report_path = self.output.parent / "LEGACY_FULLBZ_INPUT_OVERLAY.json"
         self.assertEqual(json.loads(report_path.read_text(encoding="ascii")), report)
         output_manifest = self.output.parent / "DATASET_SHA256SUMS.txt"
         self.assertIn(f"{sha256(self.output / 'stru_out')}  dataset/stru_out",
@@ -138,6 +185,30 @@ class LegacyFullBzStruOverlayTests(unittest.TestCase):
             self.skipTest(f"symlinks unavailable: {error}")
         self.write_manifest()
         with self.assertRaisesRegex(OverlayError, "symlink"):
+            build_overlay(self.source, self.manifest, self.output)
+
+    def test_rejects_missing_native_vxc_file(self) -> None:
+        (self.source / "vxck2_nao.txt").unlink()
+        self.write_manifest()
+        with self.assertRaisesRegex(OverlayError, "native Vxc index coverage"):
+            build_overlay(self.source, self.manifest, self.output)
+
+    def test_rejects_malformed_native_vxc_triangle(self) -> None:
+        path = self.source / "vxck1_nao.txt"
+        path.write_text(
+            path.read_text(encoding="ascii").replace(
+                " (3.00000000e+00,0.00000000e+00)\n", ""
+            ),
+            encoding="ascii",
+        )
+        self.write_manifest()
+        with self.assertRaisesRegex(OverlayError, "row 2 length"):
+            build_overlay(self.source, self.manifest, self.output)
+
+    def test_rejects_existing_legacy_vxc_alias(self) -> None:
+        (self.source / "vxcs1k1_nao.txt").write_text("ambiguous\n", encoding="ascii")
+        self.write_manifest()
+        with self.assertRaisesRegex(OverlayError, "legacy Vxc aliases"):
             build_overlay(self.source, self.manifest, self.output)
 
 

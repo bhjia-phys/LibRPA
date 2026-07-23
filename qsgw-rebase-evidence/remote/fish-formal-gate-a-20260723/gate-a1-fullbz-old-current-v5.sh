@@ -55,11 +55,12 @@ expected_common_dataset_manifest_sha=ba401b751eb465b957fad2270878022c13dfb922257
 expected_common_output_manifest_sha=9f96b50c098c572d603d649137e411737bfaa6b1ff7e48200cd25e94da3a6a3f
 expected_common_provenance_sha=bd5eb751832cfe0919393417e8d93d86fd8a5121cd6d33c152dff9db6927ec8a
 expected_common_contract_sha=5c0477af4bc6e4b23c2be5f286c979e44f039ef6b65295c3b577a77ecc220c9e
-expected_overlay_dataset_manifest_sha=407b47fa040ff7534d04d08f73ae99ec7d33f673cab8b25a90bae1c160e22d98
-expected_overlay_report_sha=0b897345389eb55f45abc392a471bcf68522024d6702660a5c13a0d380b3416d
+expected_overlay_dataset_manifest_sha=0889dd2cd4ffc4b578f06f9d314307542c32308177fde8d7bcd668d203a12dc8
+expected_overlay_report_sha=89ebb0a93001d0bd2b0140886aa101018433b987a377b5693a4ea4a389c45e1e
 expected_overlay_stru_sha=2e5c4dff35da70e4fe189b150a8b2528af44ed6b4cc0b6b106e169c4b83d86a4
-expected_overlay_builder_sha=bfa451f47201a4bcc04efc91ed1cebf45257b493c9644a7635786a714b4f2a0f
-expected_overlay_builder_test_sha=6d0377511b3da42d9924e2ee43fd60d060fcb46eba8c5373eb733b45d6c4a67e
+expected_overlay_vxc1_sha=5bb82f7e3cf9b57d59f577f7006445f48e2d56146c9d2e841c165483aa82c1e6
+expected_overlay_builder_sha=34ddf5d8c2b7951c662ae77e61cac80209e3d03b7a845e4c4fb88194c5a5af78
+expected_overlay_builder_test_sha=5da66b3b144b6c9baafa0dfb59d8ef1992681017c08c668c8b75aa4a02956cb9
 expected_adapter_sha=c63523fa95bbfb3f83e60183cc39e67b057589f7dbd6896d5c96a486aa9016b3
 expected_adapter_test_sha=e9f4db574b8a724d4e4beedf4d593a1a27c38c87c6b7f070a1849d9401520f87
 expected_base_comparator_sha=c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebbc
@@ -70,7 +71,7 @@ expected_initial_sha=6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d
 expected_closure_test_sha=38de02fabc0dde41911e5152b0b08a9987b312b0cea29c69396bb9e392e9c745
 expected_initial_test_sha=82634e292a8fc1eb5ed454360ea2367e06687f0547da6503291c850a00e5b339
 expected_current_parser_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
-runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a1-fullbz-old-current-v4.sh
+runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a1-fullbz-old-current-v5.sh
 
 run_succeeded=0
 record_exit() {
@@ -99,8 +100,8 @@ test -x "$old_exe"
 test -x "$candidate_exe"
 test -x "$python"
 mkdir -p "$tool_dir"
-cp "$0" "$run_root/gate-a1-fullbz-old-current-v4.sh"
-test "$(sha256sum "$run_root/gate-a1-fullbz-old-current-v4.sh" | awk '{print $1}')" = \
+cp "$0" "$run_root/gate-a1-fullbz-old-current-v5.sh"
+test "$(sha256sum "$run_root/gate-a1-fullbz-old-current-v5.sh" | awk '{print $1}')" = \
   "$RUNNER_SHA256"
 
 printf 'preflight=legacy_provenance\n'
@@ -229,8 +230,8 @@ initial_source=$observer_root/validate_qsgw_initial_state.py
 closure_test_source=$observer_root/test_validate_qsgw_trace_closure-v3-38de02fa.py
 initial_test_source=$observer_root/test_validate_qsgw_initial_state-v1.py
 current_parser_source=$candidate_source/regression_tests/backend/comparisons/cmp_qsgw.py
-overlay_builder_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/build_legacy_fullbz_stru_overlay_v1.py
-overlay_builder_test_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_build_legacy_fullbz_stru_overlay_v1.py
+overlay_builder_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/build_legacy_fullbz_stru_overlay_v2.py
+overlay_builder_test_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_build_legacy_fullbz_stru_overlay_v2.py
 
 while read -r path expected
 do
@@ -264,8 +265,8 @@ cp "$fixed_source" "$tool_dir/validate_qsgw_fixed_basis.py"
 cp "$initial_source" "$tool_dir/validate_qsgw_initial_state.py"
 cp "$closure_test_source" "$tool_dir/test_validate_qsgw_trace_closure.py"
 cp "$initial_test_source" "$tool_dir/test_validate_qsgw_initial_state.py"
-cp "$overlay_builder_source" "$tool_dir/build_legacy_fullbz_stru_overlay_v1.py"
-cp "$overlay_builder_test_source" "$tool_dir/test_build_legacy_fullbz_stru_overlay_v1.py"
+cp "$overlay_builder_source" "$tool_dir/build_legacy_fullbz_stru_overlay_v2.py"
+cp "$overlay_builder_test_source" "$tool_dir/test_build_legacy_fullbz_stru_overlay_v2.py"
 
 cp "$old_runtime/build-provenance.txt" "$run_root/old-build-provenance.txt"
 cp "$candidate_gate0/PROVENANCE.txt" "$run_root/candidate-gate0-PROVENANCE.txt"
@@ -298,33 +299,48 @@ PYTHONPATH="$tool_dir" "$python" -B "$adapter_test_source" \
   PYTHONPATH="$tool_dir" "$python" -B test_validate_qsgw_initial_state.py \
     >"$run_root/initial-unit-test.stdout" \
     2>"$run_root/initial-unit-test.stderr"
-  PYTHONPATH="$tool_dir" "$python" -B test_build_legacy_fullbz_stru_overlay_v1.py \
+  PYTHONPATH="$tool_dir" "$python" -B test_build_legacy_fullbz_stru_overlay_v2.py \
     >"$run_root/overlay-builder-unit-test.stdout" \
     2>"$run_root/overlay-builder-unit-test.stderr"
 )
 
 printf 'preflight=legacy_fullbz_same_input_overlay\n'
-"$python" -B "$tool_dir/build_legacy_fullbz_stru_overlay_v1.py" \
+"$python" -B "$tool_dir/build_legacy_fullbz_stru_overlay_v2.py" \
   "$source_input_dir" "$common_root/DATASET_SHA256SUMS.txt" "$input_dir" \
   >"$run_root/overlay-builder.stdout" \
   2>"$run_root/overlay-builder.stderr"
 test "$(sha256sum "$overlay_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
   "$expected_overlay_dataset_manifest_sha"
-test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json" | awk '{print $1}')" = \
+test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json" | awk '{print $1}')" = \
   "$expected_overlay_report_sha"
 test "$(sha256sum "$input_dir/stru_out" | awk '{print $1}')" = \
   "$expected_overlay_stru_sha"
-grep -Fq '"status": "PASS"' "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json"
-grep -Fq '"n_kpoints": 64' "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json"
-grep -Fq '"mapping": "identity"' "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json"
+test "$(sha256sum "$input_dir/vxcs1k1_nao.txt" | awk '{print $1}')" = \
+  "$expected_overlay_vxc1_sha"
+grep -Fq '"status": "PASS"' "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"contract": "legacy_fullbz_input_overlay_v2"' \
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"n_kpoints": 64' "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"mapping": "identity"' "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
 grep -Fq '"unchanged_files_hardlinked": 161' \
-  "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json"
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"legacy_vxc_files_generated": 64' \
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"legacy_vxc_values_equal": true' \
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
+grep -Fq '"dataset_file_count": 226' \
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json"
 test "$(wc -l <"$input_dir/stru_out")" = 138
 test "$(sed -n '10p' "$input_dir/stru_out")" = '4 4 4'
 test "$(sed -n '75p' "$input_dir/stru_out")" = 1
 test "$(sed -n '138p' "$input_dir/stru_out")" = 64
+test "$(find "$input_dir" -type f -printf x | wc -c)" = 226
+test "$(find "$input_dir" -type f -name 'vxcs1k*_nao.txt' -printf x | wc -c)" = 64
+test "$(head -n 1 "$input_dir/vxcs1k1_nao.txt")" = 44
 test "$input_dir/band_out" -ef "$source_input_dir/band_out"
+test "$input_dir/vxck1_nao.txt" -ef "$source_input_dir/vxck1_nao.txt"
 test ! "$input_dir/stru_out" -ef "$source_input_dir/stru_out"
+test ! "$input_dir/vxcs1k1_nao.txt" -ef "$source_input_dir/vxck1_nao.txt"
 test -z "$(find "$overlay_root" -type l -print -quit)"
 (
   cd "$overlay_root"
@@ -361,9 +377,11 @@ source_dataset=$source_input_dir
 source_dataset_manifest_sha256=$expected_common_dataset_manifest_sha
 dataset=$input_dir
 dataset_manifest_sha256=$expected_overlay_dataset_manifest_sha
-dataset_overlay_contract=legacy_fullbz_stru_overlay_v1
+dataset_overlay_contract=legacy_fullbz_input_overlay_v2
 dataset_overlay_report_sha256=$expected_overlay_report_sha
 dataset_overlay_stru_sha256=$expected_overlay_stru_sha
+dataset_overlay_legacy_vxc_files=64
+dataset_overlay_legacy_vxc_values_equal=true
 same_input_for_legacy_and_candidate=true
 pair_root=$pair_root
 pair_output_manifest_sha256=$expected_pair_output_manifest_sha
@@ -473,6 +491,7 @@ EOF
 
   test -s "$legacy_run/qsgw_oracle_matrices.dat"
   test -s "$legacy_run/homo_lumo_vs_iterations.dat"
+  ! grep -Fq 'Both HF and VXC files not found' "$legacy_run/librpa.stderr"
   grep -Fqx '# qsgw_contract_version 4' "$legacy_run/qsgw_oracle_matrices.dat"
   grep -Fqx '# qsgw_mixer linear' "$legacy_run/qsgw_oracle_matrices.dat"
   grep -Fqx "# qsgw_min_iter $target_iter" "$legacy_run/qsgw_oracle_matrices.dat"
@@ -648,10 +667,12 @@ printf 'postflight=input_integrity\n'
 )
 test "$(sha256sum "$overlay_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
   "$expected_overlay_dataset_manifest_sha"
-test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json" | awk '{print $1}')" = \
+test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json" | awk '{print $1}')" = \
   "$expected_overlay_report_sha"
 test "$(sha256sum "$input_dir/stru_out" | awk '{print $1}')" = \
   "$expected_overlay_stru_sha"
+test "$(sha256sum "$input_dir/vxcs1k1_nao.txt" | awk '{print $1}')" = \
+  "$expected_overlay_vxc1_sha"
 test -z "$(find "$overlay_root" -perm /222 -print -quit)"
 (
   cd "$candidate_gate0"
@@ -691,9 +712,11 @@ source_dataset=$source_input_dir
 source_dataset_manifest_sha256=$expected_common_dataset_manifest_sha
 dataset=$input_dir
 dataset_manifest_sha256=$expected_overlay_dataset_manifest_sha
-dataset_overlay_contract=legacy_fullbz_stru_overlay_v1
+dataset_overlay_contract=legacy_fullbz_input_overlay_v2
 dataset_overlay_report_sha256=$expected_overlay_report_sha
 dataset_overlay_stru_sha256=$expected_overlay_stru_sha
+dataset_overlay_legacy_vxc_files=64
+dataset_overlay_legacy_vxc_values_equal=true
 same_input_for_legacy_and_candidate=true
 pair_root=$pair_root
 pair_output_manifest_sha256=$expected_pair_output_manifest_sha
@@ -750,11 +773,11 @@ sha256sum \
   "$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt" \
   "$run_root/common-input-PROVENANCE.txt" \
   "$run_root/qsgw_input.contract" \
-  "$run_root/gate-a1-fullbz-old-current-v4.sh" \
+  "$run_root/gate-a1-fullbz-old-current-v5.sh" \
   "$overlay_root/DATASET_SHA256SUMS.txt" \
-  "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json" \
-  "$tool_dir/build_legacy_fullbz_stru_overlay_v1.py" \
-  "$tool_dir/test_build_legacy_fullbz_stru_overlay_v1.py" \
+  "$overlay_root/LEGACY_FULLBZ_INPUT_OVERLAY.json" \
+  "$tool_dir/build_legacy_fullbz_stru_overlay_v2.py" \
+  "$tool_dir/test_build_legacy_fullbz_stru_overlay_v2.py" \
   "$run_root/adapter-unit-test.stdout" \
   "$run_root/adapter-unit-test.stderr" \
   "$run_root/closure-unit-test.stdout" \
