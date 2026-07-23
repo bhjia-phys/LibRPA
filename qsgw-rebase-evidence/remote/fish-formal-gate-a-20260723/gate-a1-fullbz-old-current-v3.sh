@@ -22,7 +22,8 @@ case "$RUN_TAG" in
 esac
 
 root=/tmp/librpa-qsgw-formal-gate-a-20260723
-common_root=$root/input/si-k444-gate3-common-v3-2342408
+pair_root=/home/bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-20260723-v2
+common_root=$pair_root/fullbz
 input_dir=$common_root/dataset
 old_runtime=$root/legacy
 old_build=$old_runtime/old/build
@@ -46,10 +47,12 @@ expected_upstream_commit=67b9888dac0d09870361398165d0b3c1acc931ff
 expected_candidate_commit=4f9ab0cfc90f54910158ab01a877581b080f136e
 expected_gate1_output_manifest_sha=74a3453c46df34e7b0ec8430260cd47182e6d3d01a409f4a313dc976948a127f
 expected_gate2_output_manifest_sha=48dc9063d56de58b21cd77243ea56e127cfe79013b66728f6a9913ff36ac3dee
-expected_common_dataset_manifest_sha=df793f964077ca03de7ad4723975736d0d0fb85d7e548241f3a7a04677cc05f7
-expected_common_output_manifest_sha=3b7811c12df23a563e597cae2fb80f592c045d27c803a1afc7ead31d7d7439d4
-expected_common_provenance_sha=54e2a4b0f07883f4341d46e41a80fd8ae1ebac7e25d263699eda8819b00ce0d8
-expected_common_contract_sha=0dd83763717853fb64960f56354a2d7b7acd9c6759adcdff49dac9936635f110
+expected_pair_output_manifest_sha=159d433d29938f65c637a88b9f4fa3e7974c191267c79a0cd343168bc4b2ddb8
+expected_pair_validation_sha=bd6a8c65732518136d5679ceaf29b6454277f832aaf2ac56bce6860375a487da
+expected_common_dataset_manifest_sha=ba401b751eb465b957fad2270878022c13dfb922257376b9b2a9faef793873f4
+expected_common_output_manifest_sha=9f96b50c098c572d603d649137e411737bfaa6b1ff7e48200cd25e94da3a6a3f
+expected_common_provenance_sha=bd5eb751832cfe0919393417e8d93d86fd8a5121cd6d33c152dff9db6927ec8a
+expected_common_contract_sha=5c0477af4bc6e4b23c2be5f286c979e44f039ef6b65295c3b577a77ecc220c9e
 expected_adapter_sha=c63523fa95bbfb3f83e60183cc39e67b057589f7dbd6896d5c96a486aa9016b3
 expected_adapter_test_sha=e9f4db574b8a724d4e4beedf4d593a1a27c38c87c6b7f070a1849d9401520f87
 expected_base_comparator_sha=c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebbc
@@ -60,7 +63,7 @@ expected_initial_sha=6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d
 expected_closure_test_sha=38de02fabc0dde41911e5152b0b08a9987b312b0cea29c69396bb9e392e9c745
 expected_initial_test_sha=82634e292a8fc1eb5ed454360ea2367e06687f0547da6503291c850a00e5b339
 expected_current_parser_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
-runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a1-fullbz-old-current-v2.sh
+runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a1-fullbz-old-current-v3.sh
 
 run_succeeded=0
 record_exit() {
@@ -80,6 +83,8 @@ test "$(git -C "$RUNNER_SOURCE" rev-parse HEAD)" = "$RUNNER_COMMIT"
 test -z "$(git -C "$RUNNER_SOURCE" status --porcelain)"
 test "$(git -C "$RUNNER_SOURCE" show "$RUNNER_COMMIT:$runner_relative" | \
   sha256sum | awk '{print $1}')" = "$RUNNER_SHA256"
+test -e "$pair_root/PAIR_COMPLETE"
+test ! -e "$pair_root/FAILED"
 test -e "$common_root/COMPLETE"
 test -e "$candidate_gate0/GREEN_CONFIRMED"
 test ! -e "$candidate_gate0/FAILED"
@@ -87,8 +92,8 @@ test -x "$old_exe"
 test -x "$candidate_exe"
 test -x "$python"
 mkdir -p "$tool_dir"
-cp "$0" "$run_root/gate-a1-fullbz-old-current-v2.sh"
-test "$(sha256sum "$run_root/gate-a1-fullbz-old-current-v2.sh" | awk '{print $1}')" = \
+cp "$0" "$run_root/gate-a1-fullbz-old-current-v3.sh"
+test "$(sha256sum "$run_root/gate-a1-fullbz-old-current-v3.sh" | awk '{print $1}')" = \
   "$RUNNER_SHA256"
 
 printf 'preflight=legacy_provenance\n'
@@ -170,6 +175,17 @@ grep -Fqx 'iterations=0:1' "$candidate_gate2/PROVENANCE.txt"
 )
 
 printf 'preflight=common_input_bundle\n'
+test "$(sha256sum "$pair_root/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
+  "$expected_pair_output_manifest_sha"
+test "$(sha256sum "$pair_root/PAIR_VALIDATION.json" | awk '{print $1}')" = \
+  "$expected_pair_validation_sha"
+grep -Fq '"status": "PASS"' "$pair_root/PAIR_VALIDATION.json"
+test -z "$(find "$pair_root" -type l -print -quit)"
+test -z "$(find "$pair_root" -perm /222 -print -quit)"
+(
+  cd "$pair_root"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
 test "$(sha256sum "$common_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
   "$expected_common_dataset_manifest_sha"
 test "$(sha256sum "$common_root/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
@@ -182,7 +198,7 @@ test "$(sha256sum "$input_dir/qsgw_input.contract" | awk '{print $1}')" = \
   cd "$common_root"
   sha256sum --check --quiet DATASET_SHA256SUMS.txt
 )
-sed 's#/data/home/df_iopcas_bhj/ai-runs/librpa-qsgw-rebase-gates-20260715T1910-7d69a18c/inputs/si-k444-gate3-common-v3-2342408#'"$common_root"'#g' \
+sed 's#  \./#  '"$common_root"'/#g' \
   "$common_root/OUTPUT_SHA256SUMS.txt" \
   >"$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt"
 sha256sum --check --quiet "$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt"
@@ -292,6 +308,9 @@ oracle=legacy_symmetry_off_full_bz
 candidate=current_symmetry_off_full_bz
 dataset=$input_dir
 dataset_manifest_sha256=$expected_common_dataset_manifest_sha
+pair_root=$pair_root
+pair_output_manifest_sha256=$expected_pair_output_manifest_sha
+pair_validation_sha256=$expected_pair_validation_sha
 input_contract_sha256=$expected_common_contract_sha
 scf_kpoints=64
 headwing=off
@@ -601,6 +620,9 @@ candidate_gate2_provenance_sha256=$GATE2_PROVENANCE_SHA256
 candidate_gate2_output_manifest_sha256=$expected_gate2_output_manifest_sha
 dataset=$input_dir
 dataset_manifest_sha256=$expected_common_dataset_manifest_sha
+pair_root=$pair_root
+pair_output_manifest_sha256=$expected_pair_output_manifest_sha
+pair_validation_sha256=$expected_pair_validation_sha
 input_contract_sha256=$expected_common_contract_sha
 crystal_symmetry=off
 time_reversal_reduction=off_full_64_kpoint_input
@@ -653,7 +675,7 @@ sha256sum \
   "$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt" \
   "$run_root/common-input-PROVENANCE.txt" \
   "$run_root/qsgw_input.contract" \
-  "$run_root/gate-a1-fullbz-old-current-v2.sh" \
+  "$run_root/gate-a1-fullbz-old-current-v3.sh" \
   "$run_root/adapter-unit-test.stdout" \
   "$run_root/adapter-unit-test.stderr" \
   "$run_root/closure-unit-test.stdout" \

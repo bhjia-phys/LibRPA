@@ -2,7 +2,7 @@ from pathlib import Path
 import unittest
 
 
-RUNNER = Path(__file__).with_name("gate-a1-fullbz-old-current-v2.sh")
+RUNNER = Path(__file__).with_name("gate-a1-fullbz-old-current-v3.sh")
 
 
 class FishFormalGateA1RunnerTest(unittest.TestCase):
@@ -105,6 +105,13 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
         self.assertNotIn("SLURM_", self.source)
 
     def test_preserves_and_relocates_original_bundle_manifest(self):
+        self.assertIn(
+            "abacus-pinned-dd421665-si-k444-pair-physical-bundles-20260723-v2",
+            self.source,
+        )
+        self.assertIn("expected_pair_output_manifest_sha", self.source)
+        self.assertIn("expected_pair_validation_sha", self.source)
+        self.assertIn('test -e "$pair_root/PAIR_COMPLETE"', self.source)
         self.assertIn("expected_common_output_manifest_sha", self.source)
         self.assertIn("common-input-OUTPUT_SHA256SUMS.txt", self.source)
         self.assertIn("common-input-OUTPUT_SHA256SUMS.relocated.txt", self.source)
