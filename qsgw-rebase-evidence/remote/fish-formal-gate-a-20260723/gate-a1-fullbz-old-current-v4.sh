@@ -229,8 +229,8 @@ initial_source=$observer_root/validate_qsgw_initial_state.py
 closure_test_source=$observer_root/test_validate_qsgw_trace_closure-v3-38de02fa.py
 initial_test_source=$observer_root/test_validate_qsgw_initial_state-v1.py
 current_parser_source=$candidate_source/regression_tests/backend/comparisons/cmp_qsgw.py
-overlay_builder_source=$candidate_source/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/build_legacy_fullbz_stru_overlay_v1.py
-overlay_builder_test_source=$candidate_source/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_build_legacy_fullbz_stru_overlay_v1.py
+overlay_builder_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/build_legacy_fullbz_stru_overlay_v1.py
+overlay_builder_test_source=$RUNNER_SOURCE/qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_build_legacy_fullbz_stru_overlay_v1.py
 
 while read -r path expected
 do
