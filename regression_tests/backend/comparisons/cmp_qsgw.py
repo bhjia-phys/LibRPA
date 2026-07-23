@@ -173,6 +173,7 @@ def band_iterations(occupied_bands, energy_tolerance_ev="1e-4",
 
 
 def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
+                 state_relative_tolerance="1e-8",
                  hermiticity_tolerance="1e-10",
                  unitarity_tolerance="1e-10",
                  require_complete_trajectory="true", precision="3"):
@@ -181,6 +182,8 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
         relative_tolerance, "relative_tolerance")
     absolute_tolerance = _positive_float(
         absolute_tolerance, "absolute_tolerance", allow_zero=True)
+    state_relative_tolerance = _positive_float(
+        state_relative_tolerance, "state_relative_tolerance")
     hermiticity_tolerance = _positive_float(
         hermiticity_tolerance, "hermiticity_tolerance", allow_zero=True)
     unitarity_tolerance = _positive_float(
@@ -235,10 +238,19 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
                     difference_norm = _difference_frobenius(
                         test_matrix, reference_matrix)
                     reference_norm = _frobenius(reference_matrix)
+                    component = block_key[2]
+                    block_relative_tolerance = (
+                        state_relative_tolerance
+                        if component == "rotation_u" or
+                        component.startswith("wfc_spinor")
+                        else relative_tolerance
+                    )
                     if reference_norm > absolute_tolerance:
                         relative = difference_norm / reference_norm
-                        within_tolerance = relative <= relative_tolerance
-                        allowed = relative_tolerance * reference_norm
+                        within_tolerance = (
+                            relative <= block_relative_tolerance)
+                        allowed = (
+                            block_relative_tolerance * reference_norm)
                     else:
                         relative = (0.0 if difference_norm <= absolute_tolerance
                                     else math.inf)
@@ -256,7 +268,6 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
                         maximum_location = (filename, block_key)
                     maximum_absolute = max(maximum_absolute, difference_norm)
 
-                    component = block_key[2]
                     if component in HERMITIAN_COMPONENTS:
                         for side, matrix in (("test", test_matrix),
                                              ("reference", reference_matrix)):

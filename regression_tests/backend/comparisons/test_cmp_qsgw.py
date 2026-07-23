@@ -238,6 +238,19 @@ class TestQsgwMatrixTrace(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("Frobenius tolerance", msg)
 
+    def test_state_gauge_tolerance_is_separate_from_operator_tolerance(self):
+        reference = MATRIX_HEADER + matrix_rows("wfc_spinor0", [[1.0]])
+        test = MATRIX_HEADER + matrix_rows("wfc_spinor0", [[1.0 + 5.0e-7]])
+
+        passed, msg = self._compare(
+            test, reference,
+            relative_tolerance="1e-8",
+            state_relative_tolerance="2e-6",
+            require_complete_trajectory="false",
+        )
+
+        self.assertTrue(passed, msg)
+
     def test_complete_stage_one_trajectory_is_required_by_default(self):
         rows = [
             matrix_rows("h0", [[1.0]], iteration=0),
