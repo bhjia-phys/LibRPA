@@ -60,6 +60,31 @@ class FishRunnerContractTest(unittest.TestCase):
         self.assertNotIn("residual_tolerance", self.text)
         self.assertNotIn("mixing_coefficient", self.text)
 
+    def test_binds_legacy_shared_libraries_only_for_legacy_run(self) -> None:
+        self.assertIn(
+            ': "${LEGACY_BUILD_DIR:?legacy build directory is required}"',
+            self.text,
+        )
+        self.assertIn(
+            'test -f "$LEGACY_BUILD_DIR/qsgw/libqsgw.so.0.3.0"',
+            self.text,
+        )
+        self.assertIn(
+            'test -f "$LEGACY_BUILD_DIR/src/librpa.so.0.3.0"',
+            self.text,
+        )
+        self.assertIn(
+            'export LD_LIBRARY_PATH="$LEGACY_BUILD_DIR/qsgw:'
+            '$LEGACY_BUILD_DIR/src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
+            self.text,
+        )
+        legacy_block = self.text.split('cd "$legacy"', 1)[1].split(
+            'cd "$candidate"', 1
+        )[0]
+        candidate_block = self.text.split('cd "$candidate"', 1)[1]
+        self.assertIn("export LD_LIBRARY_PATH=", legacy_block)
+        self.assertNotIn("export LD_LIBRARY_PATH=", candidate_block)
+
     def test_legacy_and_candidate_numerical_inputs_are_identical(self) -> None:
         legacy = parse_input_block(self.text, "legacy")
         candidate = parse_input_block(self.text, "candidate")

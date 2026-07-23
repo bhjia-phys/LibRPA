@@ -7,6 +7,7 @@ set -Eeuo pipefail
 : "${CANDIDATE_EXE_SHA256:?candidate executable hash is required}"
 : "${LEGACY_EXE:?legacy executable is required}"
 : "${LEGACY_EXE_SHA256:?legacy executable hash is required}"
+: "${LEGACY_BUILD_DIR:?legacy build directory is required}"
 : "${DATASET_DIR:?frozen Si k444 dataset is required}"
 : "${DATASET_MANIFEST_SHA256:?dataset manifest hash is required}"
 : "${RUN_TAG:?immutable run tag is required}"
@@ -73,6 +74,8 @@ test "$(git -C "$CANDIDATE_SOURCE" rev-parse HEAD)" = "$CANDIDATE_COMMIT"
 test -z "$(git -C "$CANDIDATE_SOURCE" status --porcelain)"
 test -x "$CANDIDATE_EXE"
 test -x "$LEGACY_EXE"
+test -f "$LEGACY_BUILD_DIR/qsgw/libqsgw.so.0.3.0"
+test -f "$LEGACY_BUILD_DIR/src/librpa.so.0.3.0"
 test "$(sha256sum "$CANDIDATE_EXE" | awk '{print $1}')" = \
   "$CANDIDATE_EXE_SHA256"
 test "$(sha256sum "$LEGACY_EXE" | awk '{print $1}')" = \
@@ -201,6 +204,11 @@ result=PENDING
 legacy_commit=$expected_legacy_commit
 legacy_executable=$LEGACY_EXE
 legacy_executable_sha256=$LEGACY_EXE_SHA256
+legacy_build_dir=$LEGACY_BUILD_DIR
+legacy_libqsgw_sha256=$(sha256sum \
+  "$LEGACY_BUILD_DIR/qsgw/libqsgw.so.0.3.0" | awk '{print $1}')
+legacy_liblibrpa_sha256=$(sha256sum \
+  "$LEGACY_BUILD_DIR/src/librpa.so.0.3.0" | awk '{print $1}')
 candidate_commit=$CANDIDATE_COMMIT
 candidate_executable=$CANDIDATE_EXE
 candidate_executable_sha256=$CANDIDATE_EXE_SHA256
@@ -236,6 +244,7 @@ export LIBRI_DETERMINISTIC_REDUCTION=1
 (
   cd "$legacy"
   unset LIBRPA_QSGW_MIXING_BETA
+  export LD_LIBRARY_PATH="$LEGACY_BUILD_DIR/qsgw:$LEGACY_BUILD_DIR/src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   "$mpiexec" -np "$mpi_ranks" "$LEGACY_EXE" \
     >librpa.stdout 2>librpa.stderr
 )
