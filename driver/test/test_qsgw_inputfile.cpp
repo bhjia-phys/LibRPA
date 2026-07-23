@@ -158,27 +158,32 @@ void test_hartree_modes_are_qsgw_only_and_explicit()
     });
 }
 
-void test_qsgw_headwing_requests_fail_fast()
+void test_qsgw_accepts_only_same_grid_head_only()
 {
-    const std::string message =
-        "QSGW iterative head/wing is unsupported";
     for (const std::string& prefix :
          {valid_qsgw_prefix(), valid_qsgw_band_prefix()})
     {
+        parse(prefix +
+              "replace_w_head = true\n"
+              "option_dielect_func = 4\n");
+        assert(driver::opts.replace_w_head == LIBRPA_SWITCH_ON);
+        assert(driver::opts.option_dielect_func == 4);
+        assert(!driver::driver_params.use_pyatb);
+
         assert_throws_with_message([&] {
             parse(prefix +
                   "replace_w_head = true\n"
                   "option_dielect_func = 3\n");
-        }, message);
+        }, "QSGW supports only analytic head-only mode");
         assert_throws_with_message([&] {
             parse(prefix +
                   "replace_w_head = true\n"
                   "option_dielect_func = 4\n"
                   "use_pyatb = true\n");
-        }, message);
+        }, "QSGW independent PyATB head updates are unsupported");
         assert_throws_with_message([&] {
             parse(prefix + "use_pyatb = true\n");
-        }, message);
+        }, "QSGW independent PyATB head updates are unsupported");
     }
 }
 
@@ -388,7 +393,7 @@ int main()
 {
     test_defaults_and_explicit_linear_mixing();
     test_hartree_modes_are_qsgw_only_and_explicit();
-    test_qsgw_headwing_requests_fail_fast();
+    test_qsgw_accepts_only_same_grid_head_only();
     test_qsgw_requires_replicated_scf_wavefunctions();
     test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls();
     test_qsgw_does_not_require_the_g0w0_matrix_dump_switch();

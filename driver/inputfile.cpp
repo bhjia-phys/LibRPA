@@ -247,10 +247,13 @@ static void validate_input_parameters()
                 "legacy_extra_inverse_nk")
             throw std::runtime_error(
                 "qsgw_hartree_normalization must be weighted_occupations or legacy_extra_inverse_nk");
-        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON ||
-            params.use_pyatb)
+        if (params.use_pyatb)
             throw std::runtime_error(
-                "QSGW iterative head/wing is unsupported; set replace_w_head = false and use_pyatb = false");
+                "QSGW independent PyATB head updates are unsupported; use the same-grid velocity input");
+        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
+            driver::opts.option_dielect_func != 4)
+            throw std::runtime_error(
+                "QSGW supports only analytic head-only mode; set option_dielect_func = 4");
         // QSGW inherits the upstream EXX, GW, and RPA symmetry switches.
     }
 }

@@ -56,6 +56,7 @@ using librpa_int::cplxdb;
 using librpa_int::qsgw::OperatorFourierResult;
 using librpa_int::qsgw::ScopedReferenceEigenvectors;
 using librpa_int::qsgw::SpinKMatrixMap;
+using librpa_int::qsgw::VelocityMatrix;
 using SigmaMatrixMap = librpa_int::qsgw::SpinKFrequencyMatrixMap;
 
 class ScopedSigmaMatrixRetention
@@ -277,6 +278,30 @@ std::vector<std::filesystem::path> discover_reader_static_files()
     return {files.begin(), files.end()};
 }
 
+void validate_same_grid_velocity_binding(
+    const librpa_int::qsgw::QsgwInputContract& contract,
+    const std::string& contract_base,
+    const int n_kpoints)
+{
+    std::vector<std::filesystem::path> expected =
+        librpa_int::qsgw::resolve_same_grid_velocity_paths(
+            contract.producer(), driver::driver_params.input_dir, n_kpoints);
+
+    std::vector<std::filesystem::path> declared;
+    for (const auto& file : contract.files("velocity_mf0"))
+    {
+        declared.push_back(
+            resolved_absolute_path(contract_base, file.file));
+    }
+    std::sort(expected.begin(), expected.end());
+    std::sort(declared.begin(), declared.end());
+    if (declared != expected)
+    {
+        throw std::invalid_argument(
+            "QSGW velocity_mf0 contract files do not exactly match the same-grid head-only files read by the driver");
+    }
+}
+
 const librpa_int::qsgw::HartreeReaderRoute& hartree_reader_route()
 {
     static const librpa_int::qsgw::HartreeReaderRoute route =
@@ -409,12 +434,13 @@ void validate_stage_one_contract(
     const librpa_int::qsgw::QsgwInputContract& contract,
     const librpa_int::Dataset& dataset,
     const std::string& contract_base,
+    const librpa_int::qsgw::HeadwingGridMode headwing_grid,
     const bool update_hartree,
     const bool compute_band)
 {
     using namespace librpa_int::qsgw;
     validate_qsgw_execution_modes(
-        contract, HeadwingGridMode::Disabled, update_hartree, compute_band);
+        contract, headwing_grid, update_hartree, compute_band);
     if (contract.n_spins() != dataset.mf.get_n_spins() ||
         contract.n_bands() != dataset.mf.get_n_bands() ||
         contract.n_aos() != dataset.mf.get_n_aos() ||
@@ -472,6 +498,16 @@ void validate_stage_one_contract(
         throw std::invalid_argument(
             "QSGW input-contract producer does not match constants_choice");
     }
+    if (headwing_grid == HeadwingGridMode::ScfGrid)
+    {
+        if (symmetry_reduced_scf_grid)
+        {
+            throw std::invalid_argument(
+                "QSGW iterative head-only currently requires a full-BZ SCF grid");
+        }
+        validate_same_grid_velocity_binding(
+            contract, contract_base, dataset.mf.get_n_kpoints());
+    }
     if (update_hartree)
     {
         validate_hartree_reader_binding(contract, contract_base);
@@ -501,6 +537,25 @@ void validate_stage_one_contract(
             contract, contract_base, driver::driver_params.input_dir,
             driver::driver_params.fn_band_kpath_info);
     }
+}
+
+void refresh_qsgw_head_only(librpa_int::Dataset& dataset,
+                            const librpa::Options& options,
+                            const MeanField& live)
+{
+    if (!dataset.p_headwing)
+    {
+        throw std::invalid_argument(
+            "QSGW head-only object is not initialized");
+    }
+    dataset.p_headwing->get_meanfield_df() = live;
+    dataset.p_headwing->init(
+        options.sqrt_coulomb_threshold, dataset.vq);
+    dataset.p_headwing->cal_head();
+    dataset.epsmacs_imagfreq =
+        dataset.p_headwing->get_head_vec();
+    dataset.omegas_imagfreq = dataset.tfg.get_freq_nodes();
+    dataset.p_headwing->test_head();
 }
 
 OperatorFourierResult project_grid_operator_to_band(
@@ -790,6 +845,7 @@ librpa_int::qsgw::HartreeStaticData load_hartree_static_input_root(
 void write_contract_header(std::ostream& output,
                            const std::string& contract_path,
                            const std::string& contract_sha256,
+                           const bool update_head,
                            const bool update_hartree,
                            const bool compute_band)
 {
@@ -802,8 +858,13 @@ void write_contract_header(std::ostream& output,
     output << "# qsgw_contract_version 6\n"
            << "# fixed_basis immutable_mf0\n"
            << "# live_update eigenvalues_wfc\n"
-           << "# velocity disabled_stage1\n"
-           << "# headwing disabled_stage1\n"
+           << "# velocity "
+           << (update_head ? "fixed_basis_rotation" : "disabled_stage1")
+           << "\n"
+           << "# head "
+           << (update_head ? "scf_grid_analytic_live" : "disabled_stage1")
+           << "\n"
+           << "# wing disabled_stage1\n"
            << "# symmetry exx_" << (use_symmetry_exx ? "on" : "off")
            << "_gw_" << (use_symmetry_gw ? "on" : "off")
            << "_rpa_" << (use_symmetry_rpa ? "on" : "off") << "\n"
@@ -848,10 +909,18 @@ void run_qsgw_stage_one(const bool compute_band)
     using namespace librpa_int::global;
     using namespace librpa_int::qsgw;
 
-    if (driver::get_bool(opts.replace_w_head) || driver_params.use_pyatb)
+    const bool update_head =
+        driver::get_bool(opts.replace_w_head) &&
+        opts.option_dielect_func == 4;
+    if (driver_params.use_pyatb)
     {
         throw LIBRPA_RUNTIME_ERROR(
-            "QSGW iterative head/wing is unsupported; set replace_w_head = false and use_pyatb = false");
+            "QSGW independent PyATB head updates are unsupported; use the same-grid velocity input");
+    }
+    if (driver::get_bool(opts.replace_w_head) && !update_head)
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "QSGW supports only analytic head-only mode; set option_dielect_func = 4");
     }
     if (driver::get_bool(opts.use_kpara_scf_eigvec))
     {
@@ -880,6 +949,9 @@ void run_qsgw_stage_one(const bool compute_band)
                 opts.vq_threshold, local_atpair, true,
                 driver_params.version_coul_reader,
                 driver::get_bool(opts.use_shrink_abfs));
+    const HeadwingGridMode headwing_grid =
+        update_head ? HeadwingGridMode::ScfGrid
+                    : HeadwingGridMode::Disabled;
 
     const std::string contract_path = resolve_input_path(
         driver_params.input_dir, driver_params.qsgw_input_contract);
@@ -894,7 +966,7 @@ void run_qsgw_stage_one(const bool compute_band)
         input_contract->validate_file_hashes(base);
         prepare_stage_one_symmetry_context(*dataset);
         validate_stage_one_contract(
-            *input_contract, *dataset, base,
+            *input_contract, *dataset, base, headwing_grid,
             driver_params.qsgw_update_hartree, compute_band);
         contract_producer = static_cast<int>(input_contract->producer());
         contract_sha256 = sha256_file(contract_path);
@@ -914,6 +986,22 @@ void run_qsgw_stage_one(const bool compute_band)
         reference, dataset->pbc.weight_k, electron_count);
     const SpinKMatrixMap reference_hamiltonian =
         build_reference_hamiltonian(reference);
+
+    VelocityMatrix reference_velocity;
+    if (update_head)
+    {
+        read_headwing_input(driver_params.input_dir, false);
+        reference_velocity = dataset->velocity_matrix;
+        if (contract_producer ==
+            static_cast<int>(QsgwProducer::FhiAims))
+        {
+            prepare_fhi_aims_interband_velocity(
+                reference_velocity, reference);
+        }
+        align_distributed_velocity_to_reference_wfc(
+            dataset->p_headwing->get_meanfield_df(), reference,
+            reference_velocity, dataset->comm_h);
+    }
 
     std::optional<MeanField> band_reference;
     SpinKMatrixMap band_reference_hamiltonian;
@@ -1034,9 +1122,11 @@ void run_qsgw_stage_one(const bool compute_band)
             throw std::runtime_error("Cannot open QSGW trace output");
         write_contract_header(
             trace, contract_path, contract_sha256,
+            update_head,
             driver_params.qsgw_update_hartree, compute_band);
         write_contract_header(eigenvalue_trace, contract_path,
                                contract_sha256,
+                               update_head,
                                driver_params.qsgw_update_hartree,
                                compute_band);
         write_iteration_summary_header(trace);
@@ -1045,6 +1135,7 @@ void run_qsgw_stage_one(const bool compute_band)
         {
             write_contract_header(matrix_trace, contract_path,
                                    contract_sha256,
+                                   update_head,
                                    driver_params.qsgw_update_hartree,
                                    compute_band);
             write_matrix_trace_header(matrix_trace);
@@ -1100,6 +1191,10 @@ void run_qsgw_stage_one(const bool compute_band)
         completed_iterations = iteration;
         const EigenvalueSnapshot previous = eigenvalue_snapshot(dataset->mf);
         dataset->invalidate_compute_objects();
+        if (update_head && iteration > 1)
+        {
+            refresh_qsgw_head_only(*dataset, opts, dataset->mf);
+        }
         h.build_g0w0_sigma(opts);
         if (!dataset->p_exx || !dataset->p_g0w0)
             throw LIBRPA_RUNTIME_ERROR(
@@ -1382,9 +1477,17 @@ void run_qsgw_stage_one(const bool compute_band)
             broadcast_spin_k_matrix_map(
                 mixed_band_hamiltonian, 0, dataset->comm_h);
         }
+        if (update_head && iteration == 1)
+        {
+            // Iteration one uses the reader-computed KS head. Switch to the
+            // aligned immutable velocity before forming the next live state.
+            dataset->velocity_matrix = reference_velocity;
+        }
         const FixedBasisDiagonalizationResult diagonalization =
             diagonalize_in_reference_basis(
-                dataset->mf, reference, mixed_hamiltonian);
+                dataset->mf, reference, mixed_hamiltonian,
+                update_head ? &reference_velocity : nullptr,
+                update_head ? &dataset->velocity_matrix : nullptr);
         std::optional<FixedBasisDiagonalizationResult> band_diagonalization;
         if (compute_band)
         {
