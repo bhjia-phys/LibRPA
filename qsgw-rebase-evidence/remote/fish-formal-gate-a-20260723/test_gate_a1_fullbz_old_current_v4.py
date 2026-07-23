@@ -2,7 +2,7 @@ from pathlib import Path
 import unittest
 
 
-RUNNER = Path(__file__).with_name("gate-a1-fullbz-old-current-v3.sh")
+RUNNER = Path(__file__).with_name("gate-a1-fullbz-old-current-v4.sh")
 
 
 class FishFormalGateA1RunnerTest(unittest.TestCase):
@@ -116,6 +116,26 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
         self.assertIn("common-input-OUTPUT_SHA256SUMS.txt", self.source)
         self.assertIn("common-input-OUTPUT_SHA256SUMS.relocated.txt", self.source)
         self.assertIn("sha256sum --check --quiet DATASET_SHA256SUMS.txt", self.source)
+
+    def test_builds_one_validated_legacy_stru_overlay_for_both_sides(self):
+        self.assertIn("build_legacy_fullbz_stru_overlay_v1.py", self.source)
+        self.assertIn("test_build_legacy_fullbz_stru_overlay_v1.py", self.source)
+        self.assertIn("expected_overlay_builder_sha", self.source)
+        self.assertIn("expected_overlay_builder_test_sha", self.source)
+        self.assertIn("expected_overlay_dataset_manifest_sha", self.source)
+        self.assertIn("expected_overlay_report_sha", self.source)
+        self.assertIn("expected_overlay_stru_sha", self.source)
+        self.assertIn("legacy_fullbz_same_input_overlay", self.source)
+        self.assertIn("same_input_for_legacy_and_candidate=true", self.source)
+        self.assertIn('input_dir=$overlay_root/dataset', self.source)
+        self.assertIn('source_input_dir=$common_root/dataset', self.source)
+        self.assertIn('test "$input_dir/band_out" -ef "$source_input_dir/band_out"',
+                      self.source)
+        self.assertIn('test ! "$input_dir/stru_out" -ef "$source_input_dir/stru_out"',
+                      self.source)
+        self.assertIn('test "$(wc -l <"$input_dir/stru_out")" = 138', self.source)
+        self.assertIn("find \"$overlay_root\" -type f -exec chmod a-w", self.source)
+        self.assertNotIn("TO_BE_FILLED", self.source)
 
     def test_requires_full_matrix_and_state_observers(self):
         for observer in (
