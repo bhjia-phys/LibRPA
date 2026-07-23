@@ -17,7 +17,8 @@ case "$RUN_TAG" in
   *[!A-Za-z0-9._-]*|'') echo "RUN_TAG contains unsafe characters" >&2; exit 2 ;;
 esac
 
-bundle=/home/bhj/ai-runs/abacus-pinned-dd421665-si-k444-symmetry-physical-bundle-20260723-v3
+pair_root=/home/bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-20260723-v2
+bundle=$pair_root/symmetry
 input_dir=$bundle/dataset
 candidate_gate0=/home/bhj/ai-runs/librpa-qsgw-gate0-20260723-4f9ab0cf-v1
 candidate_source=/tmp/librpa-qsgw-gate0-20260723-4f9ab0cf-v1/candidate
@@ -31,11 +32,13 @@ omp_threads=12
 
 expected_upstream_commit=67b9888dac0d09870361398165d0b3c1acc931ff
 expected_candidate_commit=4f9ab0cfc90f54910158ab01a877581b080f136e
-expected_bundle_provenance_sha=d0da1dd120ca834e3ed81a7dd5e93b7c10ace30c79d53eb6d2fa08a27acc40c7
-expected_bundle_output_sha=01104a58dbcbcae8129331f7afd72bf866cd6d07c64226de35c4b7682489f4ba
-expected_dataset_manifest_sha=23c28adf8163e11339c72c0352501d2a595edae89ed5e352e3173a675af7e164
-expected_contract_sha=5ef0f130be39886a8a55ac72130ae9c090f897c0858753638efa2ab578e7d358
-expected_vxc_manifest_sha=545e595eab871410b4e06e46c6d4394d82f6d46fa46eb08e572a0546763a3ed4
+expected_pair_output_sha=159d433d29938f65c637a88b9f4fa3e7974c191267c79a0cd343168bc4b2ddb8
+expected_pair_validation_sha=bd6a8c65732518136d5679ceaf29b6454277f832aaf2ac56bce6860375a487da
+expected_bundle_provenance_sha=6e30e4c0f629b024153a493324d98aa1e5ea5405452d05aef351b0803900bbb9
+expected_bundle_output_sha=2ae40ab42a6d54cd9d8e21a8a11e3a1b3d8a2cc4f60d9a357e83b22899a62989
+expected_dataset_manifest_sha=c0aea2f49b4844cd6804c99aa09ceba891229c3c8a4b0830ee056aacd8b6b05a
+expected_contract_sha=9c40254b6a57fee35494f8b7efb1400949ef203617921cf89d5e63fcb8aebef6
+expected_vxc_manifest_sha=3ea65babfedb503256c70331c0ed234c5945a221492d601e9506fe980d6fe077
 expected_base_comparator_sha=c3daf072f222083a7ebdb9cf45f154d4bef64474f76db05992479a66fe30ebbc
 expected_closure_adapter_sha=900f42f1917e4c2a80962e78b80a7226411981fc21923509983e55fa9afbdbfa
 expected_closure_sha=4a5de94e6dbf590dded4a6ecd140aa4227fa61ffa0e73af17ec0f388610cffaf
@@ -44,7 +47,7 @@ expected_initial_sha=6bbade9eaeb207b6cea9fa2f80d8cbcd0baeb8cbd760a2ffab5a0fe6f6d
 expected_closure_test_sha=38de02fabc0dde41911e5152b0b08a9987b312b0cea29c69396bb9e392e9c745
 expected_initial_test_sha=82634e292a8fc1eb5ed454360ea2367e06687f0547da6503291c850a00e5b339
 expected_current_parser_sha=f1e2b6f19250b0ff8b18785d3d29072f5f423fb4fdc2ae2b35381900f1282dbb
-runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a23-current-symmetry-side-v5.sh
+runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/gate-a23-current-symmetry-side-v6.sh
 normalizer_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/normalize_qsgw_v6_self_traces_v1.py
 normalizer_test_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723/test_normalize_qsgw_v6_self_traces_v1.py
 
@@ -69,8 +72,8 @@ test "$(git -C "$RUNNER_SOURCE" show "$RUNNER_COMMIT:$runner_relative" | \
 test -x "$candidate_exe"
 test -x "$python"
 mkdir -p "$tool_dir"
-cp "$0" "$run_root/gate-a23-current-symmetry-side-v5.sh"
-test "$(sha256sum "$run_root/gate-a23-current-symmetry-side-v5.sh" | awk '{print $1}')" = \
+cp "$0" "$run_root/gate-a23-current-symmetry-side-v6.sh"
+test "$(sha256sum "$run_root/gate-a23-current-symmetry-side-v6.sh" | awk '{print $1}')" = \
   "$RUNNER_SHA256"
 
 printf 'preflight=candidate_gate0\n'
@@ -94,6 +97,19 @@ test "$(git -C "$candidate_source" rev-parse HEAD)" = "$expected_candidate_commi
 test -z "$(git -C "$candidate_source" status --porcelain)"
 
 printf 'preflight=pinned_symmetry_bundle\n'
+test -e "$pair_root/PAIR_COMPLETE"
+test ! -e "$pair_root/FAILED"
+test "$(sha256sum "$pair_root/OUTPUT_SHA256SUMS.txt" | awk '{print $1}')" = \
+  "$expected_pair_output_sha"
+test "$(sha256sum "$pair_root/PAIR_VALIDATION.json" | awk '{print $1}')" = \
+  "$expected_pair_validation_sha"
+grep -Fq '"status": "PASS"' "$pair_root/PAIR_VALIDATION.json"
+test -z "$(find "$pair_root" -type l -print -quit)"
+test -z "$(find "$pair_root" -perm /222 -print -quit)"
+(
+  cd "$pair_root"
+  sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
+)
 test -e "$bundle/COMPLETE"
 test ! -e "$bundle/FAILED"
 test -z "$(find "$bundle" -type l -print -quit)"
@@ -117,11 +133,14 @@ grep -Fqx 'grid=4x4x4' "$bundle/PROVENANCE.txt"
 grep -Fqx 'scf_kpoints=8' "$bundle/PROVENANCE.txt"
 grep -Fqx 'full_bz_kpoints=64' "$bundle/PROVENANCE.txt"
 grep -Fqx 'use_shrink_abfs=false' "$bundle/PROVENANCE.txt"
-grep -Fqx 'symmetry=on' "$bundle/PROVENANCE.txt"
+grep -Fqx 'producer_mode=symmetry' "$bundle/PROVENANCE.txt"
+grep -Fqx 'all_other_producer_inputs=identical' "$bundle/PROVENANCE.txt"
 grep -Fqx 'physical_lattice_source=matching_abacus_input_STRU' \
   "$bundle/PROVENANCE.txt"
-grep -Fqx 'cartesian_kvector_source=correct_fractional_bz_coordinates_times_physical_reciprocal_lattice' \
+grep -Fqx 'cartesian_kvector_source=fractional_bz_times_physical_reciprocal_lattice' \
   "$bundle/PROVENANCE.txt"
+grep -Fq '"symmetry_operation_count": 48' \
+  "$bundle/provenance/PHYSICAL_STRU_OVERLAY.json"
 grep -Fqx 'shared_gw_source_changes=none' "$bundle/PROVENANCE.txt"
 grep -Fqx 'headwing=off' "$bundle/PROVENANCE.txt"
 grep -Fqx 'hartree=off' "$bundle/PROVENANCE.txt"
@@ -219,11 +238,14 @@ export LIBRI_DETERMINISTIC_REDUCTION=1
 base_ld_library_path=${LD_LIBRARY_PATH:-}
 
 cat >"$run_root/CONTROLLED_VARIABLES.txt" <<EOF
-gate=current_symmetry_side
+gate=current_symmetry_side_v6
 acceptance=false_pending_full_bz_control
 candidate=current_symmetry_on_ibz
 dataset=$input_dir
 dataset_manifest_sha256=$expected_dataset_manifest_sha
+pair_root=$pair_root
+pair_output_manifest_sha256=$expected_pair_output_sha
+pair_validation_sha256=$expected_pair_validation_sha
 input_contract_sha256=$expected_contract_sha
 vxc_manifest_sha256=$expected_vxc_manifest_sha
 scf_kpoints=8
@@ -423,7 +445,7 @@ run_mode linear-beta-0.2-miniter5 5 linear
 )
 
 cat >"$run_root/PROVENANCE.txt" <<EOF
-gate=current_symmetry_side_v5
+gate=current_symmetry_side_v6
 acceptance=false_pending_full_bz_control
 runner_commit=$RUNNER_COMMIT
 runner_sha256=$RUNNER_SHA256
@@ -435,6 +457,9 @@ candidate_executable=$candidate_exe
 candidate_executable_sha256=$CANDIDATE_EXE_SHA256
 gate0_provenance_sha256=$GATE0_PROVENANCE_SHA256
 input_bundle=$bundle
+pair_root=$pair_root
+pair_output_manifest_sha256=$expected_pair_output_sha
+pair_validation_sha256=$expected_pair_validation_sha
 input_bundle_provenance_sha256=$expected_bundle_provenance_sha
 input_bundle_output_manifest_sha256=$expected_bundle_output_sha
 dataset_manifest_sha256=$expected_dataset_manifest_sha

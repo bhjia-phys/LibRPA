@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for numeric beta validation in symmetry runner v5."""
+"""Tests for matched-pair binding in symmetry runner v6."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ import unittest
 from pathlib import Path
 
 
-class CurrentSymmetrySideV5RunnerTests(unittest.TestCase):
+class CurrentSymmetrySideV6RunnerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = (
             Path(__file__)
-            .with_name("gate-a23-current-symmetry-side-v5.sh")
+            .with_name("gate-a23-current-symmetry-side-v6.sh")
             .read_text(encoding="utf-8")
         )
 
@@ -25,13 +25,16 @@ class CurrentSymmetrySideV5RunnerTests(unittest.TestCase):
             "grep -Fqx '# qsgw_mixing_beta 0.2'", self.source
         )
 
-    def test_retains_physical_structure_and_bz_bundle(self) -> None:
-        self.assertIn("symmetry-physical-bundle-20260723-v3", self.source)
+    def test_binds_matched_physical_structure_and_bz_bundle(self) -> None:
+        self.assertIn("pair-physical-bundles-20260723-v2", self.source)
+        self.assertIn("expected_pair_output_sha", self.source)
+        self.assertIn("expected_pair_validation_sha", self.source)
+        self.assertIn('test -e "$pair_root/PAIR_COMPLETE"', self.source)
         self.assertIn(
             "physical_lattice_source=matching_abacus_input_STRU", self.source
         )
         self.assertIn(
-            "cartesian_kvector_source=correct_fractional_bz_coordinates_times_physical_reciprocal_lattice",
+            "cartesian_kvector_source=fractional_bz_times_physical_reciprocal_lattice",
             self.source,
         )
 
@@ -47,8 +50,8 @@ class CurrentSymmetrySideV5RunnerTests(unittest.TestCase):
             self.assertIn(token, self.source)
 
     def test_is_versioned_and_does_not_claim_a2_or_a3(self) -> None:
-        self.assertIn("gate-a23-current-symmetry-side-v5.sh", self.source)
-        self.assertIn("gate=current_symmetry_side_v5", self.source)
+        self.assertIn("gate-a23-current-symmetry-side-v6.sh", self.source)
+        self.assertIn("gate=current_symmetry_side_v6", self.source)
         self.assertIn("acceptance=false_pending_full_bz_control", self.source)
         self.assertNotIn("A2_ACCEPTANCE", self.source)
         self.assertNotIn("A3_ACCEPTANCE", self.source)
