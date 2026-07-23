@@ -137,6 +137,15 @@ class FishFormalGateA1RunnerTest(unittest.TestCase):
         self.assertIn("find \"$overlay_root\" -type f -exec chmod a-w", self.source)
         self.assertNotIn("TO_BE_FILLED", self.source)
 
+    def test_orders_source_overlay_numerics_and_postflight(self):
+        common_preflight = self.source.index("preflight=common_input_bundle")
+        overlay_build = self.source.index("preflight=legacy_fullbz_same_input_overlay")
+        numerics = self.source.index("numerics=begin")
+        postflight = self.source.index("postflight=input_integrity")
+        self.assertLess(common_preflight, overlay_build)
+        self.assertLess(overlay_build, numerics)
+        self.assertLess(numerics, postflight)
+
     def test_requires_full_matrix_and_state_observers(self):
         for observer in (
             "compare_qsgw_legacy_v4_current_v6.py",

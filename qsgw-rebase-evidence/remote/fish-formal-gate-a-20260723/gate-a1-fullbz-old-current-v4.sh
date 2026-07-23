@@ -205,17 +205,6 @@ test "$(sha256sum "$source_input_dir/qsgw_input.contract" | awk '{print $1}')" =
   cd "$common_root"
   sha256sum --check --quiet DATASET_SHA256SUMS.txt
 )
-(
-  cd "$overlay_root"
-  sha256sum --check --quiet DATASET_SHA256SUMS.txt
-)
-test "$(sha256sum "$overlay_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
-  "$expected_overlay_dataset_manifest_sha"
-test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json" | awk '{print $1}')" = \
-  "$expected_overlay_report_sha"
-test "$(sha256sum "$input_dir/stru_out" | awk '{print $1}')" = \
-  "$expected_overlay_stru_sha"
-test -z "$(find "$overlay_root" -perm /222 -print -quit)"
 sed 's#  \./#  '"$common_root"'/#g' \
   "$common_root/OUTPUT_SHA256SUMS.txt" \
   >"$run_root/common-input-OUTPUT_SHA256SUMS.relocated.txt"
@@ -648,10 +637,22 @@ EOF
 run_mode no-mix-miniter2 2 1 none 0.2
 run_mode linear-beta-0.2-miniter5 5 0.2 linear 0.2
 
+printf 'postflight=input_integrity\n'
 (
   cd "$common_root"
   sha256sum --check --quiet DATASET_SHA256SUMS.txt
 )
+(
+  cd "$overlay_root"
+  sha256sum --check --quiet DATASET_SHA256SUMS.txt
+)
+test "$(sha256sum "$overlay_root/DATASET_SHA256SUMS.txt" | awk '{print $1}')" = \
+  "$expected_overlay_dataset_manifest_sha"
+test "$(sha256sum "$overlay_root/LEGACY_FULLBZ_STRU_OVERLAY.json" | awk '{print $1}')" = \
+  "$expected_overlay_report_sha"
+test "$(sha256sum "$input_dir/stru_out" | awk '{print $1}')" = \
+  "$expected_overlay_stru_sha"
+test -z "$(find "$overlay_root" -perm /222 -print -quit)"
 (
   cd "$candidate_gate0"
   sha256sum --check --quiet OUTPUT_SHA256SUMS.txt
