@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
-#SBATCH --output=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v1/slurm-%j.out
-#SBATCH --error=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v1/slurm-%j.err
+#SBATCH --output=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v2/slurm-%j.out
+#SBATCH --error=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v2/slurm-%j.err
 
 set -Eeuo pipefail
 
@@ -18,8 +18,8 @@ source_pair=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair
 source_symmetry=$source_pair/symmetry
 source_fullbz=$source_pair/fullbz
 source_common=$source_pair/common
-stage_dir=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v1
-root=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-20260723-v1
+stage_dir=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-submit-20260723-v2
+root=/data/home/df_iopcas_bhj/ai-runs/abacus-pinned-dd421665-si-k444-pair-physical-bundles-20260723-v2
 tools=$root/provenance/tools
 
 expected_common_manifest_sha=02e413fb565d02450f7a3709dd346baacd37bc64bd263c5e55a5e007d59a5f50
@@ -31,7 +31,7 @@ expected_fullbz_artifact_manifest_sha=b96b4344408a50154152b8e2e6bdde67fcb6ec2495
 expected_fullbz_provenance_sha=0d966e7c6532ee5f937a5df364827c2bc5face4f88b01da0d1aeb3300761cc75
 expected_fullbz_validation_sha=b1d9d56dc29861f0b6fd5c760d3b0a2c31b68ded08bd128788fe503e5224b1be
 
-runner_name=assemble_pinned_abacus_si_k444_pair_physical_bundles_v1.slurm
+runner_name=assemble_pinned_abacus_si_k444_pair_physical_bundles_v2.slurm
 required_tools=(
   build_abacus_physical_stru_overlay_v1.py
   build_abacus_physical_bz_sampling_overlay_v1.py
@@ -256,7 +256,8 @@ bz = json.load(open(sys.argv[2], encoding="utf-8"))
 mode = sys.argv[3]
 expected_kpoints = int(sys.argv[4])
 assert stru["passed"] is True
-assert stru["symmetry_convention"] == "row"
+expected_symmetry_convention = "row" if mode == "symmetry" else "absent"
+assert stru["symmetry_convention"] == expected_symmetry_convention
 assert stru["atom_cartesian_max_abs_bohr"] <= 1.0e-10
 assert stru["reciprocal_closure_max_abs"] <= 1.0e-12
 assert stru["symmetry_operation_count"] == (48 if mode == "symmetry" else 0)
@@ -300,7 +301,7 @@ PY
   )
 
   cat >"$member/PROVENANCE.txt" <<EOF
-gate=pinned_abacus_si_k444_pair_physical_bundle_v1
+gate=pinned_abacus_si_k444_pair_physical_bundle_v2
 producer_mode=$mode
 all_other_producer_inputs=identical
 source_pair=$source_pair
@@ -370,7 +371,7 @@ output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding=
 PY
 
 cat >"$root/PROVENANCE.txt" <<EOF
-gate=pinned_abacus_si_k444_pair_physical_bundles_v1
+gate=pinned_abacus_si_k444_pair_physical_bundles_v2
 acceptance_scope=matched_symmetry_and_fullbz_stage1_inputs
 runner_commit=$RUNNER_COMMIT
 source_pair=$source_pair
@@ -402,5 +403,5 @@ test -e "$root/PAIR_COMPLETE"
 test ! -e "$root/FAILED"
 test -z "$(find "$root" -type l -print -quit)"
 test -z "$(find "$root" -perm /222 -print -quit)"
-echo PINNED_ABACUS_SI_K444_PAIR_PHYSICAL_BUNDLES_V1=PASS
+echo PINNED_ABACUS_SI_K444_PAIR_PHYSICAL_BUNDLES_V2=PASS
 cat "$root/PAIR_VALIDATION.json"

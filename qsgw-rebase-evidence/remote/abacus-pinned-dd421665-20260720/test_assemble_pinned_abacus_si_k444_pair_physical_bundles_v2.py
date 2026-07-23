@@ -12,7 +12,7 @@ class PairedPhysicalBundleAssemblerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.source = (
             Path(__file__)
-            .with_name("assemble_pinned_abacus_si_k444_pair_physical_bundles_v1.slurm")
+            .with_name("assemble_pinned_abacus_si_k444_pair_physical_bundles_v2.slurm")
             .read_text(encoding="utf-8")
         )
 
@@ -39,6 +39,7 @@ class PairedPhysicalBundleAssemblerTests(unittest.TestCase):
         self.assertIn("PHYSICAL_STRU_OVERLAY.json", self.source)
         self.assertIn("PHYSICAL_BZ_SAMPLING_OVERLAY.json", self.source)
         self.assertIn("non_cartesian_tokens_unchanged", self.source)
+        self.assertIn('"row" if mode == "symmetry" else "absent"', self.source)
 
     def test_generates_matching_state_basis_contracts(self) -> None:
         self.assertIn("prepare_abacus_qsgw_ibz_contract_v3.py", self.source)
