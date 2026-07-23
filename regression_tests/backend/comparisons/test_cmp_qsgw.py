@@ -272,7 +272,7 @@ class TestQsgwMatrixTrace(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("missing required components", msg)
 
-    def test_fourier_band_trajectory_requires_static_projection_diagnostics(self):
+    def test_band_trajectory_accepts_legacy_direct_rotation_components(self):
         header = MATRIX_HEADER.replace(
             "# band disabled_stage1",
             "# band fixed_reference_operator_fourier_live",
@@ -311,19 +311,6 @@ class TestQsgwMatrixTrace(unittest.TestCase):
             matrix_rows("wfc_spinor0", [[1.0]], channel=1),
             matrix_rows("occupation", [[1.0]], channel=1),
         ]
-        diagnostics = [
-            "basis_inverse_residual",
-            "basis_condition_estimate",
-            "fourier_orthogonality_residual",
-            "source_roundtrip_relative_error",
-            "target_hermiticity_error",
-            "target_relative_hermiticity_error",
-            "repaired_target_hermiticity_error",
-        ]
-        band_rows.extend(
-            matrix_rows(component, [[1.0e-13]], channel=1)
-            for component in diagnostics
-        )
         trace = header + "".join(grid_rows + band_rows)
         compare = cmp_qsgw.matrix_trace()
 
@@ -332,18 +319,6 @@ class TestQsgwMatrixTrace(unittest.TestCase):
             {"qsgw_matrices.dat": trace},
         )
         self.assertTrue(passed, msg)
-
-        missing_diagnostic = trace.replace(
-            matrix_rows("fourier_orthogonality_residual", [[1.0e-13]],
-                        channel=1),
-            "",
-        )
-        passed, msg = compare(
-            {"qsgw_matrices.dat": missing_diagnostic},
-            {"qsgw_matrices.dat": missing_diagnostic},
-        )
-        self.assertFalse(passed)
-        self.assertIn("missing required components", msg)
 
 
 class TestQsgwEigenvalueTrace(unittest.TestCase):

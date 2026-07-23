@@ -1225,6 +1225,40 @@ void run_qsgw_stage_one(const bool compute_band)
             exchange = copy_exx_root(*dataset->p_exx, reference);
         });
 
+        SigmaMatrixMap sigma_band;
+        SpinKMatrixMap exchange_band;
+        if (compute_band)
+        {
+            dataset->p_exx->reset_kspace();
+            dataset->p_g0w0->reset_kspace();
+            const auto bvk_remap = api::build_band_bvk_remap(
+                dataset->atoms, dataset->pbc, opts.option_bvk_remap);
+            {
+                ScopedSigmaMatrixRetention retain_sigma_matrices(
+                    dataset->p_g0w0->output_sigc_ks_mat_kf);
+                dataset->p_exx->build_KS_band_blacs(
+                    band_reference->get_eigenvectors(),
+                    dataset->kfrac_band_list, bvk_remap,
+                    dataset->blacs_h,
+                    opts.use_gpu_replace_scalapack ==
+                        LIBRPA_SWITCH_ON);
+                dataset->p_g0w0->build_sigc_matrix_KS_band_blacs(
+                    band_reference->get_eigenvectors(),
+                    dataset->kfrac_band_list, bvk_remap,
+                    dataset->blacs_h,
+                    opts.use_gpu_replace_scalapack ==
+                        LIBRPA_SWITCH_ON);
+            }
+            sigma_band = collect_sigma_root(
+                *dataset->p_g0w0, *band_reference,
+                frequencies, dataset->comm_h);
+            collective_root_stage(
+                dataset->comm_h, "QSGW band EXX collection", [&] {
+                    exchange_band = copy_exx_root(
+                        *dataset->p_exx, *band_reference);
+                });
+        }
+
         SpinKMatrixMap mixed_hamiltonian;
         SpinKMatrixMap mixed_band_hamiltonian;
         SpinKMatrixMap band_exchange_output;
@@ -1235,6 +1269,12 @@ void run_qsgw_stage_one(const bool compute_band)
         collective_root_stage(dataset->comm_h, "QSGW Hamiltonian update", [&] {
             const SpinKMatrixMap correlation = build_correlation_map(
                 dataset->mf, sigma, frequencies, opts);
+            SpinKMatrixMap correlation_band;
+            if (compute_band)
+            {
+                correlation_band = build_correlation_map(
+                    dataset->mf_band, sigma_band, frequencies, opts);
+            }
             std::optional<PeriodicOperatorRMap> hartree_r;
             std::optional<SpinKMatrixMap> hartree;
             if (driver_params.qsgw_update_hartree)
@@ -1259,17 +1299,11 @@ void run_qsgw_stage_one(const bool compute_band)
                       raw_uncut, reference_hamiltonian, dataset->mf,
                       cut_options)
                 : raw_uncut;
-            std::optional<OperatorFourierResult> exchange_band_projection;
-            std::optional<OperatorFourierResult> correlation_band_projection;
             std::optional<SpinKMatrixMap> hartree_band;
             SpinKMatrixMap raw_band;
             if (compute_band)
             {
-                exchange_band_projection = project_grid_operator_to_band(
-                    exchange, *dataset, reference, *band_reference);
-                band_exchange_output = exchange_band_projection->target;
-                correlation_band_projection = project_grid_operator_to_band(
-                    correlation, *dataset, reference, *band_reference);
+                band_exchange_output = exchange_band;
                 if (hartree_r)
                 {
                     hartree_band =
@@ -1280,8 +1314,7 @@ void run_qsgw_stage_one(const bool compute_band)
                 const SpinKMatrixMap raw_band_uncut =
                     assemble_effective_hamiltonian(
                         band_reference_hamiltonian, dft_vxc_band,
-                        exchange_band_projection->target,
-                        correlation_band_projection->target,
+                        exchange_band, correlation_band,
                         hartree_band ? &*hartree_band : nullptr);
                 raw_band = apply_hamiltonian_cut(
                     raw_band_uncut, band_reference_hamiltonian,
@@ -1401,10 +1434,10 @@ void run_qsgw_stage_one(const bool compute_band)
                 {
                     write_matrix_component_trace(
                         rows, iteration, IterationChannel::Band, "exx",
-                        exchange_band_projection->target);
+                        exchange_band);
                     write_matrix_component_trace(
                         rows, iteration, IterationChannel::Band, "vc",
-                        correlation_band_projection->target);
+                        correlation_band);
                     if (hartree_band)
                     {
                         write_matrix_component_trace(
@@ -1417,54 +1450,6 @@ void run_qsgw_stage_one(const bool compute_band)
                     write_matrix_component_trace(
                         rows, iteration, IterationChannel::Band, "mixed_h",
                         mixed_band_hamiltonian);
-                    const std::vector<const OperatorFourierResult*> projections{
-                        &*exchange_band_projection,
-                        &*correlation_band_projection};
-                    const auto maximum_diagnostic = [&](const auto member) {
-                        double maximum = 0.0;
-                        for (const OperatorFourierResult* projection :
-                             projections)
-                        {
-                            maximum = std::max(
-                                maximum, projection->*member);
-                        }
-                        return maximum;
-                    };
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "basis_inverse_residual",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_basis_inverse_residual));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "basis_condition_estimate",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_basis_condition_estimate));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "fourier_orthogonality_residual",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_fourier_orthogonality_residual));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "source_roundtrip_relative_error",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_source_roundtrip_relative_error));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "target_hermiticity_error",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_target_hermiticity_error));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "target_relative_hermiticity_error",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_target_relative_hermiticity_error));
-                    write_scalar_component_trace(
-                        rows, iteration, IterationChannel::Band,
-                        "repaired_target_hermiticity_error",
-                        maximum_diagnostic(
-                            &OperatorFourierResult::maximum_repaired_target_hermiticity_error));
                 }
                 matrix_rows = rows.str();
             }

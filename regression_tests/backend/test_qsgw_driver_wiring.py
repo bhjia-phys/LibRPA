@@ -38,31 +38,37 @@ def test_reduced_grid_symmetry_context_is_prepared_before_contract_validation() 
     assert prepare_call < validate_call
 
 
-def test_qsgw_band_projects_grid_static_operators_instead_of_rebuilding_band_sigma() -> None:
+def test_qsgw_band_rebuilds_static_operators_in_the_legacy_fixed_band_basis() -> None:
     source = QSGW_DRIVER.read_text()
     assert '#include "../../src/qsgw/operator_fourier.h"' in source
 
-    projection = function_body(
-        source, "OperatorFourierResult project_grid_operator_to_band("
-    )
-    assert "interpolate_fixed_basis_operator(" in projection
-    assert "interpolate_symmetry_reduced_fixed_basis_operator(" in projection
-    assert "dataset.pbc.kfrac_list_full" in projection
-    assert "dataset.pbc.Rlist" in projection
-    assert "dataset.symmetry_context" in projection
-
     runner = function_body(source, "void run_qsgw_stage_one(")
-    assert "build_KS_band_blacs(" not in runner
-    assert "build_sigc_matrix_KS_band_blacs(" not in runner
     normalized = " ".join(runner.split())
-    assert "project_grid_operator_to_band( exchange," in normalized
-    assert "project_grid_operator_to_band( correlation," in normalized
+    assert "dataset->p_exx->reset_kspace();" in runner
+    assert "dataset->p_g0w0->reset_kspace();" in runner
+    assert "api::build_band_bvk_remap(" in runner
+    assert "dataset->p_exx->build_KS_band_blacs(" in runner
+    assert "dataset->p_g0w0->build_sigc_matrix_KS_band_blacs(" in runner
+    assert "band_reference->get_eigenvectors()" in runner
+    assert (
+        "collect_sigma_root( *dataset->p_g0w0, *band_reference, "
+        "frequencies, dataset->comm_h)" in normalized
+    )
+    assert (
+        "build_correlation_map( dataset->mf_band, sigma_band, "
+        "frequencies, opts)" in normalized
+    )
+    assert "project_grid_operator_to_band( exchange," not in normalized
+    assert "project_grid_operator_to_band( correlation," not in normalized
     assert "project_grid_operator_to_band( *hartree," not in normalized
     assert (
         "project_periodic_operator_to_fixed_basis( *hartree_r, "
         "*band_reference, dataset->kfrac_band_list)" in normalized
     )
-    assert "band_reference_hamiltonian, dft_vxc_band" in normalized
+    assert (
+        "band_reference_hamiltonian, dft_vxc_band, exchange_band, "
+        "correlation_band" in normalized
+    )
 
 
 def test_qsgw_band_applies_the_same_hamiltonian_cut_to_grid_and_band() -> None:

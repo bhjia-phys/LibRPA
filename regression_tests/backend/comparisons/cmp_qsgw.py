@@ -923,7 +923,7 @@ def _validate_matrix_trajectory(blocks, contract, label):
                 required = {
                     "exx", "vc", "raw_h", "mixed_h", "rotation_u",
                     "occupation",
-                } | fourier_diagnostics
+                }
                 if hartree:
                     required.add("delta_vh")
             else:
