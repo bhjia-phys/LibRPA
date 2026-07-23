@@ -31,9 +31,9 @@
     "sha256": "bc882cd32d703d6e840815c7e87ca33dfa2fc044fc1e8e4eadee7a5187e75ad3"
   },
   "references": {
-    "librpa/qsgw_matrices.dat": "7d02276b9d46fc73d3c92dd73688dd75bb3e6e105fe107ae690d6a3c36acdb3b",
-    "librpa/qsgw_eigenvalues.dat": "59b068b93c73546d7ba8c51b3759e98f76a4681c9d6186b649fec6f845e786d6",
-    "librpa/qsgw_iterations.dat": "36392aebcef626221c15e30da3fe72b682cf89a19492445e625bf43bd7d20b42"
+    "librpa/librpa.d/qsgw_matrices.dat": "7d02276b9d46fc73d3c92dd73688dd75bb3e6e105fe107ae690d6a3c36acdb3b",
+    "librpa/librpa.d/qsgw_eigenvalues.dat": "59b068b93c73546d7ba8c51b3759e98f76a4681c9d6186b649fec6f845e786d6",
+    "librpa/librpa.d/qsgw_iterations.dat": "36392aebcef626221c15e30da3fe72b682cf89a19492445e625bf43bd7d20b42"
   },
   "rejected_oracles": {
     "legacy_band_output": "toolchain-dependent and not numerically comparable",
