@@ -251,6 +251,20 @@ class TestQsgwMatrixTrace(unittest.TestCase):
 
         self.assertTrue(passed, msg)
 
+    def test_state_components_can_use_gauge_invariant_validation(self):
+        reference = MATRIX_HEADER + matrix_rows("rotation_u", [[1.0]])
+        test = MATRIX_HEADER + matrix_rows("rotation_u", [[-1.0]])
+
+        passed, msg = self._compare(
+            test, reference,
+            relative_tolerance="1e-8",
+            compare_state_components="false",
+            require_complete_trajectory="false",
+        )
+
+        self.assertTrue(passed, msg)
+        self.assertIn("rotation unitarity", msg)
+
     def test_complete_stage_one_trajectory_is_required_by_default(self):
         rows = [
             matrix_rows("h0", [[1.0]], iteration=0),

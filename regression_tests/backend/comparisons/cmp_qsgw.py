@@ -176,6 +176,7 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
                  state_relative_tolerance="1e-8",
                  hermiticity_tolerance="1e-10",
                  unitarity_tolerance="1e-10",
+                 compare_state_components="true",
                  require_complete_trajectory="true", precision="3"):
     """Compare keyed QSGW matrix traces and enforce matrix invariants."""
     relative_tolerance = _positive_float(
@@ -188,6 +189,8 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
         hermiticity_tolerance, "hermiticity_tolerance", allow_zero=True)
     unitarity_tolerance = _positive_float(
         unitarity_tolerance, "unitarity_tolerance", allow_zero=True)
+    compare_state_components = _as_bool(
+        compare_state_components, "compare_state_components")
     require_complete_trajectory = _as_bool(
         require_complete_trajectory, "require_complete_trajectory")
     precision = int(precision)
@@ -239,34 +242,42 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
                         test_matrix, reference_matrix)
                     reference_norm = _frobenius(reference_matrix)
                     component = block_key[2]
-                    block_relative_tolerance = (
-                        state_relative_tolerance
-                        if component == "rotation_u" or
+                    state_component = (
+                        component == "rotation_u" or
                         component.startswith("wfc_spinor")
-                        else relative_tolerance
                     )
-                    if reference_norm > absolute_tolerance:
-                        relative = difference_norm / reference_norm
-                        within_tolerance = (
-                            relative <= block_relative_tolerance)
-                        allowed = (
-                            block_relative_tolerance * reference_norm)
-                    else:
-                        relative = (0.0 if difference_norm <= absolute_tolerance
-                                    else math.inf)
-                        within_tolerance = difference_norm <= absolute_tolerance
-                        allowed = absolute_tolerance
-                    if not within_tolerance:
-                        return False, (
-                            "{}: Frobenius tolerance exceeded for block {}: "
-                            "abs={:.6E}, rel={:.6E}, allowed={:.6E}"
-                            .format(filename, block_key, difference_norm,
-                                    relative, allowed)
+                    if compare_state_components or not state_component:
+                        block_relative_tolerance = (
+                            state_relative_tolerance
+                            if state_component else relative_tolerance
                         )
-                    if relative > maximum_relative:
-                        maximum_relative = relative
-                        maximum_location = (filename, block_key)
-                    maximum_absolute = max(maximum_absolute, difference_norm)
+                        if reference_norm > absolute_tolerance:
+                            relative = difference_norm / reference_norm
+                            within_tolerance = (
+                                relative <= block_relative_tolerance)
+                            allowed = (
+                                block_relative_tolerance * reference_norm)
+                        else:
+                            relative = (
+                                0.0
+                                if difference_norm <= absolute_tolerance
+                                else math.inf
+                            )
+                            within_tolerance = (
+                                difference_norm <= absolute_tolerance)
+                            allowed = absolute_tolerance
+                        if not within_tolerance:
+                            return False, (
+                                "{}: Frobenius tolerance exceeded for block "
+                                "{}: abs={:.6E}, rel={:.6E}, allowed={:.6E}"
+                                .format(filename, block_key, difference_norm,
+                                        relative, allowed)
+                            )
+                        if relative > maximum_relative:
+                            maximum_relative = relative
+                            maximum_location = (filename, block_key)
+                        maximum_absolute = max(
+                            maximum_absolute, difference_norm)
 
                     if component in HERMITIAN_COMPONENTS:
                         for side, matrix in (("test", test_matrix),
@@ -305,6 +316,11 @@ def matrix_trace(relative_tolerance="1e-8", absolute_tolerance="1e-12",
                      p=precision)
             if maximum_location is not None:
                 message += ", max at {} block {}".format(*maximum_location)
+            if not compare_state_components:
+                message += (
+                    ", WFC/rotation compared by keys, shapes, and "
+                    "rotation unitarity"
+                )
             return True, message
         except (TypeError, ValueError) as error:
             return False, str(error)

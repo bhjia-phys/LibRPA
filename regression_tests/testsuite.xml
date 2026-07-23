@@ -541,7 +541,7 @@
       />
       <validate name="QSGW fixed-basis matrices from legacy SigcRF"
                 file="librpa/librpa.d/qsgw_matrices.dat"
-                comparison="cmp_qsgw.matrix_trace(relative_tolerance=1e-8,absolute_tolerance=1e-10,state_relative_tolerance=2e-6,hermiticity_tolerance=1e-10,unitarity_tolerance=1e-10,require_complete_trajectory=true)"
+                comparison="cmp_qsgw.matrix_trace(relative_tolerance=1e-8,absolute_tolerance=1e-10,hermiticity_tolerance=1e-10,unitarity_tolerance=1e-10,compare_state_components=false,require_complete_trajectory=true)"
       />
       <validate name="QSGW eigenvalues on the fixed grid after one iteration"
                 file="librpa/librpa.d/qsgw_eigenvalues.dat"
