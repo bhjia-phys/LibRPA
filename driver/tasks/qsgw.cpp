@@ -880,7 +880,7 @@ void write_contract_header(std::ostream& output,
     }
     output << "# band "
            << (compute_band
-                   ? "fixed_reference_operator_fourier_live"
+                   ? "fixed_reference_rotation_live"
                    : "disabled_stage1")
            << "\n"
            << "# h_qsgw_cut "

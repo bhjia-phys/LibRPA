@@ -701,7 +701,7 @@ def _parse_contract(text, label):
         raise ValueError("{}: invalid Hartree QSGW contract".format(label))
 
     if values["band"] not in (
-            "disabled_stage1", "fixed_reference_operator_fourier_live"):
+            "disabled_stage1", "fixed_reference_rotation_live"):
         raise ValueError("{}: invalid band QSGW contract".format(label))
     cut_keys = (
         "qsgw_band0_unoccupied_keep",
@@ -719,7 +719,7 @@ def _parse_contract(text, label):
                 raise ValueError("{}: inconsistent disabled H_QSGW cut contract".format(
                     label))
         elif cut_contract == "band_postprocess":
-            if values["band"] != "fixed_reference_operator_fourier_live":
+            if values["band"] != "fixed_reference_rotation_live":
                 raise ValueError("{}: H_QSGW cut requires band postprocessing".format(
                     label))
             missing_cut = [key for key in cut_keys if key not in values]
@@ -832,7 +832,7 @@ def _validate_matrix_trajectory(blocks, contract, label):
         {key[0] for key in blocks}, label)
     headwing = contract["headwing"]
     hartree = contract["hartree"] == "delta_density"
-    band = contract["band"] == "fixed_reference_operator_fourier_live"
+    band = contract["band"] == "fixed_reference_rotation_live"
     independent_headwing = headwing == "independent_full_grid_analytic_live"
     same_grid_headwing = headwing == "scf_grid_analytic_live"
 
@@ -996,7 +996,7 @@ def _parse_eigenvalue_trace(text, label):
 def _validate_eigenvalue_trajectory(rows, contract, label):
     iterations = _continuous_iterations({key[0] for key in rows}, label)
     expected_channels = {0}
-    if contract["band"] == "fixed_reference_operator_fourier_live":
+    if contract["band"] == "fixed_reference_rotation_live":
         expected_channels.add(1)
     if contract["headwing"] == "independent_full_grid_analytic_live":
         expected_channels.add(2)

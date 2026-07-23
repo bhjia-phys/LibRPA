@@ -99,7 +99,7 @@ std::string aims_same_grid_contract()
          << "headwing_grid\tscf\n"
          << "headwing_update\tfixed_basis_rotation\n"
          << "hartree_update\tdelta_density\n"
-         << "band_update\toperator_fourier\n"
+         << "band_update\tfixed_basis_rotation\n"
          << "role\tsha256\tfile\n";
     for (const char* role : {
              "mf0_eigenvalues", "mf0_wavefunctions", "scf_kpoints",
@@ -198,9 +198,22 @@ void test_aims_same_grid_hartree_and_band_contract()
     assert(contract.headwing_update() ==
            HeadwingUpdateMode::FixedBasisRotation);
     assert(contract.hartree_update() == HartreeUpdateMode::DeltaDensity);
-    assert(contract.band_update() == BandUpdateMode::OperatorFourier);
+    assert(contract.band_update() == BandUpdateMode::FixedBasisRotation);
     assert(contract.files("hartree_ri_coefficients").size() == 1);
     assert(contract.files("hartree_coulomb").size() == 1);
+
+    std::string obsolete = aims_same_grid_contract();
+    const auto position =
+        obsolete.find("band_update\tfixed_basis_rotation");
+    obsolete.replace(
+        position,
+        std::string("band_update\tfixed_basis_rotation").size(),
+        "band_update\toperator_fourier");
+    std::istringstream obsolete_input(obsolete);
+    assert_throws([&] {
+        (void)QsgwInputContract::parse(
+            obsolete_input, "obsolete-band-operator-fourier");
+    });
 }
 
 void test_execution_modes_must_match_the_input_contract()

@@ -50,6 +50,8 @@ def test_qsgw_band_rebuilds_static_operators_in_the_legacy_fixed_band_basis() ->
     assert "dataset->p_exx->build_KS_band_blacs(" in runner
     assert "dataset->p_g0w0->build_sigc_matrix_KS_band_blacs(" in runner
     assert "band_reference->get_eigenvectors()" in runner
+    assert '"fixed_reference_rotation_live"' in source
+    assert '"fixed_reference_operator_fourier_live"' not in source
     assert (
         "collect_sigma_root( *dataset->p_g0w0, *band_reference, "
         "frequencies, dataset->comm_h)" in normalized

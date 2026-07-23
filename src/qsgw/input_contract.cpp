@@ -437,8 +437,8 @@ QsgwInputContract QsgwInputContract::parse(
     const std::string band = lowercase(metadata.at("band_update"));
     if (band == "off")
         result.band_update_ = BandUpdateMode::Off;
-    else if (band == "operator_fourier")
-        result.band_update_ = BandUpdateMode::OperatorFourier;
+    else if (band == "fixed_basis_rotation")
+        result.band_update_ = BandUpdateMode::FixedBasisRotation;
     else
         throw std::invalid_argument(
             "Unsupported QSGW band update mode in " + source_name);
@@ -612,11 +612,11 @@ void validate_band_reference_binding(
     const std::string& input_directory,
     const std::string& band_kpath_filename)
 {
-    if (contract.band_update() != BandUpdateMode::OperatorFourier ||
+    if (contract.band_update() != BandUpdateMode::FixedBasisRotation ||
         contract_base_directory.empty())
     {
         throw std::invalid_argument(
-            "QSGW band reference binding requires an operator-Fourier contract and contract base directory");
+            "QSGW band reference binding requires a fixed-basis rotation contract and contract base directory");
     }
     const BandReferencePaths expected = resolve_band_reference_paths(
         input_directory, band_kpath_filename, contract.n_band_kpoints());
@@ -777,7 +777,7 @@ void validate_qsgw_execution_modes(const QsgwInputContract& contract,
     }
 
     const bool band_matches = update_band
-        ? contract.band_update() == BandUpdateMode::OperatorFourier
+        ? contract.band_update() == BandUpdateMode::FixedBasisRotation
         : contract.band_update() == BandUpdateMode::Off;
     if (!band_matches)
     {

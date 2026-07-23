@@ -275,7 +275,7 @@ class TestQsgwMatrixTrace(unittest.TestCase):
     def test_band_trajectory_accepts_legacy_direct_rotation_components(self):
         header = MATRIX_HEADER.replace(
             "# band disabled_stage1",
-            "# band fixed_reference_operator_fourier_live",
+            "# band fixed_reference_rotation_live",
         ).replace(
             "# h_qsgw_cut disabled_non_band",
             "# h_qsgw_cut band_postprocess\n"

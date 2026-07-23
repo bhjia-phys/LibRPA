@@ -36,7 +36,7 @@ python=${PYTHON:-python3}
 
 expected_legacy_commit=e08f4a130df7661e9ac355b9be45fb2bf9c3ed01
 expected_head_contract_sha=dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d
-expected_band_contract_sha=94c1832de2c73fc3d8f44c93bf206a39f80b9e2233d40398af075b19dd40cdd3
+expected_band_contract_sha=dffb9772f6e55321c3fbff8be3103a8c861c021ae48fc0e00cd6a8978c70cd47
 
 require_sha() {
   local value=$1
@@ -101,7 +101,7 @@ grep -Fqx 'n_band_kpoints 201' "$band_contract"
 grep -Fqx 'headwing_grid disabled' "$band_contract"
 grep -Fqx 'headwing_update none' "$band_contract"
 grep -Fqx 'hartree_update off' "$band_contract"
-grep -Fqx 'band_update operator_fourier' "$band_contract"
+grep -Fqx 'band_update fixed_basis_rotation' "$band_contract"
 (
   cd "$DATASET_DIR"
   sha256sum --check --quiet DATASET_SHA256SUMS.txt
@@ -134,7 +134,7 @@ grep -Fqx 'n_band_kpoints 201' "$merged_contract"
 grep -Fqx 'headwing_grid scf' "$merged_contract"
 grep -Fqx 'headwing_update fixed_basis_rotation' "$merged_contract"
 grep -Fqx 'hartree_update off' "$merged_contract"
-grep -Fqx 'band_update operator_fourier' "$merged_contract"
+grep -Fqx 'band_update fixed_basis_rotation' "$merged_contract"
 
 cat >"$legacy/librpa.in" <<EOF
 task = qsgw_band
@@ -227,6 +227,7 @@ wing=off
 hartree=off
 legacy_update=direct
 candidate_mixer=none
+band_update=fixed_basis_rotation
 energy_tolerance_ev=1e-4
 gap_tolerance_ev=2e-4
 mpi_ranks=$mpi_ranks

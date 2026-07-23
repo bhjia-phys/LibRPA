@@ -70,7 +70,7 @@ class ContractMergeTest(unittest.TestCase):
                     "disabled",
                     "none",
                     0,
-                    "operator_fourier",
+                    "fixed_basis_rotation",
                     21,
                     (
                         f"band_mf0_eigenvalues {DIGEST_C} "
@@ -86,7 +86,7 @@ class ContractMergeTest(unittest.TestCase):
             self.assertIn("n_band_kpoints 21\n", merged)
             self.assertIn("headwing_grid scf\n", merged)
             self.assertIn("headwing_update fixed_basis_rotation\n", merged)
-            self.assertIn("band_update operator_fourier\n", merged)
+            self.assertIn("band_update fixed_basis_rotation\n", merged)
             self.assertEqual(
                 sum(
                     line.startswith("mf0_eigenvalues ")
@@ -118,7 +118,7 @@ class ContractMergeTest(unittest.TestCase):
                     "disabled",
                     "none",
                     0,
-                    "operator_fourier",
+                    "fixed_basis_rotation",
                     21,
                     (
                         f"band_mf0_eigenvalues {DIGEST_C} "

@@ -50,7 +50,8 @@ class FishRunnerContractTest(unittest.TestCase):
         self.assertIn("grep -Fqx 'n_band_kpoints 201'", self.text)
         self.assertIn("headwing_grid scf", self.text)
         self.assertIn("headwing_update fixed_basis_rotation", self.text)
-        self.assertIn("band_update operator_fourier", self.text)
+        self.assertIn("band_update fixed_basis_rotation", self.text)
+        self.assertNotIn("band_update operator_fourier", self.text)
 
     def test_acceptance_is_only_multiround_bands_and_gap(self) -> None:
         self.assertIn("compare_qsgw_band_iterations_v1.py", self.text)

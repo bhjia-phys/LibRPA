@@ -40,7 +40,7 @@ enum class HartreeUpdateMode
 enum class BandUpdateMode
 {
     Off,
-    OperatorFourier,
+    FixedBasisRotation,
 };
 
 struct QsgwInputFile

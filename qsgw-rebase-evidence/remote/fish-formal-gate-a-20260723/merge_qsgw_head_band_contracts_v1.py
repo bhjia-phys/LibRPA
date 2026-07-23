@@ -94,11 +94,13 @@ def merge_contracts(head: Contract, band: Contract) -> str:
     if (
         band.metadata.get("headwing_grid") != "disabled"
         or band.metadata.get("headwing_update") != "none"
-        or band.metadata.get("band_update") != "operator_fourier"
+        or band.metadata.get("band_update") != "fixed_basis_rotation"
         or band.metadata.get("hartree_update") != "off"
         or band.metadata.get("n_headwing_kpoints") != "0"
     ):
-        raise ContractError("band contract is not head-disabled operator Fourier")
+        raise ContractError(
+            "band contract is not head-disabled fixed-basis rotation"
+        )
     _positive_metadata_int(head, "n_headwing_kpoints")
     _positive_metadata_int(band, "n_band_kpoints")
 
