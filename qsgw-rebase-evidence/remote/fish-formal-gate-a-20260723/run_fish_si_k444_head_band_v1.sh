@@ -137,10 +137,10 @@ cp "$merge_tool" "$merge_test" "$compare_tool" "$compare_test" \
 "$python" -B "$tools_dir/build_legacy_band_vxc_view_v1.py" \
   --dataset "$DATASET_DIR" \
   --manifest "$band_vxc_manifest" \
-  --output-dir "$overlay" \
+  --output-dir "$legacy" \
   --report "$run_root/LEGACY_BAND_VXC_VIEW.json" \
   >"$run_root/legacy-band-vxc-view.stdout"
-test "$(find "$overlay" -maxdepth 1 -type f \
+test "$(find "$legacy" -maxdepth 1 -type f \
   -name 'band_vxcs1k*_nao.txt' | wc -l)" -eq 201
 "$python" -B "$tools_dir/merge_qsgw_head_band_contracts_v1.py" \
   --head-contract "$head_contract" \
@@ -271,7 +271,7 @@ export LIBRI_DETERMINISTIC_REDUCTION=1
     >librpa.stdout 2>librpa.stderr
 )
 test ! -s "$legacy/librpa.stderr" || \
-  ! grep -Fq 'VXC_band file not found' "$legacy/librpa.stderr"
+  ! grep -Fq 'Failed to process new format file' "$legacy/librpa.stderr"
 (
   cd "$candidate"
   "$mpiexec" -np "$mpi_ranks" "$CANDIDATE_EXE" \
