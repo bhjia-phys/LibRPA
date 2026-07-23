@@ -31,12 +31,14 @@ tools_dir=$run_root/tools
 runner_relative=qsgw-rebase-evidence/remote/fish-formal-gate-a-20260723
 head_contract=$DATASET_DIR/qsgw_input.head-only.contract
 band_contract=$DATASET_DIR/qsgw_input.band.contract
+band_vxc_manifest=$DATASET_DIR/qsgw_vxc_band.v2.manifest
 merged_contract=$overlay/qsgw_input.head-band.contract
 python=${PYTHON:-python3}
 
 expected_legacy_commit=e08f4a130df7661e9ac355b9be45fb2bf9c3ed01
 expected_head_contract_sha=dd255667efae3e27a435f48684b801b30b3f2a68bfa6c7e792fa4a1de848921d
-expected_band_contract_sha=dffb9772f6e55321c3fbff8be3103a8c861c021ae48fc0e00cd6a8978c70cd47
+expected_band_contract_sha=05d1b4a21b0cc9b11a0d017203525661d44641dd603c5009e2145374ca530afb
+expected_band_vxc_manifest_sha=831c688c160d19a76684ac9360ffd9adc72dc5795f25ebe8e8477a8268712918
 
 require_sha() {
   local value=$1
@@ -88,6 +90,8 @@ test "$(sha256sum "$head_contract" | awk '{print $1}')" = \
   "$expected_head_contract_sha"
 test "$(sha256sum "$band_contract" | awk '{print $1}')" = \
   "$expected_band_contract_sha"
+test "$(sha256sum "$band_vxc_manifest" | awk '{print $1}')" = \
+  "$expected_band_vxc_manifest_sha"
 grep -Fqx 'n_scf_kpoints 64' "$head_contract"
 grep -Fqx 'n_headwing_kpoints 64' "$head_contract"
 grep -Fqx 'n_band_kpoints 0' "$head_contract"
@@ -102,6 +106,8 @@ grep -Fqx 'headwing_grid disabled' "$band_contract"
 grep -Fqx 'headwing_update none' "$band_contract"
 grep -Fqx 'hartree_update off' "$band_contract"
 grep -Fqx 'band_update fixed_basis_rotation' "$band_contract"
+grep -Fqx 'basis state' "$band_vxc_manifest"
+grep -Fqx 'gauge mf0_state' "$band_vxc_manifest"
 (
   cd "$DATASET_DIR"
   sha256sum --check --quiet DATASET_SHA256SUMS.txt
@@ -116,14 +122,26 @@ merge_tool=$CANDIDATE_SOURCE/$runner_relative/merge_qsgw_head_band_contracts_v1.
 merge_test=$CANDIDATE_SOURCE/$runner_relative/test_merge_qsgw_head_band_contracts_v1.py
 compare_tool=$CANDIDATE_SOURCE/$runner_relative/compare_qsgw_band_iterations_v1.py
 compare_test=$CANDIDATE_SOURCE/$runner_relative/test_compare_qsgw_band_iterations_v1.py
-cp "$merge_tool" "$merge_test" "$compare_tool" "$compare_test" "$tools_dir/"
+legacy_vxc_tool=$CANDIDATE_SOURCE/$runner_relative/build_legacy_band_vxc_view_v1.py
+legacy_vxc_test=$CANDIDATE_SOURCE/$runner_relative/test_build_legacy_band_vxc_view_v1.py
+cp "$merge_tool" "$merge_test" "$compare_tool" "$compare_test" \
+  "$legacy_vxc_tool" "$legacy_vxc_test" "$tools_dir/"
 (
   cd "$tools_dir"
   "$python" -B -m unittest -v \
     test_merge_qsgw_head_band_contracts_v1.py \
     test_compare_qsgw_band_iterations_v1.py \
+    test_build_legacy_band_vxc_view_v1.py \
     >tool-tests.stdout 2>tool-tests.stderr
 )
+"$python" -B "$tools_dir/build_legacy_band_vxc_view_v1.py" \
+  --dataset "$DATASET_DIR" \
+  --manifest "$band_vxc_manifest" \
+  --output-dir "$overlay" \
+  --report "$run_root/LEGACY_BAND_VXC_VIEW.json" \
+  >"$run_root/legacy-band-vxc-view.stdout"
+test "$(find "$overlay" -maxdepth 1 -type f \
+  -name 'band_vxcs1k*_nao.txt' | wc -l)" -eq 201
 "$python" -B "$tools_dir/merge_qsgw_head_band_contracts_v1.py" \
   --head-contract "$head_contract" \
   --band-contract "$band_contract" \
@@ -216,6 +234,9 @@ dataset_dir=$DATASET_DIR
 dataset_manifest_sha256=$DATASET_MANIFEST_SHA256
 head_contract_sha256=$expected_head_contract_sha
 band_contract_sha256=$expected_band_contract_sha
+band_vxc_manifest_sha256=$expected_band_vxc_manifest_sha
+legacy_band_vxc_view_sha256=$(sha256sum \
+  "$run_root/LEGACY_BAND_VXC_VIEW.json" | awk '{print $1}')
 merged_contract_sha256=$(sha256sum "$merged_contract" | awk '{print $1}')
 scf_kpoints=64
 band_kpoints=201
@@ -249,6 +270,8 @@ export LIBRI_DETERMINISTIC_REDUCTION=1
   "$mpiexec" -np "$mpi_ranks" "$LEGACY_EXE" \
     >librpa.stdout 2>librpa.stderr
 )
+test ! -s "$legacy/librpa.stderr" || \
+  ! grep -Fq 'VXC_band file not found' "$legacy/librpa.stderr"
 (
   cd "$candidate"
   "$mpiexec" -np "$mpi_ranks" "$CANDIDATE_EXE" \

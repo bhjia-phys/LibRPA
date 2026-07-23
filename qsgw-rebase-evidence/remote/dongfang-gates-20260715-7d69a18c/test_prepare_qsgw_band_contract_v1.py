@@ -30,7 +30,7 @@ from prepare_qsgw_band_contract_v1 import (  # noqa: E402
 
 
 N_BANDS = 26
-N_BASIS = 26
+N_BASIS = 30
 EIGENVECTOR_BYTES = N_BANDS * N_BASIS * 16
 KPOINTS = [("0", "0", "0"), ("0.025", "0.1", "-0.3333333333333333")]
 BAND_CONTRACT_NAME = "qsgw_input.band.contract"
@@ -210,8 +210,8 @@ class GenerateHappyPathTests(unittest.TestCase):
                     "kind": "band",
                     "producer": "abacus",
                     "units": "Ry",
-                    "basis": "nao",
-                    "gauge": "ao_bloch",
+                    "basis": "state",
+                    "gauge": "mf0_state",
                 },
             )
             self.assertEqual(

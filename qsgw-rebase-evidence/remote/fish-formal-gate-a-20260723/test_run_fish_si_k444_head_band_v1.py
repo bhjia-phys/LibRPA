@@ -61,6 +61,24 @@ class FishRunnerContractTest(unittest.TestCase):
         self.assertNotIn("residual_tolerance", self.text)
         self.assertNotIn("mixing_coefficient", self.text)
 
+    def test_builds_hash_checked_legacy_band_vxc_view(self) -> None:
+        self.assertIn("build_legacy_band_vxc_view_v1.py", self.text)
+        self.assertIn("test_build_legacy_band_vxc_view_v1.py", self.text)
+        self.assertIn("qsgw_vxc_band.v2.manifest", self.text)
+        self.assertIn("LEGACY_BAND_VXC_VIEW.json", self.text)
+        self.assertIn(
+            'find "$overlay" -maxdepth 1 -type f', self.text
+        )
+        self.assertIn(
+            "-name 'band_vxcs1k*_nao.txt'", self.text
+        )
+        self.assertIn(
+            'test ! -s "$legacy/librpa.stderr" ||', self.text
+        )
+        self.assertIn(
+            "! grep -Fq 'VXC_band file not found'", self.text
+        )
+
     def test_binds_legacy_shared_libraries_only_for_legacy_run(self) -> None:
         self.assertIn(
             ': "${LEGACY_BUILD_DIR:?legacy build directory is required}"',

@@ -194,23 +194,26 @@ def parse_baseline_contract(text: str) -> tuple[list[str], dict[str, str], set[t
 
 def build_band_manifest(
     kpoints: list[tuple[str, str, str]],
-    n_aos: int,
+    n_bands: int,
     vxc_records: list[tuple[str, str]],
 ) -> str:
+    # ABACUS out_mat_xc writes C^\dagger Vxc_AO C. Despite the historical
+    # "_nao" suffix, these matrices are in the producer KS state basis.
     lines = [
         MANIFEST_MAGIC,
         "kind band",
         "producer abacus",
         "units Ry",
-        "basis nao",
-        "gauge ao_bloch",
+        "basis state",
+        "gauge mf0_state",
         "spin k_index kx ky kz rows columns sha256 file",
     ]
     for index, ((kx, ky, kz), (sha256, filename)) in enumerate(
         zip(kpoints, vxc_records), 1
     ):
         lines.append(
-            f"1 {index} {kx} {ky} {kz} {n_aos} {n_aos} {sha256} {filename}"
+            f"1 {index} {kx} {ky} {kz} "
+            f"{n_bands} {n_bands} {sha256} {filename}"
         )
     return "\n".join(lines) + "\n"
 
@@ -336,7 +339,7 @@ def generate_report(dataset: Path, dry_run: bool = False) -> dict[str, object]:
         )
         vxc_records.append((_sha256_file(vxc_path), vxc_name))
 
-    manifest_text = build_band_manifest(kpoints, n_aos, vxc_records)
+    manifest_text = build_band_manifest(kpoints, n_bands, vxc_records)
     manifest_sha256 = _sha256_bytes(manifest_text.encode("utf-8"))
 
     appended_roles = (
