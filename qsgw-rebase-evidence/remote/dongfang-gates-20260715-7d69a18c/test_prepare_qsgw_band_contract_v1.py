@@ -128,7 +128,7 @@ class GenerateHappyPathTests(unittest.TestCase):
                     {
                         "key": "band_update",
                         "old": "off",
-                        "new": "operator_fourier",
+                        "new": "fixed_basis_rotation",
                     },
                 ],
             )
@@ -163,7 +163,10 @@ class GenerateHappyPathTests(unittest.TestCase):
             ]
             self.assertEqual(len(changed), 2)
             self.assertEqual(new_lines[changed[0]], "n_band_kpoints 2")
-            self.assertEqual(new_lines[changed[1]], "band_update operator_fourier")
+            self.assertEqual(
+                new_lines[changed[1]],
+                "band_update fixed_basis_rotation",
+            )
 
             appended = new_lines[len(old_lines):]
             roles = [line.split(None, 1)[0] for line in appended]

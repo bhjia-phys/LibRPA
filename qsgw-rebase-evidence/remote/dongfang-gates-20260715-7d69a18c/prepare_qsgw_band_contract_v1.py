@@ -8,7 +8,7 @@ and ``vxc_band/vxckKs1_nao.txt`` files, and writes two new files:
 
 * ``qsgw_input.band.contract`` — the baseline contract with exactly two
   metadata lines changed (``n_band_kpoints 0 -> N`` and
-  ``band_update off -> operator_fourier``) and the band role records
+  ``band_update off -> fixed_basis_rotation``) and the band role records
   appended (``band_kpoints`` x1, ``band_mf0_eigenvalues`` xN,
   ``band_mf0_wavefunctions`` xN, ``vxc_band_manifest`` x1), matching the
   roles enforced by ``src/qsgw/input_contract.cpp``.
@@ -43,7 +43,7 @@ METADATA_EDITS = (
     ("n_band_kpoints", "0"),
     ("band_update", "off"),
 )
-BAND_UPDATE_ENABLED = "operator_fourier"
+BAND_UPDATE_ENABLED = "fixed_basis_rotation"
 
 
 class ContractGenerationError(ValueError):
