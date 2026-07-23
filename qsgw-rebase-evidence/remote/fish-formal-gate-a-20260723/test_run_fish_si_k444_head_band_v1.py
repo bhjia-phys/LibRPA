@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+import re
 
 
 RUNNER = Path(__file__).with_name("run_fish_si_k444_head_band_v1.sh")
+REPOSITORY = Path(__file__).resolve().parents[3]
+
+
+def parse_input_block(text: str, side: str) -> dict[str, str]:
+    match = re.search(
+        rf'cat >"\${side}/librpa\.in" <<EOF\n(.*?)\nEOF',
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError(f"missing {side} librpa.in block")
+    result = {}
+    for raw in match.group(1).splitlines():
+        key, value = (field.strip() for field in raw.split("=", 1))
+        if key in result:
+            raise AssertionError(f"duplicate {key} in {side} input")
+        result[key] = value
+    return result
 
 
 class FishRunnerContractTest(unittest.TestCase):
@@ -40,6 +59,39 @@ class FishRunnerContractTest(unittest.TestCase):
         self.assertIn("--gap-tolerance-ev 2e-4", self.text)
         self.assertNotIn("residual_tolerance", self.text)
         self.assertNotIn("mixing_coefficient", self.text)
+
+    def test_legacy_and_candidate_numerical_inputs_are_identical(self) -> None:
+        legacy = parse_input_block(self.text, "legacy")
+        candidate = parse_input_block(self.text, "candidate")
+        legacy_controls = {"max_iter"}
+        candidate_controls = {
+            "qsgw_input_contract",
+            "qsgw_mixer",
+            "qsgw_min_iter",
+            "qsgw_max_iter",
+            "qsgw_write_iteration_matrices",
+            "qsgw_update_hartree",
+        }
+        self.assertEqual(set(legacy) - legacy_controls,
+                         set(candidate) - candidate_controls)
+        for key in set(legacy) - legacy_controls:
+            self.assertEqual(legacy[key], candidate[key], key)
+        self.assertEqual(legacy["max_iter"], "$iterations")
+        self.assertEqual(candidate["qsgw_min_iter"], "$iterations")
+        self.assertEqual(candidate["qsgw_max_iter"], "$iterations")
+        self.assertEqual(candidate["qsgw_mixer"], "none")
+        self.assertEqual(candidate["qsgw_update_hartree"], "false")
+
+    def test_none_mode_is_a_direct_raw_hamiltonian_update(self) -> None:
+        source = (REPOSITORY / "driver" / "tasks" / "qsgw.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('if (driver_params.qsgw_mixer == "linear")', source)
+        self.assertIn("if (mixer)", source)
+        self.assertIn("mixed_hamiltonian = raw;", source)
+        self.assertIn(
+            "if (compute_band) mixed_band_hamiltonian = raw_band;", source
+        )
 
 
 if __name__ == "__main__":
