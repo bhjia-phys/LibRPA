@@ -339,4 +339,47 @@ bool symmetry_rspace_restore_member_is_antiunitary(
     const SymmetryContext& ctx,
     const SymmetryRSpaceRestoreMember& member);
 
+/*!
+ * @brief Resolve the full (g, U_s, eta) operation behind a real-space restore member.
+ *
+ * Members built without spin-operation metadata (`operation_id ==
+ * kOperationIdNone`) resolve to a shared identity operation so legacy scalar
+ * contexts keep their established behavior. For metadata-bearing members the
+ * link is validated against `member.isym`; an inconsistent link throws.
+ */
+const SymmetrySpinOperation& resolve_symmetry_rspace_restore_member_spin_operation(
+    const SymmetryContext& ctx,
+    const SymmetryRSpaceRestoreMember& member);
+
+/*!
+ * @brief Jointly restore the four spin-channel real-space maps of a spinor
+ * two-point AO operator from the symmetry irreducible sector.
+ *
+ * This is the (R, tau)-domain spinor counterpart of the scalar per-channel
+ * restore used for chi0/GW self-energies. For every irreducible {I, J, R}
+ * key in the union of the four input channel maps and for every restore
+ * member it applies `transform_spinor_bilinear`:
+ *
+ * - unitary:      X' = (D orb U_s) X (D orb U_s)^dagger
+ * - antiunitary:  X' = J_AO [ ... ]* J_AO^dagger, J_AO = I orb i sigma_y
+ *
+ * with the orbital part evaluated by `rotate_symmetry_rspace_block` per
+ * member. Channels missing at an input key are zero-filled before mixing, so
+ * an antiunitary or genuinely non-collinear operation correctly populates all
+ * four output channels. Operations with identity spin action and eta = 0 take
+ * the fast path: each present channel is rotated independently and absent
+ * channels stay absent, reproducing the legacy per-channel restore exactly.
+ *
+ * `wfc_layouts` are the species basis layouts of the AO basis of the blocks
+ * and `atom_nb[atom]` gives the basis size per atom, used for zero-fill.
+ * Every full-sector target block must be reached by exactly one member; a
+ * duplicate throws, as in the scalar restore.
+ */
+std::array<symmetry_rspace_block_map_t, 4> restore_symmetry_spinor_rspace_blocks(
+    const std::array<symmetry_rspace_block_map_t, 4>& channels_ir,
+    const SymmetryContext& ctx,
+    const symmetry_rspace_sector_stars_t& sector_stars,
+    const std::vector<SpeciesBasisLayout>& wfc_layouts,
+    const std::vector<int>& atom_nb);
+
 } // namespace librpa_int
