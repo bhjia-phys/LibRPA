@@ -2802,4 +2802,55 @@ std::array<symmetry_rspace_block_map_t, 4> restore_symmetry_spinor_rspace_blocks
     return channels_full;
 }
 
+void validate_spin_operations_for_storage(
+    const SymmetryContext& ctx,
+    const int n_spins,
+    const int n_spinor,
+    const double tol)
+{
+    if (ctx.spin_operations.empty() || n_spinor >= 2)
+    {
+        return;  // legacy ordinary/grey input, or spinor storage accepts all
+    }
+    for (std::size_t iop = 0; iop != ctx.spin_operations.size(); ++iop)
+    {
+        const auto& op = ctx.spin_operations[iop];
+        if (n_spins == 2)
+        {
+            const auto action =
+                classify_collinear_action_effective(op.spin_u, op.antiunitary, tol);
+            if (action != CollinearChannelAction::Keep)
+            {
+                std::ostringstream oss;
+                oss << "Spin symmetry operation " << iop
+                    << (action == CollinearChannelAction::Swap
+                            ? " exchanges the collinear spin channels"
+                            : " is a genuine spinor rotation")
+                    << " and cannot be represented on collinear two-channel storage;"
+                    << " use spinor (n_spinor = 2) wave functions for this"
+                    << " magnetic/spin-space group";
+                throw LIBRPA_RUNTIME_ERROR(oss.str());
+            }
+        }
+        else
+        {
+            // Scalar storage: only U_s = +-I (up to tolerance) is meaningful.
+            const bool identity_spin =
+                std::abs(std::norm(op.spin_u[0]) - 1.0) < tol
+                && std::abs(op.spin_u[1]) < tol
+                && std::abs(op.spin_u[2]) < tol
+                && std::abs(std::norm(op.spin_u[3]) - 1.0) < tol
+                && std::abs(op.spin_u[0] - op.spin_u[3]) < tol;
+            if (!identity_spin)
+            {
+                std::ostringstream oss;
+                oss << "Spin symmetry operation " << iop
+                    << " carries a non-identity spin rotation and is meaningless on"
+                    << " scalar (spinless) storage";
+                throw LIBRPA_RUNTIME_ERROR(oss.str());
+            }
+        }
+    }
+}
+
 }  // namespace librpa_int

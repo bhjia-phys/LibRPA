@@ -382,4 +382,27 @@ std::array<symmetry_rspace_block_map_t, 4> restore_symmetry_spinor_rspace_blocks
     const std::vector<SpeciesBasisLayout>& wfc_layouts,
     const std::vector<int>& atom_nb);
 
+/*!
+ * @brief Validate the spin operation table against the mean-field spin storage.
+ *
+ * Phase 8 fixed-cell spin-space-group contract:
+ * - spinor storage (n_spinor == 2) accepts every operation;
+ * - collinear storage (n_spins == 2, n_spinor == 1) accepts only operations
+ *   whose effective channel action is Keep (each collinear channel is mapped
+ *   onto itself); Swap and Incompatible actions throw, instructing spinor
+ *   storage, because the production per-channel restore paths cannot mix or
+ *   exchange channels;
+ * - scalar storage (n_spins == 1) accepts only identity spin actions
+ *   (U_s = +-I up to tolerance); any genuine spin rotation is meaningless on
+ *   a spinless density and throws.
+ *
+ * A context without a spin operation table is always accepted (legacy
+ * ordinary/grey space-group behavior).
+ */
+void validate_spin_operations_for_storage(
+    const SymmetryContext& ctx,
+    int n_spins,
+    int n_spinor,
+    double tol = 1e-8);
+
 } // namespace librpa_int
