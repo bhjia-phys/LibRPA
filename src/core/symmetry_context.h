@@ -266,6 +266,33 @@ ComplexMatrix build_symmetry_kspace_operator_transform_matrix(
     bool use_time_reversal = false,
     const Vector3_Order<double>* k_bz_target = nullptr);
 
+/*!
+ * @brief Per-atom Bloch gauge phases relating member.k_bz to an equivalent
+ * alternative target k-point.
+ *
+ * `k_bz_target - member.k_bz` must be a reciprocal lattice vector; the
+ * returned phase for atom I is the Bloch re-gauging factor of the AO basis
+ * between the two k-points. The phases are plain unitary factors applied
+ * AFTER any (anti)unitary transform: X_target(I, J) *= phase[I] * conj(phase[J]).
+ * Returns an all-ones vector when `k_bz_target` is nullptr.
+ */
+std::vector<std::complex<double>> build_symmetry_kstar_member_target_gauge_phases(
+    const SymmetryContext& ctx,
+    const SymmetryKStarMember& member,
+    std::size_t atom_count,
+    const Vector3_Order<double>* k_bz_target);
+
+/*!
+ * @brief Resolve the spin-space operation of one k-star member through the
+ * action_id -> kspace_actions -> spin_operations link.
+ *
+ * Throws LIBRPA_RUNTIME_ERROR when the link is missing or inconsistent with
+ * the member's legacy (spatial_isym, time_reversal) fields.
+ */
+const SymmetrySpinOperation& resolve_symmetry_kstar_member_spin_operation(
+    const SymmetryContext& ctx,
+    const SymmetryKStarMember& member);
+
 symmetry_irreducible_sector_t build_symmetry_rspace_irreducible_sector(
     const SymmetryContext& ctx,
     const std::vector<Vector3_Order<int>>& Rlist);

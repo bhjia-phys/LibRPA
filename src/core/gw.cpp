@@ -1080,6 +1080,27 @@ static void build_gf_libri_kserial(
         : restore_symmetry_kstars
         ? build_symmetry_kstar_member_kfrac_targets(symmetry_context, pbc)
         : symmetry_kstar_member_kfrac_targets_t{};
+    // Spinor mean field: restore all four spin blocks through the unified
+    // (g, U_s, eta) kernel, then extract the requested (bra, ket) channel.
+    // The per-channel scalar restore would miss the SU(2) block mixing and
+    // the antiunitary Theta remap.
+    const bool use_spinor_restore = mf.get_n_spinor() == 2;
+    const auto restore_gf = [&](const std::vector<double> &taus_sel,
+                                const std::vector<Vector3_Order<int>> &Rs_sel) {
+        if (use_spinor_restore)
+        {
+            return extract_spinor_gf_block(
+                get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
+                    symmetry_context, wfc_layouts, mf, ispin, kfrac_list, taus_sel, Rs_sel,
+                    atom_nw, -1, &member_kfrac_targets,
+                    restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr),
+                ispinor_bra, ispinor_ket);
+        }
+        return get_symmetry_restored_gf_cplx_imagtimes_Rs(
+            symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list,
+            taus_sel, Rs_sel, atom_nw, -1, &member_kfrac_targets,
+            restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr);
+    };
     // Full-grid wavefunctions can carry a gauge that is not reproduced exactly from k-star
     // metadata. Keep the representative route only when a cheap sample matches direct full-k.
     if (restore_symmetry_kstars_from_full_grid && !taus.empty() && !Rs_vec.empty())
@@ -1087,10 +1108,8 @@ static void build_gf_libri_kserial(
         constexpr double restore_check_tol = 1e-6;
         const std::vector<double> tau_check{taus.front()};
         const std::vector<Vector3_Order<int>> R_check{Rs_vec.front()};
-        const auto restored_check = get_symmetry_restored_gf_cplx_imagtimes_Rs(
-            symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list, tau_check,
-            R_check, atom_nw, -1, &member_kfrac_targets,
-            &full_grid_kstar_representatives).at(tau_check.front()).at(R_check.front());
+        const auto restored_check =
+            restore_gf(tau_check, R_check).at(tau_check.front()).at(R_check.front());
         const auto direct_check =
             mf.get_gf_cplx_imagtimes_Rs(
                   ispin, ispinor_bra, ispinor_ket, kfrac_list, tau_check, R_check)
@@ -1103,10 +1122,7 @@ static void build_gf_libri_kserial(
         }
     }
     auto gf = (restore_symmetry_kstars || restore_symmetry_kstars_from_full_grid)
-        ? get_symmetry_restored_gf_cplx_imagtimes_Rs(
-              symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list, taus, Rs_vec, atom_nw,
-              -1, &member_kfrac_targets,
-              restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr)
+        ? restore_gf(taus, Rs_vec)
         : mf.get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, taus, Rs_vec);
     // global::ofs_myid << "gf " << gf << std::endl;
     tau_gf_libri.clear();
@@ -1186,13 +1202,29 @@ static void build_gf_libri_kblacs_para(
             symmetry_context, wfc_layouts, mf, kfrac_list, atom_nw);
     global::ofs_myid << "GW kBLACS GF symmetry restore: "
                      << (restore_symmetry_kstars ? "on" : "off") << std::endl;
-    auto gf_taus_Rs_cplx = restore_symmetry_kstars
-        ? get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
-              ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs, kblacs_ctxt,
-              desc_wfc, desc_gf, symmetry_context, pbc, atbasis_wfc)
-        : get_gf_cplx_imagtimes_Rs_kblacs_para(
-              ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs, kblacs_ctxt,
-              desc_wfc, desc_gf);
+    std::map<double, std::map<Vector3_Order<int>, Matz>> gf_taus_Rs_cplx;
+    if (restore_symmetry_kstars && mf.get_n_spinor() == 2)
+    {
+        // Spinor mean field: restore all four spin blocks through the unified
+        // (g, U_s, eta) kernel, then extract the requested (bra, ket) channel.
+        gf_taus_Rs_cplx = extract_spinor_gf_block_kblacs(
+            get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
+                ispin, mf, kfrac_list, taus, Rs, kblacs_ctxt, desc_wfc, desc_gf,
+                symmetry_context, pbc, atbasis_wfc),
+            ispinor_bra, ispinor_ket);
+    }
+    else if (restore_symmetry_kstars)
+    {
+        gf_taus_Rs_cplx = get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
+            ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs, kblacs_ctxt,
+            desc_wfc, desc_gf, symmetry_context, pbc, atbasis_wfc);
+    }
+    else
+    {
+        gf_taus_Rs_cplx = get_gf_cplx_imagtimes_Rs_kblacs_para(
+            ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs, kblacs_ctxt,
+            desc_wfc, desc_gf);
+    }
 
     for (auto &tau_gf_R_cplx: gf_taus_Rs_cplx)
     {

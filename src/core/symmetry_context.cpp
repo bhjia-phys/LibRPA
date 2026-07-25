@@ -2272,6 +2272,52 @@ ComplexMatrix build_symmetry_kspace_operator_transform_matrix(
     return transform;
 }
 
+std::vector<std::complex<double>> build_symmetry_kstar_member_target_gauge_phases(
+    const SymmetryContext& ctx,
+    const SymmetryKStarMember& member,
+    const std::size_t atom_count,
+    const Vector3_Order<double>* k_bz_target)
+{
+    std::vector<std::complex<double>> phases(atom_count, {1.0, 0.0});
+    if (k_bz_target == nullptr)
+    {
+        return phases;
+    }
+    const auto k_shift = build_symmetry_equivalent_kpoint_shift(member.k_bz, *k_bz_target);
+    for (std::size_t atom = 0; atom != atom_count; ++atom)
+    {
+        phases[atom] = build_symmetry_reciprocal_gauge_phase(
+            k_shift, static_cast<atom_t>(atom), ctx.input_coord_frac,
+            ctx.basis_convention);
+    }
+    return phases;
+}
+
+const SymmetrySpinOperation& resolve_symmetry_kstar_member_spin_operation(
+    const SymmetryContext& ctx,
+    const SymmetryKStarMember& member)
+{
+    if (member.action_id >= ctx.kspace_actions.size())
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "spinor k-star restore found a member action_id without a geometric action");
+    }
+    const auto& action = ctx.kspace_actions[member.action_id];
+    if (action.canonical_operation_id >= ctx.spin_operations.size())
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "spinor k-star restore found a geometric action without a spin operation");
+    }
+    const auto& op = ctx.spin_operations[action.canonical_operation_id];
+    if (op.antiunitary != member.time_reversal
+        || static_cast<int>(op.spatial_id) != member.spatial_isym)
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "spinor k-star restore found an inconsistent member action link");
+    }
+    return op;
+}
+
 ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,
                                             const std::vector<SpeciesBasisLayout>& layouts,
                                             const SymmetryKStarMember& member,
@@ -2280,8 +2326,7 @@ ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,
                                             const Vector3_Order<double>& k_ibz,
                                             const bool use_time_reversal,
                                             const Vector3_Order<double>* k_bz_target)
-{
-    // -------------------------------------------------------------------------
+{    // -------------------------------------------------------------------------
     // Rotate D(k_ibz) to D(k_bz) using the input-convention Bloch rotation matrix M.
     //
     // Important: ABACUS defines the Bloch phase with k_bz, while the

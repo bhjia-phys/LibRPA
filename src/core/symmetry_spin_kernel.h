@@ -25,7 +25,10 @@
  *   Theta^-1 = M*); the order does not commute. The remap
  *   {Y11*, -Y10*, -Y01*, Y00*} is an involution (sigma_y* = -sigma_y).
  *
- * This header is referenced by tests only; no production path includes it yet.
+ * Production use (Phase 4): the spinor Green's-function k-star restore in
+ * meanfield.cpp / meanfield_mpi.cpp drives this kernel through the call
+ * sites that are enabled only for n_spinor == 2 input. The scalar
+ * (n_spinor == 1) restore path does not include this header.
  */
 #pragma once
 
