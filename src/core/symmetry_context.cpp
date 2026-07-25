@@ -4,6 +4,8 @@
  */
 #include "symmetry_context.h"
 
+#include "symmetry_spin_kernel.h"
+
 #include "../math/rsh.h"
 #include "../utils/constants.h"
 #include "../utils/error.h"
@@ -2649,6 +2651,155 @@ bool symmetry_rspace_restore_member_is_antiunitary(
         return false;
     }
     return ctx.spin_operations[member.operation_id].antiunitary;
+}
+
+const SymmetrySpinOperation& resolve_symmetry_rspace_restore_member_spin_operation(
+    const SymmetryContext& ctx,
+    const SymmetryRSpaceRestoreMember& member)
+{
+    if (member.operation_id == SymmetryRSpaceRestoreMember::kOperationIdNone)
+    {
+        // Shared identity operation for members built without spin metadata;
+        // the caller supplies the orbital rotation per member, so the default
+        // spatial_id is never consumed on the fast path.
+        static const SymmetrySpinOperation identity_operation{};
+        return identity_operation;
+    }
+    if (member.operation_id >= ctx.spin_operations.size())
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "spinor real-space restore found a member operation_id without a spin operation");
+    }
+    const auto& op = ctx.spin_operations[member.operation_id];
+    if (static_cast<int>(op.spatial_id) != member.isym)
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "spinor real-space restore found an inconsistent member operation link");
+    }
+    return op;
+}
+
+std::array<symmetry_rspace_block_map_t, 4> restore_symmetry_spinor_rspace_blocks(
+    const std::array<symmetry_rspace_block_map_t, 4>& channels_ir,
+    const SymmetryContext& ctx,
+    const symmetry_rspace_sector_stars_t& sector_stars,
+    const std::vector<SpeciesBasisLayout>& wfc_layouts,
+    const std::vector<int>& atom_nb)
+{
+    // Union of the irreducible keys over the four channels. Under a spin
+    // mixing operation every channel contributes to every output channel, so
+    // the union is the complete set of blocks that must be visited.
+    std::set<std::pair<int, std::pair<int, std::array<int, 3>>>> ir_keys;
+    for (const auto& channel : channels_ir)
+    {
+        for (const auto& i_entry : channel)
+        {
+            for (const auto& jr_entry : i_entry.second)
+            {
+                ir_keys.emplace(i_entry.first, jr_entry.first);
+            }
+        }
+    }
+
+    std::array<symmetry_rspace_block_map_t, 4> channels_full;
+    for (const auto& key : ir_keys)
+    {
+        const auto ir_I = static_cast<atom_t>(key.first);
+        const auto ir_J = static_cast<atom_t>(key.second.first);
+        const Vector3_Order<int> ir_R{
+            key.second.second[0], key.second.second[1], key.second.second[2]};
+        const auto pair_iter = sector_stars.find({ir_I, ir_J});
+        if (pair_iter == sector_stars.end() || pair_iter->second.count(ir_R) == 0)
+        {
+            std::ostringstream oss;
+            oss << "Failed to match a symmetry-filtered spinor block with the"
+                << " irreducible-sector restore map for I=" << ir_I
+                << " J=" << ir_J << " R=(" << ir_R.x << "," << ir_R.y << ","
+                << ir_R.z << ")";
+            throw LIBRPA_RUNTIME_ERROR(oss.str());
+        }
+
+        const int nao_I = atom_nb.at(ir_I);
+        const int nao_J = atom_nb.at(ir_J);
+
+        const auto block_at = [&channels_ir, &key](std::size_t channel) -> const ComplexMatrix*
+        {
+            const auto i_iter = channels_ir[channel].find(key.first);
+            if (i_iter == channels_ir[channel].end()) return nullptr;
+            const auto jr_iter = i_iter->second.find(key.second);
+            return jr_iter == i_iter->second.end() ? nullptr : &jr_iter->second;
+        };
+
+        for (const auto& restore_member : pair_iter->second.at(ir_R))
+        {
+            const auto& op =
+                resolve_symmetry_rspace_restore_member_spin_operation(ctx, restore_member);
+            const int full_I = static_cast<int>(restore_member.full_atom_pair.first);
+            const int full_J = static_cast<int>(restore_member.full_atom_pair.second);
+            const std::array<int, 3> full_R{
+                restore_member.full_R.x, restore_member.full_R.y, restore_member.full_R.z};
+            const auto scatter = [&channels_full, full_I, full_J, &full_R](
+                                     std::size_t channel, ComplexMatrix&& block)
+            {
+                auto& target = channels_full[channel][full_I][{full_J, full_R}];
+                if (target.nr != 0)
+                {
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "Duplicate full-sector spinor block appears during symmetry restore");
+                }
+                target = std::move(block);
+            };
+
+            const auto orbit = [&ctx, &wfc_layouts, &restore_member, ir_I, ir_J](
+                                   std::size_t spatial_id, const ComplexMatrix& block)
+            {
+                (void)spatial_id;  // resolved per member, not per spatial_id
+                return rotate_symmetry_rspace_block(
+                    ctx, wfc_layouts, restore_member.isym, ir_I, ir_J, block);
+            };
+
+            if (op.spin_source == SymmetrySpinActionSource::Identity && !op.antiunitary)
+            {
+                // Fast path: channels evolve independently and absent channels
+                // stay absent, identical to the legacy per-channel restore.
+                for (std::size_t channel = 0; channel != 4; ++channel)
+                {
+                    const ComplexMatrix* block = block_at(channel);
+                    if (block == nullptr) continue;
+                    scatter(channel, orbit(op.spatial_id, *block));
+                }
+                continue;
+            }
+
+            // Spin mixing or antiunitary: zero-fill absent channels, then the
+            // four-block kernel (SU(2) mixing and, for eta = 1, the Theta
+            // remap) populates all four output channels.
+            SpinorBlocks4<ComplexMatrix> blocks_in;
+            {
+                ComplexMatrix* slots[4] = {&blocks_in.b00, &blocks_in.b01,
+                                           &blocks_in.b10, &blocks_in.b11};
+                for (std::size_t channel = 0; channel != 4; ++channel)
+                {
+                    const ComplexMatrix* block = block_at(channel);
+                    if (block != nullptr)
+                    {
+                        *slots[channel] = *block;
+                    }
+                    else
+                    {
+                        slots[channel]->create(nao_I, nao_J);
+                    }
+                }
+            }
+            auto blocks_out = transform_spinor_bilinear(
+                op, blocks_in, orbit, BilinearConvention::SourceToTarget_DXDdag);
+            scatter(0, std::move(blocks_out.b00));
+            scatter(1, std::move(blocks_out.b01));
+            scatter(2, std::move(blocks_out.b10));
+            scatter(3, std::move(blocks_out.b11));
+        }
+    }
+    return channels_full;
 }
 
 }  // namespace librpa_int

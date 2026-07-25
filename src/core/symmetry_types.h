@@ -220,6 +220,9 @@ struct SymmetryRSpaceRestoreMember
 using symmetry_rspace_sector_stars_t =
     std::map<atpair_t, std::map<Vector3_Order<int>, std::vector<SymmetryRSpaceRestoreMember>>>;
 using symmetry_atom_block_matrix_map_t = std::map<atom_t, std::map<atom_t, ComplexMatrix>>;
+//! One spin-channel real-space tensor map keyed {I, {J, R}} with dense AO blocks.
+using symmetry_rspace_block_map_t =
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, ComplexMatrix>>;
 using symmetry_kstar_member_kfrac_targets_t =
     std::vector<std::vector<Vector3_Order<double>>>;
 using symmetry_kstar_representative_indices_t = std::vector<int>;
