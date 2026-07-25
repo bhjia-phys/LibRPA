@@ -326,4 +326,17 @@ ComplexMatrix rotate_symmetry_rspace_block(const SymmetryContext& ctx,
                                            const atom_t atom_from_j,
                                            const ComplexMatrix& matrix_source);
 
+/*!
+ * @brief Whether the (g, U_s, eta) operation that generated a real-space
+ * restore member is antiunitary.
+ *
+ * Returns false for members built without spin-operation metadata
+ * (`operation_id == kOperationIdNone`) so legacy scalar contexts keep their
+ * established behavior. Charge-channel consumers (chi0, W) must complex
+ * conjugate the rotated block when this returns true.
+ */
+bool symmetry_rspace_restore_member_is_antiunitary(
+    const SymmetryContext& ctx,
+    const SymmetryRSpaceRestoreMember& member);
+
 } // namespace librpa_int

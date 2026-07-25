@@ -902,6 +902,9 @@ void SymmetryContext::generate_rspace_sector_stars(
     {
         return;
     }
+    // Restore members record the generating (g, U_s, eta) operation, so the
+    // spin-operation table must be populated before stars are built.
+    ensure_operation_metadata();
     build_symmetry_rspace_sector_stars(*this, period, Rlist, rspace_sector_stars, nullptr);
 }
 
@@ -2511,8 +2514,20 @@ void build_symmetry_rspace_sector_stars(const SymmetryContext& ctx,
             auto& star_members = sector_stars[ir_pair][ir_R];
             std::vector<std::string> candidate_debug;
             bool saw_duplicate_member = false;
-            for (std::size_t isym = 0; isym < ctx.rspace_operations.size(); ++isym)
+            // Iterate the full (g, U_s, eta) operation table when available so
+            // that antiunitary-only reachability (e.g. Theta{E|t} in an AFM
+            // magnetic group) generates restore members that record their
+            // operation; the `covered` dedup keeps the first table entry
+            // reaching each full sector, which is the unitary copy for the
+            // grey-group expansion (unitary copies come first there).
+            const std::size_t n_iteration = ctx.spin_operations.empty()
+                ? ctx.rspace_operations.size() : ctx.spin_operations.size();
+            for (std::size_t iop = 0; iop != n_iteration; ++iop)
             {
+                const std::size_t isym = ctx.spin_operations.empty()
+                    ? iop : ctx.spin_operations[iop].spatial_id;
+                const std::size_t operation_id = ctx.spin_operations.empty()
+                    ? SymmetryRSpaceRestoreMember::kOperationIdNone : iop;
                 const int inv = inverse_map[isym];
                 if (!use_operation[static_cast<std::size_t>(inv)])
                 {
@@ -2548,7 +2563,7 @@ void build_symmetry_rspace_sector_stars(const SymmetryContext& ctx,
                 if (covered.insert(full_key).second)
                 {
                     star_members.push_back(
-                        {static_cast<int>(isym), {full_I, full_J}, full_R});
+                        {static_cast<int>(isym), {full_I, full_J}, full_R, operation_id});
                 }
             }
 
@@ -2622,6 +2637,18 @@ ComplexMatrix rotate_symmetry_rspace_block(const SymmetryContext& ctx,
 {
     return rotate_symmetry_rspace_block(
         ctx, layouts, layouts, isym, atom_from_i, atom_from_j, matrix_source);
+}
+
+bool symmetry_rspace_restore_member_is_antiunitary(
+    const SymmetryContext& ctx,
+    const SymmetryRSpaceRestoreMember& member)
+{
+    if (member.operation_id == SymmetryRSpaceRestoreMember::kOperationIdNone
+        || member.operation_id >= ctx.spin_operations.size())
+    {
+        return false;
+    }
+    return ctx.spin_operations[member.operation_id].antiunitary;
 }
 
 }  // namespace librpa_int

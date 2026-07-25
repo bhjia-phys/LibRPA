@@ -638,8 +638,16 @@ static Chi0CollectMap<Tdata> restore_symmetry_abf_rspace_tensor_map_chi0(
             {
                 if (target_set.count(restore_member.full_atom_pair) == 0)
                     continue;
-                const ComplexMatrix chi0_full = rotate_symmetry_rspace_block(
+                ComplexMatrix chi0_full = rotate_symmetry_rspace_block(
                     symmetry_ctx, abf_layouts, restore_member.isym, ir_I, ir_J, chi0_ir);
+                // Charge-channel response under an antiunitary (g, U_s, eta=1)
+                // operation: the spin trace cancels U_s and the orbital-rotated
+                // block is complex conjugated (bosonic imaginary-time/frequency
+                // convention, same as the dense Wc q-star TR handling).
+                if (symmetry_rspace_restore_member_is_antiunitary(symmetry_ctx, restore_member))
+                {
+                    chi0_full = conj(chi0_full);
+                }
                 auto &target = tensors_full[as_int(restore_member.full_atom_pair.first)][{
                     as_int(restore_member.full_atom_pair.second),
                     {restore_member.full_R.x,

@@ -1417,6 +1417,139 @@ void test_rspace_block_restore_uses_stored_operation_rotation_convention()
     assert_matrix_close(restored, expected_full);
 }
 
+/*!
+ * Two-atom AFM-chain toy: atoms at fractional x=0 and x=1/2, magnetic group
+ * {E, Theta g} with g = {-1 | 1/2,0,0} (improper, swaps the two atoms).
+ * The antiunitary operation is the only one connecting sector (0,0,0) to
+ * (1,1,0), so the star must record it with eta=1 and the charge-channel
+ * restore must conjugate the rotated block.
+ */
+void test_rspace_sector_star_records_antiunitary_operation()
+{
+    SymmetryContext ctx;
+    const Matrix3 lattice(1.0, 0.0, 0.0,
+                          0.0, 1.0, 0.0,
+                          0.0, 0.0, 1.0);
+    ctx.set_crystal_structure(lattice,
+                              lattice,
+                              {{0, 0}, {1, 0}},
+                              {{0, {0.0, 0.0, 0.0}}, {1, {0.5, 0.0, 0.0}}});
+    ctx.basis_convention = {-1,
+                            0,
+                            LIBRPA_ANGULAR_ORDER_NATURAL,
+                            LIBRPA_RSH_COEFF_1_M,
+                            LIBRPA_RSH_COEFF_1_M};
+    auto g = make_row_symmetry_operation({-1, 0, 0,
+                                           0, 1, 0,
+                                           0, 0, 1});
+    g.translation = {0.5, 0.0, 0.0};
+    ctx.set_rspace_operations({SpaceGroupSymOp::IDENTITY, g});
+    SymmetrySpinOperation spin_e;  // spatial 0, unitary, identity spin
+    SymmetrySpinOperation spin_tg; // spatial 1, antiunitary: Theta g
+    spin_tg.spatial_id = 1;
+    spin_tg.antiunitary = true;
+    ctx.set_symmetry_spin_operations({spin_e, spin_tg}, false);
+    ctx.build_rsh_rotations(ctx.basis_convention, 0);
+    ctx.irreducible_sector.clear();
+    add_irreducible_sector_entry(ctx.irreducible_sector, 0, 0, {0, 0, 0});
+    ctx.set_available();
+
+    const Vector3_Order<int> period{2, 1, 1};
+    const std::vector<Vector3_Order<int>> Rlist{{0, 0, 0}};
+    ctx.ensure_operation_metadata();
+    symmetry_rspace_sector_stars_t sector_stars;
+    build_symmetry_rspace_sector_stars(ctx, period, Rlist, sector_stars);
+
+    const auto& members = sector_stars.at({0, 0}).at({0, 0, 0});
+    assert(members.size() == 2);
+    const SymmetryRSpaceRestoreMember* unitary_member = nullptr;
+    const SymmetryRSpaceRestoreMember* antiunitary_member = nullptr;
+    for (const auto& member : members)
+    {
+        if (member.full_atom_pair.first == 0)
+        {
+            unitary_member = &member;
+        }
+        else
+        {
+            antiunitary_member = &member;
+        }
+    }
+    assert(unitary_member != nullptr && antiunitary_member != nullptr);
+    assert(antiunitary_member->full_atom_pair.first == 1
+           && antiunitary_member->full_atom_pair.second == 1
+           && antiunitary_member->full_R == Vector3_Order<int>(0, 0, 0));
+    assert(!symmetry_rspace_restore_member_is_antiunitary(ctx, *unitary_member));
+    assert(symmetry_rspace_restore_member_is_antiunitary(ctx, *antiunitary_member));
+
+    // Charge-channel restore through the antiunitary member: s-orbital block
+    // is invariant under the orbital rotation, so the full block must be the
+    // complex conjugate of the irreducible source block.
+    const std::vector<SpeciesBasisLayout> layouts{{"X", {0}}};
+    ComplexMatrix block_ir(1, 1);
+    block_ir(0, 0) = std::complex<double>(0.3, -0.4);
+    ComplexMatrix block_full = rotate_symmetry_rspace_block(
+        ctx, layouts, antiunitary_member->isym, 0, 0, block_ir);
+    if (symmetry_rspace_restore_member_is_antiunitary(ctx, *antiunitary_member))
+    {
+        block_full = conj(block_full);
+    }
+    ComplexMatrix expected(1, 1);
+    expected(0, 0) = std::complex<double>(0.3, 0.4);
+    assert_matrix_close(block_full, expected);
+
+    // The unitary member restores without conjugation.
+    ComplexMatrix block_full_u = rotate_symmetry_rspace_block(
+        ctx, layouts, unitary_member->isym, 0, 0, block_ir);
+    if (symmetry_rspace_restore_member_is_antiunitary(ctx, *unitary_member))
+    {
+        block_full_u = conj(block_full_u);
+    }
+    assert_matrix_close(block_full_u, block_ir);
+}
+
+/*!
+ * Same structure but with the grey-group default spin table (no explicit
+ * magnetic input): the unitary copies come first and already cover every
+ * sector, so no restore member may be flagged antiunitary. In particular the
+ * improper operation g must not be misread as time reversal.
+ */
+void test_rspace_sector_star_grey_default_keeps_unitary_members()
+{
+    SymmetryContext ctx;
+    const Matrix3 lattice(1.0, 0.0, 0.0,
+                          0.0, 1.0, 0.0,
+                          0.0, 0.0, 1.0);
+    ctx.set_crystal_structure(lattice,
+                              lattice,
+                              {{0, 0}, {1, 0}},
+                              {{0, {0.0, 0.0, 0.0}}, {1, {0.5, 0.0, 0.0}}});
+    auto g = make_row_symmetry_operation({-1, 0, 0,
+                                           0, 1, 0,
+                                           0, 0, 1});
+    g.translation = {0.5, 0.0, 0.0};
+    ctx.set_rspace_operations({SpaceGroupSymOp::IDENTITY, g});
+    ctx.irreducible_sector.clear();
+    add_irreducible_sector_entry(ctx.irreducible_sector, 0, 0, {0, 0, 0});
+    ctx.set_available();
+
+    const Vector3_Order<int> period{2, 1, 1};
+    const std::vector<Vector3_Order<int>> Rlist{{0, 0, 0}};
+    ctx.ensure_operation_metadata();
+    symmetry_rspace_sector_stars_t sector_stars;
+    build_symmetry_rspace_sector_stars(ctx, period, Rlist, sector_stars);
+
+    const auto& members = sector_stars.at({0, 0}).at({0, 0, 0});
+    assert(members.size() == 2);
+    bool saw_atom1_sector = false;
+    for (const auto& member : members)
+    {
+        assert(!symmetry_rspace_restore_member_is_antiunitary(ctx, member));
+        saw_atom1_sector = saw_atom1_sector || member.full_atom_pair.first == 1;
+    }
+    assert(saw_atom1_sector);
+}
+
 void test_mgo_k333_irreducible_sector_matches_both()
 {
     SymmetryContext ctx;
@@ -2137,6 +2270,8 @@ int main()
     test_mgo_k333_irreducible_sector_matches_single();
     test_rspace_sector_star_member_isym_maps_full_to_ir_r();
     test_rspace_block_restore_uses_stored_operation_rotation_convention();
+    test_rspace_sector_star_records_antiunitary_operation();
+    test_rspace_sector_star_grey_default_keeps_unitary_members();
     test_mgo_k333_irreducible_sector_matches_both();
     test_bn_shrink_irreducible_sector_can_be_generated_from_symmetry();
     test_spin_operations_identity_translation();
