@@ -38,4 +38,19 @@ CollinearChannelAction classify_collinear_action(
     return CollinearChannelAction::Incompatible;
 }
 
+CollinearChannelAction classify_collinear_action_effective(
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol)
+{
+    const auto action = classify_collinear_action(U, antiunitary, tol);
+    if (!antiunitary || action == CollinearChannelAction::Incompatible)
+    {
+        return action;
+    }
+    // Theta remap exchanges the channels: XOR the permutation.
+    return action == CollinearChannelAction::Keep ? CollinearChannelAction::Swap
+                                                  : CollinearChannelAction::Keep;
+}
+
 } // namespace librpa_int

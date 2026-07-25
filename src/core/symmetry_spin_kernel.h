@@ -145,4 +145,18 @@ CollinearChannelAction classify_collinear_action(
     bool antiunitary,
     double tol);
 
+/*!
+ * @brief Effective channel action on collinear two-channel storage.
+ *
+ * The antiunitary Theta remap exchanges the up/down channels on its own
+ * (X'00 = conj(X11), X'11 = conj(X00)), so the effective permutation is the
+ * XOR of the Theta swap and the U_s swap: an antiunitary operation with
+ * diagonal U_s swaps the channels, while an antiunitary operation with
+ * off-diagonal U_s keeps them. Incompatible stays Incompatible.
+ */
+CollinearChannelAction classify_collinear_action_effective(
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol);
+
 } // namespace librpa_int

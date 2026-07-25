@@ -53,6 +53,11 @@ void initialize_symmetry_context(Dataset &ds, const bool build_shell_rotations)
     if (ds.spg_spin_ops_explicit)
     {
         ctx.set_symmetry_spin_operations(ds.spg_spin_ops, ds.spg_grey_group);
+        // Phase 8: collinear/scalar storage can only hold operations whose
+        // effective spin action maps each channel onto itself; anything else
+        // is rejected here instead of silently mis-restored downstream.
+        validate_spin_operations_for_storage(
+            ctx, ds.mf.get_n_spins(), ds.mf.get_n_spinor());
     }
     ctx.build_periodic_mappings(ds.pbc, ds.pbc.Rlist);
 
