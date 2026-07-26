@@ -14,3 +14,10 @@ add_executable(
 )
 target_link_libraries(test_qsgw_inputfile PRIVATE rpa_lib)
 add_test(NAME test_qsgw_inputfile COMMAND $<TARGET_FILE:test_qsgw_inputfile>)
+
+add_executable(
+  test_stru_symops_parser
+  test_stru_symops_parser.cpp
+  ../stru_symops_parser.cpp
+)
+add_test(NAME test_stru_symops_parser COMMAND $<TARGET_FILE:test_stru_symops_parser>)
