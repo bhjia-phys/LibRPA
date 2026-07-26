@@ -2053,6 +2053,45 @@ void test_spin_operation_storage_validation()
     assert(!throws_on(empty_ctx, 2, 1));
 }
 
+/*!
+ * DerivedFromSpatialSOC: the context reconstructs U_s = U[det(Q) Q] from the
+ * Cartesian axial rotation of the spatial operation (hexagonal cell, so the
+ * fractional-to-Cartesian conversion is exercised), while identity-source
+ * operations are left untouched.
+ */
+void test_derived_soc_spin_action_reconstruction()
+{
+    SymmetryContext ctx;
+    const double rt3half = std::sqrt(3.0) / 2.0;
+    const Matrix3 lattice(1.0, 0.0, 0.0,
+                          0.5, rt3half, 0.0,
+                          0.0, 0.0, 2.0);
+    ctx.set_crystal_structure(lattice, lattice, {{0, 0}}, {{0, {0.0, 0.0, 0.0}}});
+    auto g = make_row_symmetry_operation({-1, 0, 0,
+                                           0, 1, 0,
+                                           0, 0, 1});
+    ctx.set_rspace_operations({SpaceGroupSymOp::IDENTITY, g});
+    SymmetrySpinOperation spin_e;
+    SymmetrySpinOperation derived;
+    derived.spatial_id = 1;
+    derived.spin_source = SymmetrySpinActionSource::DerivedFromSpatialSOC;
+    ctx.set_symmetry_spin_operations({spin_e, derived}, false);
+
+    // Compare against the operation as stored in the pool (set_rspace_operations
+    // may normalize the convention), not the caller-side copy.
+    const Matrix3 cartesian = fractional_rotation_to_cartesian(
+        ctx.rspace_operations.at(1), lattice);
+    const auto expected = so3_to_su2(axial_rotation_of(cartesian));
+    const auto& actual = ctx.spin_operations.at(1).spin_u;
+    for (std::size_t i = 0; i != 4; ++i)
+    {
+        assert(std::abs(actual[i] - expected[i]) < 1e-12);
+    }
+    const auto& first = ctx.spin_operations.at(0).spin_u;
+    assert(std::abs(first[0] - 1.0) < 1e-12 && std::abs(first[1]) < 1e-12
+           && std::abs(first[2]) < 1e-12 && std::abs(first[3] - 1.0) < 1e-12);
+}
+
 void test_mgo_k333_irreducible_sector_matches_both()
 {
     SymmetryContext ctx;
@@ -2781,6 +2820,7 @@ int main()
     test_collinear_ssg_spin_flip_translation_restore();
     test_noncollinear_finite_ssg_restore_and_validation();
     test_spin_operation_storage_validation();
+    test_derived_soc_spin_action_reconstruction();
     test_mgo_k333_irreducible_sector_matches_both();
     test_bn_shrink_irreducible_sector_can_be_generated_from_symmetry();
     test_spin_operations_identity_translation();

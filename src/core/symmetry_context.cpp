@@ -675,6 +675,20 @@ void SymmetryContext::set_symmetry_spin_operations(
             throw LIBRPA_INVALID_ARGUMENT(
                 "grey-group expansion expects a unitary-only spin operation table");
         }
+        if (op.spin_source == SymmetrySpinActionSource::DerivedFromSpatialSOC)
+        {
+            // U_s = U[det(Q) Q], reconstructed from the Cartesian axial part
+            // of the spatial rotation (SOC magnetic group contract).
+            if (!lattice_available)
+            {
+                throw LIBRPA_RUNTIME_ERROR(
+                    "DerivedFromSpatialSOC spin action requires the lattice vectors "
+                    "to build the Cartesian spin rotation");
+            }
+            const auto& spatial = operation_pool.at(op.spatial_id).spatial;
+            const Matrix3 cartesian = fractional_rotation_to_cartesian(spatial, lattice_vectors);
+            op.spin_u = so3_to_su2(axial_rotation_of(cartesian));
+        }
         expanded.push_back(op);
     }
     if (grey_group)
