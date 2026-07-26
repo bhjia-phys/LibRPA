@@ -3,6 +3,7 @@ add_library(librpa_file_reader
   read_data.cpp
   reader_band.cpp
   reader_structure.cpp
+  ../stru_symops_parser.cpp
   reader_basis.cpp
   reader_lri.cpp
   reader_coulomb.cpp
