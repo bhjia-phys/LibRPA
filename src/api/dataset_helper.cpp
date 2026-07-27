@@ -236,10 +236,6 @@ void initialize_ds_exx(Dataset &ds, const LibrpaOptions &opts)
     const bool use_symmetry = opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
     if (use_symmetry)
     {
-        reject_spinor_symmetry_speedup(ds, "EXX");
-    }
-    if (use_symmetry)
-    {
         initialize_symmetry_context(ds, true);
         require_symmetry_shell_layouts(ds, "EXX");
     }
@@ -261,10 +257,6 @@ void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_chi0");
     const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
-    if (use_symmetry)
-    {
-        reject_spinor_symmetry_speedup(ds, "RPA/chi0");
-    }
     if (use_symmetry)
     {
         initialize_symmetry_context(ds, true);
@@ -298,10 +290,6 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_g0w0");
     const bool use_symmetry = opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
-    if (use_symmetry)
-    {
-        reject_spinor_symmetry_speedup(ds, "GW");
-    }
     if (use_symmetry)
     {
         initialize_symmetry_context(ds, true);
