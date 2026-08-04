@@ -1349,97 +1349,59 @@ double compute_pi_det_blacs_2d_gamma_only(matrix_m<double> &loc_piT, const Array
 
 complex<double> compute_pi_det_blacs_2d(Matz &loc_piT, const ArrayDesc &arrdesc_pi, int *ipiv, int &info)
 {
-    int one = 1;
+    const int one = 1;
     const int range_all = arrdesc_pi.m();
-    int DESCPI_T[9];
-// if(out_pi)
-// {
-//     print_complex_real_matrix("first_pi",pi_freq_q.at(0).at(0));
-//     print_complex_real_matrix("first_loc_piT_mat",loc_piT);
-// }
-#ifdef OPEN_TEST_FOR_LU_DECOMPOSITION
-    printf(
-        "success before pzgetrf_ processid:%d,range_all: %d, loc_piT.nr(): %d, loc_piT.nc(): %d\n",
-        arrdesc_pi.myid(), range_all, loc_piT.nr(), loc_piT.nc());
-#endif
-    double det_begin = omp_get_wtime();
-    // ScalapackConnector::transpose_desc(DESCPI_T, arrdesc_pi.desc);
     pzgetrf_(&range_all, &range_all, loc_piT.ptr(), &one, &one, arrdesc_pi.desc, ipiv, &info);
-    double trf_end = omp_get_wtime();
-    // ScalapackConnector::pgetrf_f(range_all,range_all,loc_piT.c,one,one,DESCPI_T,ipiv, info);
-    // printf("   after LU myid: %d\n",mpi_comm_global_h.myid);
-    // printf("desc myid: %d,  m n: %d,%d,  mb nb: %d, %d,  loc_m_n: %d, %d, myp: %d,%d, npr,npc:
-    // %d, %d\n",mpi_comm_global_h.myid, arrdesc_pi.m(),arrdesc_pi.n(),
-    // arrdesc_pi.mb(),arrdesc_pi.nb(),
-    // arrdesc_pi.m_loc(),arrdesc_pi.n_loc(),arrdesc_pi.myprow(),arrdesc_pi.mypcol(),arrdesc_pi.nprows(),arrdesc_pi.npcols());
-    complex<double> ln_det_loc(0.0, 0.0);
-    complex<double> ln_det_all(0.0, 0.0);
-    // complex<double> det_loc(1.0,0.0);
-    // complex<double> det_glo(0.0,0.0);
-    // vector<complex<double>>  det_dig;
-    // vector<complex<double>>  ln_det_dig;
-    // vector<complex<double>>  det_dig_r;
-    // vector<complex<double>>  det_dig_c;
-    // printf(" myid: %d ig=25, locr,locc: %d,
-    // %d)\n",mpi_comm_global_h.myid,arrdesc_pi.indx_g2l_r(25),arrdesc_pi.indx_g2l_c(25));
-    for (int ig = 0; ig != range_all; ig++)
+    if (info != 0)
     {
-        // int locr=para_mpi.localIndex(ig,row_nblk,para_mpi.nprow,para_mpi.myprow);
-        // int locc=para_mpi.localIndex(ig,col_nblk,para_mpi.npcol,para_mpi.mypcol);
-        int locr = arrdesc_pi.indx_g2l_r(ig);
-        int locc = arrdesc_pi.indx_g2l_c(ig);
+        std::ostringstream oss;
+        if (info > 0)
+        {
+            oss << "ScaLAPACK PZGETRF failed while computing logdet: U(" << info << ","
+                << info << ") is zero, so the matrix is singular (info=" << info << ")";
+        }
+        else
+        {
+            oss << "ScaLAPACK PZGETRF failed while computing logdet: illegal argument or "
+                   "descriptor entry (info="
+                << info << ")";
+        }
+        throw LIBRPA_RUNTIME_ERROR(oss.str());
+    }
+
+    double log_abs_loc = 0.0;
+    double phase_loc = 0.0;
+    for (int ig = 0; ig != range_all; ++ig)
+    {
+        const int locr = arrdesc_pi.indx_g2l_r(ig);
+        const int locc = arrdesc_pi.indx_g2l_c(ig);
         if (locr >= 0 && locc >= 0)
         {
-            // if(ipiv[locr]!=(ig+1))
-            // 	det_loc=-1*det_loc * loc_piT(locc,locr);
-            // else
-            // 	det_loc=det_loc * loc_piT(locc,locr);
-            // det_dig.push_back(loc_piT(locr,locc));
-            // det_dig_r.push_back(locr);
-            // det_dig_c.push_back(locc);
-            complex<double> tmp_ln_det;
-            if (loc_piT(locr, locc).real() > 0)
-            {
-                tmp_ln_det = std::log(loc_piT(locr, locc));
-                // ln_det_dig.push_back(tmp_ln_det);
-            }
-            else
-            {
-                tmp_ln_det = std::log(-loc_piT(locr, locc));
-                // ln_det_dig.push_back(tmp_ln_det);
-            }
-            ln_det_loc += tmp_ln_det;
+            const auto diagonal = loc_piT(locr, locc);
+            log_abs_loc += std::log(std::abs(diagonal));
+            phase_loc += std::arg(diagonal);
         }
     }
-    double ln_end = omp_get_wtime();
-//     ComplexMatrix det_mm(loc_piT.nr(),loc_piT.nc());
-//     for(int i=0;i!=loc_piT.nr();i++)
-//         for(int j=0;j!=loc_piT.nc();j++)
-//             det_mm(i,j)=loc_piT(i,j);
-//    // sort(det_dig.rbegin(),det_dig.rend());
-//     ComplexMatrix det_dig_mm(det_dig.size(),4);
-//     for(int i=0;i!=det_dig.size();i++)
-//     {
-//         det_dig_mm(i,0) =det_dig_r[i];
-//         det_dig_mm(i,1) =det_dig_c[i];
-//         det_dig_mm(i,2)=det_dig[i];
-//         det_dig_mm(i,3)=ln_det_dig[i];
-//     }
-//     char fn[100];
-//     sprintf(fn, "det_dig_myid_%d.mtx", comm_h.myid);
-//     print_complex_matrix_file("det_dig_loc", det_dig_mm, fn, false);
 
-//     sprintf(fn, "det_mat_myid_%d.mtx", comm_h.myid);
-//     print_complex_matrix_file("det_mat_loc", det_mm, fn, false);
+    int swap_count_loc = 0;
+    if (arrdesc_pi.mypcol() == 0)
+    {
+        for (int locr = 0; locr != arrdesc_pi.m_loc(); ++locr)
+        {
+            const int global_row = arrdesc_pi.indx_l2g_r(locr);
+            if (ipiv[locr] != global_row + 1) ++swap_count_loc;
+        }
+    }
 
+    const double logdet_loc[2] = {log_abs_loc, phase_loc};
+    double logdet_all[2] = {0.0, 0.0};
+    int swap_count = 0;
+    MPI_Allreduce(logdet_loc, logdet_all, 2, MPI_DOUBLE, MPI_SUM, arrdesc_pi.comm());
+    MPI_Allreduce(&swap_count_loc, &swap_count, 1, MPI_INT, MPI_SUM, arrdesc_pi.comm());
 
-    MPI_Allreduce(&ln_det_loc,&ln_det_all,1,MPI_DOUBLE_COMPLEX,MPI_SUM, arrdesc_pi.comm());
-    double det_end = omp_get_wtime();
-    // if(comm_h.myid == 0)
-    //     lib_printf("    | Det time   trf: %f   ln: %f   allreduce: %f\n",trf_end-det_begin,ln_end-trf_end, det_end-ln_end);
-    //MPI_Allreduce(&det_loc,&det_glo,1,MPI_DOUBLE_COMPLEX,MPI_PROD,comm_h.comm);
-    //ln_det_all=std::log(det_glo);
-    return ln_det_all;
+    double phase = std::remainder(logdet_all[1] + PI * swap_count, TWO_PI);
+    if (phase <= -PI) phase += TWO_PI;
+    return {logdet_all[0], phase};
 }
 
 cplxdb compute_rpa_response_trace_logdet_blacs_2d(

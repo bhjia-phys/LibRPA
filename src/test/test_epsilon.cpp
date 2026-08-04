@@ -96,6 +96,32 @@ void test_head_only_trace_logdet_can_use_reduced_response(const BlacsCtxtHandler
     assert_complex_close(full_actual, actual, 1e-12);
 }
 
+void test_trace_logdet_accounts_for_complex_row_pivot(const BlacsCtxtHandler &blacs_h)
+{
+    ArrayDesc desc(blacs_h);
+    desc.init_square_blk(2, 2, 0, 0);
+
+    // response = I - A, where A = [[1, 2i], [-2i, 5]] is positive definite
+    // with det(A) = 1. PZGETRF must pivot the first row because |-2i| > |1|.
+    const std::complex<double> response_dense[2][2] = {
+        {{0.0, 0.0}, {0.0, -2.0}},
+        {{0.0, 2.0}, {-4.0, 0.0}}};
+    auto response = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+    for (int i = 0; i != 2; ++i)
+    {
+        const int ilo = desc.indx_g2l_r(i);
+        if (ilo < 0) continue;
+        for (int j = 0; j != 2; ++j)
+        {
+            const int jlo = desc.indx_g2l_c(j);
+            if (jlo >= 0) response(ilo, jlo) = response_dense[i][j];
+        }
+    }
+
+    const auto actual = librpa_int::compute_rpa_response_trace_logdet_blacs_2d(response, desc);
+    assert_complex_close(actual, {-4.0, 0.0}, 1e-12);
+}
+
 void add_scalar_wq_block(
     atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
         &wq,
@@ -617,6 +643,7 @@ int main(int argc, char *argv[])
         blacs_h.set_square_grid();
 
         test_head_only_trace_logdet_can_use_reduced_response(blacs_h);
+        test_trace_logdet_accounts_for_complex_row_pivot(blacs_h);
         test_wq_to_wr_symmetry_reduced_q_matches_full_bz();
         test_wq_to_wr_antiunitary_member_conjugates();
         test_wq_to_wr_symmetry_collective_handles_empty_local_rank();
