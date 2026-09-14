@@ -40,6 +40,9 @@
 #include "ri.h"
 #include "utils_atomic_basis_blacs.h"
 #ifdef LIBRPA_USE_LIBRI
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+#include <RI/parallel/Parallel_LRI_Equally_Weighted.h>
+#endif
 #include <RI/physics/RPA.h>
 #include <RI/physics/symmetry/Symmetry_Filter.h>
 #endif
@@ -117,8 +120,11 @@ template <typename Tdata>
 static Chi0CollectMap<Tdata> collect_chi0_map2_first(
     MPI_Comm comm, Chi0CollectMap<Tdata> &chi0s, const Chi0CollectRequest &request)
 {
-    return RI::Communicate_Tensors_Map_Judge::comm_map2_first(
+    global::profiler.start("chi0_collect_comm_map2_first", LIBRPA_VERBOSE_DEBUG);
+    auto result = RI::Communicate_Tensors_Map_Judge::comm_map2_first(
         comm, chi0s, request.first, request.second);
+    global::profiler.stop("chi0_collect_comm_map2_first");
+    return result;
 }
 
 #ifdef LIBRPA_USE_LIBRI
@@ -126,8 +132,11 @@ template <typename Tdata>
 static Chi0CollectMap<Tdata> collect_chi0_map2(
     MPI_Comm comm, Chi0CollectMap<Tdata> &chi0s, const Chi0ExactCollectRequest &request)
 {
-    return RI::Communicate_Tensors_Map_Judge::comm_map2(
+    global::profiler.start("chi0_collect_comm_map2", LIBRPA_VERBOSE_DEBUG);
+    auto result = RI::Communicate_Tensors_Map_Judge::comm_map2(
         comm, chi0s, request.first, request.second);
+    global::profiler.stop("chi0_collect_comm_map2");
+    return result;
 }
 #endif
 
@@ -1368,7 +1377,7 @@ static void build_gf_Rt_libri_kblacs_para(
     double tau,
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri)
 {
-    global::profiler.start("build_gf_Rt_libri_kblacs_para");
+    global::profiler.start("build_gf_Rt_libri_kblacs_para", LIBRPA_VERBOSE_DEBUG);
 
     const auto atom_nw = atbasis_wfc.get_atom_nb_map();
     const auto wfc_layouts = atbasis_wfc.has_l_shells()
@@ -1378,8 +1387,9 @@ static void build_gf_Rt_libri_kblacs_para(
         use_symmetry_context
         && can_restore_symmetry_kstar_meanfield(
             symmetry_context, wfc_layouts, mf, kfrac_list, atom_nw);
-    global::ofs_myid << "Chi0 kBLACS GF symmetry restore: "
-                     << (restore_symmetry_kstars ? "on" : "off") << std::endl;
+    if (global::should_output(LIBRPA_VERBOSE_DEBUG))
+        global::ofs_myid << "Chi0 kBLACS GF symmetry restore: "
+                         << (restore_symmetry_kstars ? "on" : "off") << std::endl;
     auto gf_imagtimes_Rs_cplx = restore_symmetry_kstars
         ? get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
               ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, {tau}, Rs, kblacs_ctxt,
@@ -2107,7 +2117,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
 
     RI::RPA<int, int, 3, Tdata> rpa;
     global::profiler.start("chi0_libri_routing_set_parallel");
-    libri_set_parallel(rpa, comm_h.comm, atoms_pos, lat_array, period_array, atom_nw);
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+    rpa.lri.parallel =
+        std::make_shared<RI::Parallel_LRI_Equally_Weighted<int, int, 3, Tdata>>(atom_nw);
+#endif
+    rpa.set_parallel(comm_h.comm, atoms_pos, lat_array, period_array);
     global::profiler.stop("chi0_libri_routing_set_parallel");
     const auto libri_chi0_irreducible_sector =
         use_chi0_rspace_symmetry ? convert_symmetry_irreducible_sector_to_libri_chi0(
@@ -2271,7 +2285,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     // time
                     const auto nbands = mf.get_n_bands();
                     assert(nbands_G < nbands);
-                    if (comm_h.is_root())
+                    if (comm_h.is_root() && global::should_output())
                     {
                         if (nbands_G >= 0)
                             std::cout << "Green's Function sums over " << nbands_G
@@ -2281,11 +2295,17 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     }
                     if (this->is_mf_eigvec_k_distributed_)
                     {
+                        global::profiler.start("chi0_gf_pos_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                        comm_h.barrier();
+                        global::profiler.stop("chi0_gf_pos_entry_wait");
                         build_gf_Rt_libri_kblacs_para(
                             this->mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, this->atbasis_wfc,
                             isp, is1, is2, this->pbc, this->symmetry_context,
                             this->use_symmetry_context, this->pbc.kfrac_list, Rs_gf, tau,
                             gf_po_libri);
+                        global::profiler.start("chi0_gf_neg_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                        comm_h.barrier();
+                        global::profiler.stop("chi0_gf_neg_entry_wait");
                         build_gf_Rt_libri_kblacs_para(
                             this->mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, this->atbasis_wfc,
                             isp, is2, is1, this->pbc, this->symmetry_context,
@@ -2309,6 +2329,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     rpa.set_Gs_pos(gf_po_libri, libri_threshold_G);
                     rpa.set_Gs_neg(gf_ne_libri, libri_threshold_G);
                     global::profiler.stop("chi0_set_Gs");
+                    global::profiler.start("chi0_cal_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                    comm_h.barrier();
+                    global::profiler.stop("chi0_cal_entry_wait");
                     global::ofs_myid << "rpa.cal_chi0s begin,    tau = " << tau << "\n";
                     global::profiler.start("chi0_libri_routing_cal_chi0s", "Call cal_chi0s");
                     rpa.cal_chi0s();
@@ -2320,6 +2343,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     rpa.free_Gs_pos();
                     global::profiler.stop("chi0_libri_routing_free_gf");
 
+                    global::profiler.start("chi0_collect_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                    comm_h.barrier();
+                    global::profiler.stop("chi0_collect_entry_wait");
                     // collect chi0 on selected atpairs and, for q/uhap split, selected R vectors
                     global::profiler.start("chi0_libri_routing_collect_Rs", "Collect R blocks");
                     if (comm_h.nprocs > 1)
@@ -2529,7 +2555,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     wtime_end_isp_tau - wtime_start_isp_tau);
             }
             // Release freed memory to OS, to resolve memory fragments in LibRI
+            profiler.start("chi0_tau_malloc_trim", LIBRPA_VERBOSE_DEBUG);
             release_free_mem();
+            profiler.stop("chi0_tau_malloc_trim");
         } // ispin
     } // itau
 

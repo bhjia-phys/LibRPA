@@ -4,7 +4,12 @@
 # - https://stackoverflow.com/questions/19278510/cmake-ctest-add-test-command-appends-extra-quotes-to-my-command-parameters
 macro(config_test TARGET NUMPROC)
   add_executable(${TARGET} ${TARGET}.cpp)
+  target_compile_definitions(${TARGET} PRIVATE "LIBRPA_MPI_THREAD_LEVEL=${LIBRPA_MPI_THREAD_LEVEL}")
   target_link_libraries(${TARGET} PRIVATE rpa_lib)
+  if(LIBRPA_BUNDLED_ELPA_PROJECT_TARGET)
+    # Tests include LibRPA headers directly, including base_blacs.h.
+    add_dependencies(${TARGET} ${LIBRPA_BUNDLED_ELPA_PROJECT_TARGET})
+  endif()
   # Math and MPI symbols will have been included in rpa_lib for static library case.
   # Only link them when shared library is built.
   if(BUILD_SHARED_LIBS)

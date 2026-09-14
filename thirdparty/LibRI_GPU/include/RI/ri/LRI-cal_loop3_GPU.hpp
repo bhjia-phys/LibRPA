@@ -11,14 +11,12 @@
 #include "../global/Map_Operator.h"
 #include "../global/Tensor_Multiply.h"
 
-#include "../global/gpu/GPU_Wrapper.h"
+#include "../global/gpu/GPU_Backend.h"
 #include "../global/gpu/GPU_Data_Input.h"
 #include "../global/gpu/GPU_Data_Mul.h"
 #include "../global/gpu/GPU_Data_Tmp.h"
 #include "../global/gpu/GPU_Data_Output.h"
 #include "../global/gpu/Dim.h"
-#include "../global/gpu/Magmablas_Interface-Contiguous.h"
-#include "../global/gpu/Magma_Wrapper.h"
 
 #include <omp.h>
 
@@ -50,16 +48,8 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 	mkl_set_num_threads(1);
 	#endif
 
-	magma_init();
-
-	const magma_int_t dev_size = Magma_Wrapper::magma_get_size();
-	const int mpi_size = MPI_Wrapper::mpi_get_size(this->mpi_comm);
-	assert(mpi_size<=dev_size);
-
-	const int mpi_rank = MPI_Wrapper::mpi_get_rank(this->mpi_comm);
-	magma_setdevice(mpi_rank);
-	magma_queue_t queue;
-	magma_queue_create(mpi_rank, &queue);
+	GPU_Backend::Context gpu_context(this->mpi_comm);
+	GPU_Backend::Queue &queue = gpu_context.queue();
 
 	std::map<TA, omp_lock_t> lock_Ds_result_add_map = LRI_Cal_Aux::init_lock_result(labels, this->parallel->list_A, Ds_result);
 
@@ -143,24 +133,24 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a0b0.upload(queue);
 					rDs_a1b1.upload(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 					dim_1.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a0b0.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a1b1.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						C0_left,
-						rDs_mul.h_array_1.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_mul.h_array_1.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a;
@@ -202,13 +192,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_a.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_mul.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b0_a1b1
@@ -279,24 +269,24 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a0b1.upload(queue);
 					rDs_a1b0.upload(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 					dim_1.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a1b0.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a0b1.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						C0_left,
-						rDs_mul.h_array_1.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_mul.h_array_1.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a;
@@ -338,13 +328,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_a.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_mul.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b1_a1b0
@@ -415,13 +405,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a1b2.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a * D_a0b0
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a, rDs_a0b0;
@@ -465,7 +455,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Aa01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_a.upload(queue);
@@ -475,18 +465,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = false;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_mul.d_array_2, rDs_a0b0.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b0_a1b2
@@ -555,13 +545,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a1b2.d_array, rDs_b.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a * D_a0b1
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a, rDs_a0b1;
@@ -605,7 +595,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Aa01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_a.upload(queue);
@@ -615,18 +605,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = false;
-					magmablas_gemm_vbatched_2s(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a0b1.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaNoTrans,
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b1_a1b2
@@ -695,13 +685,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a0b2.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a * D_a1b0
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a, rDs_a1b0;
@@ -745,7 +735,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Aa01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_a.upload(queue);
@@ -755,18 +745,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = false;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_mul.d_array_2, rDs_a1b0.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b2_a1b0
@@ -835,13 +825,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a0b2.d_array, rDs_b.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a * D_a1b1
 					GPU_Data::Input<TA, TAC, Tdata> rDs_a, rDs_a1b1;
@@ -885,7 +875,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Aa01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_a.upload(queue);
@@ -895,18 +885,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = false;
-					magmablas_gemm_vbatched_2s(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a1b1.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaNoTrans,
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_a.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b2_a1b1
@@ -977,13 +967,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b1.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a0b0 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a0b0;
@@ -1027,7 +1017,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Ab01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_b.upload(queue);
@@ -1037,18 +1027,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a0b0.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaNoTrans,
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b0_a2b1
@@ -1117,13 +1107,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_a2b0.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a0b1 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a0b1;
@@ -1167,7 +1157,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Ab01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_b.upload(queue);
@@ -1177,18 +1167,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_mul.d_array_2, rDs_a0b1.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaNoTrans, MagmaNoTrans,
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b1_a2b0
@@ -1257,13 +1247,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b1.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a1b0 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a1b0;
@@ -1307,7 +1297,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Ab01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_b.upload(queue);
@@ -1317,18 +1307,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a1b0.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaNoTrans,
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b0_a2b1
@@ -1397,13 +1387,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_a2b0.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a1b1 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a1b1;
@@ -1447,7 +1437,7 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 						} // end for Ab01
 					} // end omp parallel
 
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 					rDs_mul.upload_2nd(queue);
 					rDs_b.upload(queue);
@@ -1457,18 +1447,18 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::NoTrans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_mul.d_array_2, rDs_a1b1.d_array,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaNoTrans, MagmaNoTrans,
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b1_a2b0
@@ -1538,13 +1528,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b2.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a0b0 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a0b0;
@@ -1591,25 +1581,25 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a0b0.upload(queue);
 					rDs_mul.upload_2nd(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 
 					dim_1.upload(queue);
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a0b0.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b0_a2b2
@@ -1677,13 +1667,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b2.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a0b1 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a0b1;
@@ -1730,25 +1720,25 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a0b1.upload(queue);
 					rDs_mul.upload_2nd(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 
 					dim_1.upload(queue);
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a0b1.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b1_a2b2
@@ -1816,13 +1806,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b2.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a1b0 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a1b0;
@@ -1869,25 +1859,25 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a1b0.upload(queue);
 					rDs_mul.upload_2nd(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 
 					dim_1.upload(queue);
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a1b0.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b0_a2b2
@@ -1955,13 +1945,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a2b2.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul.d_array_1,
 						rDs_mul.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul * D_a1b1 * D_b
 					GPU_Data::Input<TA, TAC, Tdata> rDs_b, rDs_a1b1;
@@ -2008,25 +1998,25 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_b.upload(queue);
 					rDs_a1b1.upload(queue);
 					rDs_mul.upload_2nd(queue);
-					const std::vector<magma_int_t> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
+					const std::vector<GPU_Backend::Int> rDs_tmp_segments_size = rDs_tmp.upload(memory_limit, queue);
 					rDs_output.upload(queue);
 
 					dim_1.upload(queue);
 					dim_2.upload(queue);
 
 					constexpr bool C0_left = true;
-					magmablas_gemm_vbatched_2s(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched2s(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a1b1.d_array, rDs_mul.d_array_2,
 						Tdata(0), rDs_tmp.d_array,
-						MagmaTrans, MagmaTrans,
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_b.d_array,
 						Tdata(1), rDs_output.d_array,
 						C0_left,
-						rDs_output.h_array.size(), rDs_tmp_segments_size.data(), queue);
-					magma_queue_sync(queue);
+						rDs_output.h_array.size(), rDs_tmp_segments_size, queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b1_a2b2
@@ -2095,13 +2085,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_1.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a1b2.d_array,
 						Tdata(1), rDs_mul_1.d_array_1,
 						rDs_mul_1.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_mul2 = D_a2b1 * D_a
 					// b1a1a0 = a2b1 * a1a0a2
@@ -2144,13 +2134,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_2.upload_1st(queue);
 					dim_1.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a2b1.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul_2.d_array_1,
 						rDs_mul_2.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul2 * D_mul1
 					// a0b0 = b1a1a0 * b0b1a1
@@ -2186,13 +2176,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_output.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_mul_2.d_array_2, rDs_mul_1.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b2_a2b1
@@ -2259,13 +2249,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_1.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a0b2.d_array, rDs_b.d_array,
 						Tdata(1), rDs_mul_1.d_array_1,
 						rDs_mul_1.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_mul2 = D_a2b0 * D_a
 					// a1a0b0 = a1a0a2 * a2b0
@@ -2308,13 +2298,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_2.upload_1st(queue);
 					dim_1.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_a2b0.d_array,
 						Tdata(1), rDs_mul_2.d_array_1,
 						rDs_mul_2.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul2 * D_mul1
 					// a1b1 = a1a0b0 * a0b0b1
@@ -2350,13 +2340,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_output.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_mul_2.d_array_2, rDs_mul_1.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b2_a2b0
@@ -2423,13 +2413,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_1.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_b.d_array, rDs_a0b2.d_array,
 						Tdata(1), rDs_mul_1.d_array_1,
 						rDs_mul_1.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_mul2 = D_a2b1 * D_a
 					// b1a0a1 = a2b1 * a0a1a2
@@ -2472,13 +2462,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_2.upload_1st(queue);
 					dim_1.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a2b1.d_array, rDs_a.d_array,
 						Tdata(1), rDs_mul_2.d_array_1,
 						rDs_mul_2.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul2 * D_mul1
 					// a1b0 = b1a0a1 * b0b1a0
@@ -2514,13 +2504,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_output.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::Trans, GPU_Backend::Trans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_mul_2.d_array_2, rDs_mul_1.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a0b2_a2b1
@@ -2587,13 +2577,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_1.upload_1st(queue);
 					dim_0.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::Trans,
 						dim_0.m.data(), dim_0.n.data(), dim_0.k.data(),
 						Tdata(1), rDs_a1b2.d_array, rDs_b.d_array,
 						Tdata(1), rDs_mul_1.d_array_1,
 						rDs_mul_1.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_mul2 = D_a2b0 * D_a
 					// a0a1b0 = a0a1a2 * a2b0
@@ -2636,13 +2626,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_mul_2.upload_1st(queue);
 					dim_1.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_1.m.data(), dim_1.n.data(), dim_1.k.data(),
 						Tdata(1), rDs_a.d_array, rDs_a2b0.d_array,
 						Tdata(1), rDs_mul_2.d_array_1,
 						rDs_mul_2.h_array_1.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					// D_result = D_mul2 * D_mul1
 					// a0b1 = a0a1b0 * a1b0b1
@@ -2678,13 +2668,13 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_GPU(
 					rDs_output.upload(queue);
 					dim_2.upload(queue);
 
-					magmablas_gemm_vbatched(
-						MagmaNoTrans, MagmaNoTrans,
+					GPU_Backend::gemmVbatched(
+						GPU_Backend::NoTrans, GPU_Backend::NoTrans,
 						dim_2.m.data(), dim_2.n.data(), dim_2.k.data(),
 						Tdata(1), rDs_mul_2.d_array_2, rDs_mul_1.d_array_2,
 						Tdata(1), rDs_output.d_array,
 						rDs_output.h_array.size(), queue);
-					magma_queue_sync(queue);
+					GPU_Backend::sync(queue);
 
 					rDs_output.download(Ds_result, queue);
 				} break; // end case a1b2_a2b0

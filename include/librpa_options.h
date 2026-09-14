@@ -535,6 +535,30 @@ typedef struct
     //! Experimental
     LibrpaSwitch output_gw_sigc_ks_mat_kf;
 
+    //! Output exact-exchange matrix in KS basis and k-space.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    LibrpaSwitch output_exx_ks_mat_k;
+
+    //! First zero-based KS state included in both dimensions when exporting the
+    //! KS-basis exact-exchange and correlation self-energy matrices. Matrix
+    //! construction is unaffected.
+    //! @par Default
+    //! 0
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_start;
+
+    //! Half-open KS-state end index when exporting KS-basis matrices; negative
+    //! means all remaining states.
+    //! @par Default
+    //! -1
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_end;
+
     //! Output correlation self-energy matrix in NAO basis (k-space, imaginary frequency domain).
     //! @par Default
     //! false
