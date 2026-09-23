@@ -348,6 +348,79 @@ struct DriverParams
     //! Experimental
     double qsgw_convergence_tolerance_ev;
 
+    //! Native scalar S(R) CSR input for task=crpa_u, relative to input_dir.
+    //! @par Default
+    //! SR.csr
+    //! @par Status
+    //! Experimental
+    std::string crpa_overlap_file = "SR.csr";
+    //! Explicit species labels in numeric structure-type order, separated by spaces.
+    //! @par Default
+    //! Empty (required for task=crpa_u).
+    //! @par Status
+    //! Experimental
+    std::string crpa_species_labels;
+    //! Species whose first radial d shell supplies the correlated atomic trials.
+    //! @par Default
+    //! Empty (required for task=crpa_u).
+    //! @par Status
+    //! Experimental
+    std::string crpa_correlated_species;
+    //! Species supplying the first radial p shell of a dp parent frame.
+    //! Must differ from crpa_correlated_species; spectator species are not selected.
+    //! @par Default
+    //! Empty (required when crpa_parent_orbitals=dp).
+    //! @par Status
+    //! Experimental
+    std::string crpa_ligand_species;
+    //! Atomic trials projected into B and jointly metric-normalized: d, dp, eg or t2g.
+    //! eg/t2g refer to global Cartesian axes, using the first radial shell.
+    //! @par Default
+    //! d
+    //! @par Status
+    //! Experimental
+    std::string crpa_parent_orbitals = "d";
+    //! Reported subset of the jointly normalized parent frame: d, dp, eg or t2g.
+    //! Must be a subset of crpa_parent_orbitals; it does not select response bands A.
+    //! @par Default
+    //! d
+    //! @par Status
+    //! Experimental
+    std::string crpa_output_orbitals = "d";
+    //! A: inclusive absolute-Hartree lower/upper pairs selecting original KS states
+    //! on both occupied and empty branches of Pd. Independent of output window B.
+    //! @par Default
+    //! Empty (specify exactly one of this parameter and crpa_response_bands).
+    //! @par Status
+    //! Experimental
+    std::vector<double> crpa_response_windows_ha;
+    //! B: inclusive absolute-Hartree lower/upper pairs for projecting atomic trials.
+    //! Does not change KS poles, occupations, or the response selection A.
+    //! @par Default
+    //! Empty (specify exactly one of this parameter and crpa_orbital_bands).
+    //! @par Status
+    //! Experimental
+    std::vector<double> crpa_orbital_windows_ha;
+    //! A: distinct zero-based original KS indices shared by all spin/k points.
+    //! @par Default
+    //! Empty (mutually exclusive with crpa_response_windows_ha).
+    //! @par Status
+    //! Experimental
+    std::vector<int> crpa_response_bands;
+    //! B: distinct zero-based original KS indices shared by all spin/k points.
+    //! @par Default
+    //! Empty (mutually exclusive with crpa_orbital_windows_ha).
+    //! @par Status
+    //! Experimental
+    std::vector<int> crpa_orbital_bands;
+    //! Positive metric/KS orthogonality tolerance. Frobenius residual gates use
+    //! this value times sqrt(matrix dimension); input KS states are never repaired.
+    //! @par Default
+    //! 1.0e-10
+    //! @par Status
+    //! Experimental
+    double crpa_residual_tol = 1.0e-10;
+
     std::string format();
 
     //! Apply producer-specific defaults to input filename and prefix parameters.

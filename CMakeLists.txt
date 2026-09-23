@@ -508,6 +508,7 @@ add_subdirectory(src)
 
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_compute.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_crpa.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_enums.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_global.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_handler.h

@@ -194,6 +194,29 @@ static void validate_input_parameters()
             && params.sf_state_end <= params.sf_state_start)
             throw std::runtime_error("sf_state_end must be greater than sf_state_start");
     }
+    if (task == "crpa_u")
+    {
+        if (params.crpa_species_labels.empty() || params.crpa_correlated_species.empty() ||
+            params.crpa_overlap_file.empty())
+            throw std::runtime_error("crpa_u requires explicit species labels, correlated species and overlap file");
+        if (!std::isfinite(params.crpa_residual_tol) || params.crpa_residual_tol <= 0.0)
+            throw std::runtime_error("crpa_residual_tol must be finite and positive");
+        for (const auto selection : {
+                 std::make_pair(&params.crpa_response_windows_ha, &params.crpa_response_bands),
+                 std::make_pair(&params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})
+        {
+            const auto* edges = selection.first;
+            const auto* bands = selection.second;
+            if (edges->empty() == bands->empty())
+                throw std::runtime_error("each cRPA A/B selection requires either energy windows or explicit bands");
+            if (edges->size() % 2 != 0)
+                throw std::runtime_error("cRPA A/B energy windows require lower/upper pairs in Hartree");
+            for (std::size_t i = 0; i < edges->size(); i += 2)
+                if (!std::isfinite((*edges)[i]) || !std::isfinite((*edges)[i + 1]) ||
+                    (*edges)[i] > (*edges)[i + 1])
+                    throw std::runtime_error("invalid cRPA energy-window bounds");
+        }
+    }
     if (task == "qsgw" || task == "qsgw_band")
     {
         if (driver::opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
@@ -296,6 +319,55 @@ void parse_inputfile_to_params(const std::string &fn)
                    task_normalized.begin(), [](const unsigned char ch) {
                        return static_cast<char>(std::tolower(ch));
                    });
+    if (task_normalized == "crpa_u")
+    {
+        for (auto item : {
+                 std::pair<const char*, std::string*>{"crpa_overlap_file", &driver_params.crpa_overlap_file},
+                 {"crpa_species_labels", &driver_params.crpa_species_labels},
+                 {"crpa_correlated_species", &driver_params.crpa_correlated_species},
+                 {"crpa_ligand_species", &driver_params.crpa_ligand_species},
+                 {"crpa_parent_orbitals", &driver_params.crpa_parent_orbitals},
+                 {"crpa_output_orbitals", &driver_params.crpa_output_orbitals}})
+            get_last_assigned_value(parser, item.first, *item.second);
+        for (auto item : {
+                 std::pair<const char*, std::vector<double>*>{"crpa_response_windows_ha", &driver_params.crpa_response_windows_ha},
+                 {"crpa_orbital_windows_ha", &driver_params.crpa_orbital_windows_ha}})
+        {
+            std::string text;
+            if (!get_last_assigned_value(parser, item.first, text)) continue;
+            std::replace(text.begin(), text.end(), ',', ' ');
+            std::replace(text.begin(), text.end(), 'D', 'E');
+            std::replace(text.begin(), text.end(), 'd', 'e');
+            std::istringstream stream(text);
+            item.second->clear();
+            double value;
+            while (stream >> value) item.second->push_back(value);
+            if (!stream.eof())
+                throw std::runtime_error(std::string(item.first) + " contains an invalid number");
+        }
+        for (auto item : {
+                 std::pair<const char*, std::vector<int>*>{"crpa_response_bands", &driver_params.crpa_response_bands},
+                 {"crpa_orbital_bands", &driver_params.crpa_orbital_bands}})
+        {
+            std::string text;
+            if (!get_last_assigned_value(parser, item.first, text)) continue;
+            std::replace(text.begin(), text.end(), ',', ' ');
+            std::istringstream stream(text);
+            item.second->clear();
+            int value;
+            while (stream >> value) item.second->push_back(value);
+            if (!stream.eof())
+                throw std::runtime_error(std::string(item.first) + " contains an invalid integer");
+        }
+        std::string tolerance;
+        if (get_last_assigned_value(parser, "crpa_residual_tol", tolerance))
+        {
+            std::size_t consumed = 0;
+            driver_params.crpa_residual_tol = std::stod(tolerance, &consumed);
+            if (consumed != tolerance.size())
+                throw std::runtime_error("crpa_residual_tol must be a valid number");
+        }
+    }
     if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
     {
         for (const std::string& removed : {

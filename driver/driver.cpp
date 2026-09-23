@@ -177,6 +177,25 @@ std::string DriverParams::format()
         ss << "sf_state_start = " << sf_state_start << std::endl;
         ss << "sf_state_end   = " << sf_state_end << std::endl;
     }
+    if (normalized_task == "crpa_u")
+    {
+        ss << "crpa_overlap_file = " << crpa_overlap_file << '\n';
+        ss << "crpa_species_labels = " << crpa_species_labels << '\n';
+        ss << "crpa_correlated_species = " << crpa_correlated_species << '\n';
+        ss << "crpa_ligand_species = " << crpa_ligand_species << '\n';
+        ss << "crpa_parent_orbitals = " << crpa_parent_orbitals << '\n';
+        ss << "crpa_output_orbitals = " << crpa_output_orbitals << '\n';
+        ss << "crpa_residual_tol = " << crpa_residual_tol << '\n';
+        ss << "crpa_response_windows_ha =";
+        for (const double value : crpa_response_windows_ha) ss << ' ' << value;
+        ss << "\ncrpa_orbital_windows_ha =";
+        for (const double value : crpa_orbital_windows_ha) ss << ' ' << value;
+        ss << "\ncrpa_response_bands =";
+        for (const int value : crpa_response_bands) ss << ' ' << value;
+        ss << "\ncrpa_orbital_bands =";
+        for (const int value : crpa_orbital_bands) ss << ' ' << value;
+        ss << '\n';
+    }
     return ss.str();
 }
 

@@ -86,4 +86,18 @@ foreach(target
   config_test(${target} 4)
 endforeach()
 
+config_test(test_matrix_power_scalar 1)
+add_test(NAME test_matrix_power_scalar_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_matrix_power_scalar>)
+
+if(LIBRPA_USE_LIBRI)
+  foreach(target
+      test_crpa_window_input
+      test_crpa_band_response
+      test_pair_density_vertex
+      test_crpa_screening)
+    config_test(${target} 1)
+    add_test(NAME ${target}_mpi COMMAND mpirun -np 4 $<TARGET_FILE:${target}>)
+  endforeach()
+endif()
+
 # TODO(minye): make use of GTest

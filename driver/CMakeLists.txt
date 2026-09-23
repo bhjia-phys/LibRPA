@@ -17,6 +17,8 @@ list(APPEND exe_sources
   tasks/g0w0.cpp
   tasks/g0w0_band.cpp
   tasks/rpa.cpp
+  tasks/crpa.cpp
+  reader_nao_overlap.cpp
   tasks/print_minimax.cpp
   tasks/qsgw.cpp
   qsgw/vxc_io.cpp

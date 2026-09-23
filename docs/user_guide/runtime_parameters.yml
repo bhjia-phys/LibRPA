@@ -116,6 +116,28 @@ blocks:
     fields:
       - api.use_scalapack_ecrpa
 
+  - heading: Constrained RPA
+    text: |
+      These experimental driver parameters apply to `task = crpa_u`.
+      A selects the original KS bands on both branches of the excluded response
+      Pd. B independently selects the band space used to construct local output
+      orbitals. Specify either energy windows or a band list for each space.
+      Calculations use scalar full-grid LIBRI and native positive imaginary
+      frequencies; see [the cRPA guide](crpa.md) for supported numerical settings,
+      orbital conventions and the distinction between the first node and U(0).
+    fields:
+      - driver.crpa_overlap_file
+      - driver.crpa_species_labels
+      - driver.crpa_correlated_species
+      - driver.crpa_ligand_species
+      - driver.crpa_parent_orbitals
+      - driver.crpa_output_orbitals
+      - driver.crpa_response_windows_ha
+      - driver.crpa_orbital_windows_ha
+      - driver.crpa_response_bands
+      - driver.crpa_orbital_bands
+      - driver.crpa_residual_tol
+
   - heading: ABF Compression
     fields:
       - api.use_shrink_abfs
