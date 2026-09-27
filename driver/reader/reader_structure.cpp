@@ -7,10 +7,8 @@
 #include "../../src/io/global_io.h"
 #include "../../src/utils/error.h"
 
-#include <algorithm>
-#include <cctype>
-#include <exception>
 #include <fstream>
+#include <string>
 #include <vector>
 
 namespace librpa::reader

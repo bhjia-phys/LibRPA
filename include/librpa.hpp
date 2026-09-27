@@ -349,6 +349,12 @@ public:
     void set_symmetry_operations(int n_symops, int row_conv, const int* rotmats,
                                  const double* trans = nullptr);
 
+    /** @brief Set spatial symmetry operations with spin actions. */
+    void set_symmetry_spin_operations(int n_ops, int row_conv, const int* rotmats,
+                                      const double* trans, const int* antiunitary,
+                                      const double* spin_u, int spin_action_source,
+                                      int grey_group);
+
     /**
      * @brief Set direct and reciprocal lattice vectors.
      * @param[in] lat_mat Direct lattice vectors in Bohr.
