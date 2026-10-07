@@ -31,6 +31,7 @@ list(APPEND exe_sources
   qsgw/vxc_io.cpp
   qsgw/band_output.cpp
   qsgw/iteration_trace.cpp
+  qsgw/checkpoint.cpp
   # tasks/test.cpp
   # task_qsgw.cpp
   # task_qsgwA.cpp

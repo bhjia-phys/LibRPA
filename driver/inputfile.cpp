@@ -343,6 +343,8 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_band0_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_string(parser, "qsgw_restart_file", driver_params.qsgw_restart_file);
+        parse_qsgw_string(parser, "qsgw_checkpoint_file", driver_params.qsgw_checkpoint_file);
         parse_qsgw_double(parser, "qsgw_convergence_tolerance_ev",
                           driver_params.qsgw_convergence_tolerance_ev);
     }

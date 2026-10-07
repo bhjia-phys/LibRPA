@@ -394,14 +394,14 @@ struct DriverParams
     //! Experimental
     double qsgw_mixing_beta;
 
-    //! Minimum number of QSGW updates before convergence may terminate the run.
+    //! Earliest global QSGW iteration at which convergence may terminate the run.
     //! @par Default
     //! 1
     //! @par Status
     //! Experimental
     int qsgw_min_iter;
 
-    //! Maximum number of QSGW updates.
+    //! Maximum global QSGW iteration, including restored updates.
     //! @par Default
     //! 10
     //! @par Status
@@ -435,6 +435,21 @@ struct DriverParams
     //! @par Status
     //! Experimental
     bool qsgw_write_iteration_matrices;
+
+    //! Checkpoint to restore at a completed QSGW iteration; relative to cwd.
+    //! @par Default
+    //! `none`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_restart_file;
+
+    //! Checkpoint written after every complete update; relative to output_dir.
+    //! Use `none` to disable checkpoint output.
+    //! @par Default
+    //! `qsgw_checkpoint.bin`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_checkpoint_file;
 
     //! Maximum eigenvalue change used for convergence, in eV.
     //! @par Default

@@ -73,6 +73,8 @@ DriverParams::DriverParams():
     qsgw_band0_cut_mode(0),
     qsgw_band0_cut_shift_ha(20.0),
     qsgw_write_iteration_matrices(false),
+    qsgw_restart_file("none"),
+    qsgw_checkpoint_file("qsgw_checkpoint.bin"),
     qsgw_convergence_tolerance_ev(1.0e-4)
 {
 }
@@ -214,6 +216,8 @@ std::string DriverParams::format()
            << qsgw_convergence_tolerance_ev << std::endl;
         ss << "qsgw_write_iteration_matrices = " << std::boolalpha
            << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_restart_file = " << qsgw_restart_file << std::endl;
+        ss << "qsgw_checkpoint_file = " << qsgw_checkpoint_file << std::endl;
     }
     if (output_gw_spec_func)
     {
