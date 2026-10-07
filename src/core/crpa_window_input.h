@@ -14,7 +14,7 @@ struct CrpaWindowOptions
 {
     std::string correlated_species;
     std::string ligand_species;
-    //! Parent frame and output subset: d, dp, eg, or t2g, in the Cartesian frame.
+    //! Parent frame and output subset: s, p, sp, d, dp, eg, or t2g, in the Cartesian frame.
     //! d|dp and eg|dp select columns after joint d+p polar normalization.
     std::string parent_orbitals = "d";
     std::string output_orbitals = "d";

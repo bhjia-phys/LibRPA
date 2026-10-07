@@ -195,6 +195,66 @@ void test_explicit_bands_across_overlapping_energy_ranges()
     }
 }
 
+void test_common_sp_frame_with_cross_shell_overlap()
+{
+    // Two radial s shells distinguish the selected first shell from a spectator.
+    AtomicBasis basis(std::vector<std::size_t>{5});
+    basis.set_l_shells({{0, 0, 1}});
+    BasisConvention convention;
+    convention.bloch_phase = -1;
+    convention.bloch_ratom = 0;
+    convention.order = LIBRPA_ANGULAR_ORDER_ABS_PM;
+    convention.coeff_m_negative = LIBRPA_RSH_COEFF_M_1;
+    convention.coeff_m_positive = LIBRPA_RSH_COEFF_1_M;
+    const double coupling = 0.31;
+    ComplexMatrix overlap(5, 5), inverse_sqrt(5, 5);
+    overlap.set_as_identity_matrix();
+    inverse_sqrt.set_as_identity_matrix();
+    overlap(0, 2) = overlap(2, 0) = coupling;
+    const double plus = 1.0 / std::sqrt(1.0 + coupling);
+    const double minus = 1.0 / std::sqrt(1.0 - coupling);
+    inverse_sqrt(0, 0) = inverse_sqrt(2, 2) = (plus + minus) / 2.0;
+    inverse_sqrt(0, 2) = inverse_sqrt(2, 0) = (plus - minus) / 2.0;
+    MeanField meanfield(1, 1, 5, 5);
+    meanfield.get_eigenvectors()[0][0][0] = transpose(inverse_sqrt, false);
+    CrpaWindowOptions options;
+    options.correlated_species = "Si";
+    options.parent_orbitals = options.output_orbitals = "sp";
+    options.response_bands = {0, 2};
+    options.orbital_bands = {0, 1, 2, 3, 4};
+    auto build = [&](const CrpaWindowOptions& selected)
+    {
+        return build_crpa_window_input(basis, convention, {0}, {"Si"}, {overlap},
+                                       {{0, 0, 0}}, meanfield, selected);
+    };
+    const auto sp = build(options);
+    require(sp.sites.size() == 1 && sp.sites[0].n_orbitals == 4,
+            "s and p must share one site for cross-shell tensor elements");
+    const int rows[] = {0, 2, 3, 4};
+    ComplexMatrix expected(5, 4);
+    for (int row = 0; row < 5; ++row)
+        for (int col = 0; col < 4; ++col) expected(row, col) = inverse_sqrt(row, rows[col]);
+    require(distance(sp.orbitals_spin_k[0][0], expected) < 1e-12,
+            "joint sp normalization differs from the analytic metric frame");
+    ComplexMatrix identity(4, 4);
+    identity.set_as_identity_matrix();
+    require(distance(transpose(expected, true) * overlap * expected, identity) < 1e-12,
+            "sp frame is not orthonormal across shells");
+    for (const auto& selection : {std::string("s"), std::string("p")})
+    {
+        options.output_orbitals = selection;
+        const auto subset = build(options);
+        const auto& phi = subset.orbitals_spin_k[0][0];
+        const int offset = selection == "s" ? 0 : 1;
+        for (int row = 0; row < 5; ++row)
+            for (int col = 0; col < phi.nc; ++col)
+                require(std::abs(phi(row, col) - expected(row, offset + col)) < 1e-12,
+                        "s|sp or p|sp was normalized outside its common parent frame");
+        require(subset.response_bands == sp.response_bands,
+                "output orbital selection changed the response subspace");
+    }
+}
+
 }  // namespace
 
 int main()
@@ -203,6 +263,7 @@ int main()
     {
         test_independent_windows_spin_frames_and_spectator();
         test_explicit_bands_across_overlapping_energy_ranges();
+        test_common_sp_frame_with_cross_shell_overlap();
         std::cout << "cRPA window orbital numerical test passed\n";
     }
     catch (const std::exception& error)

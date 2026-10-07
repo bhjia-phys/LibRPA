@@ -12,10 +12,15 @@ or by an explicit zero-based KS band list shared by all spin/k points. PDOS and
 KS-band inspection determine the material-specific selection.
 
 For each spin, atomic trials are projected into B and orthonormalized using
-the AO overlap. `crpa_parent_orbitals` selects `d`, `dp`, `eg` or `t2g` trials;
+the AO overlap. `crpa_parent_orbitals` selects `s`, `p`, `sp`, `d`, `dp`, `eg` or `t2g` trials;
 `crpa_output_orbitals` selects a subset of the resulting common frame. Thus
 `d|dp` and `eg|dp` retain columns of the jointly normalized d+p frame. The
 first radial shell is used; `eg` and `t2g` refer to the global Cartesian axes.
+`sp` combines `s, pz, px, py` on each correlated atom in one output site, retaining
+the cross-shell direct and exchange interactions in its four-index tensor. In
+contrast, `dp` combines correlated-atom d orbitals with distinct ligand-atom p
+orbitals. Selecting `s` or `p` from an `sp` parent retains columns of that same
+jointly normalized frame, rather than constructing separate local frames.
 An explicit ligand species prevents spectator atoms such as Li or Sr from
 being interpreted as oxygen.
 

@@ -373,14 +373,14 @@ struct DriverParams
     //! @par Status
     //! Experimental
     std::string crpa_ligand_species;
-    //! Atomic trials projected into B and jointly metric-normalized: d, dp, eg or t2g.
+    //! Atomic trials projected into B and jointly metric-normalized: s, p, sp, d, dp, eg or t2g.
     //! eg/t2g refer to global Cartesian axes, using the first radial shell.
     //! @par Default
     //! d
     //! @par Status
     //! Experimental
     std::string crpa_parent_orbitals = "d";
-    //! Reported subset of the jointly normalized parent frame: d, dp, eg or t2g.
+    //! Reported subset of the jointly normalized parent frame: s, p, sp, d, dp, eg or t2g.
     //! Must be a subset of crpa_parent_orbitals; it does not select response bands A.
     //! @par Default
     //! d

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 #include "../math/rsh.h"
 
@@ -11,16 +12,23 @@ namespace librpa_int
 namespace
 {
 
-std::vector<int> d_components(const std::string& orbitals)
+using OrbitalComponent = std::pair<int, int>;  // (l, m), first radial shell
+
+std::vector<OrbitalComponent> orbital_components(const std::string& orbitals)
 {
-    if (orbitals == "d" || orbitals == "dp") return {0, 1, -1, 2, -2};
-    if (orbitals == "eg") return {0, 2};
-    if (orbitals == "t2g") return {1, -1, -2};
-    throw LIBRPA_INVALID_ARGUMENT("cRPA orbitals must be d, dp, eg, or t2g");
+    if (orbitals == "s") return {{0, 0}};
+    if (orbitals == "p") return {{1, 0}, {1, 1}, {1, -1}};
+    if (orbitals == "sp") return {{0, 0}, {1, 0}, {1, 1}, {1, -1}};
+    if (orbitals == "d" || orbitals == "dp")
+        return {{2, 0}, {2, 1}, {2, -1}, {2, 2}, {2, -2}};
+    if (orbitals == "eg") return {{2, 0}, {2, 2}};
+    if (orbitals == "t2g") return {{2, 1}, {2, -1}, {2, -2}};
+    throw LIBRPA_INVALID_ARGUMENT("cRPA orbitals must be s, p, sp, d, dp, eg, or t2g");
 }
 
 std::string orbital_label(int l, int m)
 {
+    if (l == 0 && m == 0) return "s";
     if (l == 1)
     {
         if (m == 0) return "pz";
@@ -141,13 +149,13 @@ CrpaWindowBuildResult build_crpa_window_input(
         throw LIBRPA_INVALID_ARGUMENT(
             "cRPA window orbitals require a specified cell-periodic basis convention");
 
-    const auto parent_m = d_components(options.parent_orbitals);
-    const auto output_m = d_components(options.output_orbitals);
+    const auto parent_m = orbital_components(options.parent_orbitals);
+    const auto output_m = orbital_components(options.output_orbitals);
     const bool parent_p = options.parent_orbitals == "dp";
     const bool output_p = options.output_orbitals == "dp";
     if (output_p && !parent_p)
         throw LIBRPA_INVALID_ARGUMENT("dp output requires a dp parent orbital frame");
-    for (const int m : output_m)
+    for (const auto& m : output_m)
         if (std::find(parent_m.begin(), parent_m.end(), m) == parent_m.end())
             throw LIBRPA_INVALID_ARGUMENT("output orbitals are not a subset of the parent frame");
 
@@ -171,16 +179,19 @@ CrpaWindowBuildResult build_crpa_window_input(
     int n_parent = 0;
     int n_output = 0;
     auto append_site =
-        [&](int atom, int l, const std::vector<int>& components, const std::vector<int>& selected)
+        [&](int atom, const std::vector<OrbitalComponent>& components,
+            const std::vector<OrbitalComponent>& selected)
     {
         SiteOrbitalGroup parent;
         parent.label = species_labels[atom_types[atom]] + "-atom-" + std::to_string(atom);
         parent.atom_index = atom;
         parent.orb_start = n_parent;
         parent.n_orbitals = static_cast<int>(components.size());
-        const int shell = first_shell_offset(basis.get_l_shells(atom), l);
-        for (const int m : components)
+        for (const auto& component : components)
         {
+            const int l = component.first;
+            const int m = component.second;
+            const int shell = first_shell_offset(basis.get_l_shells(atom), l);
             const int local = shell + rsh_m_to_index(l, m, convention.order);
             if (local < 0 || local >= static_cast<int>(basis.get_atom_nb(atom)))
                 throw LIBRPA_INVALID_ARGUMENT("cRPA shell metadata exceeds the atom basis size");
@@ -194,11 +205,11 @@ CrpaWindowBuildResult build_crpa_window_input(
             output.orb_start = n_output;
             output.n_orbitals = static_cast<int>(selected.size());
             output.orbital_labels.clear();
-            for (const int m : selected)
+            for (const auto& component : selected)
             {
-                const auto found = std::find(components.begin(), components.end(), m);
+                const auto found = std::find(components.begin(), components.end(), component);
                 output_columns.push_back(n_parent + static_cast<int>(found - components.begin()));
-                output.orbital_labels.push_back(orbital_label(l, m));
+                output.orbital_labels.push_back(orbital_label(component.first, component.second));
             }
             result.sites.push_back(output);
             n_output += output.n_orbitals;
@@ -206,7 +217,7 @@ CrpaWindowBuildResult build_crpa_window_input(
         n_parent += parent.n_orbitals;
     };
     for (int atom = 0; atom < static_cast<int>(basis.n_atoms); ++atom)
-        if (atom_types[atom] == correlated) append_site(atom, 2, parent_m, output_m);
+        if (atom_types[atom] == correlated) append_site(atom, parent_m, output_m);
     if (parent_sites.empty())
         throw LIBRPA_INVALID_ARGUMENT("no atom matches the selected correlated species");
     if (parent_p)
@@ -214,8 +225,8 @@ CrpaWindowBuildResult build_crpa_window_input(
         const int before = n_parent;
         for (int atom = 0; atom < static_cast<int>(basis.n_atoms); ++atom)
             if (atom_types[atom] == ligand)
-                append_site(atom, 1, {0, 1, -1},
-                            output_p ? std::vector<int>{0, 1, -1} : std::vector<int>{});
+                append_site(atom, orbital_components("p"),
+                            output_p ? orbital_components("p") : std::vector<OrbitalComponent>{});
         if (before == n_parent)
             throw LIBRPA_INVALID_ARGUMENT("no atom matches the selected ligand species");
     }
