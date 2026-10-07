@@ -48,6 +48,8 @@ struct RpaHeadwingSettings
 
 //! Velocity/momentum matrix, indexed as [spin][k][cartesian].
 using velocity_matrix_t = std::vector<std::vector<std::vector<ComplexMatrix>>>;
+//! Original-KS endpoint mask [spin][k][band], without changing occupations.
+using HeadwingBandSelection = std::vector<std::vector<std::vector<unsigned char>>>;
 
 void initialize_velocity_matrix(velocity_matrix_t &velocity, int n_spins, int n_kpoints,
                                 int n_states);
@@ -233,6 +235,8 @@ private:
     const KPointBlacsParallelContext *kblacs_ctxt_;
     const ArrayDesc *desc_wfc_kblacs_;
     bool use_kpara_eigvec_;
+    HeadwingBandSelection excluded_band_pairs_;
+    bool retains_band_pair(int spin, int k, int n, int m) const;
     size_t n_nonsingular;
     // Lebedev-Laikov angular grid; qw has absorbed 4Pi.
     std::vector<double> qx_leb, qy_leb, qz_leb, qw_leb;
@@ -245,6 +249,10 @@ public:
     bool use_2d_dielectric = false;
     bool use_soc = false;
     bool debug = false;
+    //! Normalize only the angular Gamma-cell average, preserving its vacuum limit.
+    bool normalize_gamma_cell_weights = false;
+    //! Set before init/cal_head: omit pairs whose two original KS endpoints are selected.
+    void set_excluded_band_pairs(const HeadwingBandSelection &selection);
 
     // Symmetry-aware head/wing switches. When use_symmetry is true and the
     // input symmetry context can restore the BZ from the IBZ k-grid, cal_head

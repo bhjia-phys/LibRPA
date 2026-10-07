@@ -74,13 +74,16 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
              options->parallel_routing != LIBRPA_ROUTING_AUTO))
             throw LIBRPA_INVALID_ARGUMENT(
                 "cRPA requires full-grid LIBRI and replicated eigenvectors");
-        if (options->replace_w_head == LIBRPA_SWITCH_ON || options->option_dielect_func != 0 ||
+        const bool optical = options->replace_w_head == LIBRPA_SWITCH_ON;
+        if ((optical && (options->option_dielect_func != 3 ||
+                         options->use_2d_dielectric == LIBRPA_SWITCH_ON)) ||
+            (!optical && options->option_dielect_func != 0) ||
             options->tfgrids_type != LIBRPA_TFGRID_MINIMAX || options->n_bands_chi0 >= 0 ||
             options->use_fullcoul_eps != LIBRPA_SWITCH_ON ||
             options->use_fullcoul_wc != LIBRPA_SWITCH_ON)
             throw LIBRPA_INVALID_ARGUMENT(
-                "cRPA requires native minimax, all loaded bands, full/full Coulomb and no head "
-                "correction");
+                "cRPA requires native minimax, all loaded bands, full/full Coulomb and either "
+                "no head correction or 3D analytic option 3");
         const bool shrink = options->use_shrink_abfs == LIBRPA_SWITCH_ON;
         if (shrink && (options->use_shrink_chi != LIBRPA_SWITCH_ON ||
                        !ds->basis_aux_shrink.initialized() || ds->sinvS.empty()))
@@ -190,6 +193,16 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
                         ds->sinvS,     ds->vq,
                         ds->blacs_h,   shrink ? ds->desc_abf_shrink : ds->desc_abf,
                         shrink,        opts.sqrt_coulomb_threshold};
+    std::unique_ptr<diele_func> full_headwing, constrained_headwing;
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON)
+    {
+        full_headwing = make_ds_headwing(*ds, opts, true);
+        constrained_headwing = make_ds_headwing(*ds, opts, true, &selection);
+        full_headwing->normalize_gamma_cell_weights = true;
+        constrained_headwing->normalize_gamma_cell_weights = true;
+        context.full_headwing = full_headwing.get();
+        context.constrained_headwing = constrained_headwing.get();
+    }
     std::vector<CorrelatedSubspace*> frame_views;
     for (const auto& frame : frames) frame_views.push_back(frame.get());
     auto result = std::make_unique<LibrpaCrpaResult>();

@@ -379,7 +379,7 @@ void test_soc_bloch_phases()
     periodic.compare_tensors(periodic.run());
 }
 
-void test_soc_optical_charge_vertex()
+void test_constrained_soc_optical()
 {
     Fixture f(true, 0.37);
     const double pi = std::acos(-1.0);
@@ -397,19 +397,24 @@ void test_soc_optical_charge_vertex()
                                     Z(0, 0.025 * (alpha + 1) * (j - i)) *
                                     f.coefficients(3 * s + j, m);
     const auto &frequencies = f.ds.tfg.get_freq_nodes();
-    const auto make_optical = [&](const MeanField &mf)
+    const auto make_optical = [&](const MeanField &mf, bool constrained)
     {
         auto optical = std::make_unique<diele_func>(
             mf, f.ds.velocity_matrix, f.ds.pbc.kfrac_list, f.ds.basis_wfc,
             f.ds.basis_aux, frequencies, 3, 6, 1, 2, f.ds.pbc, f.ds.comm_h, f.ds.blacs_h);
         optical->use_soc = true;
+        if (constrained) optical->set_excluded_band_pairs(f.selection());
+        optical->normalize_gamma_cell_weights = true;
         optical->init(0, f.ds.vq);
         optical->cal_head();
         optical->cal_wing(f.ds.cs_data, 0, f.ds.vq);
         return optical;
     };
-    const auto full = make_optical(f.ds.mf);
+    const auto full = make_optical(f.ds.mf, false);
+    const auto retained = make_optical(f.ds.mf, true);
+    double excluded_signal = 0;
     for (std::size_t iw = 0; iw < frequencies.size(); ++iw)
+        for (int which = 0; which < 2; ++which)
         {
             ComplexMatrix head(3, 3), wing(2, 3);
             head.set_as_identity_matrix();
@@ -417,6 +422,7 @@ void test_soc_optical_charge_vertex()
                 for (int n = 0; n < 2; ++n)
                     for (int m = 2; m < 6; ++m)
                     {
+                        if (which && m < 4) continue;
                         const double delta = f.ds.mf.get_eigenvals()[0](k, m) -
                                              f.ds.mf.get_eigenvals()[0](k, n);
                         const double denominator = delta * delta + frequencies[iw] * frequencies[iw];
@@ -431,16 +437,32 @@ void test_soc_optical_charge_vertex()
                                     std::conj(f.vertex(mu, n, m) * va(m, n)) / denominator;
                         }
                     }
-            const auto &actual = full;
+            const auto &actual = which ? retained : full;
             for (int i = 0; i < 3; ++i)
                 for (int j = 0; j < 3; ++j)
                 {
                     close(actual->get_dielectric_head(iw)(i, j), head(i, j), 2e-12);
+                    excluded_signal = std::max(excluded_signal, std::abs(
+                        full->get_dielectric_head(iw)(i, j) - retained->get_dielectric_head(iw)(i, j)));
                 }
             for (int mu = 0; mu < 2; ++mu)
                 for (int alpha = 0; alpha < 3; ++alpha)
                     close(actual->get_wing_mu(iw)(mu, alpha), wing(mu, alpha), 2e-12);
         }
+    if (excluded_signal < 1e-4) throw std::runtime_error("optical Pd control was trivial");
+
+    // A zero-response vacuum must give the retained identity after cell averaging.
+    auto vacuum_mf = f.ds.mf;
+    vacuum_mf.get_weight()[0].zero_out();
+    const auto vacuum = make_optical(vacuum_mf, false);
+    auto identity = init_local_mat<Z>(f.ds.desc_abf, MAJOR::COL);
+    for (int i = 0; i < identity.nr(); ++i)
+        for (int j = 0; j < identity.nc(); ++j)
+            identity(i, j) = f.ds.desc_abf.indx_l2g_r(i) == f.ds.desc_abf.indx_l2g_c(j) ? 1.0 : 0.0;
+    auto inverse = identity.copy();
+    vacuum->rewrite_eps_abf_space(inverse, 0, identity, identity, f.ds.desc_abf, 2, 0, false, false);
+    for (int i = 0; i < inverse.nr(); ++i)
+        for (int j = 0; j < inverse.nc(); ++j) close(inverse(i, j), identity(i, j), 2e-12);
 }
 }  // namespace
 
@@ -455,7 +477,7 @@ int main(int argc, char** argv)
         test_zero_soc_limit();
         test_soc_and_spin_representation();
         test_soc_bloch_phases();
-        test_soc_optical_charge_vertex();
+        test_constrained_soc_optical();
     }
     catch (const std::exception &failure)
     {

@@ -5,6 +5,7 @@
 
 namespace librpa_int
 {
+class diele_func;
 
 //! One site's ordered tensor U_ab,cd, with independently chosen spin frames.
 struct CrpaOnsiteTensor
@@ -37,13 +38,16 @@ struct CrpaContext
     const ArrayDesc &active_auxiliary_descriptor;
     bool transform_auxiliary_basis = false;
     double sqrt_coulomb_threshold = 0.0;
+    diele_func *full_headwing = nullptr;
+    diele_func *constrained_headwing = nullptr;
 };
 
 /*! Build P0 and Pd on the same original KS poles and positive minimax nodes.
  * Pr=P0-Pd, U=v+Wc[Pr], W=v+Wc[P0]. The bare term uses the same retained
  * Coulomb spectrum as the native Wc backend. Each frame corresponds to one
  * physical spin channel. No static node, continuation, or file I/O is added.
- * Results are returned on all ranks. Only scalar, full-grid LIBRI is supported.
+ * SOC uses one full spinor frame whose density vertex sums both components.
+ * Results are returned on all ranks. Scalar/spinor full-grid LIBRI is supported.
  */
 CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &selection,
                                const std::vector<CorrelatedSubspace *> &frames);

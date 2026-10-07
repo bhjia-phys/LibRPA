@@ -94,6 +94,22 @@ trial-spin columns and is not a scalar-shell Hund parameter. Inspect resolved
 entries using the emitted orbital labels. Keep entire degenerate groups when
 choosing A or B.
 
+For a gapped three-dimensional input, `replace_w_head = true` with
+`option_dielect_func = 3` uses analytic head and wings from the original KS
+velocity matrices. Supply the existing native `velocity_matrix` input. Full
+screening uses every physical transition; constrained screening omits a pair
+only when both original endpoints belong to A. The RI optical charge vertex
+sums equal spinor components. Only the angular Gamma-cell weights are
+normalized; the regular dielectric body is unchanged. Symmetry, distributed
+KS inputs and the two-dimensional optical route are currently excluded from
+this cRPA task.
+
+With `replace_w_head = false` and `option_dielect_func = 0`, an uncorrected
+periodic result remains a finite-mesh diagnostic until the Gamma contribution
+is bounded. Using a full-response optical head unchanged for nonzero Pd would
+screen with the wrong response. Small-case optical tests do not establish
+material mesh or basis convergence.
+
 Library callers use `librpa_crpa.h`: initialize `LibrpaCrpaInput`, supply S(k)
 and the window/species data, call `librpa_compute_crpa_window` collectively,
 then inspect the owned result and release it with `librpa_delete_crpa_result`.

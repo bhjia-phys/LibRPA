@@ -183,6 +183,7 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
     require_collectively(
         !frames.empty() && frames.size() == chi.mf.get_n_spins() && desc.initialized() &&
             desc.m() == basis.nb_total && desc.n() == basis.nb_total && !chi.use_symmetry_context &&
+            ((context.full_headwing == nullptr) == (context.constrained_headwing == nullptr)) &&
             std::isfinite(context.sqrt_coulomb_threshold) && context.sqrt_coulomb_threshold >= 0.0,
         comm, "cRPA requires matching spin frames, full q grid and active descriptor");
     for (const auto *frame : frames)
@@ -279,8 +280,13 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
         // Raw v is supplied only once to its spectral filter. Our bare term above
         // uses the identical threshold; it never restores discarded directions.
         auto coulomb_wc = copy_coulomb(context.coulomb);
+        auto *optical = constrained ? context.constrained_headwing : context.full_headwing;
+        std::vector<std::complex<double>> epsmac;
+        if (optical)
+            for (double value : optical->get_head_vec()) epsmac.emplace_back(value);
         auto wc = compute_Wc_freq_q_blacs(chi, context.coulomb, coulomb_wc,
-                                          context.sqrt_coulomb_threshold, false, 0, {}, nullptr,
+                                          context.sqrt_coulomb_threshold, optical != nullptr,
+                                          optical ? 3 : 0, epsmac, optical,
                                           context.blacs, desc, false);
         for (auto &tensor : result.tensors)
         {

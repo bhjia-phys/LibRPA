@@ -10,9 +10,11 @@
 #include "../../src/io/fs.h"
 #include "../../src/io/global_io.h"
 #include "../../src/mpi/global_mpi.h"
+#include "../../src/api/instance_manager.h"
 #include "../../src/utils/constants.h"
 #include "../driver.h"
 #include "../reader_nao_overlap.h"
+#include "../read_data.h"
 #include "../task.h"
 #include "librpa_crpa.h"
 
@@ -57,6 +59,9 @@ void write_result(const LibrpaCrpaResult* result)
                      : "Output Phi uses independent B window and separate physical spin frames.\n")
              << "First radial shell; eg/t2g labels refer to global Cartesian axes.\n"
              << "Native positive minimax nodes only; no direct U(0) was calculated.\n"
+             << (driver::opts.replace_w_head == LIBRPA_SWITCH_ON
+                     ? "Analytic full/constrained head and wings; normalized angular Gamma-cell weights.\n"
+                     : "No optical correction: finite-mesh periodic diagnostic.\n")
              << "Interaction and frequency columns use eV; indices are zero based.\n"
              << "U_intra=mean U_mm,mm; U_inter=mean_(m!=n) U_mm,nn; J=mean U_mn,nm.\n"
              << driver::driver_params.format();
@@ -153,6 +158,15 @@ void driver::task_crpa_u()
                 overlap_packed.push_back(spatial.c[i].real());
                 overlap_packed.push_back(spatial.c[i].imag());
             }
+        }
+        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON)
+        {
+            auto dataset = librpa_int::api::get_dataset_instance(h.get_c_handler());
+            const auto &velocity_name = driver_params.prefix_velocity;
+            const auto velocity_path = librpa_int::is_absolute_path(velocity_name)
+                                           ? velocity_name
+                                           : librpa_int::join_path(driver_params.input_dir, velocity_name);
+            read_velocity(velocity_path, dataset->mf, dataset->velocity_matrix);
         }
     }
     catch (const std::exception& failure)
