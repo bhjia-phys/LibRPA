@@ -118,9 +118,10 @@ void test_native_screening_pipeline(bool negative_mode)
         }
     }
     frame.compute_T_R();
-    ds.cs_data.use_libri = true;
+    // Model normal distributed API input: only block owners set the tag.
     if (ds.comm_h.is_root())
     {
+        ds.cs_data.use_libri = true;
         auto data = std::make_shared<std::valarray<double>>(0.0, 4 * naux);
         const double retained[] = {0.15, 0.2, 0.2, 0.4};
         const double discarded[] = {0.3, 0.05, 0.05, 0.1};

@@ -492,7 +492,9 @@ PairDensityVertex::PairDensityVertex(
             "PairDensityVertex requires an initialized MPI communicator");
 
     std::string local_error;
-    if (!Cs.use_libri)
+    // Empty MPI owners have no representation to contradict LIBRI routing.
+    // Only owners of an actual block receive the storage tag from input APIs.
+    if (!Cs.data_IJR.empty() || (!Cs.data_libri.empty() && !Cs.use_libri))
         local_error =
             "projector pair-density vertex requires LIBRPA_ROUTING_LIBRI Cs storage";
     try
