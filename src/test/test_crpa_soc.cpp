@@ -275,15 +275,110 @@ struct Fixture
     }
 };
 
-void test_complex_soc_response()
+void test_zero_soc_limit()
 {
-    Fixture scalar(false, 0), spinor(true, 0.37), rotated(true, 0.37, 0.61);
-    Fixture periodic(true, 0.37, 0, true);
+    Fixture scalar(false, 0), spinor(true, 0);
     scalar.compare_response(false);
+    scalar.compare_response(true);
     spinor.compare_response(false);
-    rotated.compare_response(false);
-    periodic.compare_response(false);
+    spinor.compare_response(true);
+    const auto reference = scalar.run(), packed = spinor.run();
+    scalar.compare_tensors(reference);
+    spinor.compare_tensors(packed);
+    for (int a = 0; a < 6; ++a)
+        for (int b = 0; b < 6; ++b)
+            for (int c = 0; c < 6; ++c)
+                for (int d = 0; d < 6; ++d)
+                    for (std::size_t iw = 0; iw < reference.frequencies.size(); ++iw)
+                    {
+                        const bool same_components = a % 2 == b % 2 && c % 2 == d % 2;
+                        const int row = (a / 2) * 3 + b / 2, col = (c / 2) * 3 + d / 2;
+                        for (int family = 0; family < 3; ++family)
+                        {
+                            const auto& s = reference.tensors[0];
+                            const auto& p = packed.tensors[0];
+                            const auto& x = family == 0 ? s.bare : (family == 1 ? s.u[iw] : s.w[iw]);
+                            const auto& y = family == 0 ? p.bare : (family == 1 ? p.u[iw] : p.w[iw]);
+                            close(y(a * 6 + b, c * 6 + d), same_components ? x(row, col) : Z{});
+                        }
+                    }
 }
+
+void test_soc_and_spin_representation()
+{
+    Fixture original(true, 0.37), rotated(true, 0.37, 0.61);
+    original.compare_response(false);
+    original.compare_response(true);
+    rotated.compare_response(false);
+    rotated.compare_response(true);
+    const auto first = original.run(), second = rotated.run();
+    original.compare_tensors(first);
+    rotated.compare_tensors(second);
+    for (std::size_t iw = 0; iw < first.frequencies.size(); ++iw)
+        for (int i = 0; i < first.tensors[0].bare.size; ++i)
+        {
+            close(first.tensors[0].bare.c[i], second.tensors[0].bare.c[i], 1e-12);
+            close(first.tensors[0].u[iw].c[i], second.tensors[0].u[iw].c[i], 1e-11);
+            close(first.tensors[0].w[iw].c[i], second.tensors[0].w[iw].c[i], 1e-11);
+        }
+
+    BasisConvention convention;
+    convention.bloch_phase = -1;
+    convention.bloch_ratom = 0;
+    convention.order = LIBRPA_ANGULAR_ORDER_ABS_PM;
+    convention.coeff_m_negative = LIBRPA_RSH_COEFF_M_1;
+    convention.coeff_m_positive = LIBRPA_RSH_COEFF_1_M;
+    ComplexMatrix spatial(3, 3);
+    spatial.set_as_identity_matrix();
+    CrpaWindowOptions options;
+    options.correlated_species = "X";
+    options.parent_orbitals = options.output_orbitals = "s";
+    options.response_bands = {0, 1, 2, 3};
+    options.orbital_bands = {0, 1, 4, 5};
+    const auto built = build_crpa_window_input(
+        original.ds.basis_wfc, convention, {0}, {"X"}, std::vector<ComplexMatrix>(4, spatial),
+        original.ds.pbc.kfrac_list, original.ds.mf, options);
+    if (built.sites[0].n_orbitals != 2 || built.sites[0].orbital_labels !=
+            std::vector<std::string>{"s:up", "s:down"})
+        throw std::runtime_error("SOC output labels/count are inconsistent");
+    // Analytic spectral projection gives precisely the first Kramers pair.
+    for (const auto& phi : built.orbitals_spin_k.at(0))
+        for (int i = 0; i < 6; ++i)
+            for (int a = 0; a < 2; ++a) close(phi(i, a), original.coefficients(i, a), 1e-12);
+
+    // An independently specified nonorthogonal AO change: C=R*C0,
+    // S=R^(-dagger)R^(-1). The complete B projects back to the original trials.
+    ComplexMatrix r(3, 3), inverse(3, 3);
+    r.set_as_identity_matrix();
+    inverse.set_as_identity_matrix();
+    r(0, 1) = 0.2;
+    r(1, 2) = 0.3;
+    inverse(0, 1) = -0.2;
+    inverse(1, 2) = -0.3;
+    inverse(0, 2) = 0.06;
+    const auto metric = transpose(inverse, true) * inverse;
+    auto nonorthogonal = original.ds.mf;
+    for (int k = 0; k < 4; ++k)
+        for (int s = 0; s < 2; ++s)
+            nonorthogonal.get_eigenvectors()[0][s][k] =
+                nonorthogonal.get_eigenvectors()[0][s][k] * transpose(r, false);
+    options.orbital_bands = {0, 1, 2, 3, 4, 5};
+    const auto changed = build_crpa_window_input(
+        original.ds.basis_wfc, convention, {0}, {"X"}, std::vector<ComplexMatrix>(4, metric),
+        original.ds.pbc.kfrac_list, nonorthogonal, options);
+    for (const auto& phi : changed.orbitals_spin_k.at(0))
+        for (int i = 0; i < 6; ++i)
+            for (int a = 0; a < 2; ++a) close(phi(i, a), i == 3 * a ? 1.0 : 0.0, 1e-12);
+}
+
+void test_soc_bloch_phases()
+{
+    Fixture periodic(true, 0.37, 0, true);
+    periodic.compare_response(false);
+    periodic.compare_response(true);
+    periodic.compare_tensors(periodic.run());
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -294,7 +389,9 @@ int main(int argc, char** argv)
     global::init_global_io();
     try
     {
-        test_complex_soc_response();
+        test_zero_soc_limit();
+        test_soc_and_spin_representation();
+        test_soc_bloch_phases();
     }
     catch (const std::exception &failure)
     {

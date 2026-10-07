@@ -9,7 +9,8 @@
  * The local frame is the metric polar factor:
  *   Phi(k) = W(k) [W(k)^dagger S(k) W(k)]^(-1/2).
  * This class constructs output orbitals; it does not select response bands.
- * Construct a separate instance for each output spin frame.
+ * Construct a separate instance for each scalar output spin frame. SOC uses
+ * one instance with component-major spinor AO rows and I_spinor tensor S.
  *
  * Storage convention (verified against production code):
  *   MeanField::wfc is stored as bands×NAO, where wfc(ib, iao) = C_{iao, ib},
@@ -28,7 +29,7 @@
  *   T(R) = (1/Nk) Σ_k exp(-i2π k_frac·R) Φ(k)
  *
  * Rank-deficient or ill-conditioned O(k) throws; no silent truncation.
- * First version: scalar non-SOC (n_spinor == 1), complex S/W/C/Φ/Q supported.
+ * Complex S/W/C/Φ/Q supported; spinor rows use the same metric algebra.
  */
 
 #include <complex>

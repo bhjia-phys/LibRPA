@@ -957,15 +957,16 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
 {
     using librpa_int::global::lib_printf;
 
-    // Selected responses use the same replicated scalar LIBRI kernel as P0.
+    // Selected responses use the same replicated scalar/spinor LIBRI kernel as P0.
     // Other routes must not silently ignore an attached selection.
     if (!band_selection_.empty())
     {
         const bool supported = routing == LIBRPA_ROUTING_LIBRI &&
             !is_mf_eigvec_k_distributed_ && !use_symmetry_context &&
-            mf.get_n_spinor() == 1 && tfg.has_time_grids();
+            (mf.get_n_spinor() == 1 ||
+             (mf.get_n_spinor() == 2 && mf.get_n_spins() == 1)) && tfg.has_time_grids();
         check_chi0_collective_error(comm_h, supported ? "" :
-            "Chi0 selected bands require scalar full-grid LIBRI with replicated eigenvectors and time grids");
+            "Chi0 selected bands require scalar/spinor full-grid LIBRI with replicated eigenvectors and time grids");
     }
 
     gf_save = gf_discard = 0;

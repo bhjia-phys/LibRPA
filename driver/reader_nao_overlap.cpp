@@ -11,6 +11,29 @@
 
 namespace librpa_driver
 {
+
+librpa_int::ComplexMatrix spatial_nao_overlap(const librpa_int::ComplexMatrix& overlap,
+                                             int n_aos, int n_spinor)
+{
+    if (n_aos <= 0 || (n_spinor != 1 && n_spinor != 2) || overlap.nr != overlap.nc)
+        throw std::runtime_error("invalid cRPA overlap dimensions");
+    if (overlap.nr == n_aos) return overlap;
+    if (n_spinor != 2 || overlap.nr != 2 * n_aos)
+        throw std::runtime_error("cRPA overlap and loaded spatial AO dimensions differ");
+    librpa_int::ComplexMatrix spatial(n_aos, n_aos);
+    for (int i = 0; i < n_aos; ++i)
+        for (int j = 0; j < n_aos; ++j)
+        {
+            spatial(i, j) = overlap(2 * i, 2 * j);
+            const double tolerance = 1e-12 * (1 + std::abs(spatial(i, j)));
+            if (std::abs(overlap(2 * i + 1, 2 * j + 1) - spatial(i, j)) > tolerance ||
+                std::abs(overlap(2 * i, 2 * j + 1)) > tolerance ||
+                std::abs(overlap(2 * i + 1, 2 * j)) > tolerance)
+                throw std::runtime_error("cRPA exported overlap is not spin independent");
+        }
+    return spatial;
+}
+
 namespace
 {
 

@@ -68,11 +68,12 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     {
         if (!options || !input) throw LIBRPA_INVALID_ARGUMENT("missing cRPA input or options");
         if (options->use_symmetry_rpa == LIBRPA_SWITCH_ON ||
-            options->use_kpara_scf_eigvec == LIBRPA_SWITCH_ON || ds->mf.get_n_spinor() != 1 ||
+            options->use_symmetry_gw == LIBRPA_SWITCH_ON ||
+            options->use_kpara_scf_eigvec == LIBRPA_SWITCH_ON ||
             (options->parallel_routing != LIBRPA_ROUTING_LIBRI &&
              options->parallel_routing != LIBRPA_ROUTING_AUTO))
             throw LIBRPA_INVALID_ARGUMENT(
-                "cRPA requires scalar, full-grid LIBRI and replicated eigenvectors");
+                "cRPA requires full-grid LIBRI and replicated eigenvectors");
         if (options->replace_w_head == LIBRPA_SWITCH_ON || options->option_dielect_func != 0 ||
             options->tfgrids_type != LIBRPA_TFGRID_MINIMAX || options->n_bands_chi0 >= 0 ||
             options->use_fullcoul_eps != LIBRPA_SWITCH_ON ||
@@ -154,14 +155,15 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
         for (int spin = 0; spin < ds->mf.get_n_spins(); ++spin)
         {
             auto frame = std::make_unique<CorrelatedSubspace>(
-                built.sites, ds->pbc.kfrac_list, ds->pbc.Rlist, ds->mf.get_n_aos(),
+                built.sites, ds->pbc.kfrac_list, ds->pbc.Rlist,
+                ds->mf.get_n_aos() * ds->mf.get_n_spinor(),
                 ds->mf.get_n_bands(), 1, window.gram_abs, window.gram_rel, window.gram_cond_max,
                 window.s_abs, window.s_rel, window.s_cond_max, window.residual_tol,
                 window.t_roundtrip_tol);
             selection[spin].resize(ds->mf.get_n_kpoints());
             for (int k = 0; k < ds->mf.get_n_kpoints(); ++k)
             {
-                frame->set_S_k(k, overlap[k]);
+                frame->set_S_k(k, crpa_spinor_overlap(overlap[k], ds->mf.get_n_spinor()));
                 frame->set_W_k(k, built.orbitals_spin_k[spin][k]);
                 selection[spin][k].assign(ds->mf.get_n_bands(), 0);
                 for (const int band : built.response_bands[spin][k]) selection[spin][k][band] = 1;
@@ -234,4 +236,12 @@ void librpa_crpa_result_bands(const LibrpaCrpaResult* result, int response_windo
         (response_window ? result->response_bands : result->orbital_bands).at(spin).at(kpoint);
     *count = static_cast<int>(row.size());
     *bands = row.data();
+}
+
+const char* librpa_crpa_result_orbital_label(const LibrpaCrpaResult* result, int atom, int orbital)
+{
+    if (!result || orbital < 0) throw LIBRPA_INVALID_ARGUMENT("invalid cRPA orbital query");
+    for (const auto& site : result->values.sites)
+        if (site.atom_index == atom) return site.orbital_labels.at(orbital).c_str();
+    throw LIBRPA_INVALID_ARGUMENT("cRPA output does not contain the requested atom");
 }

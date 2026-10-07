@@ -130,19 +130,36 @@ std::vector<std::vector<std::vector<int>>> select_bands(const MeanField& meanfie
 }
 }  // namespace
 
+ComplexMatrix crpa_spinor_overlap(const ComplexMatrix& overlap, int n_spinor)
+{
+    if (overlap.nr <= 0 || overlap.nr != overlap.nc || (n_spinor != 1 && n_spinor != 2))
+        throw LIBRPA_INVALID_ARGUMENT("cRPA requires a square spatial overlap and one or two components");
+    if (n_spinor == 1) return overlap;
+    ComplexMatrix lifted(n_spinor * overlap.nr, n_spinor * overlap.nc);
+    for (int s = 0; s < n_spinor; ++s)
+        for (int i = 0; i < overlap.nr; ++i)
+            for (int j = 0; j < overlap.nc; ++j)
+                lifted(s * overlap.nr + i, s * overlap.nc + j) = overlap(i, j);
+    return lifted;
+}
+
 CrpaWindowBuildResult build_crpa_window_input(
     const AtomicBasis& basis, const BasisConvention& convention, const std::vector<int>& atom_types,
     const std::vector<std::string>& species_labels, const std::vector<ComplexMatrix>& overlap_k,
     const std::vector<Vector3_Order<double>>& kfrac_list, const MeanField& meanfield,
     const CrpaWindowOptions& options)
 {
+    const int n_spinor = meanfield.get_n_spinor();
+    const int nao = meanfield.get_n_aos();
+    const int n_rows = nao * n_spinor;
     if (!basis.initialized() || !basis.has_l_shells() || !meanfield.initialized() ||
-        meanfield.get_n_spinor() != 1 || basis.nb_total != meanfield.get_n_aos() ||
+        (n_spinor != 1 && (n_spinor != 2 || meanfield.get_n_spins() != 1)) ||
+        basis.nb_total != nao ||
         atom_types.size() != basis.n_atoms || kfrac_list.empty() ||
         kfrac_list.size() != static_cast<std::size_t>(meanfield.get_n_kpoints()) ||
         overlap_k.size() != kfrac_list.size())
         throw LIBRPA_INVALID_ARGUMENT(
-            "cRPA window construction requires matching scalar KS/basis/k data");
+            "cRPA window construction requires matching scalar or two-component KS/basis/k data");
     // The downstream lattice Fourier transform uses the same cell-periodic convention.
     if (!is_basis_convention_set(convention) || convention.bloch_phase != -1 ||
         convention.bloch_ratom != 0)
@@ -186,7 +203,8 @@ CrpaWindowBuildResult build_crpa_window_input(
         parent.label = species_labels[atom_types[atom]] + "-atom-" + std::to_string(atom);
         parent.atom_index = atom;
         parent.orb_start = n_parent;
-        parent.n_orbitals = static_cast<int>(components.size());
+        parent.n_orbitals = n_spinor * static_cast<int>(components.size());
+        for (int s = 0; s < n_spinor; ++s)
         for (const auto& component : components)
         {
             const int l = component.first;
@@ -195,21 +213,25 @@ CrpaWindowBuildResult build_crpa_window_input(
             const int local = shell + rsh_m_to_index(l, m, convention.order);
             if (local < 0 || local >= static_cast<int>(basis.get_atom_nb(atom)))
                 throw LIBRPA_INVALID_ARGUMENT("cRPA shell metadata exceeds the atom basis size");
-            trial_rows.push_back(static_cast<int>(basis.get_part_range()[atom]) + local);
-            parent.orbital_labels.push_back(orbital_label(l, m));
+            trial_rows.push_back(s * nao + static_cast<int>(basis.get_part_range()[atom]) + local);
+            parent.orbital_labels.push_back(orbital_label(l, m) +
+                (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
         }
         parent_sites.push_back(parent);
         if (!selected.empty())
         {
             auto output = parent;
             output.orb_start = n_output;
-            output.n_orbitals = static_cast<int>(selected.size());
+            output.n_orbitals = n_spinor * static_cast<int>(selected.size());
             output.orbital_labels.clear();
+            for (int s = 0; s < n_spinor; ++s)
             for (const auto& component : selected)
             {
                 const auto found = std::find(components.begin(), components.end(), component);
-                output_columns.push_back(n_parent + static_cast<int>(found - components.begin()));
-                output.orbital_labels.push_back(orbital_label(component.first, component.second));
+                output_columns.push_back(n_parent + s * static_cast<int>(components.size()) +
+                                         static_cast<int>(found - components.begin()));
+                output.orbital_labels.push_back(orbital_label(component.first, component.second) +
+                    (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
             }
             result.sites.push_back(output);
             n_output += output.n_orbitals;
@@ -231,8 +253,7 @@ CrpaWindowBuildResult build_crpa_window_input(
             throw LIBRPA_INVALID_ARGUMENT("no atom matches the selected ligand species");
     }
 
-    const int nao = meanfield.get_n_aos();
-    ComplexMatrix trials(nao, n_parent);
+    ComplexMatrix trials(n_rows, n_parent);
     trials.zero_out();
     for (int column = 0; column < n_parent; ++column) trials(trial_rows[column], column) = 1.0;
     result.orbitals_spin_k.resize(meanfield.get_n_spins());
@@ -240,22 +261,32 @@ CrpaWindowBuildResult build_crpa_window_input(
     {
         // No Fourier transform is needed until the API constructs the final output subspace.
         CorrelatedSubspace parent(
-            parent_sites, kfrac_list, {{0, 0, 0}}, nao, meanfield.get_n_bands(), 1,
+            parent_sites, kfrac_list, {{0, 0, 0}}, n_rows, meanfield.get_n_bands(), 1,
             options.gram_abs, options.gram_rel, options.gram_cond_max, options.s_abs, options.s_rel,
             options.s_cond_max, options.residual_tol, options.t_roundtrip_tol);
         for (int k = 0; k < meanfield.get_n_kpoints(); ++k)
         {
-            const auto* wfc = meanfield.find_wfc(spin, 0, k);
-            if (!wfc || wfc->nr != meanfield.get_n_bands() || wfc->nc != nao)
-                throw LIBRPA_INVALID_ARGUMENT(
-                    "cRPA output construction requires full scalar KS eigenvectors");
-            parent.set_S_k(k, overlap_k[k]);
-            parent.set_W_k(k, project_trial_orbitals_to_band_window(*wfc, overlap_k[k], trials,
+            ComplexMatrix wfc(meanfield.get_n_bands(), n_rows);
+            for (int s = 0; s < n_spinor; ++s)
+            {
+                const auto* component = meanfield.find_wfc(spin, s, k);
+                if (!component || component->nr != wfc.nr || component->nc != nao)
+                    throw LIBRPA_INVALID_ARGUMENT(
+                        "cRPA output construction requires all KS spinor components");
+                for (int band = 0; band < wfc.nr; ++band)
+                    for (int row = 0; row < nao; ++row)
+                        wfc(band, s * nao + row) = (*component)(band, row);
+            }
+            if (overlap_k[k].nr != nao || overlap_k[k].nc != nao)
+                throw LIBRPA_INVALID_ARGUMENT("cRPA spatial overlap has an inconsistent shape");
+            const auto overlap = crpa_spinor_overlap(overlap_k[k], n_spinor);
+            parent.set_S_k(k, overlap);
+            parent.set_W_k(k, project_trial_orbitals_to_band_window(wfc, overlap, trials,
                                                                     result.orbital_bands[spin][k]));
             const auto phi = parent.build_phi(k);
-            parent.build_spin_k(0, k, *wfc);
-            ComplexMatrix output(nao, n_output);
-            for (int row = 0; row < nao; ++row)
+            parent.build_spin_k(0, k, wfc);
+            ComplexMatrix output(n_rows, n_output);
+            for (int row = 0; row < n_rows; ++row)
                 for (int column = 0; column < n_output; ++column)
                     output(row, column) = phi(row, output_columns[column]);
             result.orbitals_spin_k[spin].push_back(std::move(output));

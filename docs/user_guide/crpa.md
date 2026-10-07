@@ -57,8 +57,10 @@ using a band list. This selects the original KS indices directly; no orbital
 character weighting or modified eigenvalues enter the response.
 
 Species labels follow the numeric species order in the structure input.
-`crpa_overlap_file` is a native scalar S(R) CSR file, relative to `input_dir`.
-Scalar wavefunctions, the full k/q mesh and LIBRI routing are required. A
+`crpa_overlap_file` is a native S(R) CSR file, relative to `input_dir`.
+Spatial exports and interleaved SOC exports are accepted; SOC exports must
+have identical diagonal spin blocks and zero off-diagonal blocks.
+Scalar or two-component spinor wavefunctions, the full k/q mesh and LIBRI routing are required. A
 compressed auxiliary basis additionally requires `use_shrink_abfs = true`,
 `use_shrink_chi = true` and the corresponding native transformation inputs.
 
@@ -69,10 +71,28 @@ Outputs under `output_dir` are:
 - `crpa_summary.dat`: intraorbital, distinct-orbital direct and exchange
   averages, with explicit atom/spin indices. Exchange averages are not Slater J.
 - `crpa_windows.dat`: the actual selected original KS indices for A and B.
+- `crpa_orbitals.dat`: atom, local column and atomic-trial label.
 - `crpa_metadata.txt`: orbital conventions, input selections and units.
 
 No direct zero-frequency value or analytic continuation is added by this task.
 The first minimax node must not be identified with U(0).
+
+For SOC, set `use_spinor_wfc = true`. Each spatial trial is lifted to both
+spin components, projected into the original full-spinor B states, and jointly
+normalized in the metric `I_spinor tensor S`. A p site therefore has six columns,
+a d site ten, and an sp site eight. Within each site, up trials precede down
+trials; these labels identify the trial orientation and are not conserved spin
+quantum numbers. The response has one channel of occupied spinor states with
+occupation at most one, without an additional factor of two. It retains all
+four Green-function spin-block products.
+
+SOC emits one complete spinor four-index tensor per site/frequency. Its
+`spin_left = spin_right = 0` denotes that one channel; spinor information is
+carried by `a,b,c,d`. The density vertex sums same-component products before
+screening. The complete-spinor summary exchange average includes opposite
+trial-spin columns and is not a scalar-shell Hund parameter. Inspect resolved
+entries using the emitted orbital labels. Keep entire degenerate groups when
+choosing A or B.
 
 Library callers use `librpa_crpa.h`: initialize `LibrpaCrpaInput`, supply S(k)
 and the window/species data, call `librpa_compute_crpa_window` collectively,

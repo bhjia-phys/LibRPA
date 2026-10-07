@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iomanip>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -49,7 +50,11 @@ void write_result(const LibrpaCrpaResult* result)
 {
     auto metadata = output_file("crpa_metadata.txt");
     metadata << "Original KS poles; P_d selects A on both occupied and empty branches.\n"
-             << "Output Phi uses independent B window and separate physical spin frames.\n"
+             << (driver::n_spinor == 2
+                     ? "Output Phi uses independent B and one jointly normalized spinor frame.\n"
+                       "Spinor trial labels are not conserved spin quantum numbers.\n"
+                       "Full-spinor J includes all distinct columns; it is not a scalar-shell Hund mean.\n"
+                     : "Output Phi uses independent B window and separate physical spin frames.\n")
              << "First radial shell; eg/t2g labels refer to global Cartesian axes.\n"
              << "Native positive minimax nodes only; no direct U(0) was calculated.\n"
              << "Interaction and frequency columns use eV; indices are zero based.\n"
@@ -69,6 +74,9 @@ void write_result(const LibrpaCrpaResult* result)
                 windows << '\n';
             }
     auto tensors = output_file("crpa_tensors.dat");
+    auto orbitals = output_file("crpa_orbitals.dat");
+    orbitals << "# atom local_column trial_label\n";
+    std::set<int> written_atoms;
     tensors << "# atom spin_left spin_right nu_eV a b c d V_re V_im U_re U_im W_re W_im\n";
     auto summary = output_file("crpa_summary.dat");
     summary << "# atom spin_left spin_right n_orbitals nu_eV V_intra V_inter J_bare "
@@ -78,6 +86,10 @@ void write_result(const LibrpaCrpaResult* result)
         LibrpaCrpaTensor tensor;
         librpa_crpa_result_tensor(result, record, &tensor);
         const int n = tensor.n_orbitals;
+        if (written_atoms.insert(tensor.atom_index).second)
+            for (int a = 0; a < n; ++a)
+                orbitals << tensor.atom_index << ' ' << a << ' '
+                         << librpa_crpa_result_orbital_label(result, tensor.atom_index, a) << '\n';
         const double frequency = tensor.frequency_ha * librpa_int::HA2EV;
         summary << tensor.atom_index << ' ' << tensor.spin_left << ' ' << tensor.spin_right << ' '
                 << n << ' ' << frequency;
@@ -133,14 +145,15 @@ void driver::task_crpa_u()
         for (int k = 0; k < n_kpoints; ++k)
             kpoints.push_back({kfrac[3 * k], kfrac[3 * k + 1], kfrac[3 * k + 2]});
         const auto overlap_k = librpa_driver::fourier_nao_overlap(overlap, kpoints);
-        if (overlap.dimension != n_basis_ao)
-            throw std::runtime_error("cRPA overlap and loaded AO dimensions differ");
         for (const auto& matrix : overlap_k)
-            for (int i = 0; i < matrix.size; ++i)
+        {
+            const auto spatial = librpa_driver::spatial_nao_overlap(matrix, n_basis_ao, n_spinor);
+            for (int i = 0; i < spatial.size; ++i)
             {
-                overlap_packed.push_back(matrix.c[i].real());
-                overlap_packed.push_back(matrix.c[i].imag());
+                overlap_packed.push_back(spatial.c[i].real());
+                overlap_packed.push_back(spatial.c[i].imag());
             }
+        }
     }
     catch (const std::exception& failure)
     {

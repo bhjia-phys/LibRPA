@@ -58,7 +58,9 @@ struct SitePairDensityVertex
 /*! Build one site vertex from explicit physical-position t(A) matrices.
  *
  * This is the production-linked pure kernel used by the independent unit
- * tests. T_R_site[iA] has shape NAO x n_orbitals and stores t(pbc.Rlist[iA]),
+ * tests. T_R_site[iA] has shape (n_spinor*NAO) x n_orbitals and stores t(pbc.Rlist[iA]),
+ * with one or two component-major spinor blocks. SOC sums the same-component
+ * products before contraction; Cs and both atomic bases remain spatial.
  * not CorrelatedSubspace's negative-Fourier T_code(A). The wrapper below
  * converts t(A)=T_code(wrap_bvk(-A)) on untwisted BvK meshes. This pure kernel
  * independently accepts any complete full-q grid dual to pbc.Rlist.

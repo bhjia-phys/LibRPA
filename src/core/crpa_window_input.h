@@ -38,7 +38,7 @@ struct CrpaWindowOptions
 struct CrpaWindowBuildResult
 {
     std::vector<SiteOrbitalGroup> sites;
-    //! Normalized output Phi[spin][k], each matrix AO x local orbitals.
+    //! Phi[channel][k], with component-major spinor AO rows for SOC.
     std::vector<std::vector<ComplexMatrix>> orbitals_spin_k;
     //! Original-KS state indices [spin][k][selected band], independently selected.
     std::vector<std::vector<std::vector<int>>> response_bands;
@@ -48,10 +48,14 @@ struct CrpaWindowBuildResult
 std::vector<std::vector<std::vector<int>>> crpa_bands_in_energy_windows(
     const MeanField& meanfield, const std::vector<double>& edges_ha);
 
+//! Lift a spatial overlap to component-major I_spinor tensor S (one or two components).
+ComplexMatrix crpa_spinor_overlap(const ComplexMatrix& overlap, int n_spinor);
+
 /*! Build spin-resolved local orbitals without changing KS energies or occupations.
  * Atomic types index species_labels; unrelated species remain spectators.
  * Only the first radial shell for each selected angular momentum is used.
- * S(k) and scalar eigenvectors must use the supplied basis convention.
+ * Spatial S(k) and the scalar/spinor eigenvectors share the supplied basis convention.
+ * SOC uses one jointly normalized spinor frame, not separate physical-spin frames.
  * Response window A never participates in construction of output window B.
  */
 CrpaWindowBuildResult build_crpa_window_input(

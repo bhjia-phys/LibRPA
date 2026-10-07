@@ -123,9 +123,11 @@ bool atom_block_nonzero(const ComplexMatrix &T, const AtomicBasis &basis, const 
 {
     const int begin = static_cast<int>(basis.get_part_range().at(atom));
     const int end = begin + static_cast<int>(basis.get_atom_nb(atom));
+    const int nao = static_cast<int>(basis.nb_total);
+    for (int s = 0; s < T.nr / nao; ++s)
     for (int i = begin; i != end; ++i)
         for (int a = 0; a != T.nc; ++a)
-            if (T(i, a) != Complex{0.0, 0.0}) return true;
+            if (T(s * nao + i, a) != Complex{0.0, 0.0}) return true;
     return false;
 }
 
@@ -195,9 +197,15 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
         throw LIBRPA_INVALID_ARGUMENT(
             "pair-density vertex T(R) count does not match the BvK R grid");
 
+    const int nao = static_cast<int>(basis_wfc.nb_total);
+    if (nao <= 0 || T_R_site.empty())
+        throw LIBRPA_INVALID_ARGUMENT("pair-density vertex requires nonempty AO and T(R) data");
+    const int n_spinor = T_R_site.front().nr / nao;
+    if (n_spinor != 1 && n_spinor != 2)
+        throw LIBRPA_INVALID_ARGUMENT("pair-density vertex requires one or two spinor components");
     for (const auto &T : T_R_site)
     {
-        if (T.nr != static_cast<int>(basis_wfc.nb_total) || T.nc != site.n_orbitals)
+        if (T.nr != n_spinor * nao || T.nc != site.n_orbitals)
             throw LIBRPA_INVALID_ARGUMENT(
                 "pair-density vertex T(R) has an inconsistent matrix shape");
         validate_finite_matrix(T, "pair-density vertex T(R)");
@@ -267,9 +275,16 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
                         const int ab = a * site.n_orbitals + b;
                         for (int i = 0; i != n_i; ++i)
                             for (int j = 0; j != n_j; ++j)
-                                products(ab, i * n_j + j) =
-                                    std::conj(T_left(i_begin + i, a)) * T_right(j_begin + j, b) +
-                                    std::conj(T_right(j_begin + j, a)) * T_left(i_begin + i, b);
+                            {
+                                Complex density{};
+                                for (int s = 0; s < n_spinor; ++s)
+                                    density +=
+                                        std::conj(T_left(s * nao + i_begin + i, a)) *
+                                            T_right(s * nao + j_begin + j, b) +
+                                        std::conj(T_right(s * nao + j_begin + j, a)) *
+                                            T_left(s * nao + i_begin + i, b);
+                                products(ab, i * n_j + j) = density;
+                            }
                     }
                 // Ordinary transpose: the conjugations are already in products.
                 if (n_mu && nij)
@@ -534,7 +549,8 @@ PairDensityVertex::PairDensityVertex(
             for (std::size_t iR = 0; iR != pbc.Rlist.size(); ++iR)
             {
                 const auto &T = subspace.get_T(static_cast<int>(iR));
-                if (T.nr != static_cast<int>(basis_wfc.nb_total))
+                const int nao = static_cast<int>(basis_wfc.nb_total);
+                if (nao <= 0 || (T.nr != nao && T.nr != 2 * nao))
                 {
                     local_error =
                         "PairDensityVertex subspace T(R) has the wrong AO dimension";

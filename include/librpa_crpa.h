@@ -17,7 +17,7 @@ extern "C"
      * B selects the KS space used to project atomic trials; A and B are independent.
      * For each space, provide exactly one window array or explicit band list.
      * Species labels follow the zero-based type indices passed to librpa_set_atoms.
-     * Output orbitals are selected from each spin's jointly normalized parent frame.
+     * Scalar output uses each spin's parent frame; SOC uses one full spinor frame.
      */
     typedef struct
     {
@@ -39,7 +39,8 @@ extern "C"
         const int* orbital_bands;
         int n_kpoints;
         int n_aos;
-        /** Packed complex [k][AO row][AO column][real/imag], full scalar k grid. */
+        /** Spatial overlap [k][AO row][AO column][real/imag], full k grid.
+         * SOC lifts this internally to I_spinor tensor S; n_aos stays spatial. */
         const double* overlap_k_ri;
         double gram_abs;
         double gram_rel;
@@ -77,7 +78,7 @@ extern "C"
 
     /** Collective calculation on the handler communicator; no input/output files.
      * All ranks must call with identical options and replicated LibrpaCrpaInput.
-     * Supports scalar full-grid LIBRI with replicated KS eigenvectors and native
+     * Supports scalar or two-component spinor full-grid LIBRI with replicated KS eigenvectors and native
      * positive minimax nodes. No static node or analytic continuation is added.
      * The result is independently owned on each rank; delete it on every rank.
      */
@@ -95,6 +96,11 @@ extern "C"
      */
     void librpa_crpa_result_bands(const LibrpaCrpaResult* result, int response_window, int spin,
                                   int kpoint, int* count, const int** bands);
+
+    /** Trial label for a local output column; owned by result until deletion.
+     * SOC suffix up/down identifies a trial, not a conserved spin quantum number.
+     * SOC tensor spin_left/right are channel zero; spinor indices are a,b,c,d. */
+    const char* librpa_crpa_result_orbital_label(const LibrpaCrpaResult* result, int atom, int orbital);
 
 #ifdef __cplusplus
 }

@@ -29,6 +29,11 @@ std::vector<librpa_int::ComplexMatrix> fourier_nao_overlap(
     const NaoOverlapRealSpace& overlap,
     const std::vector<librpa_int::Vector3_Order<double>>& kfrac_list);
 
+//! Validate/extract S from an interleaved ABACUS I_spinor tensor S export.
+//! A spatial export is also accepted. No spin averaging conceals a discrepancy.
+librpa_int::ComplexMatrix spatial_nao_overlap(const librpa_int::ComplexMatrix& overlap,
+                                             int n_aos, int n_spinor);
+
 //! Maximum absolute element of S(k)-S(k)^dagger over all supplied k points.
 double max_nao_overlap_hermiticity_residual(
     const std::vector<librpa_int::ComplexMatrix>& overlap_k);
