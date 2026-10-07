@@ -635,7 +635,11 @@ void librpa_set_symmetry_spin_operations(
     const std::string tname = "api_set_symmetry_spin_operations";
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
-    const auto source = static_cast<SymmetrySpinActionSource>(spin_action_source);
+    // A supplied SOC spin matrix is upstream authority, rather than a request
+    // to reconstruct it from the spatial rotation during context initialization.
+    const auto source = spin_action_source == 2 && spin_u != nullptr
+                            ? SymmetrySpinActionSource::ExplicitSpinSpace
+                            : static_cast<SymmetrySpinActionSource>(spin_action_source);
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &ops = pds->spg_symops;
     auto &spin_ops = pds->spg_spin_ops;

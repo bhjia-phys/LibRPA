@@ -9,13 +9,16 @@
 
 #include "../api/dataset.h"
 #include "../api/dataset_helper.h"
+#include "../api/instance_manager.h"
 #include "../core/crpa.h"
 #include "../core/crpa_window_input.h"
 #include "../core/dielecmodel.h"
+#include "../core/symmetry_spin_kernel.h"
 #include "../io/global_io.h"
 #include "../math/utils_matrix_m_mpi.h"
 #include "../mpi/global_mpi.h"
 #include "../utils/constants.h"
+#include "librpa_input.h"
 
 using namespace librpa_int;
 
@@ -708,6 +711,60 @@ void test_soc_and_spin_representation()
     for (const auto& phi : changed.orbitals_spin_k.at(0))
         for (int i = 0; i < 6; ++i)
             for (int a = 0; a < 2; ++a) close(phi(i, a), i == 3 * a ? 1.0 : 0.0, 1e-12);
+    // A public SOC setter with a supplied SU(2) matrix must preserve that
+    // matrix through initialization. The null case instead derives identity
+    // from the spatial identity. Compare the resulting density rotation to an
+    // independent dense calculation, including the grey-group Theta partner.
+    std::unique_ptr<LibrpaHandler, decltype(&librpa_destroy_handler)> public_handler(
+        librpa_create_handler(MPI_COMM_WORLD), &librpa_destroy_handler);
+    auto* handle = public_handler.get();
+    const int rotation[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    const double lattice[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    const double reciprocal[] = {TWO_PI, 0, 0, 0, TWO_PI, 0, 0, 0, TWO_PI};
+    const double origin[] = {0, 0, 0};
+    const int species = 0;
+    librpa_set_scf_dimension(handle, 1, 1, 2, 1, 2);
+    librpa_set_latvec_and_G(handle, lattice, reciprocal);
+    librpa_set_atoms(handle, 1, &species, origin);
+    librpa_set_kgrids_kvec(handle, 1, 1, 1, 1, origin, nullptr);
+    const double c = std::cos(0.43), s = std::sin(0.43);
+    const double supplied_u[] = {c, 0, 0, s, 0, s, c, 0};
+    ComplexMatrix density(2, 2), supplied(2, 2), theta(2, 2);
+    density(0, 0) = 0.7;
+    density(1, 1) = 0.3;
+    density(0, 1) = Z(0.13, 0.24);
+    density(1, 0) = std::conj(density(0, 1));
+    supplied(0, 0) = supplied(1, 1) = c;
+    supplied(0, 1) = supplied(1, 0) = Z(0, s);
+    theta(0, 1) = 1;
+    theta(1, 0) = -1;
+    SpinorBlocks4<ComplexMatrix> blocks{ComplexMatrix(1, 1), ComplexMatrix(1, 1),
+                                       ComplexMatrix(1, 1), ComplexMatrix(1, 1)};
+    blocks.b00(0, 0) = density(0, 0);
+    blocks.b01(0, 0) = density(0, 1);
+    blocks.b10(0, 0) = density(1, 0);
+    blocks.b11(0, 0) = density(1, 1);
+    for (bool provided : {false, true})
+    {
+        librpa_set_symmetry_spin_operations(handle, 1, 1, rotation, nullptr, nullptr,
+                                            provided ? supplied_u : nullptr, 2, 1);
+        const auto public_ds = api::get_dataset_instance(handle);
+        initialize_symmetry_context(*public_ds, false);
+        for (const auto& operation : public_ds->symmetry_context.spin_operations)
+        {
+            auto expected = provided ? supplied * density * transpose(supplied, true) : density;
+            if (operation.antiunitary)
+                expected = theta * conj(expected) * transpose(theta, true);
+            const auto transformed = transform_spinor_bilinear(
+                operation, blocks, [](std::size_t, const ComplexMatrix& value) { return value; },
+                BilinearConvention::SourceToTarget_DXDdag);
+            close(transformed.b00(0, 0), expected(0, 0), 1e-12);
+            close(transformed.b01(0, 0), expected(0, 1), 1e-12);
+            close(transformed.b10(0, 0), expected(1, 0), 1e-12);
+            close(transformed.b11(0, 0), expected(1, 1), 1e-12);
+        }
+    }
+
 }
 
 void test_soc_bloch_phases()
