@@ -58,6 +58,51 @@ magnitude. Stopping uses the largest eigenvalue change after `qsgw_min_iter`.
 after each update. Optional matrix diagnostics are enabled by
 `qsgw_write_iteration_matrices`.
 
+## Checkpoint continuation
+
+Both QSGW tasks save the last completed update by default in
+`output_dir/qsgw_checkpoint.bin` (normally `librpa.d/qsgw_checkpoint.bin`).
+The optional `qsgw_checkpoint_file` selects another filename relative to
+`output_dir`, or an absolute path; `none` disables saving. The driver writes
+a temporary file and renames it only after the complete state has been written.
+Interruption during a later update therefore leaves the previous completed
+checkpoint available. Work inside an unfinished self-energy calculation is
+not restored.
+
+To continue, retain the original producer input and numerical settings, use
+a fresh working/output directory, and set:
+
+```ini
+qsgw_restart_file = /path/to/initial/librpa.d/qsgw_checkpoint.bin
+qsgw_max_iter = 3
+```
+
+The restart path is relative to the working directory unless absolute.
+Restoration is explicit: a checkpoint already present in `output_dir` does
+not start a restart unless selected with `qsgw_restart_file`. The default
+`none` starts from the original input.
+
+Iteration limits are global. Restoring completed iteration 1 with a maximum
+of 3 computes updates 2 and 3. The maximum must exceed the saved iteration;
+the minimum and stopping tolerance may also change. New traces begin at the
+restored boundary, so a separate output directory preserves earlier traces.
+
+The checkpoint retains the grid and optional band-path Hamiltonians in the
+immutable initial KS basis, live eigenvalues, wavefunctions, occupation weights,
+Fermi energy and the last iteration summary. Directly restoring wavefunctions
+preserves their gauge at the boundary. Screening and exchange are rebuilt
+for each new update; the original reference remains the basis for Vxc and
+self-energy projection. Native RI, Coulomb and velocity files remain required.
+
+The reader checks dimensions, reference eigenpairs, Vxc, k coordinates/weights,
+cut policy, effective fixed mixing fraction, frequency count and head mode.
+Other producer files and numerical controls must also remain unchanged; the
+checkpoint does not validate every input. MPI size can change because these
+tasks require replicated wavefunctions. This experimental binary format
+rejects incompatible byte order and accepts fixed-mode versions 1--3.
+This implementation supports `qsgw_mixer = none` and `linear`; automatic-mixing
+history requires the separate mixer-aware extension.
+
 ## Numerical checks
 
 The small regression suite covers two updates of molecular H2O from FHI-aims
@@ -69,6 +114,14 @@ The band case uses the default 16 minimax
 frequencies and the same Gamma reference on grid and path. Tests compare actual
 iteration energies, Hamiltonian residuals, electron count and eigenvalue
 trajectories with the existing numeric table comparator used by G0W0.
+
+`regression_tests/verify_qsgw_restart.py` compares uninterrupted trajectories
+with independently started continuation processes for Si without/with linear
+mixing and H2O with a band path and Hamiltonian cut. It checks all eigenvalues,
+summary fields, reference-basis operators and exact restored WFC/occupations;
+later eigenvector phases and degenerate rotations are excluded. Use a fresh
+`--work-dir`, the built `--binary`, and explicit `--ranks` in the matching MPI
+runtime. These controls test numerical continuation, not material convergence.
 
 A manual Si k666 band case is under
 `regression_tests/manual/Si_k666_qsgw_band`. These cases check numerical workflows;
