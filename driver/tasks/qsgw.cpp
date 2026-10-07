@@ -32,6 +32,7 @@
 #include "../../src/utils/profiler.h"
 #include "../driver.h"
 #include "../qsgw/band_output.h"
+#include "../qsgw/checkpoint.h"
 #include "../qsgw/iteration_trace.h"
 #include "../qsgw/vxc_io.h"
 #include "../read_data.h"
@@ -446,6 +447,45 @@ void run_qsgw(const bool compute_band)
     const double mixing_beta = driver_params.qsgw_mixer == "linear"
         ? driver_params.qsgw_mixing_beta : 1.0;
 
+    const CheckpointContext checkpoint_context{
+        reference, band_reference ? &*band_reference : nullptr,
+        dataset->pbc.kfrac_list, dataset->kfrac_band_list,
+        dataset->pbc.weight_k, dft_vxc, dft_vxc_band,
+        driver_params.qsgw_band0_cut_mode,
+        driver_params.qsgw_band0_unoccupied_keep,
+        driver_params.qsgw_band0_cut_shift_ha, mixing_beta,
+        opts.nfreq, update_head ? opts.option_dielect_func : 0};
+    int starting_iteration = 0;
+    IterationSummary starting_summary;
+    starting_summary.fermi_energy_ev = reference.get_efermi() * HA2EV;
+    starting_summary.gap_ev = initial_occupations.gap * HA2EV;
+    starting_summary.electron_count = initial_occupations.electron_count;
+    starting_summary.beta = mixing_beta;
+    if (driver_params.qsgw_restart_file != "none")
+    {
+        collective_root_stage(dataset->comm_h, "QSGW checkpoint restore", [&] {
+            starting_summary = read_qsgw_checkpoint(
+                driver_params.qsgw_restart_file, checkpoint_context,
+                dataset->mf, compute_band ? &dataset->mf_band : nullptr,
+                current_hamiltonian, current_band_hamiltonian);
+            starting_iteration = starting_summary.iteration;
+            if (starting_iteration >= driver_params.qsgw_max_iter)
+                throw std::runtime_error(
+                    "qsgw_max_iter must exceed the checkpoint's completed iteration");
+            lib_printf("QSGW restored completed iteration %d from %s\n",
+                       starting_iteration, driver_params.qsgw_restart_file.c_str());
+        });
+        dataset->comm_h.bcast(&starting_iteration, 1, 0);
+        broadcast_checkpoint_meanfield(dataset->mf, dataset->comm_h);
+        broadcast_spin_k_matrix_map(current_hamiltonian, 0, dataset->comm_h);
+        if (compute_band)
+        {
+            broadcast_checkpoint_meanfield(dataset->mf_band, dataset->comm_h);
+            broadcast_spin_k_matrix_map(current_band_hamiltonian, 0, dataset->comm_h);
+            dataset->is_band_calc_done = true;
+        }
+    }
+
     std::ofstream trace;
     std::ofstream eigenvalue_trace;
     std::ofstream matrix_trace;
@@ -472,7 +512,7 @@ void run_qsgw(const bool compute_band)
             write_wavefunction_trace(
                 matrix_trace, 0, IterationChannel::Grid, reference);
             write_occupation_trace(
-                matrix_trace, 0, IterationChannel::Grid, dataset->mf);
+                matrix_trace, 0, IterationChannel::Grid, reference);
             if (compute_band)
             {
                 write_matrix_component_trace(
@@ -486,30 +526,42 @@ void run_qsgw(const bool compute_band)
                     *band_reference);
                 write_occupation_trace(
                     matrix_trace, 0, IterationChannel::Band,
-                    dataset->mf_band);
+                    *band_reference);
+            }
+            if (starting_iteration > 0)
+            {
+                write_matrix_component_trace(matrix_trace, starting_iteration,
+                    IterationChannel::Grid, "mixed_h", current_hamiltonian);
+                write_wavefunction_trace(matrix_trace, starting_iteration,
+                    IterationChannel::Grid, dataset->mf);
+                write_occupation_trace(matrix_trace, starting_iteration,
+                    IterationChannel::Grid, dataset->mf);
+                if (compute_band)
+                {
+                    write_matrix_component_trace(matrix_trace, starting_iteration,
+                        IterationChannel::Band, "mixed_h", current_band_hamiltonian);
+                    write_wavefunction_trace(matrix_trace, starting_iteration,
+                        IterationChannel::Band, dataset->mf_band);
+                    write_occupation_trace(matrix_trace, starting_iteration,
+                        IterationChannel::Band, dataset->mf_band);
+                }
             }
         }
-        IterationSummary summary;
-        summary.iteration = 0;
-        summary.fermi_energy_ev = reference.get_efermi() * HA2EV;
-        summary.gap_ev = initial_occupations.gap * HA2EV;
-        summary.electron_count = initial_occupations.electron_count;
-        summary.beta = mixing_beta;
-        write_iteration_summary(trace, summary);
-        write_eigenvalue_trace(eigenvalue_trace, 0,
-                               IterationChannel::Grid, reference,
+        write_iteration_summary(trace, starting_summary);
+        write_eigenvalue_trace(eigenvalue_trace, starting_iteration,
+                               IterationChannel::Grid, dataset->mf,
                                dataset->pbc.kfrac_list);
         if (compute_band)
         {
             write_eigenvalue_trace(
-                eigenvalue_trace, 0, IterationChannel::Band,
-                *band_reference, dataset->kfrac_band_list);
+                eigenvalue_trace, starting_iteration, IterationChannel::Band,
+                dataset->mf_band, dataset->kfrac_band_list);
         }
     });
 
     bool converged = false;
-    int completed_iterations = 0;
-    for (int iteration = 1;
+    int completed_iterations = starting_iteration;
+    for (int iteration = starting_iteration + 1;
          iteration <= driver_params.qsgw_max_iter; ++iteration)
     {
         completed_iterations = iteration;
@@ -729,6 +781,12 @@ void run_qsgw(const bool compute_band)
             summary.electron_count = occupations.electron_count;
             summary.converged = converged_flag != 0;
             summary.beta = mixing_beta;
+            if (driver_params.qsgw_checkpoint_file != "none")
+                write_qsgw_checkpoint(
+                    resolve_input_path(opts.output_dir, driver_params.qsgw_checkpoint_file),
+                    checkpoint_context, summary, dataset->mf,
+                    compute_band ? &dataset->mf_band : nullptr,
+                    current_hamiltonian, current_band_hamiltonian);
             write_iteration_summary(trace, summary);
             write_eigenvalue_trace(
                 eigenvalue_trace, iteration, IterationChannel::Grid,

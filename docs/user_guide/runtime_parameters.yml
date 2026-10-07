@@ -178,6 +178,8 @@ blocks:
       - driver.qsgw_band0_cut_mode
       - driver.qsgw_band0_cut_shift_ha
       - driver.qsgw_write_iteration_matrices
+      - driver.qsgw_restart_file
+      - driver.qsgw_checkpoint_file
       - driver.qsgw_convergence_tolerance_ev
 
   - heading: LibRI Filtering
