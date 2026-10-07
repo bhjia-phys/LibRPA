@@ -70,6 +70,14 @@ foreach(target
   config_test(${target} 1)
 endforeach()
 
+# This suite verifies representation and q-view contracts with assert(). Keep
+# those numerical checks active in Release builds as well.
+if(MSVC)
+  target_compile_options(test_symmetry_context PRIVATE /UNDEBUG)
+else()
+  target_compile_options(test_symmetry_context PRIVATE -UNDEBUG)
+endif()
+
 # add 4-process tests
 foreach(target
   test_atomic_basis_blacs
