@@ -50,6 +50,11 @@ void initialize_symmetry_context(Dataset &ds, const bool build_shell_rotations)
     ctx.clear();
     ctx.set_crystal_structure(ds.pbc.latvec, ds.pbc.G, ds.atoms.types, ds.atoms.coords_frac);
     ctx.set_rspace_operations(spg_symops);
+    if (ds.spg_spin_ops_explicit)
+    {
+        ctx.set_symmetry_spin_operations(ds.spg_spin_ops, ds.spg_grey_group);
+        validate_spin_operations_for_storage(ctx, ds.mf.get_n_spins(), ds.mf.get_n_spinor());
+    }
     ctx.build_periodic_mappings(ds.pbc, ds.pbc.Rlist);
 
     auto mark_available = [&ctx]() {

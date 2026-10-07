@@ -320,6 +320,7 @@ module librpa_f03
          procedure :: set_ao_basis_aux_shrink => librpa_set_ao_basis_aux_shrink
          procedure :: set_basis_convention => librpa_set_basis_convention
          procedure :: set_symmetry_operations => librpa_set_symmetry_operations
+         procedure :: set_symmetry_spin_operations => librpa_set_symmetry_spin_operations
          procedure :: set_latvec_and_G => librpa_set_latvec_and_G
          procedure :: set_atoms => librpa_set_atoms
          procedure :: set_kgrids_kvec => librpa_set_kgrids_kvec
@@ -423,6 +424,7 @@ contains
    end subroutine librpa_finalize_global
 
    !> @brief Set global LibRPA stdout verbosity.
+   !> @param[in] output_level Verbosity level.
    subroutine librpa_set_output_level(output_level)
       implicit none
       integer, intent(in) :: output_level
@@ -430,6 +432,7 @@ contains
    end subroutine librpa_set_output_level
 
    !> @brief Get global LibRPA stdout verbosity.
+   !> @return Current verbosity level.
    integer function librpa_get_output_level() result(output_level)
       implicit none
       output_level = -1
@@ -575,6 +578,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_wfc  Number of wave-function basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_wfc(this, natoms, nbs_wfc, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -590,6 +595,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_aux  Number of auxiliary basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux(this, natoms, nbs_aux, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -605,6 +612,8 @@ contains
    !> @param[in,out] this            Handler.
    !> @param[in]     natoms          Number of atoms.
    !> @param[in]     nbs_aux_shrink  Number of shrink auxiliary basis functions on each atom.
+   !> @param[in]     nshells         Optional number of angular shells on each atom.
+   !> @param[in]     l_shells        Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux_shrink(this, natoms, nbs_aux_shrink, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -650,6 +659,19 @@ contains
       real(dp), dimension(3, n_symops), intent(in), optional :: trans
       call error_on_call("librpa_set_symmetry_operations")
    end subroutine librpa_set_symmetry_operations
+
+   !> @brief Set explicit magnetic operations; spin_u uses eight real/imag entries per operation.
+   subroutine librpa_set_symmetry_spin_operations(this, n_ops, row_conv, rotmats, trans, &
+         antiunitary, spin_u, spin_action_source, grey_group)
+      implicit none
+      class(LibrpaHandler), intent(inout) :: this
+      integer, intent(in) :: n_ops, spin_action_source
+      logical, intent(in) :: row_conv, grey_group
+      integer, intent(in) :: rotmats(9, n_ops)
+      real(dp), intent(in), optional :: trans(3, n_ops), spin_u(8, n_ops)
+      integer, intent(in), optional :: antiunitary(n_ops)
+      call error_on_call("librpa_set_symmetry_spin_operations")
+   end subroutine librpa_set_symmetry_spin_operations
 
    !> @brief Set the direct and reciprocal lattice vectors
    !>

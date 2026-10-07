@@ -96,11 +96,13 @@ list(APPEND lib_sources
         ../driver/read_data.cpp
         ../driver/reader_eigenvec.cpp
         ../driver/reader_basis.cpp
+        ../driver/stru_symops_parser.cpp
         ../driver/reader_structure.cpp
         ../driver/reader_lri.cpp
         ../driver/reader_coulomb.cpp
 
         core/analycont.cpp
+        core/symmetry_spin_kernel.cpp
         core/symmetry_context.cpp
         core/atomic_basis.cpp
         core/chi0.cpp
