@@ -350,6 +350,10 @@ public:
     double cal_factor(std::string name);
     void test_head();
     std::vector<double> get_head_vec();
+    const matrix_m<std::complex<double>> &get_dielectric_head(int frequency) const
+    { return head.at(frequency); }
+    const matrix_m<std::complex<double>> &get_wing_mu(int frequency) const
+    { return wing_mu.at(frequency); }
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
 
     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,

@@ -379,6 +379,69 @@ void test_soc_bloch_phases()
     periodic.compare_tensors(periodic.run());
 }
 
+void test_soc_optical_charge_vertex()
+{
+    Fixture f(true, 0.37);
+    const double pi = std::acos(-1.0);
+    initialize_velocity_matrix(f.ds.velocity_matrix, 1, 4, f.bands);
+    // Hermitian imaginary AO velocity operators, odd under time reversal.
+    for (int k = 0; k < 4; ++k)
+        for (int alpha = 0; alpha < 3; ++alpha)
+            for (int n = 0; n < f.bands; ++n)
+                for (int m = 0; m < f.bands; ++m)
+                    for (int s = 0; s < 2; ++s)
+                        for (int i = 0; i < 3; ++i)
+                            for (int j = 0; j < 3; ++j)
+                                f.ds.velocity_matrix[0][k][alpha](n, m) +=
+                                    std::conj(f.coefficients(3 * s + i, n)) *
+                                    Z(0, 0.025 * (alpha + 1) * (j - i)) *
+                                    f.coefficients(3 * s + j, m);
+    const auto &frequencies = f.ds.tfg.get_freq_nodes();
+    const auto make_optical = [&](const MeanField &mf)
+    {
+        auto optical = std::make_unique<diele_func>(
+            mf, f.ds.velocity_matrix, f.ds.pbc.kfrac_list, f.ds.basis_wfc,
+            f.ds.basis_aux, frequencies, 3, 6, 1, 2, f.ds.pbc, f.ds.comm_h, f.ds.blacs_h);
+        optical->use_soc = true;
+        optical->init(0, f.ds.vq);
+        optical->cal_head();
+        optical->cal_wing(f.ds.cs_data, 0, f.ds.vq);
+        return optical;
+    };
+    const auto full = make_optical(f.ds.mf);
+    for (std::size_t iw = 0; iw < frequencies.size(); ++iw)
+        {
+            ComplexMatrix head(3, 3), wing(2, 3);
+            head.set_as_identity_matrix();
+            for (int k = 0; k < 4; ++k)
+                for (int n = 0; n < 2; ++n)
+                    for (int m = 2; m < 6; ++m)
+                    {
+                        const double delta = f.ds.mf.get_eigenvals()[0](k, m) -
+                                             f.ds.mf.get_eigenvals()[0](k, n);
+                        const double denominator = delta * delta + frequencies[iw] * frequencies[iw];
+                        for (int alpha = 0; alpha < 3; ++alpha)
+                        {
+                            const auto &va = f.ds.velocity_matrix[0][k][alpha];
+                            for (int beta = 0; beta < 3; ++beta)
+                                head(alpha, beta) += 4 * pi * 0.5 * va(m, n) *
+                                    f.ds.velocity_matrix[0][k][beta](n, m) / (delta * denominator);
+                            for (int mu = 0; mu < 2; ++mu)
+                                wing(mu, alpha) -= 2 * std::sqrt(4 * pi) * 0.25 *
+                                    std::conj(f.vertex(mu, n, m) * va(m, n)) / denominator;
+                        }
+                    }
+            const auto &actual = full;
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                {
+                    close(actual->get_dielectric_head(iw)(i, j), head(i, j), 2e-12);
+                }
+            for (int mu = 0; mu < 2; ++mu)
+                for (int alpha = 0; alpha < 3; ++alpha)
+                    close(actual->get_wing_mu(iw)(mu, alpha), wing(mu, alpha), 2e-12);
+        }
+}
 }  // namespace
 
 int main(int argc, char** argv)
@@ -392,6 +455,7 @@ int main(int argc, char** argv)
         test_zero_soc_limit();
         test_soc_and_spin_representation();
         test_soc_bloch_phases();
+        test_soc_optical_charge_vertex();
     }
     catch (const std::exception &failure)
     {
