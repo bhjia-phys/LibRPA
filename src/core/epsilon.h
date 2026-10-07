@@ -71,6 +71,13 @@ void unfold_Wc_freq_q_blacs(
     const librpa_int::ArrayDesc &desc_small,
     const librpa_int::ArrayDesc &desc_full);
 
+//! Restore representative charge kernels to every full-grid q before local orbital contraction.
+std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
+    const std::map<Vector3_Order<double>, Matz>& representative_kernels,
+    const PeriodicBoundaryData& pbc, const SymmetryQPointView& view,
+    const SymmetryContext& symmetry, const AtomicBasis& auxiliary_basis,
+    const ArrayDesc& descriptor);
+
 //! Fourier transform screened Coulomb in q-space to R-space, but still in frequency domain
 std::map<double, std::map<Vector3_Order<int>, Matz>> FT_Wc_freq_q(
     const MpiCommHandler &comm_h,

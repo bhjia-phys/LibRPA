@@ -886,6 +886,23 @@ void Chi0::set_band_selection(const BandSelection &selection)
     }
     check_chi0_collective_error(
         comm_h, reference == flat ? "" : "Chi0 band selections differ between ranks");
+    if (!candidate.empty() && use_symmetry_context && qstar_only_symmetry)
+    {
+        for (const auto &star : symmetry_context.kstars)
+        {
+            int source = -1;
+            for (const auto &member : star.members)
+                for (int k = 0; k < mf.get_n_kpoints(); ++k)
+                    if (same_fractional_kpoint(member.k_bz, pbc.kfrac_list[k], 1e-8))
+                    {
+                        if (source < 0) source = k;
+                        for (int spin = 0; spin < mf.get_n_spins(); ++spin)
+                            if (candidate[spin][k] != candidate[spin][source])
+                                error = "cRPA original-band selector changes within a magnetic k star";
+                    }
+        }
+        check_chi0_collective_error(comm_h, error);
+    }
     band_selection_.swap(candidate);
 }
 
@@ -962,7 +979,7 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
     if (!band_selection_.empty())
     {
         const bool supported = routing == LIBRPA_ROUTING_LIBRI &&
-            !is_mf_eigvec_k_distributed_ && !use_symmetry_context &&
+            !is_mf_eigvec_k_distributed_ && (!use_symmetry_context || qstar_only_symmetry) &&
             (mf.get_n_spinor() == 1 ||
              (mf.get_n_spinor() == 2 && mf.get_n_spins() == 1)) && tfg.has_time_grids();
         check_chi0_collective_error(comm_h, supported ? "" :
@@ -2156,8 +2173,14 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
     const bool chi0_band_space_complete =
         rspace_symmetry_has_complete_band_space(this->mf, this->nbands_G);
     const bool use_chi0_rspace_symmetry =
-        chi0_rspace_symmetry_available && chi0_band_space_complete;
-    if (chi0_rspace_symmetry_available && !chi0_band_space_complete
+        chi0_rspace_symmetry_available && chi0_band_space_complete && !qstar_only_symmetry;
+    if (qstar_only_symmetry && this->use_symmetry_context && comm_h.is_root())
+    {
+        global::lib_printf_root(
+            "cRPA q-star screening retains full original k-grid Green functions and full "
+            "real-space contractions\n");
+    }
+    else if (chi0_rspace_symmetry_available && !chi0_band_space_complete
         && comm_h.is_root())
     {
         const int n_bands_used =
@@ -2468,12 +2491,12 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     {
                         build_gf_Rt_libri_serial(this->mf, this->nbands_G, this->band_selection_, this->atbasis_wfc, isp, is1, is2,
                                                  this->pbc, this->symmetry_context,
-                                                 this->use_symmetry_context,
+                                                 this->use_symmetry_context && !this->qstar_only_symmetry,
                                                  this->pbc.kfrac_list, this->IJRs_gf_local, tau,
                                                  gf_po_libri);
                         build_gf_Rt_libri_serial(this->mf, this->nbands_G, this->band_selection_, this->atbasis_wfc, isp, is1, is2,
                                                  this->pbc, this->symmetry_context,
-                                                 this->use_symmetry_context,
+                                                 this->use_symmetry_context && !this->qstar_only_symmetry,
                                                  this->pbc.kfrac_list, this->IJRs_gf_local, -tau,
                                                  gf_ne_libri);
                     }

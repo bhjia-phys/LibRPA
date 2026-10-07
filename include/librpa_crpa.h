@@ -79,7 +79,9 @@ extern "C"
     /** Collective calculation on the handler communicator; no input/output files.
      * All ranks must call with identical options and replicated LibrpaCrpaInput.
      * Supports scalar or two-component spinor full-grid LIBRI with replicated KS eigenvectors and native
-     * positive minimax nodes. No static node or analytic continuation is added.
+     * positive minimax nodes. use_symmetry_rpa reduces q-space screening only,
+     * restoring full kernels before contraction; original full-k states are required.
+     * No static node or analytic continuation is added.
      * The result is independently owned on each rank; delete it on every rank.
      */
     LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h,

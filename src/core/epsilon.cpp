@@ -2668,7 +2668,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     const auto abf_layouts =
         chi0.atbasis_abf.build_species_basis_layouts(chi0.symmetry_context.atom_to_type);
     const bool use_symmetry_dense_chi0_collect =
-        chi0.use_symmetry_context
+        chi0.use_symmetry_context && !chi0.qstar_only_symmetry
         && comm_h.nprocs > 1
         && can_symmetrize_symmetry_chi0_ibz_blocks(
             chi0.symmetry_context, abf_layouts, atom_nabf, chi0.pbc);
@@ -2975,7 +2975,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                 if (has_local_chi0_q)
                 {
                     chi0_wq = chi0.get_chi0_q().at(freq).at(q);
-                    if (chi0.use_symmetry_context)
+                    if (chi0.use_symmetry_context && !chi0.qstar_only_symmetry)
                     {
                         chi0_wq = symmetrize_symmetry_chi0_ibz_blocks_if_needed(
                             comm_h, chi0.symmetry_context, abf_layouts, chi0_wq, q,
@@ -3535,7 +3535,7 @@ static Matz restore_symmetry_blacs_wq_to_star_source(const Matz& Wq_source,
     return Wq_star;
 }
 
-static std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
+std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
     const std::map<Vector3_Order<double>, Matz>& Wq_rep_map,
     const PeriodicBoundaryData& pbc,
     const SymmetryQPointView& qpoint_view,

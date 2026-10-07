@@ -182,7 +182,9 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
     const auto &desc = context.active_auxiliary_descriptor;
     require_collectively(
         !frames.empty() && frames.size() == chi.mf.get_n_spins() && desc.initialized() &&
-            desc.m() == basis.nb_total && desc.n() == basis.nb_total && !chi.use_symmetry_context &&
+            desc.m() == basis.nb_total && desc.n() == basis.nb_total &&
+            chi.mf.get_n_kpoints() == chi.pbc.get_n_cells_bvk() &&
+            (!chi.use_symmetry_context || chi.qstar_only_symmetry) &&
             ((context.full_headwing == nullptr) == (context.constrained_headwing == nullptr)) &&
             std::isfinite(context.sqrt_coulomb_threshold) && context.sqrt_coulomb_threshold >= 0.0,
         comm, "cRPA requires matching spin frames, full q grid and active descriptor");
@@ -201,8 +203,12 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
                              std::all_of(result.frequencies.begin(), result.frequencies.end(),
                                          [](double f) { return std::isfinite(f) && f > 0.0; }),
                          comm, "cRPA requires output sites and original positive frequency nodes");
-    const std::vector<Vector3_Order<double>> qs(chi.active_qpoints().begin(),
-                                                chi.active_qpoints().end());
+    const auto &qs = chi.pbc.klist;
+    const double q_weight = 1.0 / chi.pbc.get_n_cells_bvk();
+    require_collectively(qs.size() == chi.pbc.get_n_cells_bvk(), comm,
+                         "cRPA requires complete original q points for orbital contraction");
+    global::lib_printf_root("cRPA: screening %zu representative q points; contracting %zu full q points\n",
+                            chi.active_qpoints().size(), qs.size());
 
     // Build and transform each physical spin's output frame once.
     std::vector<std::vector<std::map<Vector3_Order<double>, ComplexMatrix>>> vertices;
@@ -253,7 +259,7 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
                     vertices[tensor.spin_left][tensor.site_index].at(q), bare,
                     vertices[tensor.spin_right][tensor.site_index].at(q), n, n);
             comm.bcast(block.c, block.size, 0);
-            tensor.bare += chi.q_weight(q) * block;
+            tensor.bare += q_weight * block;
         }
     }
 
@@ -288,6 +294,30 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
                                           context.sqrt_coulomb_threshold, optical != nullptr,
                                           optical ? 3 : 0, epsmac, optical,
                                           context.blacs, desc, false);
+        if (chi.qpoint_view().restore_mode == SymmetryQPointRestoreMode::FULL_CRYSTAL)
+            for (auto &[frequency, kernels] : wc)
+            {
+                const auto restored = restore_symmetry_dense_wq_map(
+                    kernels, chi.pbc, chi.qpoint_view(), chi.symmetry_context, basis, desc);
+                // Preserve the input's exact q keys after fractional-coordinate restoration.
+                std::map<Vector3_Order<double>, Matz> full;
+                for (const auto &q : qs)
+                {
+                    auto match = restored.end();
+                    for (auto it = restored.begin(); it != restored.end(); ++it)
+                        if (same_fractional_kpoint(Vector3_Order<double>{chi.pbc.latvec * it->first},
+                                                   Vector3_Order<double>{chi.pbc.latvec * q}, 1e-8))
+                        {
+                            require_collectively(match == restored.end(), comm,
+                                                 "cRPA q-star restore has duplicate members");
+                            match = it;
+                        }
+                    require_collectively(match != restored.end(), comm,
+                                         "cRPA q-star restore misses a full-grid member");
+                    full.emplace(q, match->second);
+                }
+                kernels.swap(full);
+            }
         for (auto &tensor : result.tensors)
         {
             auto &values = constrained ? tensor.u : tensor.w;
@@ -297,7 +327,7 @@ CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &
                 ComplexMatrix value(tensor.bare);
                 for (const auto &q : qs)
                     value +=
-                        chi.q_weight(q) *
+                        q_weight *
                         contract_crpa_blacs(vertices[tensor.spin_left][tensor.site_index].at(q),
                                             vertices[tensor.spin_right][tensor.site_index].at(q),
                                             wc.at(frequency).at(q), desc, n, n, comm);

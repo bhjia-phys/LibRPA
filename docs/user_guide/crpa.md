@@ -100,9 +100,9 @@ velocity matrices. Supply the existing native `velocity_matrix` input. Full
 screening uses every physical transition; constrained screening omits a pair
 only when both original endpoints belong to A. The RI optical charge vertex
 sums equal spinor components. Only the angular Gamma-cell weights are
-normalized; the regular dielectric body is unchanged. Symmetry, distributed
-KS inputs and the two-dimensional optical route are currently excluded from
-this cRPA task.
+normalized; the regular dielectric body is unchanged. Optical sums retain all
+original full-BZ KS states and velocities even when q-star screening is enabled.
+Distributed KS inputs and the two-dimensional optical route remain excluded.
 
 With `replace_w_head = false` and `option_dielect_func = 0`, an uncorrected
 periodic result remains a finite-mesh diagnostic until the Gamma contribution
@@ -128,3 +128,20 @@ vertices use their respective spin-resolved local frames. The reported left and
 right spin indices identify those frames, not two independently screened U's.
 Finite-temperature or metallic static-limit accuracy requires separate response
 and convergence controls; selecting positive minimax nodes alone does not establish it.
+
+With `use_symmetry_rpa = true`, the first symmetry route retains full original
+k-grid Green functions and reduces only response q sampling and dense screening.
+Every screened kernel is restored through the supplied unitary/antiunitary
+operation table before contraction with the full-grid local spinor vertices.
+The bare term also uses all original q points. Multiplying one representative
+orbital tensor by star multiplicity would not preserve its individual components.
+Selectors must keep complete degenerate groups and agree within each magnetic
+k star. A supplied group must be a symmetry of the reference and constrained
+model; grid reduction alone does not establish that property. The driver accepts
+an explicit `spin_symmetry` structure tail, and library callers use
+`librpa_set_symmetry_spin_operations`. SOC symmetry calculations reject a legacy
+spatial-only declaration. A grey-group declaration appends time
+reversal; it is appropriate for the nonmagnetic GaAs SOC control, and must not
+be applied automatically to a magnetic state. This initial route does not
+extend the native even-frequency response to general magnetic odd-frequency
+components or validate k-star wavefunction reconstruction for cRPA.

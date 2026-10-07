@@ -67,8 +67,7 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     try
     {
         if (!options || !input) throw LIBRPA_INVALID_ARGUMENT("missing cRPA input or options");
-        if (options->use_symmetry_rpa == LIBRPA_SWITCH_ON ||
-            options->use_symmetry_gw == LIBRPA_SWITCH_ON ||
+        if (options->use_symmetry_gw == LIBRPA_SWITCH_ON ||
             options->use_kpara_scf_eigvec == LIBRPA_SWITCH_ON ||
             (options->parallel_routing != LIBRPA_ROUTING_LIBRI &&
              options->parallel_routing != LIBRPA_ROUTING_AUTO))
@@ -186,7 +185,7 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     initialize_ds_tfgrids(*ds, opts);
     initialize_ds_atpairs_local(*ds, LIBRPA_ROUTING_LIBRI);
     ds->redistribute_coulomb_blacs2ap();
-    initialize_ds_chi0(*ds, opts);
+    initialize_ds_chi0(*ds, opts, true);
     const bool shrink = opts.use_shrink_abfs == LIBRPA_SWITCH_ON;
     CrpaContext context{*ds->p_chi0,   ds->cs_data,
                         ds->basis_aux, ds->atpairs_local,
@@ -196,8 +195,12 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     std::unique_ptr<diele_func> full_headwing, constrained_headwing;
     if (opts.replace_w_head == LIBRPA_SWITCH_ON)
     {
-        full_headwing = make_ds_headwing(*ds, opts, true);
-        constrained_headwing = make_ds_headwing(*ds, opts, true, &selection);
+        // This first magnetic route reduces q-space screening only. Optical sums
+        // retain every original full-BZ state and velocity for both response models.
+        auto optical_options = opts;
+        optical_options.use_symmetry_rpa = optical_options.use_symmetry_gw = LIBRPA_SWITCH_OFF;
+        full_headwing = make_ds_headwing(*ds, optical_options, true);
+        constrained_headwing = make_ds_headwing(*ds, optical_options, true, &selection);
         full_headwing->normalize_gamma_cell_weights = true;
         constrained_headwing->normalize_gamma_cell_weights = true;
         context.full_headwing = full_headwing.get();

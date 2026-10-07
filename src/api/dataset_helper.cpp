@@ -252,14 +252,20 @@ void initialize_ds_exx(Dataset &ds, const LibrpaOptions &opts)
     global::profiler.stop("initialize_ds_exx");
 }
 
-void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
+void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts, bool qstar_only)
 {
     global::profiler.start("initialize_ds_chi0");
     const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
-    if (use_symmetry)
+    if (use_symmetry && !qstar_only)
     {
         reject_spinor_symmetry_speedup(ds, "RPA/chi0");
     }
+    if (qstar_only && (ds.mf.get_n_kpoints() != ds.pbc.get_n_cells_bvk() ||
+                      opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON))
+        throw LIBRPA_INVALID_ARGUMENT("q-star-only response requires replicated full-grid KS states");
+    if (qstar_only && use_symmetry && ds.mf.get_n_spinor() == 2 && !ds.spg_spin_ops_explicit)
+        throw LIBRPA_INVALID_ARGUMENT(
+            "SOC cRPA symmetry requires an explicit magnetic operation table and grey-group declaration");
     if (use_symmetry)
     {
         initialize_symmetry_context(ds, true);
@@ -280,6 +286,7 @@ void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
                                                        ds.tfg, ds.scfk_blacs_ctxt, desc_scf_wfc,
                                                        is_eigvec_k_distributed,
                                                        use_symmetry);
+    ds.p_chi0->qstar_only_symmetry = qstar_only;
     ds.p_chi0->gf_threshold = opts.gf_threshold;
     ds.p_chi0->libri_collect_s0_chunk = opts.libri_chi0_collect_s0_chunk;
     ds.p_chi0->libri_collect_max_bytes = opts.libri_chi0_collect_max_bytes;
