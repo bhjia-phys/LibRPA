@@ -120,6 +120,7 @@ list(APPEND lib_sources
         core/qsgw/distributed_matrix.cpp
         core/qsgw/effective_hamiltonian.cpp
         core/qsgw/fixed_basis.cpp
+        core/qsgw/headwing_velocity.cpp
         core/qsgw/hamiltonian_cut.cpp
         core/qsgw/hamiltonian_mixing.cpp
         core/qsgw/occupation.cpp

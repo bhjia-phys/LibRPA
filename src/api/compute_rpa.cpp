@@ -49,6 +49,10 @@ double librpa_get_rpa_correlation_energy(LibrpaHandler *h, const LibrpaOptions *
     profiler.start("api_get_rpa_correlation_energy");
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    if (opts.option_dielect_func == 5)
+        throw LIBRPA_RUNTIME_ERROR(
+            "option_dielect_func = 5 is a standalone G0W0 driver preset; "
+            "API callers must supply velocity and use option_dielect_func = 3");
     initialize_ds_global_ddla(*pds, opts);
 
     const auto ks_local = pds->mf.get_iks_local();

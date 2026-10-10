@@ -35,6 +35,13 @@ DriverParams::DriverParams():
     fn_dielfunc("dielecfunc_out"),
     fn_vxc_scf("vxc_out"),
     prefix_velocity("mommat_ks_kpt_"),
+    g0w0_headwing_velocity("file"),
+    g0w0_fn_hr(""),
+    g0w0_fn_hr_spin1(""),
+    g0w0_fn_sr(""),
+    g0w0_fn_rr(""),
+    g0w0_hr_unit("Ry"),
+    g0w0_rr_unit("Bohr"),
     fn_band_kpath_info("band_kpath_info"),
     version_coul_reader(-1),
     version_lri_reader(-1),
@@ -148,6 +155,24 @@ std::string DriverParams::format()
     std::string normalized_task = task;
     std::transform(normalized_task.begin(), normalized_task.end(),
                    normalized_task.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (normalized_task == "g0w0" || normalized_task == "g0w0_band")
+    {
+        if (requested_option_dielect_func == 5)
+        {
+            ss << "option_dielect_func_requested = 5" << std::endl;
+            ss << "option_dielect_func_effective = 3" << std::endl;
+        }
+        ss << "g0w0_headwing_velocity = " << g0w0_headwing_velocity << std::endl;
+        if (g0w0_headwing_velocity == "native")
+        {
+            ss << "g0w0_fn_hr = " << g0w0_fn_hr << std::endl;
+            ss << "g0w0_fn_hr_spin1 = " << g0w0_fn_hr_spin1 << std::endl;
+            ss << "g0w0_fn_sr = " << g0w0_fn_sr << std::endl;
+            ss << "g0w0_fn_rr = " << g0w0_fn_rr << std::endl;
+            ss << "g0w0_hr_unit = " << g0w0_hr_unit << std::endl;
+            ss << "g0w0_rr_unit = " << g0w0_rr_unit << std::endl;
+        }
+    }
     if (normalized_task == "qsgw" || normalized_task == "qsgw_band")
     {
         const bool aims_input = constants_choice == "aims";
@@ -219,6 +244,7 @@ std::string basis_convention_label("unknown");
 librpa::Handler h;
 
 librpa::Options opts;
+int requested_option_dielect_func = 0;
 
 #define normal_pair(name) {#name, opts.name}
 #define bool_pair(name) {#name, get_bool(opts.name)}
