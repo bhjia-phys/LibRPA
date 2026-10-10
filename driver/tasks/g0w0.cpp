@@ -1,4 +1,7 @@
+#include <librpa_enums.h>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -9,8 +12,7 @@
 #include <string>
 #include <vector>
 
-#include <librpa_enums.h>
-
+#include "../../src/api/dataset_helper.h"
 #include "../../src/api/instance_manager.h"
 #include "../../src/core/symmetry_context.h"
 #include "../../src/io/fs.h"
@@ -19,9 +21,242 @@
 #include "../../src/utils/constants.h"
 #include "../../src/utils/profiler.h"
 #include "../driver.h"
+#include "../qsgw/ao_operator_io.h"
 #include "../read_data.h"
 #include "../task.h"
 #include "task_helper.h"
+
+template <typename Function>
+static void g0w0_headwing_stage(const librpa_int::MpiCommHandler &comm, const std::string &label,
+                                Function &&function)
+{
+    std::exception_ptr local_error;
+    int failed = 0, any_failed = 0;
+    try
+    {
+        function();
+    }
+    catch (const std::exception &error)
+    {
+        failed = 1;
+        local_error = std::current_exception();
+        librpa_int::global::lib_printf(LIBRPA_VERBOSE_CRITICAL, "%s failed: %s\n", label.c_str(),
+                                       error.what());
+    }
+    catch (...)
+    {
+        failed = 1;
+        local_error = std::current_exception();
+    }
+    comm.allreduce(&failed, &any_failed, 1, MPI_MAX);
+    if (any_failed)
+    {
+        if (local_error) std::rethrow_exception(local_error);
+        throw LIBRPA_RUNTIME_ERROR(label + " failed on another rank");
+    }
+}
+
+static void prepare_g0w0_native_velocity()
+{
+    using namespace librpa_int;
+    using namespace librpa_int::qsgw;
+    const auto ds = api::get_dataset_instance(driver::h);
+    const auto &mf = ds->mf;
+    const auto &comm = ds->comm_h;
+    const auto &params = driver::driver_params;
+    const int n = mf.get_n_states(), nk = mf.get_n_kpoints(), ns = mf.get_n_spins();
+    const std::size_t count = static_cast<std::size_t>(ns) * nk * 3 * n * n;
+    std::vector<cplxdb> velocity;
+    HeadwingAoOperators operators;
+    std::vector<LocalizedMatrix> hamiltonians;
+    auto input_path = [&](const std::string &filename)
+    { return is_absolute_path(filename) ? filename : join_path(params.input_dir, filename); };
+
+    g0w0_headwing_stage(
+        comm, "G0W0 native velocity input",
+        [&]
+        {
+            const auto period = ds->pbc.period;
+            const long long nk_full = static_cast<long long>(period.x) * period.y * period.z;
+            if (mf.get_n_spinor() != 1 || (ns != 1 && ns != 2) || n <= 0 || mf.get_n_aos() != n)
+                throw LIBRPA_RUNTIME_ERROR(
+                    "G0W0 native velocity requires one or two collinear spins and complete AO/band "
+                    "frames");
+            if (nk <= 0 || nk != nk_full || static_cast<int>(ds->pbc.kfrac_list.size()) != nk ||
+                static_cast<int>(ds->pbc.weight_k.size()) != nk)
+                throw LIBRPA_RUNTIME_ERROR(
+                    "G0W0 native velocity requires the complete full-BZ SCF mesh");
+            for (const auto weight : ds->pbc.weight_k)
+                if (!std::isfinite(weight) || std::abs(weight - 1.0 / nk) > 1e-8)
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "G0W0 native velocity requires uniform full-BZ k weights");
+            if (ns == 2 && params.g0w0_fn_hr_spin1.empty())
+                throw LIBRPA_RUNTIME_ERROR(
+                    "Two-spin G0W0 native velocity requires g0w0_fn_hr_spin1");
+            if (ns == 1 && !params.g0w0_fn_hr_spin1.empty())
+                throw LIBRPA_RUNTIME_ERROR("g0w0_fn_hr_spin1 is only valid for two spin channels");
+            if (count > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+                throw LIBRPA_RUNTIME_ERROR(
+                    "G0W0 native velocity exceeds the MPI buffer-count limit");
+            velocity.resize(count);
+            if (!comm.is_root()) return;
+            const double energy_scale = params.g0w0_hr_unit == "Ry"   ? 0.5
+                                        : params.g0w0_hr_unit == "eV" ? 1.0 / HA2EV
+                                                                      : 1.0;
+            const double length_scale = params.g0w0_rr_unit == "Angstrom" ? ANG2BOHR : 1.0;
+            operators = driver::qsgw::read_headwing_ao_operators(
+                input_path(params.g0w0_fn_sr), input_path(params.g0w0_fn_rr), length_scale);
+            if (operators.dimension != n)
+                throw LIBRPA_RUNTIME_ERROR(
+                    "G0W0 native S/r dimension differs from the loaded SCF frame");
+            hamiltonians.push_back(driver::qsgw::read_headwing_hamiltonian_csr(
+                input_path(params.g0w0_fn_hr), energy_scale));
+            if (ns == 2)
+                hamiltonians.push_back(driver::qsgw::read_headwing_hamiltonian_csr(
+                    input_path(params.g0w0_fn_hr_spin1), energy_scale));
+        });
+
+    std::array<double, 4> residuals{};
+    for (int spin = 0; spin < ns; ++spin)
+        for (int ik = 0; ik < nk; ++ik)
+        {
+            const auto *wfc = mf.find_wfc(spin, 0, ik);
+            Matz ket;
+            g0w0_headwing_stage(
+                comm, "G0W0 native eigenframe shape",
+                [&]
+                {
+                    if (wfc != nullptr && wfc->size != 0 && (wfc->nr != n || wfc->nc != n))
+                        throw LIBRPA_RUNTIME_ERROR(
+                            "G0W0 native velocity found a partial SCF eigenvector block");
+                    ket = Matz(n, n, MAJOR::ROW);
+                });
+            const int owner = find_mpi_owner_rank(wfc != nullptr && wfc->size != 0, comm.comm);
+            if (owner < 0)
+                throw LIBRPA_RUNTIME_ERROR(
+                    "G0W0 native velocity is missing a SCF eigenvector block");
+            g0w0_headwing_stage(comm, "G0W0 native eigenframe transfer",
+                                [&]
+                                {
+                                    if (comm.myid != owner) return;
+                                    // MeanField stores band rows and AO columns; the model API
+                                    // takes AO rows.
+                                    for (int ao = 0; ao < n; ++ao)
+                                        for (int band = 0; band < n; ++band)
+                                            ket(ao, band) = (*wfc)(band, ao);
+                                });
+            comm.bcast(ket.ptr(), n * n, owner);
+            g0w0_headwing_stage(
+                comm, "G0W0 native velocity frame",
+                [&]
+                {
+                    if (!comm.is_root()) return;
+                    std::vector<double> eigenvalues(n);
+                    for (int band = 0; band < n; ++band)
+                        eigenvalues[band] = mf.get_eigenvals().at(spin)(ik, band);
+                    const auto result = compute_localized_velocity_in_frame(
+                        hamiltonians.at(spin), operators, ds->pbc.kfrac_list.at(ik), ds->pbc.latvec,
+                        eigenvalues, ket);
+                    residuals[0] = std::max(residuals[0], result.metric_residual);
+                    residuals[1] = std::max(residuals[1], result.hamiltonian_frame_residual_ha);
+                    residuals[2] =
+                        std::max(residuals[2], result.hamiltonian_hermiticity_residual_ha);
+                    residuals[3] =
+                        std::max(residuals[3], result.velocity_upper_diagonal_imaginary_ha_bohr);
+                    if (result.metric_residual > 1e-6 ||
+                        result.hamiltonian_frame_residual_ha > 1e-4 / HA2EV ||
+                        result.hamiltonian_hermiticity_residual_ha > 1e-4 / HA2EV ||
+                        result.velocity_upper_diagonal_imaginary_ha_bohr > 1e-8)
+                    {
+                        std::ostringstream message;
+                        message << std::scientific << "spin=" << spin << " k=" << ik
+                                << " metric=" << result.metric_residual
+                                << " frame_Ha=" << result.hamiltonian_frame_residual_ha
+                                << " hermiticity_Ha=" << result.hamiltonian_hermiticity_residual_ha
+                                << " diagonal_imag_HaBohr="
+                                << result.velocity_upper_diagonal_imaginary_ha_bohr;
+                        throw LIBRPA_RUNTIME_ERROR(message.str());
+                    }
+                    for (int alpha = 0; alpha < 3; ++alpha)
+                        for (int i = 0; i < n; ++i)
+                            for (int j = 0; j < n; ++j)
+                            {
+                                const std::size_t offset =
+                                    ((((static_cast<std::size_t>(spin) * nk + ik) * 3 + alpha) * n +
+                                      i) *
+                                         n +
+                                     j);
+                                velocity[offset] = result.velocity_ha_bohr[alpha](i, j);
+                            }
+                });
+        }
+    comm.bcast(velocity.data(), static_cast<int>(velocity.size()), 0);
+    g0w0_headwing_stage(comm, "G0W0 native velocity setter",
+                        [&] { driver::h.set_velocity_matrix_packed(ns, nk, n, velocity.data()); });
+    if (comm.is_root())
+        global::lib_printf(
+            "G0W0 native velocity: metric %.8e frame_Ha %.8e hermiticity_Ha %.8e "
+            "diagonal_imag_HaBohr %.8e; SCF E/C/occupations retained\n",
+            residuals[0], residuals[1], residuals[2], residuals[3]);
+
+    // Match the existing file reader's grid and analytic object preparation.
+    // The ordinary G0W0 build will reuse this head/wing with the unchanged SCF frame.
+    std::vector<double> frequency_weights;
+    driver::h.get_imaginary_frequency_grids(driver::opts, ds->omegas_imagfreq, frequency_weights);
+    initialize_ds_headwing(*ds, driver::opts, driver::opts.option_dielect_func == 3);
+}
+
+static void write_g0w0_headwing_diagnostics()
+{
+    using namespace librpa_int;
+    const auto ds = api::get_dataset_instance(driver::h);
+    if (!global::should_output(LIBRPA_VERBOSE_DEBUG)) return;
+    g0w0_headwing_stage(
+        ds->comm_h, "G0W0 head/wing diagnostics",
+        [&]
+        {
+            if (!ds->comm_h.is_root()) return;
+            if (!ds->p_headwing)
+                throw LIBRPA_RUNTIME_ERROR("G0W0 analytic head/wing was not initialized");
+            create_directories(driver::opts.output_dir, 0);
+            std::ofstream v(join_path(driver::opts.output_dir, "g0w0_velocity.csv"));
+            std::ofstream hw(join_path(driver::opts.output_dir, "g0w0_headwing.csv"));
+            if (!v || !hw)
+                throw LIBRPA_RUNTIME_ERROR("Cannot open G0W0 head/wing diagnostic output");
+            v << "spin,k,alpha,row,col,real_HaBohr,imag_HaBohr\n"
+              << std::scientific << std::setprecision(17);
+            for (std::size_t spin = 0; spin < ds->velocity_matrix.size(); ++spin)
+                for (std::size_t ik = 0; ik < ds->velocity_matrix[spin].size(); ++ik)
+                    for (std::size_t a = 0; a < ds->velocity_matrix[spin][ik].size(); ++a)
+                    {
+                        const auto &matrix = ds->velocity_matrix[spin][ik][a];
+                        for (int i = 0; i < matrix.nr; ++i)
+                            for (int j = 0; j < matrix.nc; ++j)
+                                v << spin << ',' << ik << ',' << a << ',' << i << ',' << j << ','
+                                  << matrix(i, j).real() << ',' << matrix(i, j).imag() << '\n';
+                    }
+            hw << "quantity,frequency,omega_Ha,row,col,real,imag\n"
+               << std::scientific << std::setprecision(17);
+            const auto &frequencies = ds->p_headwing->get_frequency_nodes();
+            for (const auto &[name, matrices] :
+                 std::array<std::pair<const char *, const std::vector<Matz> *>, 2>{
+                     {{"head", &ds->p_headwing->get_head_tensors()},
+                      {"wing_auxiliary", &ds->p_headwing->get_wing_auxiliary()}}})
+                for (std::size_t iw = 0; iw < matrices->size(); ++iw)
+                {
+                    const auto &matrix = matrices->at(iw);
+                    for (int i = 0; i < matrix.nr(); ++i)
+                        for (int j = 0; j < matrix.nc(); ++j)
+                            hw << name << ',' << iw << ',' << frequencies.at(iw) << ',' << i << ','
+                               << j << ',' << matrix(i, j).real() << ',' << matrix(i, j).imag()
+                               << '\n';
+                }
+            v.flush();
+            hw.flush();
+            if (!v || !hw)
+                throw LIBRPA_RUNTIME_ERROR("Cannot flush G0W0 head/wing diagnostic output");
+        });
+}
 
 static std::vector<double> make_spectral_omegas_ha()
 {
@@ -580,7 +815,11 @@ void driver::task_g0w0()
         (opts.option_dielect_func == 3 || opts.option_dielect_func == 4);
     if (compute_headwing)
     {
-        read_headwing_input(driver_params.input_dir, opts.option_dielect_func == 3);
+        if (driver_params.g0w0_headwing_velocity == "native")
+            prepare_g0w0_native_velocity();
+        else
+            read_headwing_input(driver_params.input_dir, opts.option_dielect_func == 3);
+        write_g0w0_headwing_diagnostics();
     }
     else if (driver::get_bool(opts.replace_w_head) && librpa_int::path_exists(file_df.c_str()))
     {
