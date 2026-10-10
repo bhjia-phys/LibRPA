@@ -457,7 +457,7 @@ typedef struct
 
     //! Option of computing dielectric function on imaginary axis.
     /*!
-     * Available values:
+     * Available numerical API values:
      * - 0: use data directly read from input
      * - 1: cubic-spline interpolation from input data
      * - 2: dielectric model fitting from input data
@@ -471,6 +471,14 @@ typedef struct
      *   head direction, projected onto the retained Coulomb space and normalized.
      *   Requires auxiliary l-shell metadata and the ScaLAPACK Wc path.
      *   Supported for three-dimensional G0W0 and G0W0 band calculations only.
+     *
+     * The standalone g0w0/g0w0_band driver also accepts 5: compute native
+     * velocity from original H(R), S(R), and r(R) in the loaded SCF frame,
+     * then resolve to numerical API option 3 for analytic head and wing.
+     * This driver preset requires replace_w_head and use_scalapack_gw_wc,
+     * selects g0w0_headwing_velocity=native, and rejects use_pyatb=true.
+     * Direct library/API callers must select 3 and supply velocity through
+     * the public setter; do not pass 5 to LibrpaOptions.
      *
      * @par Default
      * 0
