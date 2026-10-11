@@ -9,6 +9,7 @@
 #include "librpa_enums.h"
 #include "librpa_input.h"
 #include "librpa_options.h"
+#include "mpi_test_config.h"
 #include "testutils.h"
 
 template <typename T, typename = void>
@@ -629,11 +630,49 @@ static void test_disabled_component_symmetry_keeps_shared_context()
     opts.use_symmetry_exx = LIBRPA_SWITCH_OFF;
     opts.use_symmetry_rpa = LIBRPA_SWITCH_OFF;
     opts.use_symmetry_gw = LIBRPA_SWITCH_OFF;
+    assert(opts.output_exx_ks_mat_k == LIBRPA_SWITCH_OFF);
+    assert(opts.istate_output_mat_start == 0);
+    assert(opts.istate_output_mat_end == -1);
+    opts.istate_output_mat_end = 1;
+    assert(opts.n_bands_exclude_chi0 == 0);
+    assert(opts.n_bands_exclude_sigc == 0);
+    opts.n_bands_exclude_chi0 = 1;
 
     initialize_ds_exx(ds, opts);
     initialize_ds_chi0(ds, opts);
     initialize_ds_g0w0(ds, opts);
 
+    assert(opts.n_bands_sigc == -1);
+    assert(ds.p_g0w0->nbands_G == -1);
+    for (const int n_bands : {0, 1, -1})
+    {
+        opts.n_bands_sigc = n_bands;
+        initialize_ds_g0w0(ds, opts);
+        assert(ds.p_g0w0->nbands_G == n_bands);
+    }
+
+    assert(ds.p_chi0->n_bands_exclude == 1);
+    assert(ds.p_g0w0->n_bands_exclude == 0);
+    opts.n_bands_exclude_chi0 = 0;
+    opts.n_bands_exclude_sigc = 1;
+    initialize_ds_chi0(ds, opts);
+    initialize_ds_g0w0(ds, opts);
+    assert(ds.p_chi0->n_bands_exclude == 0);
+    assert(ds.p_g0w0->n_bands_exclude == 1);
+    for (int invalid : {-1, 2})
+    {
+        opts.n_bands_exclude_chi0 = invalid;
+        opts.n_bands_exclude_sigc = invalid;
+        for (auto init : {initialize_ds_chi0, initialize_ds_g0w0})
+        {
+            bool rejected = false;
+            try { init(ds, opts); }
+            catch (const std::runtime_error &) { rejected = true; }
+            assert(rejected);
+        }
+    }
+    assert(ds.p_g0w0->istate_output_mat_start == 0);
+    assert(ds.p_g0w0->istate_output_mat_end == 1);
     assert(ds.symmetry_context.available);
     assert(ds.symmetry_context.kstars.size() == 1);
     assert(ds.symmetry_context.kstars.front().star_index == 17);
@@ -753,7 +792,7 @@ int main (int argc, char *argv[])
     using namespace librpa_int;
     using namespace librpa_int::global;
     int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init_thread(&argc, &argv, LIBRPA_MPI_THREAD_LEVEL, &provided);
 
     int size_global = get_mpi_size(MPI_COMM_WORLD);
     if (size_global != 4) throw std::runtime_error("test imposes 4 MPI processes");

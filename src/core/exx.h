@@ -24,6 +24,8 @@ class Exx
         bool is_rspace_redist_for_KS_;
         bool is_rspace_redist_blacs_;
 
+        void write_rspace_matrices_binary() const;
+
         void build_KS(const std::map<int, std::map<int, std::map<int, ComplexMatrix>>> &wfc_target,
                       const std::vector<Vector3_Order<double>> &kfrac_target,
                       const AtomPairBvKRemap<atom_t> &bvk_remap);
@@ -33,7 +35,7 @@ class Exx
             const AtomPairBvKRemap<atom_t> &bvk_remap,
             const BlacsCtxtHandler &blacs_ctxt_h,
             bool use_gpu_replace_scalapack = false,
-            bool target_is_band_path = false);
+            const std::string &source = "kgrid");
 
     public:
         //! refenrence to the MeanField object to compute density matrix
@@ -54,11 +56,17 @@ class Exx
         double libri_threshold_V;
         double libri_threshold_D;
 
+        std::string output_dir;
+        bool output_exx_mat_k = false;
+        bool output_exx_mat_r = false;
+
         //! exact-exchange Hamiltonian in real space, dimension (nspins, nspinors, nspinors, I, J, R, nao_I, nao_J)
         std::map<int, std::map<int, std::map<int, std::map<atom_t, std::map<atom_t, std::map<Vector3_Order<int>, Matd>>>>>> exx_IJR;
         std::map<int, std::map<int, std::map<int, std::map<atom_t, std::map<atom_t, std::map<Vector3_Order<int>, Matz>>>>>> exx_IJR_cplx;
         //! exact-exchange Hamiltonian in the basis of KS states, dimension (nspins, n_kpoints, n_bands, n_bands)
         std::map<int, std::map<int, Matz>> exx_KS;
+        //! Descriptor for distributed KS exact-exchange matrix blocks.
+        ArrayDesc desc_exx_KS;
         //! exact-exchange energy of each state, dimension (nspins, n_kpoints, n_bands). This is actually the diagonal elements of Heex_KS.
         std::map<int, std::map<int, std::map<int, double>>> Eexx;
 
@@ -76,7 +84,8 @@ class Exx
         //! Build and store the real-space exchange matrix
         void build(const LibrpaParallelRouting routing,
                    const AtomicBasis &atbasis_abf, const Cs_LRI &Cs,
-                   const atpair_R_mat_t& coul_mat);
+                   const atpair_R_mat_t& coul_mat,
+                   bool coul_mat_is_replicated = false);
 
         void build_KS_kgrid();
         // void build_KS0_kgrid();
@@ -90,7 +99,12 @@ class Exx
                                  const std::vector<Vector3_Order<double>> &kfrac_band,
                                  const AtomPairBvKRemap<atom_t> &bvk_remap,
                                  const BlacsCtxtHandler &blacs_ctxt_h,
-                                 bool use_gpu_replace_scalapack = false);
+                                 bool use_gpu_replace_scalapack = false,
+                                 int band_index = 0);
+        void write_exx_matrices_KS_binary(const std::string &output_dir,
+                                          const std::string &source,
+                                          int istate_start,
+                                          int istate_end) const;
         void reset_rspace();
         void reset_kspace();
 };

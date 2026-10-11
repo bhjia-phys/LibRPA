@@ -11,8 +11,9 @@ implemented in C++ with MPI/OpenMP parallelism, provides C and Fortran
 interfaces, and can be integrated with density functional theory (DFT) codes
 through both file-based and API-based workflows.
 
-**Note:** LibRPA is under active development, and its input/output interfaces
-are prone to change.
+> [!NOTE]
+> LibRPA is under active development, and its input/output interfaces
+> are prone to change.
 
 ## Features
 
@@ -42,14 +43,17 @@ For GW calculations, the following libraries are additionally required:
 
 These libraries are bundled with LibRPA by default, but external versions may also be provided.
 
+CUDA and HIP builds additionally use [LibDDLA](https://github.com/userchba/LibDDLA)
+for distributed GPU linear algebra. LibRPA bundles a compatible revision and
+also supports an external LibDDLA installation.
+
 ## Download
 
-Clone the repository and initialize submodules:
+Clone the repository:
 
 ```bash
-git clone https://github.com/Srlive1201/LibRPA
+git clone https://github.com/AESM-Group/LibRPA
 cd LibRPA
-git submodule update --init --recursive
 ```
 
 ## Build
@@ -58,13 +62,6 @@ A minimal out-of-source build can be done with:
 
 ```bash
 cmake -B build
-cmake --build build -j4
-```
-
-To enable *GW*-related functionality, configure with:
-
-```bash
-cmake -B build -DLIBRPA_USE_LIBRI=ON
 cmake --build build -j4
 ```
 
@@ -94,19 +91,13 @@ More details can be found in the documentation for
 
 ## Documentation
 
-Comprehensive documentation, including installation instructions, user guides,
-examples, and tutorials, is available here: <https://srlive1201.github.io/LibRPA/>
+See the [documentation](https://aesm-group.github.io/LibRPA/) for installation instructions, user
+guides, examples, and tutorials.
 
 ## How to cite
 
-If you use LibRPA in published work, please consider citing the following papers:
-
-- R. Shi, P. Lin, M.-Y. Zhang, L. He, and X. Ren,
-  *Phys. Rev. B* **109**, 035103 (2024).
-- R. Shi, M.-Y. Zhang, P. Lin, L. He, and X. Ren,
-  *Comput. Phys. Commun.* **309**, 109496 (2025).
-- M.-Y. Zhang, P. Lin, R. Shi, and X. Ren,
-  *J. Chem. Theory Comput.* **22**, 5770 (2026).
+If you use LibRPA in your work, please consider citing the relevant papers that enable the relevant feature.
+Please consult the [How to Cite](./docs/user_guide/cite.rst) page for more details.
 
 ## Licensing
 
@@ -117,6 +108,8 @@ The bundled or included third-party components are licensed as follows:
 
 - [greenX (`c90d131`)](https://github.com/nomad-coe/greenX/tree/c90d131873eeec68406c335dc22ae8ad4b445dd8): Apache-2.0
 - [cereal (1.3.0)](https://github.com/USCiLab/cereal/tree/v1.3.0): BSD-3-Clause
-- [LibRI (`e978e96`)](https://github.com/abacusmodeling/LibRI/tree/e978e96404dd9bcbf8cca0c954470cbd5bdf2edf): LGPL-3.0
-- [LibComm (`c6606b3`)](https://github.com/abacusmodeling/LibComm/tree/c6606b3c9176ba51e87bf9140a622a9de07fc2ad): LGPL-3.0
+- [LibRI (`75902f8`)](https://github.com/abacusmodeling/LibRI/tree/75902f8555b114da11c1086b7fdb02202bc3ced8): LGPL-3.0
+- LibRI GPU variant (`2f5e23e`): LGPL-3.0
+- [LibComm (`12457e7`)](https://github.com/abacusmodeling/LibComm/tree/12457e7): LGPL-3.0
+- [LibDDLA (`f1f3295`)](https://github.com/userchba/LibDDLA/tree/f1f32953605c434be383abc195e5d1fb41eb1316): LGPL-3.0
 - [ELPA (2026.02.001)](https://elpa.mpcdf.mpg.de/): LGPL-3.0

@@ -41,6 +41,8 @@ option(LIBRPA_ENABLE_FORTRAN_TEST  "Flag to build tests for Fortran bindings" ON
 
 # Customizable cmake macro
 set(LIBRPA_FORTRAN_DP "c_double" CACHE STRING "Kind of double precision that the Fortran binding uses to interface the user code")
+set(LIBRPA_MPI_THREAD_LEVEL "${LIBRPA_MPI_THREAD_LEVEL}" CACHE STRING "MPI thread level requested by LibRPA executables; empty selects automatically")
+set_property(CACHE LIBRPA_MPI_THREAD_LEVEL PROPERTY STRINGS "" MPI_THREAD_SINGLE MPI_THREAD_FUNNELED MPI_THREAD_SERIALIZED MPI_THREAD_MULTIPLE)
 set(EXTERNAL_ELPA_DIR "" CACHE PATH "External ELPA installation prefix")
 set(LIBRPA_BUNDLED_ELPA_VERSION "2026.02.001" CACHE STRING "Bundled ELPA version")
 set_property(CACHE LIBRPA_BUNDLED_ELPA_VERSION PROPERTY STRINGS "2026.02.001")
@@ -63,10 +65,10 @@ if (DEFINED USE_GREENX_API)
 endif()
 # Hash number of the bundled greenX. Keep it consistent with thirdparty/greenX
 set(_BUNDLED_GREENX_COMMIT_HASH  "c90d131")
-set(_BUNDLED_LIBRI_COMMIT_HASH   "e978e96")
-set(_BUNDLED_LIBRI_GPU_COMMIT_HASH "2f5e23e")
+set(_BUNDLED_LIBRI_COMMIT_HASH   "75902f8")
+set(_BUNDLED_LIBRI_GPU_COMMIT_HASH "8f20f4c")
 set(_BUNDLED_LIBCOMM_COMMIT_HASH "12457e7")
-set(_BUNDLED_LIBDDLA_COMMIT_HASH "f1f3295")
+set(_BUNDLED_LIBDDLA_COMMIT_HASH "0d576d4")
 
 # Add cmake load files
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -76,6 +78,7 @@ set(parallel_libs "")
 set(_librpa_elpa_configure_libs "")
 set(_loaded_cmake_inc OFF)
 set(_LIBRPA_USE_BUNDLED_LIBCOMM OFF)
+set(_LIBRPA_USE_BUNDLED_LIBRI_GPU OFF)
 
 # TODO: maybe better way to customize environments?
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake.inc" AND LIBRPA_USE_CMAKE_INC)
@@ -311,7 +314,7 @@ if(LIBRPA_USE_LIBRI)
     if((LIBRPA_USE_CUDA OR LIBRPA_USE_HIP) AND LIBRPA_USE_LIBRI_GPU)
       message(STATUS "Use internal LibRI   : thirdparty/LibRI_GPU   (commit hash ${_BUNDLED_LIBRI_GPU_COMMIT_HASH})")
       set(LibRI_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/LibRI_GPU/include)
-      list(APPEND math_libs "-lmagma")
+      set(_LIBRPA_USE_BUNDLED_LIBRI_GPU ON)
     else()
       message(STATUS "Use internal LibRI   : thirdparty/LibRI   (commit hash ${_BUNDLED_LIBRI_COMMIT_HASH})")
       set(LibRI_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/LibRI/include)
@@ -326,23 +329,68 @@ if(LIBRPA_USE_LIBRI)
   endif()
 
   add_compile_definitions("LIBRPA_USE_LIBRI")
+
+  if(NOT (LIBRPA_USE_CUDA OR LIBRPA_USE_HIP))
+    # Keep probe settings local and recheck when the selected headers change.
+    function(check_libri_fine_grained_lock)
+      set(CMAKE_REQUIRED_INCLUDES
+        ${LibRI_INCLUDE_DIR} ${LibComm_INCLUDE_DIR} ${Cereal_INCLUDE_DIR})
+      set(CMAKE_REQUIRED_LIBRARIES MPI::MPI_CXX OpenMP::OpenMP_CXX)
+      set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+      unset(LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK CACHE)
+      check_cxx_source_compiles([=[
+#include <RI/ri/LRI.h>
+#include <complex>
+void set_mode(RI::LRI<int, int, 3, double>& real,
+              RI::LRI<int, int, 3, std::complex<double>>& complex)
+{
+  real.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+  complex.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+}
+]=] LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK)
+    endfunction()
+    check_libri_fine_grained_lock()
+    if(LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK)
+      add_compile_definitions(LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK)
+      message(STATUS "LibRI CPU fine-grained locking enabled for RPA, EXX and GW")
+    endif()
+  endif()
 endif()
 
-if((LIBRPA_USE_EXTERNAL_ELPA OR LIBRPA_USE_BUNDLED_ELPA) AND NOT (LIBRPA_USE_CUDA OR LIBRPA_USE_HIP))
-  set(_LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_MULTIPLE)
-elseif((LIBRPA_USE_CUDA OR LIBRPA_USE_HIP) AND _LIBRPA_USE_BUNDLED_LIBCOMM)
-  set(_LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_FUNNELED)
-else()
-  set(_LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_MULTIPLE)
+if(NOT LIBRPA_MPI_THREAD_LEVEL)
+  if((LIBRPA_USE_EXTERNAL_ELPA OR LIBRPA_USE_BUNDLED_ELPA) AND NOT (LIBRPA_USE_CUDA OR LIBRPA_USE_HIP))
+    set(LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_MULTIPLE)
+  elseif(_LIBRPA_USE_BUNDLED_LIBCOMM)
+    set(LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_FUNNELED)
+  else()
+    set(LIBRPA_MPI_THREAD_LEVEL MPI_THREAD_MULTIPLE)
+  endif()
 endif()
-message(STATUS "Driver MPI thread level         : ${_LIBRPA_MPI_THREAD_LEVEL}")
+set(_librpa_supported_mpi_thread_levels
+  MPI_THREAD_SINGLE
+  MPI_THREAD_FUNNELED
+  MPI_THREAD_SERIALIZED
+  MPI_THREAD_MULTIPLE)
+list(FIND _librpa_supported_mpi_thread_levels "${LIBRPA_MPI_THREAD_LEVEL}" _librpa_mpi_thread_level_index)
+if(_librpa_mpi_thread_level_index EQUAL -1)
+  message(FATAL_ERROR
+    "Invalid LIBRPA_MPI_THREAD_LEVEL=${LIBRPA_MPI_THREAD_LEVEL}; expected one of: ${_librpa_supported_mpi_thread_levels}")
+endif()
+unset(_librpa_mpi_thread_level_index)
+unset(_librpa_supported_mpi_thread_levels)
+message(STATUS "Executable MPI thread level     : ${LIBRPA_MPI_THREAD_LEVEL}")
 
 if(LIBRPA_USE_CUDA)
   # find_package(CUDA REQUIRED)
   find_package(CUDAToolkit REQUIRED)
   add_definitions(-DADD_)
   if(LIBRPA_USE_LIBRI_GPU)
-    add_compile_definitions("__CUDA_RI")
+    if(_LIBRPA_USE_BUNDLED_LIBRI_GPU)
+      add_compile_definitions("__DDLA_RI")
+      message(STATUS "Bundled LibRI GPU backend       : DDLA_RI")
+    else()
+      add_compile_definitions("__CUDA_RI")
+    endif()
   endif()
   # include_directories(${MAGMA_ROOT}/include)
   # set(MAGMA_INCLUDE_DIR "${MAGMA_ROOT}/include")
@@ -410,7 +458,12 @@ if(LIBRPA_USE_HIP)
   add_compile_definitions("DDLA_USE_HIP")
   add_compile_definitions("__HIP_PLATFORM_AMD__")
   if(LIBRPA_USE_LIBRI_GPU)
-    add_compile_definitions("__HIP_RI")
+    if(_LIBRPA_USE_BUNDLED_LIBRI_GPU)
+      add_compile_definitions("__DDLA_RI")
+      message(STATUS "Bundled LibRI GPU backend       : DDLA_RI")
+    else()
+      add_compile_definitions("__HIP_RI")
+    endif()
   endif()
   set(HIP_LIBRARIES "-lamdhip64 -lgalaxyhip -lhipblas -lhipsolver -lrccl -lhiprand")
   list(APPEND math_libs
@@ -474,10 +527,14 @@ endif()
 if(LIBRPA_ENABLE_DRIVER)
   message(STATUS "LibRPA driver enabled")
   list(APPEND CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
-  add_subdirectory(driver)
 endif()
 
 add_subdirectory(src)
+add_subdirectory(driver/reader)
+
+if(LIBRPA_ENABLE_DRIVER)
+  add_subdirectory(driver)
+endif()
 
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_compute.h
@@ -488,6 +545,8 @@ install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_options.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/file_reader.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/librpa_file_reader.hpp
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librpa)
 
 message(STATUS "CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX}")

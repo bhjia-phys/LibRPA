@@ -3,11 +3,14 @@
 #include "librpa_input.h"
 
 // Standard headers
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <complex>
 #include <cstring>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <valarray>
@@ -19,6 +22,7 @@
 #include "../io/stl_io_helper.h"
 #include "../math/matrix.h"
 #include "../math/vector3_order.h"
+#include "../utils/constants.h"
 #include "../utils/error.h"
 #include "../utils/profiler.h"
 #include "instance_manager.h"
@@ -692,6 +696,7 @@ void librpa_set_latvec_and_G(LibrpaHandler* h, const double lat_mat[9], const do
     using std::cout;
     using std::endl;
     using librpa_int::global::profiler;
+    using librpa_int::global::should_output;
 
     const std::string tname = "api_set_latvec_and_G";
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
@@ -705,7 +710,7 @@ void librpa_set_latvec_and_G(LibrpaHandler* h, const double lat_mat[9], const do
     pbc.set_latvec_and_G(latt, recp);
 
     pds->comm_h.barrier();
-    if (pds->comm_h.is_root())
+    if (pds->comm_h.is_root() && should_output())
     {
         cout << "Lattice vectors (Bohr): latt" << endl;
         pbc.latvec.print(16);
@@ -733,6 +738,7 @@ void librpa_set_atoms(LibrpaHandler* h, int natoms, const int *types, const doub
     using std::endl;
     using librpa_int::coord_t;
     using librpa_int::global::lib_printf;
+    using librpa_int::global::should_output;
     using librpa_int::global::profiler;
 
     const std::string tname = "api_set_atoms";
@@ -756,7 +762,7 @@ void librpa_set_atoms(LibrpaHandler* h, int natoms, const int *types, const doub
         const auto &coords = atoms.coords;
         const auto &coords_frac = atoms.coords_frac;
         pds->comm_h.barrier();
-        if (pds->comm_h.is_root())
+        if (pds->comm_h.is_root() && should_output())
         {
             cout << "Atom positions read (Cartesian in Bohr | fractional):" << endl;
             for (int i = 0; i != natoms; i++)
@@ -775,7 +781,7 @@ void librpa_set_atoms(LibrpaHandler* h, int natoms, const int *types, const doub
         atoms.set(v_types, v_coords);
         const auto &coords = atoms.coords;
         pds->comm_h.barrier();
-        if (pds->comm_h.is_root())
+        if (pds->comm_h.is_root() && should_output())
         {
             cout << "Atom positions read (Cartesian in Bohr, fractional not set due to uninitialized lattice):" << endl;
             for (int i = 0; i != natoms; i++)
@@ -796,6 +802,7 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3, int nkp
                             const double* kvecs, const double* kweights)
 {
     using librpa_int::global::lib_printf;
+    using librpa_int::global::should_output;
     using std::cout;
     using std::endl;
     using librpa_int::global::profiler;
@@ -821,7 +828,7 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3, int nkp
     pds->invalidate_compute_objects();
 
     pds->comm_h.barrier();
-    if (pds->comm_h.is_root())
+    if (pds->comm_h.is_root() && should_output())
     {
         librpa_int::global::lib_printf("kgrids: %3d %3d %3d\n", pbc.period.x, pbc.period.y, pbc.period.z);
         cout << "k-points read (Cartesian in 2Pi Bohr^-1 | fractional):" << endl;
@@ -862,6 +869,107 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3, int nkp
     profiler.stop(tname);
 }
 
+void librpa_set_irreducible_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3,
+                                       int n_scf, const double* kvecs_scf,
+                                       int n_full, const double* kvecs_full,
+                                       const int* full_to_scf)
+{
+    using namespace librpa_int;
+    if (nk1 <= 0 || nk2 <= 0 || nk3 <= 0 || n_scf <= 0 || n_full <= 0 ||
+        kvecs_scf == nullptr || kvecs_full == nullptr || full_to_scf == nullptr)
+        throw LIBRPA_INVALID_ARGUMENT("Invalid explicit full-grid mapping buffers");
+    int expected = 1;
+    for (const int size : {nk1, nk2, nk3})
+    {
+        if (expected > n_full / size)
+            throw LIBRPA_INVALID_ARGUMENT("Explicit full-grid count differs from grid dimensions");
+        expected *= size;
+    }
+    if (expected != n_full)
+        throw LIBRPA_INVALID_ARGUMENT("Explicit full-grid count differs from grid dimensions");
+    auto ds = api::get_dataset_instance(h);
+    if (n_scf > n_full || ds->mf.get_n_kpoints() != n_scf)
+        throw LIBRPA_INVALID_ARGUMENT("Explicit mapping SCF count differs from mean field");
+    const auto finite = [](const double value) { return std::isfinite(value); };
+    if (!std::all_of(kvecs_scf, kvecs_scf + 3 * static_cast<std::size_t>(n_scf), finite) ||
+        !std::all_of(kvecs_full, kvecs_full + 3 * static_cast<std::size_t>(n_full), finite))
+        throw LIBRPA_INVALID_ARGUMENT("Explicit full-grid mapping contains non-finite coordinates");
+    const int dimensions[3] = {nk1, nk2, nk3};
+    const auto fractional = [&](const double* k) {
+        return ds->pbc.latvec * Vector3_Order<double>{k[0] / TWO_PI, k[1] / TWO_PI, k[2] / TWO_PI};
+    };
+    const auto origin = fractional(kvecs_full);
+    const auto grid_key = [&](const double* k) {
+        const auto f = fractional(k) - origin;
+        const double coords[3] = {f.x, f.y, f.z};
+        std::array<int, 3> key;
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            const double x = coords[axis] * dimensions[axis];
+            if (!std::isfinite(x) || std::abs(x - std::round(x)) > 1e-5)
+                throw LIBRPA_INVALID_ARGUMENT("Explicit point is outside the declared uniform grid");
+            const int reduced = static_cast<int>(std::fmod(std::round(x), dimensions[axis]));
+            key[axis] = (reduced + dimensions[axis]) % dimensions[axis];
+        }
+        return key;
+    };
+    std::set<std::array<int, 3>> seen;
+    std::vector<std::set<std::array<int, 3>>> star_keys(n_scf);
+    std::vector<std::vector<Vector3_Order<double>>> stars(n_scf);
+    for (int ik = 0; ik < n_full; ++ik)
+    {
+        const int rep = full_to_scf[ik];
+        if (rep < 0 || rep >= n_scf)
+            throw LIBRPA_INVALID_ARGUMENT("Explicit full-grid representative index out of range");
+        const auto key = grid_key(kvecs_full + 3 * static_cast<std::size_t>(ik));
+        if (!seen.insert(key).second)
+            throw LIBRPA_INVALID_ARGUMENT("Duplicate explicit point modulo reciprocal lattice vectors");
+        star_keys[rep].insert(key);
+        stars[rep].push_back({kvecs_full[3 * ik] / TWO_PI,
+                             kvecs_full[3 * ik + 1] / TWO_PI,
+                             kvecs_full[3 * ik + 2] / TWO_PI});
+    }
+    for (int rep = 0; rep < n_scf; ++rep)
+        if (star_keys[rep].count(grid_key(kvecs_scf + 3 * static_cast<std::size_t>(rep))) != 1)
+            throw LIBRPA_INVALID_ARGUMENT("Explicit mapping omits a SCF representative from its star");
+    auto candidate = ds->pbc;
+    candidate.set_irreducible_kgrids_kvec(
+        nk1, nk2, nk3,
+        std::vector<double>(kvecs_scf, kvecs_scf + 3 * static_cast<std::size_t>(n_scf)), stars);
+    if (!ds->spg_symops.empty())
+    {
+        // Validate the generated transformation routes against the producer's
+        // assignment without replacing the explicitly supplied mapping.
+        SymmetryContext check;
+        check.set_crystal_structure(candidate.latvec, candidate.G, ds->atoms.types,
+                                    ds->atoms.coords_frac);
+        check.set_rspace_operations(ds->spg_symops);
+        if (ds->spg_spin_ops_explicit)
+            check.set_symmetry_spin_operations(ds->spg_spin_ops, ds->spg_grey_group);
+        check.build_periodic_mappings(candidate, candidate.Rlist);
+        if (check.kstars.size() != stars.size())
+            throw LIBRPA_INVALID_ARGUMENT("Explicit mapping differs from symmetry star count");
+        for (std::size_t rep = 0; rep < stars.size(); ++rep)
+        {
+            const auto &generated = check.kstars[rep];
+            if (!same_fractional_kpoint(generated.k_ibz, candidate.kfrac_list[rep], 1e-5) ||
+                generated.members.size() != stars[rep].size())
+                throw LIBRPA_INVALID_ARGUMENT("Explicit mapping differs from symmetry star");
+            for (const auto &member : generated.members)
+            {
+                const bool found = std::any_of(stars[rep].begin(), stars[rep].end(),
+                    [&](const Vector3_Order<double> &k) {
+                        return same_fractional_kpoint(ds->pbc.latvec * k, member.k_bz, 1e-5);
+                    });
+                if (!found)
+                    throw LIBRPA_INVALID_ARGUMENT("Explicit mapping differs from symmetry members");
+            }
+        }
+    }
+    ds->pbc = std::move(candidate);
+    ds->invalidate_compute_objects();
+}
+
 void librpa_set_kq_mapping(LibrpaHandler* h, int nkpts, const int* map_q_ks)
 {
     using std::cout;
@@ -882,7 +990,7 @@ void librpa_set_kq_mapping(LibrpaHandler* h, int nkpts, const int* map_q_ks)
     pds->invalidate_compute_objects();
     // ofs_myid << map << std::endl;
     pds->comm_h.barrier();
-    if (pds->comm_h.is_root())
+    if (pds->comm_h.is_root() && should_output())
     {
         const int nkpt = pbc.irk_point_id_mapping.size();
         cout << "SCF k-point to Coulomb q-point mapping:" << endl;
