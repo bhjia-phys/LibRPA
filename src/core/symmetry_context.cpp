@@ -823,14 +823,15 @@ bool symmetry_spin_u_equal(const std::array<std::complex<double>, 4>& u1,
                            const std::array<std::complex<double>, 4>& u2,
                            const double tol)
 {
+    bool same_sign = true;
+    bool opposite_sign = true;
     for (std::size_t i = 0; i != 4; ++i)
     {
-        if (std::min(std::abs(u1[i] - u2[i]), std::abs(u1[i] + u2[i])) >= tol)
-        {
-            return false;
-        }
+        same_sign = same_sign && std::abs(u1[i] - u2[i]) < tol;
+        opposite_sign = opposite_sign && std::abs(u1[i] + u2[i]) < tol;
     }
-    return true;
+    // The SU(2) double-cover sign applies to the whole matrix.
+    return same_sign || opposite_sign;
 }
 
 void validate_symmetry_spin_operations(
