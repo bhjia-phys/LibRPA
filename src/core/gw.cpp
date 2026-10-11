@@ -1457,6 +1457,8 @@ void G0W0::build_spacetime(
             {
                 const auto freq = tfg.get_freq_nodes()[ifreq];
                 auto freq_iter = Wc_freq_q_atom_pair->find(freq);
+                // Unfold and Fourier/export contain collectives. A rank with
+                // no atom pairs must participate with an empty local map.
                 atom_mapping<std::map<Vector3_Order<double>, Matz>>::pair_t_old Wc_q;
                 if (freq_iter != Wc_freq_q_atom_pair->end()) Wc_q = freq_iter->second;
 
