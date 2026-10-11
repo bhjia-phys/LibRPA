@@ -215,7 +215,8 @@ typedef struct
     //! BvK remapping convention for band interpolation.
     /*!
      * Available values:
-     * - 0: map each atom-pair R to one nearest BvK image.
+     * - 0: map each atom-pair R to one nearest BvK image; equally split
+     *   inconsistent opposite-pair ties to preserve the adjoint relation.
      * - 1: Wigner-Seitz remapping; split over all nearest BvK images at equal distance.
      *
      * @par Default
