@@ -13,6 +13,7 @@
 #include "../math/scalapack_connector.h"
 
 #include "../io/stl_io_helper.h"
+#include "mpi_test_config.h"
 #include "testutils.h"
 
 using namespace std;
@@ -113,13 +114,16 @@ static void test_dmat_cplx_Rs_kpara(int nk, int nb, int nocc)
     }
 }
 
-static void test_gf_cplx_Rs_kpara(int nk, int nb, int nocc, double gap, double tau)
+static void test_gf_cplx_Rs_kpara(int nk, int nb, int nocc, double gap, double tau, int n_bands = -1, int n_excluded = 0)
 {
     std::vector<Vector3_Order<double>> kfrac_list;
     std::vector<Vector3_Order<int>> Rs;
     const auto mf = init_mf_pbc(nk, nb, nocc, gap, kfrac_list, Rs);
 
-    const auto gf_Rs = get_gf_cplx_imagtimes_Rs_kpara(0, mf, kfrac_list, {tau}, Rs, mpi_comm_global_h);
+    std::vector<bool> mask(nb, true);
+    if (n_bands >= 0) std::fill(mask.begin() + n_bands, mask.end(), false);
+    std::fill_n(mask.begin(), n_excluded, false);
+    const auto gf_Rs = get_gf_cplx_imagtimes_Rs_kpara(0, mf, kfrac_list, {tau}, Rs, mpi_comm_global_h, mask);
     assert(gf_Rs.size() == 1);
     assert(gf_Rs.at(tau).size() == Rs.size());
     const double coeff = std::exp(- 0.5 * std::abs(gap * tau)) * (tau > 0? 1.0: -1.0);
@@ -133,12 +137,14 @@ static void test_gf_cplx_Rs_kpara(int nk, int nb, int nocc, double gap, double t
             {
                 for (int ib = 0; ib < nocc; ib++)
                 {
-                    if (tau > 0) assert(fequal(rmat(ib, ib), {0.0, 0.0}));
+                    if (!mask[ib]) assert(fequal(rmat(ib, ib), {0.0, 0.0}));
+                    else if (tau > 0) assert(fequal(rmat(ib, ib), {0.0, 0.0}));
                     else assert(fequal(rmat(ib, ib), {coeff, 0.0}));
                 }
                 for (int ib = nocc; ib < nb; ib++)
                 {
-                    if (tau > 0) assert(fequal(rmat(ib, ib), {coeff, 0.0}));
+                    if (!mask[ib]) assert(fequal(rmat(ib, ib), {0.0, 0.0}));
+                    else if (tau > 0) assert(fequal(rmat(ib, ib), {coeff, 0.0}));
                     else assert(fequal(rmat(ib, ib), {0.0, 0.0}));
                 }
             }
@@ -272,7 +278,7 @@ static void test_dmat_cplx_Rs_kblacs_para_full_wfc()
     }
 }
 
-static void test_gf_cplx_imagtimes_Rs_kblacs_para_full_wfc()
+static void test_gf_cplx_imagtimes_Rs_kblacs_para_full_wfc(bool masked = false)
 {
     if (size_global < 2 || size_global % 2 != 0) return;
 
@@ -334,9 +340,15 @@ static void test_gf_cplx_imagtimes_Rs_kblacs_para_full_wfc()
             ? std::vector<Vector3_Order<int>>{{-1, 0, 0}, {0, 0, 0}}
             : std::vector<Vector3_Order<int>>{{1, 0, 0}};
     std::vector<double> imagtimes{1.0, -0.5};
-    const auto gf_ref = mf_ref.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_list, imagtimes, Rs);
+    std::vector<bool> mask(nb, true);
+    if (masked)
+    {
+        std::fill(mask.begin() + 3, mask.end(), false);
+        mask[0] = false;
+    }
+    const auto gf_ref = mf_ref.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_list, imagtimes, Rs, mask);
     const auto gf_Rs = get_gf_cplx_imagtimes_Rs_kblacs_para(
-        0, mf, kfrac_list, imagtimes, Rs, context, desc_wfc, desc_gf);
+        0, mf, kfrac_list, imagtimes, Rs, context, desc_wfc, desc_gf, mask);
     assert(gf_Rs.size() == imagtimes.size());
 
     for (const auto tau: imagtimes)
@@ -625,7 +637,7 @@ static MeanField build_two_atom_full_bz_meanfield_from_kstar(
     return mf_full;
 }
 
-static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier()
+static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(bool masked = false, bool exclude_lowest = false)
 {
     if (size_global < 2) return;
 
@@ -644,8 +656,9 @@ static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier()
     MeanField mf_full = build_two_atom_full_bz_meanfield_from_kstar(ctx, wfc_layouts, atom_nw);
     const auto expected_dmat_R0 = mf_full.get_dmat_cplx_R(0, 0, 0, kfrac_full, Rs.front());
     const auto expected_dmat_R1 = mf_full.get_dmat_cplx_R(0, 0, 0, kfrac_full, Rs.back());
+    const std::vector<bool> mask{!exclude_lowest, !masked};
     const auto expected_gf =
-        mf_full.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_full, taus, Rs);
+        mf_full.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_full, taus, Rs, mask);
 
     KPointBlacsProcessShape shape(1, size_global, false);
     KPointBlacsParallelContext context(shape, mpi_comm_global_h.comm, 1);
@@ -668,7 +681,7 @@ static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier()
         atbasis_wfc);
     const auto actual_gf = get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
         0, 0, 0, mf, kfrac_ibz, taus, Rs, context, desc_wfc_full, desc_dm, ctx, pbc,
-        atbasis_wfc);
+        atbasis_wfc, mask);
 
     const std::map<Vector3_Order<int>, ComplexMatrix> expected_dmat{
         {Rs.front(), expected_dmat_R0}, {Rs.back(), expected_dmat_R1}};
@@ -730,16 +743,22 @@ static void test_dmat_kblacs_reduced_kstar_matches_symmetry_restore()
     KPointBlacsParallelContext context(shape, mpi_comm_global_h.comm, 1);
     const auto desc_wfc_full = context.create_array_desc(1, 1, 1, 1);
     const auto desc_dm = context.create_array_desc(1, 1);
+    const int has_empty_local_wfc =
+        desc_wfc_full.m_loc() * desc_wfc_full.n_loc() == 0 ? 1 : 0;
+    int empty_local_wfc_ranks = 0;
+    MPI_Allreduce(&has_empty_local_wfc, &empty_local_wfc_ranks, 1, MPI_INT, MPI_SUM,
+                  mpi_comm_global_h.comm);
+    if (empty_local_wfc_ranks == 0)
+        throw std::runtime_error("kBLACS fixture did not create an empty local WFC block");
 
     MeanField mf(1, 1, 1, 1);
     mf.get_efermi() = 0.0;
     mf.get_eigenvals()[0](0, 0) = -1.0;
     mf.get_weight()[0](0, 0) = 2.0;
-    if (context.kpoint_blacs_root_global_rank(0) == myid_global)
-    {
-        mf.get_eigenvectors()[0][0][0].create(1, 1);
-        mf.get_eigenvectors()[0][0][0](0, 0) = {1.0, 0.0};
-    }
+    // Keep a replicated source WFC on every rank. Ranks with no local
+    // descriptor entries must ignore this nonlocal storage.
+    mf.get_eigenvectors()[0][0][0].create(1, 1);
+    mf.get_eigenvectors()[0][0][0](0, 0) = {1.0, 0.0};
 
     const auto actual = get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
         0, 0, 0, mf, kfrac_list, Rs, context, desc_wfc_full, desc_dm, ctx, pbc,
@@ -847,8 +866,6 @@ static SymmetryContext build_gamma_tr_spinor_kstar_context()
     ctx.rsh_rotations.emplace_back();
     ctx.rsh_rotations.back()[0] = ComplexMatrix(1, 1);
     ctx.rsh_rotations.back()[0](0, 0) = {1.0, 0.0};
-
-    // (E, I, unitary) and (E, I, antiunitary): grey-group Theta at Gamma
     ctx.spin_operations.push_back(SymmetrySpinOperation{
         0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
     ctx.spin_operations.push_back(SymmetrySpinOperation{
@@ -877,14 +894,9 @@ static SymmetryContext build_gamma_tr_spinor_kstar_context()
     }
     star.members[1].time_reversal = true;
     ctx.kstars.push_back(star);
-
     return ctx;
 }
 
-//! Phase 4: the k-BLACS four-channel spinor GF restore must reproduce the
-//! serial spinor restore on a Gamma star with an antiunitary member. The wfc
-//! lives only on the k-point root rank; the missing channels on other ranks
-//! exercise the distributed zero-fill path.
 static void test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore()
 {
     if (size_global < 2) return;
@@ -906,17 +918,14 @@ static void test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore()
     mf_ref.get_weight()[0](0, 0) = 1.0;
     mf_ref.get_weight()[0](0, 1) = 0.0;
     for (int ispinor = 0; ispinor != 2; ++ispinor)
-    {
         mf_ref.get_eigenvectors()[0][ispinor][0].create(2, 1);
-    }
     mf_ref.get_eigenvectors()[0][0][0](0, 0) = {0.6, 0.1};
     mf_ref.get_eigenvectors()[0][0][0](1, 0) = {-0.2, 0.7};
     mf_ref.get_eigenvectors()[0][1][0](0, 0) = {0.5, -0.3};
     mf_ref.get_eigenvectors()[0][1][0](1, 0) = {0.1, 0.4};
 
     const auto expected = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf_ref, 0, kfrac_list, taus, Rs, atom_nw, -1);
-
+        ctx, wfc_layouts, mf_ref, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{});
     KPointBlacsProcessShape shape(1, size_global, false);
     KPointBlacsParallelContext context(shape, mpi_comm_global_h.comm, 1);
     const auto desc_wfc = context.create_array_desc(1, 2, 1, 2);
@@ -935,11 +944,8 @@ static void test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore()
     }
 
     const auto actual = get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
-        0, mf, kfrac_list, taus, Rs, context, desc_wfc, desc_dm, ctx, pbc,
-        atbasis_wfc);
-
+        0, mf, kfrac_list, taus, Rs, context, desc_wfc, desc_dm, ctx, pbc, atbasis_wfc);
     for (const auto tau : taus)
-    {
         for (const auto &R : Rs)
         {
             const auto &exp_blocks = expected.at(tau).at(R);
@@ -949,30 +955,19 @@ static void test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore()
             const Matz *act_channel[4] = {
                 &act_blocks.b00, &act_blocks.b01, &act_blocks.b10, &act_blocks.b11};
             for (int s = 0; s != 4; ++s)
-            {
                 for (int jloc = 0; jloc != desc_dm.n_loc(); ++jloc)
-                {
-                    const int jglob = desc_dm.indx_l2g_c(jloc);
                     for (int iloc = 0; iloc != desc_dm.m_loc(); ++iloc)
                     {
+                        const int jglob = desc_dm.indx_l2g_c(jloc);
                         const int iglob = desc_dm.indx_l2g_r(iloc);
                         if (!fequal((*act_channel[s])(iloc, jloc),
                                     (*exp_channel[s])(iglob, jglob), cplxdb{1e-12, 0.0}))
-                        {
                             throw std::runtime_error(
                                 "kBLACS spinor Green's function did not match serial restore");
-                        }
                     }
-                }
-            }
         }
-    }
 }
 
-//! Phase 4 EXX: the k-BLACS four-channel spinor density-matrix restore must
-//! reproduce the serial spinor restore on a Gamma star with an antiunitary
-//! member. The wfc lives only on the k-point root rank; the missing channels
-//! on other ranks exercise the distributed zero-fill path.
 static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
 {
     if (size_global < 2) return;
@@ -1060,7 +1055,7 @@ static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
 int main (int argc, char *argv[])
 {
     int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init_thread(&argc, &argv, LIBRPA_MPI_THREAD_LEVEL, &provided);
     init_global_mpi(MPI_COMM_WORLD);
     init_global_io();
 
@@ -1076,14 +1071,21 @@ int main (int argc, char *argv[])
     test_dmat_cplx_Rs_kpara(15, 4, 2);
     test_gf_cplx_Rs_kpara(3, 7, 2, 1.0, 1.0);
     test_gf_cplx_Rs_kpara(15, 3, 2, 0.5, -1.0);
+    test_gf_cplx_Rs_kpara(3, 7, 2, 1.0, -1.0, 1);
+    test_gf_cplx_Rs_kpara(3, 7, 2, 1.0, 1.0, 3);
+    test_gf_cplx_Rs_kpara(3, 7, 2, 1.0, -1.0, 3, 1);
+    test_gf_cplx_Rs_kpara(3, 7, 2, 1.0, 1.0, 3, 1);
 
     // Actual examples
     test_dmat_cplx_Rs_kpara();
     test_dmat_cplx_Rs_kblacs_para_full_wfc();
     test_gf_cplx_imagtimes_Rs_kblacs_para_full_wfc();
+    test_gf_cplx_imagtimes_Rs_kblacs_para_full_wfc(true);
     test_dm_gf_kblacs_para_redistributed_full_wfc();
     test_dmat_kblacs_reduced_kstar_matches_symmetry_restore();
     test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier();
+    test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(true);
+    test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(false, true);
     test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore();
     test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore();
 

@@ -194,13 +194,39 @@ static void validate_input_parameters()
             && params.sf_state_end <= params.sf_state_start)
             throw std::runtime_error("sf_state_end must be greater than sf_state_start");
     }
-    if (task == "qsgw" || task == "qsgw_band")
+    if (task == "g0w0" || task == "g0w0_band")
+    {
+        if (params.g0w0_headwing_velocity != "file" && params.g0w0_headwing_velocity != "native")
+            throw std::runtime_error("g0w0_headwing_velocity must be file or native");
+        if (params.g0w0_headwing_velocity == "native")
+        {
+            if (driver::opts.replace_w_head != LIBRPA_SWITCH_ON ||
+                (driver::opts.option_dielect_func != 3 && driver::opts.option_dielect_func != 4))
+                throw std::runtime_error(
+                    "G0W0 native velocity requires replace_w_head and option_dielect_func = 3 or 4");
+            if (params.g0w0_fn_hr.empty() || params.g0w0_fn_sr.empty() || params.g0w0_fn_rr.empty())
+                throw std::runtime_error("G0W0 native velocity requires g0w0_fn_hr, g0w0_fn_sr, and g0w0_fn_rr");
+            if (params.g0w0_hr_unit != "Ha" && params.g0w0_hr_unit != "Ry" && params.g0w0_hr_unit != "eV")
+                throw std::runtime_error("g0w0_hr_unit must be Ha, Ry, or eV");
+            if (params.g0w0_rr_unit != "Bohr" && params.g0w0_rr_unit != "Angstrom")
+                throw std::runtime_error("g0w0_rr_unit must be Bohr or Angstrom");
+            if (params.use_spinor_wfc || driver::opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON ||
+                driver::opts.use_symmetry_rpa == LIBRPA_SWITCH_ON ||
+                driver::opts.use_symmetry_gw == LIBRPA_SWITCH_ON ||
+                driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON)
+                throw std::runtime_error(
+                    "G0W0 native velocity currently requires scalar full-BZ wavefunctions without k-parallel or symmetry reduction");
+            if (params.use_pyatb)
+                throw std::runtime_error("G0W0 native velocity requires use_pyatb = false");
+        }
+    }
+    if (task == "qsgw")
     {
         if (driver::opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
             throw std::runtime_error(
                 "QSGW fixed-basis iteration requires replicated SCF wavefunctions; set use_kpara_scf_eigvec = false");
-        if (params.qsgw_input_contract.empty())
-            throw std::runtime_error("qsgw_input_contract must not be empty");
+        if (params.qsgw_vxc_basis != "state" && params.qsgw_vxc_basis != "nao")
+            throw std::runtime_error("qsgw_vxc_basis must be state or nao");
         if (params.qsgw_mixer != "none" && params.qsgw_mixer != "linear")
             throw std::runtime_error("qsgw_mixer must be none or linear");
         if (!(params.qsgw_mixing_beta > 0.0 &&
@@ -229,9 +255,19 @@ static void validate_input_parameters()
             throw std::runtime_error(
                 "QSGW independent PyATB head updates are unsupported; use the same-grid velocity input");
         if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
-            driver::opts.option_dielect_func != 4)
+            driver::opts.option_dielect_func != 3 && driver::opts.option_dielect_func != 4)
             throw std::runtime_error(
-                "QSGW supports only analytic head-only mode; set option_dielect_func = 4");
+                "QSGW analytic head/wing requires option_dielect_func = 3 or 4");
+        if (params.qsgw_headwing_velocity != "reference" &&
+            params.qsgw_headwing_velocity != "rotate_reference" &&
+            params.qsgw_headwing_velocity != "current_hr")
+            throw std::runtime_error("Unsupported qsgw_headwing_velocity convention");
+        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
+            driver::opts.option_dielect_func == 3 && params.qsgw_headwing_velocity == "reference")
+            throw std::runtime_error("QSGW wings require rotate_reference or current_hr velocity");
+        if (params.qsgw_headwing_velocity == "current_hr" &&
+            (params.qsgw_fn_sr.empty() || params.qsgw_fn_rr.empty()))
+            throw std::runtime_error("QSGW current_hr velocity requires qsgw_fn_sr and qsgw_fn_rr");
         // QSGW inherits the upstream EXX, GW, and RPA symmetry switches.
     }
 }
@@ -257,6 +293,8 @@ void parse_inputfile_to_params(const std::string &fn)
     {
         librpa_int::set_aims_constants();
     }
+    parser.parse_string("input_preset", driver_params.input_preset, "fhi-aims", flag);
+    driver_params.apply_input_preset();
     _parse_string_post(driver_params, input_dir, check_dirpath);
     _parse_double(driver_params, cs_threshold);
     _parse_bool(driver_params, output_energy_qp);
@@ -275,6 +313,18 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_string(driver_params, prefix_lri_coeff_shrink);
     _parse_string(driver_params, prefix_shrink_sinvS);
     _parse_string(driver_params, prefix_coul_full);
+    _parse_string(driver_params, prefix_sternheimer_chi0);
+    _parse_string(driver_params, fn_sternheimer_qpoints);
+    _parse_string(driver_params, fn_sternheimer_partial_manifest);
+    _parse_string(driver_params, fn_sternheimer_symmetry_routes);
+    _parse_string(driver_params, fn_sternheimer_qstar_routes);
+    _parse_string(driver_params, prefix_sternheimer_reconstructed);
+    _parse_string(driver_params, prefix_sternheimer_kresolved);
+    _parse_string(driver_params, prefix_sternheimer_symmetry_diagnostic);
+    _parse_int(driver_params, sternheimer_iq);
+    _parse_double(driver_params, sternheimer_qweight);
+    _parse_bool(driver_params, use_rpa_gamma);
+    _parse_bool(driver_params, sternheimer_matrix_only);
     _parse_string(driver_params, prefix_coul_cut);
     _parse_string(driver_params, prefix_eigvecs_scf);
     _parse_string(driver_params, fn_stru);
@@ -287,20 +337,33 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_string(driver_params, fn_eigocc_scf);
     _parse_string(driver_params, fn_dielfunc);
     _parse_string(driver_params, fn_vxc_scf);
+    _parse_string(driver_params, prefix_velocity);
     _parse_string(driver_params, fn_band_kpath_info);
     std::string task_normalized = driver_params.task;
     std::transform(task_normalized.begin(), task_normalized.end(),
                    task_normalized.begin(), [](const unsigned char ch) {
                        return static_cast<char>(std::tolower(ch));
                    });
-    if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
+    if (task_normalized == "g0w0" || task_normalized == "g0w0_band")
     {
-        for (const std::string& removed : {
-                 "qsgw_update_hartree",
-                 "qsgw_hartree_coulomb",
-                 "qsgw_hartree_normalization",
-                 "qsgw_export_hamiltonian_for_pyatb",
-                 "qsgw_hr_export_full_mp_rgrid"})
+        parse_qsgw_string(parser, "g0w0_headwing_velocity", driver_params.g0w0_headwing_velocity);
+        parse_qsgw_string(parser, "g0w0_fn_hr", driver_params.g0w0_fn_hr);
+        parse_qsgw_string(parser, "g0w0_fn_hr_spin1", driver_params.g0w0_fn_hr_spin1);
+        parse_qsgw_string(parser, "g0w0_fn_sr", driver_params.g0w0_fn_sr);
+        parse_qsgw_string(parser, "g0w0_fn_rr", driver_params.g0w0_fn_rr);
+        parse_qsgw_string(parser, "g0w0_hr_unit", driver_params.g0w0_hr_unit);
+        parse_qsgw_string(parser, "g0w0_rr_unit", driver_params.g0w0_rr_unit);
+    }
+    if (task_normalized == "qsgw")
+    {
+        std::string removed_system_type;
+        if (get_last_assigned_value(parser, "qsgw_system_type", removed_system_type))
+            throw std::runtime_error(
+                "qsgw_system_type was removed; QSGW selects mixing automatically from the SCF "
+                "k-point input");
+        for (const std::string removed :
+             {"qsgw_update_hartree", "qsgw_hartree_coulomb", "qsgw_hartree_normalization",
+              "qsgw_export_hamiltonian_for_pyatb", "qsgw_hr_export_full_mp_rgrid"})
         {
             std::string ignored;
             if (get_last_assigned_value(parser, removed, ignored))
@@ -309,8 +372,9 @@ void parse_inputfile_to_params(const std::string &fn)
                     removed + " is not supported by the head-only QSGW workflow");
             }
         }
-        parse_qsgw_string(parser, "qsgw_input_contract",
-                           driver_params.qsgw_input_contract);
+        parse_qsgw_string(parser, "prefix_vxc_scf", driver_params.prefix_vxc_scf);
+        parse_qsgw_string(parser, "prefix_vxc_band", driver_params.prefix_vxc_band);
+        parse_qsgw_string(parser, "qsgw_vxc_basis", driver_params.qsgw_vxc_basis);
         parse_qsgw_string(parser, "qsgw_mixer", driver_params.qsgw_mixer);
         std::transform(driver_params.qsgw_mixer.begin(),
                        driver_params.qsgw_mixer.end(),
@@ -330,6 +394,11 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_band0_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_string(parser, "qsgw_headwing_velocity", driver_params.qsgw_headwing_velocity);
+        parse_qsgw_string(parser, "qsgw_fn_sr", driver_params.qsgw_fn_sr);
+        parse_qsgw_string(parser, "qsgw_fn_rr", driver_params.qsgw_fn_rr);
+        parse_qsgw_string(parser, "qsgw_restart_file", driver_params.qsgw_restart_file);
+        parse_qsgw_string(parser, "qsgw_checkpoint_file", driver_params.qsgw_checkpoint_file);
         parse_qsgw_double(parser, "qsgw_convergence_tolerance_ev",
                           driver_params.qsgw_convergence_tolerance_ev);
     }
@@ -402,6 +471,8 @@ void parse_inputfile_to_params(const std::string &fn)
 
     _parse_int(opts, n_bands_chi0);
     _parse_int(opts, n_bands_sigc);
+    _parse_int(opts, n_bands_exclude_chi0);
+    _parse_int(opts, n_bands_exclude_sigc);
     _parse_int(opts, option_bvk_remap);
 
     // chi0 related
@@ -475,8 +546,8 @@ void parse_inputfile_to_params(const std::string &fn)
         if (flag == 0) opts.output_gw_sigc_ks_kf = get_switch(btmp);
     }
     _parse_int(opts, rpa_headwing_body_start);
-    if (opts.rpa_headwing_body_start < 0)
-        throw std::runtime_error("rpa_headwing_body_start must be non-negative");
+    if (opts.rpa_headwing_body_start < -1)
+        throw std::runtime_error("rpa_headwing_body_start must be at least -1");
     parser.parse_string("rpa_headwing_mode", stmp, "qavg", flag);
     if (flag == 0 || flag == 1)
     {
@@ -491,6 +562,18 @@ void parse_inputfile_to_params(const std::string &fn)
         parser.parse_bool("output_gw_sigc_mat", btmp, flag);
         if (flag == 0) opts.output_gw_sigc_ks_mat_kf = get_switch(btmp);
     }
+    _parse_switch(opts, output_exx_ks_mat_k);
+    _parse_switch(opts, output_exx_mat_k);
+    _parse_switch(opts, output_exx_mat_r);
+    _parse_int(opts, istate_output_mat_start);
+    _parse_int(opts, istate_output_mat_end);
+    if (opts.istate_output_mat_start < 0)
+        throw std::runtime_error("istate_output_mat_start must be non-negative");
+    if (opts.istate_output_mat_end >= 0 &&
+        opts.istate_output_mat_end <= opts.istate_output_mat_start)
+        throw std::runtime_error(
+            "istate_output_mat_end must be negative or greater than "
+            "istate_output_mat_start");
     _parse_switch(opts, output_gw_sigc_mat_kf);
     _parse_switch(opts, output_gw_sigc_mat_rt);
     _parse_switch(opts, output_gw_sigc_mat_rf);
@@ -528,6 +611,37 @@ void parse_inputfile_to_params(const std::string &fn)
     // Spectral function
     _parse_double(opts, sf_gf_omega_shift);
     _parse_double(opts, sf_sigc_omega_shift);
+
+    // Option 5 selects native G0W0 velocity or the per-update QSGW current-HR
+    // velocity path. Both use the existing numerical option-3 head/wing method.
+    requested_option_dielect_func = opts.option_dielect_func;
+    if (opts.option_dielect_func == 5)
+    {
+        const bool is_g0w0 = task_normalized == "g0w0" || task_normalized == "g0w0_band";
+        const bool is_qsgw = task_normalized == "qsgw";
+        if (!is_g0w0 && !is_qsgw)
+            throw std::runtime_error(
+                "option_dielect_func = 5 is only supported for g0w0, g0w0_band, or qsgw");
+        if (opts.replace_w_head != LIBRPA_SWITCH_ON)
+            throw std::runtime_error("option_dielect_func = 5 requires replace_w_head = true");
+        if (opts.use_scalapack_gw_wc != LIBRPA_SWITCH_ON)
+            throw std::runtime_error(
+                "option_dielect_func = 5 requires use_scalapack_gw_wc = true to consume analytic "
+                "wings");
+        const std::string velocity_key =
+            is_qsgw ? "qsgw_headwing_velocity" : "g0w0_headwing_velocity";
+        const std::string native_mode = is_qsgw ? "current_hr" : "native";
+        std::string &velocity_mode =
+            is_qsgw ? driver_params.qsgw_headwing_velocity : driver_params.g0w0_headwing_velocity;
+        std::string assigned_velocity;
+        if (get_last_assigned_value(parser, velocity_key, assigned_velocity) &&
+            velocity_mode != native_mode)
+            throw std::runtime_error("option_dielect_func = 5 selects " + velocity_key + " = " +
+                                     native_mode + " and conflicts with " + velocity_key + " = " +
+                                     velocity_mode);
+        velocity_mode = native_mode;
+        opts.option_dielect_func = 3;
+    }
 
     validate_input_parameters();
 }

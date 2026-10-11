@@ -233,6 +233,18 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3,
 void librpa_set_kq_mapping(LibrpaHandler* h, int nkpts, const int* map_q_ks);
 
 /**
+ * @brief Set an explicit full-grid to loaded SCF representative mapping.
+ *
+ * Local operation without MPI collectives. Coordinates are Cartesian in Bohr^-1.
+ * full_to_scf uses 0-based indices into the loaded SCF list. There is one Coulomb
+ * representative per loaded SCF point. Does not change the SCF storage dimension.
+ */
+void librpa_set_irreducible_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3,
+                                       int n_scf, const double* kvecs_scf,
+                                       int n_full, const double* kvecs_full,
+                                       const int* full_to_scf);
+
+/**
  * @brief Set local RI coefficients.
  *
  * @param[in] h          Handler.
@@ -413,6 +425,12 @@ void librpa_set_velocity_matrix(LibrpaHandler* h, int n_spins, int n_kpts, int n
  *
  * The flattened matrix order is [spin][k][cartesian][row band][column band], with
  * interleaved real/imaginary values.
+ *
+ * @param[in] h           Handler.
+ * @param[in] n_spins     Number of spin channels.
+ * @param[in] n_kpts      Number of k-points used by analytic head/wing.
+ * @param[in] n_states    Number of bands.
+ * @param[in] velocity_ri Flattened matrix with interleaved real/imaginary parts.
  */
 void librpa_set_velocity_matrix_packed(LibrpaHandler* h, int n_spins, int n_kpts, int n_states,
                                        const double* velocity_ri);

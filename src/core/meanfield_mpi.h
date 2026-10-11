@@ -38,12 +38,12 @@ std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h);
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {});
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h);
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {});
 
 // ==================================================================
 // Density matrix and green's function calculation, two-level parallel (over k-points and BLACS) version.
@@ -104,7 +104,8 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm);
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const std::vector<bool> &band_mask = {});
 
 std::map<double, std::map<Vector3_Order<int>, Matz>>
 get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
@@ -113,7 +114,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc);
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask = {});
 
 /*!
  * @brief Four-channel spinor variant of
@@ -153,6 +154,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm);
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const std::vector<bool> &band_mask = {});
 
 }  // namespace librpa_int

@@ -4,8 +4,15 @@ This page documents the formats of the input data files required by the LibRPA d
 
 ## Driver input names
 
-The standalone driver reads dataset files from `input_dir`.
-By default, single-file inputs are named [`stru_out`](#stru-out),
+The standalone driver reads dataset files from `input_dir`. The default
+`input_preset = fhi-aims` keeps the historical filenames. Setting
+`input_preset = abacus` selects the current reader-v1 names: `stru_out.txt`,
+`band_out.txt`, `vxc.txt`, `bz_sample.txt`, `basis_map.txt`,
+`wfc_basis.txt`, `aux_basis.txt`, `aux_basis_s.txt`, `KS_wfc_*`, `Cs_*`,
+`Cs_shrink_*`, `sinvS_*`, `V_cut_*`, and `V_full_*`, together with the
+`velocity_matrix` prefix.
+For the historical FHI-aims and `abacus-legacy` presets, single-file inputs
+are named [`stru_out`](#stru-out),
 [`bz_sampling_out`](#bz-sampling-out), [`basis_wfc_out`](#basis-files),
 [`basis_aux_out`](#basis-files), and [`band_out`](#band-out).
 Additional optional single-file inputs use
@@ -13,17 +20,19 @@ Additional optional single-file inputs use
 [`band_kpath_info`](#band-kpath-info).
 These exact filenames can be changed in `librpa.in` with `fn_stru`,
 `fn_bz_sampling`, `fn_basis_wfc`, `fn_basis_aux`, `fn_eigocc_scf`,
-`fn_dielfunc`, `fn_vxc_scf`, and `fn_band_kpath_info`.
+`fn_dielfunc`, `fn_vxc_scf`, and `fn_band_kpath_info`. Velocity/momentum files
+are selected with `prefix_velocity`.
 
 The combined [`basis_out`](#basis-out) file selected by `fn_basis` is
 deprecated and is read only as a fallback when split basis files are absent.
-When `use_shrink_abfs = t`, reader-v1 datasets should also provide
-`basis_aux_shrink_out`, or the filename selected by `fn_basis_aux_shrink`, for
-the compressed auxiliary basis. The old `fn_basis_shrink` input key is still
-accepted as an alias.
+When `use_shrink_abfs = t`, historical datasets use `basis_aux_shrink_out`, or
+the filename selected by `fn_basis_aux_shrink`, for the compressed auxiliary
+basis. Current ABACUS reader-v1 datasets use `aux_basis_s.txt` through the
+same setting. The old `fn_basis_shrink` input key is still accepted as an
+alias.
 
-Multi-file inputs are selected by prefix.
-The defaults are [`Cs_data`](#cs-data) for localized RI coefficients,
+For the historical FHI-aims and `abacus-legacy` presets, multi-file inputs are
+selected by prefix. The defaults are [`Cs_data`](#cs-data) for localized RI coefficients,
 [`Cs_shrinked_data`](#cs-data) for compressed-auxiliary-basis RI coefficients,
 [`coulomb_mat`](#coulomb-mat) for bare Coulomb matrices,
 [`coulomb_cut`](#coulomb-cut) for truncated Coulomb matrices, and
@@ -31,12 +40,76 @@ The defaults are [`Cs_data`](#cs-data) for localized RI coefficients,
 These prefixes can be changed with `prefix_lri_coeff`,
 `prefix_lri_coeff_shrink`, `prefix_coul_full`, `prefix_coul_cut`, and
 `prefix_eigvecs_scf`.
-For example, `prefix_coul_full = coulomb_mat` matches files such as `coulomb_mat_0.txt`.
-For shrink reader-v1 datasets, keep the full and shrink coefficient families
-distinct, for example `prefix_lri_coeff = v1_Cs_data_` and
-`prefix_lri_coeff_shrink = v1_Cs_shrinked_data_`. The LRI reader rejects
+For example, `prefix_coul_full = coulomb_mat` matches files such as
+`coulomb_mat_0.txt`.
+For ABACUS reader-v1 shrink datasets, keep the full and shrink coefficient
+families distinct, for example `prefix_lri_coeff = Cs_` and
+`prefix_lri_coeff_shrink = Cs_shrink_`. The LRI reader rejects
 identical full/shrink prefixes and filters the other family when one prefix is
 a leading substring of the other.
+
+## `librpa_2d_coulomb_head.txt`
+
+Strict-2D complete-Wc runs require the standalone reader-v1 dataset to provide
+this producer-generated metadata file in `input_dir`. It records the in-plane
+cell area and the squared auxiliary-basis monopole norm used to normalize the
+analytic Gamma head. The file is consumed by the reader; it is not inferred
+from the LibRPA basis files.
+
+The parser accepts comments, optional `=`, and arbitrary whitespace. The
+required keys are:
+
+```text
+version = 1
+area_parallel_bohr2 = 19.390653825130212
+multipole_norm_squared = 2205.0673846924301
+```
+
+`area_parallel_bohr2` is the positive in-plane cell area in Bohr$^2$.
+`multipole_norm_squared` is the positive squared monopole norm in the
+producer's auxiliary-basis convention. The values must come from the same
+full auxiliary basis and producer run as `basis_aux_out`, Coulomb matrices,
+and head/wing data. A missing, non-positive, or unsupported-version value is
+rejected before the strict-2D complete-Wc route starts.
+
+### Minimal complete-Wc driver settings
+
+The following strict-2D settings select the complete Gamma head/wing Wc route
+for the standalone driver. The ordinary dataset, frequency, band, and GW
+settings still need to be supplied for the calculation:
+
+```ini
+task = g0w0
+input_dir = ./reader-v1
+output_dir = ./librpa.out
+parallel_routing = libri
+replace_w_head = t
+option_dielect_func = 3
+use_2d_dielectric = t
+use_scalapack_gw_wc = t
+use_fullcoul_eps = t
+use_fullcoul_wc = t
+use_shrink_abfs = f
+sqrt_coulomb_threshold = 0
+rpa_headwing_mode = qavg
+```
+
+The `input_dir` must contain the metadata file described above together with
+the full auxiliary basis, full Coulomb matrices, and producer head/wing data.
+The complete-Wc route requires full Coulomb for both the dielectric basis and
+the finite-q external legs, and it currently requires the ScaLAPACK Wc path.
+
+Producer support is defined by this reader-v1 contract: a producer is
+supported when it writes `librpa_2d_coulomb_head.txt` and the matching full
+auxiliary-basis, Coulomb, and head/wing files from the same run. Older output
+without this metadata is not inferred or accepted; regenerate it with a
+producer that implements the contract.
+
+In this version the public C/C++ and Fortran API options do not provide a
+metadata injection field. Strict-2D complete-Wc is therefore supported through
+the standalone reader-v1 driver, which reads the file and configures the
+head/wing object. A direct API request without that driver configuration is
+rejected before Wc construction.
 
 (stru-out)=
 ## `stru_out`
@@ -79,6 +152,41 @@ R11 R12 R13 R21 R22 R23 R31 R32 R33 t1 t2 t3
 Include the identity operation when providing the block; symmetry-enabled
 calculations require it.
 
+An optional spin-operation block may follow the spatial operation rows:
+
+```text
+spin_symmetry grey source
+```
+
+The `grey` value is nonzero when the listed operations are the unitary block of
+a grey magnetic group; LibRPA then adds the corresponding antiunitary copy.
+`source` selects the spin action convention:
+
+- `0`: `Identity`; no spin matrix is read.
+- `1`: `ExplicitSpinSpace`; each operation row must provide an explicit SU(2)
+  matrix.
+- `2`: `DerivedFromSpatialSOC`; no spin matrix is read from this tail, and
+  LibRPA derives the spin action from the spatial operation.
+
+The spin block contains one row for every spatial operation. Each row starts
+with an `antiunitary` flag (`0` or nonzero). For `source = 1`, append eight
+floating-point values containing the row-major 2x2 SU(2) matrix as
+`(real, imaginary)` pairs:
+
+```text
+antiunitary
+```
+
+or
+
+```text
+antiunitary U11_re U11_im U12_re U12_im U21_re U21_im U22_re U22_im
+```
+
+Whitespace separates tokens; line breaks in these examples are for
+readability only. The spin block is passed to the same symmetry-operation API
+as programmatically supplied datasets.
+
 Older `stru_out` files may also contain the following Brillouin-zone sampling
 entries. LibRPA no longer reads k-points from `stru_out`; datasets must provide
 [`bz_sampling_out`](#bz-sampling-out).
@@ -95,9 +203,11 @@ entries. LibRPA no longer reads k-points from `stru_out`; datasets must provide
 (basis-files)=
 ## Basis files
 
-The split basis files `basis_wfc_out`, `basis_aux_out`, and
-`basis_aux_shrink_out` use the same format. They describe, respectively, the
-wave-function basis, the full auxiliary basis, and the shrink auxiliary basis.
+The historical split basis files `basis_wfc_out`, `basis_aux_out`, and
+`basis_aux_shrink_out` use the same format. Current ABACUS reader-v1 datasets
+use `wfc_basis.txt`, `aux_basis.txt`, and `aux_basis_s.txt` for the same three
+roles. They describe, respectively, the wave-function basis, the full
+auxiliary basis, and the shrink auxiliary basis.
 
 The first line contains three entries:
 
@@ -241,6 +351,33 @@ This line indicates that SCF k-point `2`
 
 Older files may contain irreducible-k-point weight summaries after these rows.
 LibRPA ignores those summaries because the row weights above are already authoritative.
+
+### Optional explicit full-grid mapping
+
+ABACUS reader-v1 may append the following block when the SCF list is reduced:
+
+```text
+full_kmap N_FULL
+id kx ky kz SCF_representative
+```
+
+There are `N_FULL = nk1 * nk2 * nk3` rows. Both indices are 1-based;
+`SCF_representative` indexes the saved SCF list, not the full grid. Cartesian
+coordinates have the same Bohr$^{-1}$ units as the preceding rows. The current
+extension requires one Coulomb representative per listed SCF point.
+
+When present, this block is authoritative for the full-grid coordinates and
+full-to-SCF assignment. LibRPA checks coverage, unique points modulo reciprocal
+lattice vectors, the actual mesh offset, representative membership, and folded
+weights before using it. It does not overwrite this mapping with an independently
+inferred one. Structure-side symmetry operations still determine the AO/ABF
+transformations; `full_kmap` supplies file indices, not symmetry matrices or
+additional wave functions.
+
+Files without this marker retain the original reading and inference path,
+including historical FHI-aims and ABACUS files and their ignored trailing
+summaries. No new block is required for those inputs. Malformed explicit
+`full_kmap` blocks are rejected rather than silently falling back.
 
 A few remarks
 
@@ -516,6 +653,10 @@ where `ibasis` is the fastest index.
 This file stores the PyATB velocity matrix used by the head/wing correction.
 LibRPA auto-detects the legacy text format and the binary v1 format from the
 file header.
+
+For an ABACUS input preset, the driver discovers the file from
+`prefix_velocity`: it prefers `<prefix_velocity>.txt` and accepts the legacy
+extensionless `<prefix_velocity>` name as a fallback.
 
 ### Legacy text format
 
@@ -898,10 +1039,10 @@ written in binary format using C-style ordering.
 
 When `use_shrink_abfs = t`, `prefix_shrink_sinvS` selects the transform from
 the compressed auxiliary basis back to the full auxiliary basis. The default
-legacy prefix is `shrink_sinvS_`; reader-v1 producer runs should use
-`v1_shrink_sinvS_`.
+legacy prefix is `shrink_sinvS_`; ABACUS reader-v1 producer runs should use
+`sinvS_`.
 
-The reader-v1 binary format starts with:
+The ABACUS reader-v1 binary format starts with:
 
 - `int32 marker = -30241621`
 - `int32 nblocks`

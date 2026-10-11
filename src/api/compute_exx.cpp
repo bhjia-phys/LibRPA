@@ -152,13 +152,14 @@ void librpa_build_exx(LibrpaHandler* h, const LibrpaOptions *p_opts)
     const auto &cs_data_exx = use_shrink_abfs ? pds->cs_data_shrink : pds->cs_data;
     const auto &coul = opts.use_fullcoul_exx ? pds->vq : pds->vq_cut;
     profiler.start("ft_vq_cut", "Fourier transform truncated Coulomb");
+    bool coul_mat_is_replicated = false;
     const auto VR = librpa_int::FT_Vq(
         pds->comm_h, basis_aux_exx, pds->symmetry_context, coul, pds->pbc, true,
-        opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
+        opts.use_symmetry_exx == LIBRPA_SWITCH_ON, &coul_mat_is_replicated);
     profiler.stop("ft_vq_cut");
 
     profiler.start("exx_real_work");
-    pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR);
+    pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
     // pds->p_exx->build_KS_kgrid_blacs(pds->blacs_h);
     profiler.stop("exx_real_work");
     // global::ofs_myid << pds->p_exx->exx_IJR << std::endl;
@@ -205,6 +206,14 @@ void librpa_get_exx_pot_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, con
     // TODO: make choosing blacs/non-blacs method a run time option
     pexx->build_KS_kgrid_blacs(pds->blacs_h, opts.use_gpu_replace_scalapack);
     pds->is_band_calc_done = false;
+    if (opts.output_exx_ks_mat_k == LIBRPA_SWITCH_ON)
+    {
+        profiler.start("exx_export_KS", "Export exact exchange in KS basis");
+        pexx->write_exx_matrices_KS_binary(
+            opts.output_dir, "kgrid",
+            opts.istate_output_mat_start, opts.istate_output_mat_end);
+        profiler.stop("exx_export_KS");
+    }
     const int n_states_calc = i_state_high - i_state_low;
     const bool publish_local_values =
         opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON || pds->blacs_h.myid == 0;
@@ -268,8 +277,17 @@ void librpa_get_exx_pot_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, co
             pds->redistribute_band_eigvecs_kpara_2d();
         }
         pexx->build_KS_band_blacs(pds->mf_band.get_eigenvectors(), pds->kfrac_band_list,
-                                  bvk_remap, pds->blacs_h, opts.use_gpu_replace_scalapack);
+                                  bvk_remap, pds->blacs_h, opts.use_gpu_replace_scalapack,
+                                  pds->band_data_id);
         pds->is_band_calc_done = true;
+    }
+    if (opts.output_exx_ks_mat_k == LIBRPA_SWITCH_ON)
+    {
+        profiler.start("exx_export_KS", "Export exact exchange in KS basis");
+        pexx->write_exx_matrices_KS_binary(
+            opts.output_dir, "band_" + std::to_string(pds->band_data_id),
+            opts.istate_output_mat_start, opts.istate_output_mat_end);
+        profiler.stop("exx_export_KS");
     }
     const int n_states_calc = i_state_high - i_state_low;
     const bool publish_local_values =

@@ -49,6 +49,11 @@ For naming, follow these general conventions:
 - Use `snake_case` for variables, object instances, functions, and namespaces.
 - Use `SCREAMING_SNAKE_CASE` for constants.
 
+## Profiling
+
+When profiling the driver, set `output_level = critical` to reduce output
+overhead while keeping essential results and the timing report visible.
+
 ## Source code structure of LibRPA
 
 ```
@@ -58,6 +63,7 @@ For naming, follow these general conventions:
 |-- cmake             : CMake find modules and build helper scripts
 |-- docs              : Sphinx/MyST user and developer documentation
 |-- driver            : Command-line driver, input parsing, and data readers
+|   |-- reader        : Shared input readers and the experimental LibBSE file interface
 |   `-- tasks         : Driver task implementations
 |-- examples
 |   `-- build         : Example build scripts for common platforms
@@ -66,6 +72,7 @@ For naming, follow these general conventions:
 |-- src               : Source code for the library target
 |   |-- api           : Public API implementation and handler/dataset glue
 |   |-- core          : Physics objects and algorithms: basis, RPA, EXX, GW, symmetry
+|   |   `-- qsgw      : Fixed-basis QSGW numerical operations
 |   |-- elpa          : ELPA eigensolver integration
 |   |-- gpu           : Optional CUDA/HIP device and linear-algebra adapters
 |   |-- interface     : Thin interfaces to external codes, e.g. BLAS, LAPACK, and ScaLAPACK 
@@ -80,8 +87,11 @@ For naming, follow these general conventions:
 
 The public API path is `include/librpa*.h(pp)`, implemented under `src/api`.
 The driver path is `driver/main.cpp` with tasks implemented under `driver/tasks`
-and input data coming from `driver/read_data.cpp`. Library code (`src/`)
-should stay independent of the command-line driver (`driver/`).
+and input preparation in `driver/read_data.cpp`. Shared input readers live in
+`driver/reader` and receive their handler, options, and parsing state explicitly.
+The `librpa_file_reader` target contains only these readers and links to `rpa_lib`;
+it is available with `LIBRPA_ENABLE_DRIVER=OFF`. The driver may use its private
+headers, and a file reader API is exposed through `include/file_reader.hpp`.
 
 ## A few C++ guidelines
 

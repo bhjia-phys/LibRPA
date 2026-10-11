@@ -1,3 +1,5 @@
+"""Compare sequences of extracted scalar values, grouped by filename."""
+
 import math
 
 
@@ -5,12 +7,47 @@ __all__ = ["abs_diff"]
 
 
 def abs_diff(tolerance, precision=3):
-    """
-    returns true, if the two objects can be converted to floats and are their
-    absolute difference is smaller than the given tolerance. The optional
-    precision argument determines the number of digits behind the decimal dot.
+    """Create an absolute-difference comparator for scalar sequences.
+
+    Each input maps filenames to sequences of values convertible to float.
+    A single string is treated as a one-value sequence; numeric strings may
+    use Fortran D exponents. Corresponding values are compared in order across
+    matching files, and the largest absolute difference determines the result.
+    Missing files, unequal sequence lengths, and empty inputs fail.
+    Nonfinite values are rejected on either side, even if they match.
+
+    Args:
+        tolerance: Maximum allowed absolute difference, inclusive.
+        precision: Digits after the decimal point in scientific-notation
+            diagnostics. Defaults to 3; does not affect comparison accuracy.
+
+    Returns:
+        A callable accepting test and reference dictionaries and returning
+        (passed, message). The message reports the maximum difference and its
+        filename and one-based value index, or explains a structural mismatch.
+
+    Examples:
+        >>> compare = abs_diff(1e-4)
+        >>> compare({}, {})
+        (False, 'no files found')
+        >>> compare({"librpa.out": ["1.00001"]},
+        ...         {"librpa.out": ["1.00002"]})[0]
+        True
+        >>> compare({"librpa.out": ["nan"]},
+        ...         {"librpa.out": ["NaN"]})[0]
+        False
+        >>> compare({"librpa.out": ["nan"]}, {"librpa.out": ["1.0"]})
+        (False, 'nonfinite value (nan mismatch) in librpa.out value 1: nan != 1.0')
+        >>> compare({"librpa.out": ["1.0"]}, {"librpa.out": ["nan"]})
+        (False, 'nonfinite value (nan mismatch) in librpa.out value 1: 1.0 != nan')
+        >>> compare({"librpa.out": []}, {"librpa.out": ["-1.234"]})
+        (False, 'value count mismatch in librpa.out: 0 != 1')
+        >>> compare({"librpa.out": []}, {"librpa.out": []})
+        (False, 'no scalar values found in librpa.out')
     """
     tolerance = float(tolerance)
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and nonnegative")
     prec = int(precision)
 
     def inner_float_absdiff(fnobj1, fnobj2):
@@ -40,10 +77,13 @@ def abs_diff(tolerance, precision=3):
                 value1 = _parse_float(o1)
                 value2 = _parse_float(o2)
                 if math.isnan(value1) or math.isnan(value2):
-                    if math.isnan(value1) and math.isnan(value2):
-                        continue
                     return False, (
-                        "nan mismatch in {} value {}: {} != {}"
+                        "nonfinite value (nan mismatch) in {} value {}: {} != {}"
+                        .format(fn, iobj, o1, o2)
+                    )
+                if not math.isfinite(value1) or not math.isfinite(value2):
+                    return False, (
+                        "nonfinite value in {} value {}: {} != {}"
                         .format(fn, iobj, o1, o2)
                     )
                 d = abs(value1 - value2)

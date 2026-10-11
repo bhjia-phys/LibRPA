@@ -113,10 +113,17 @@ void reject_spinor_symmetry_speedup(const Dataset &ds, const char *calculation)
     {
         return;
     }
+    // Spinor symmetry requires an explicit spatial/spin operation table in the
+    // input dataset. Keep rejecting legacy requests with no spin-space action
+    // so that an ordinary spatial table cannot silently produce wrong channels.
+    if (ds.spg_spin_ops_explicit)
+    {
+        return;
+    }
     throw LIBRPA_RUNTIME_ERROR(
         std::string("Cannot use ") + calculation
-        + " symmetry speed-up with spinor wave functions; disable symmetry for spinor runs"
-        + " (magnetic/spin-space group symmetry support is under development, Phase 2+)");
+        + " symmetry speed-up with spinor wave functions without an explicit spin-space"
+        + " operation table; regenerate the dataset with spin_symmetry metadata");
 }
 
 void initialize_ds_tfgrids(Dataset &ds, const LibrpaOptions &opts)
@@ -230,10 +237,29 @@ void initialize_ds_atpairs_local(Dataset &ds, LibrpaParallelRouting routing)
     global::profiler.stop(__FUNCTION__);
 }
 
+bool resolve_use_symmetry_exx(const LibrpaOptions &opts, const PeriodicBoundaryData &pbc)
+{
+    if (opts.use_symmetry_exx == LIBRPA_SWITCH_ON)
+        return true;
+    // Same predicate as the GW/RPA guard in build_pbc_qpoint_view: the loaded
+    // SCF k-list is symmetry-reduced when it is shorter than the full BZ grid.
+    if (static_cast<int>(pbc.klist.size()) < pbc.get_n_cells_bvk())
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "The SCF k-grid is symmetry-reduced, but use_symmetry_exx is off. Exchange from "
+            "a reduced k-grid without the symmetry restore is inexact (star members are "
+            "folded into weights without basis rotations, and the Coulomb star expansion "
+            "only supports the inversion partner). Either set use_symmetry_exx = t, or "
+            "supply an unreduced full-BZ k-list from a producer run with symmetry disabled. "
+            "Refusing to compute silently wrong exchange.");
+    }
+    return false;
+}
+
 void initialize_ds_exx(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_exx");
-    const bool use_symmetry = opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
+    const bool use_symmetry = resolve_use_symmetry_exx(opts, ds.pbc);
     if (use_symmetry)
     {
         initialize_symmetry_context(ds, true);
@@ -250,12 +276,17 @@ void initialize_ds_exx(Dataset &ds, const LibrpaOptions &opts)
     ds.p_exx->libri_threshold_C = opts.libri_exx_threshold_C;
     ds.p_exx->libri_threshold_D = opts.libri_exx_threshold_D;
     ds.p_exx->libri_threshold_V = opts.libri_exx_threshold_V;
+    ds.p_exx->output_dir = opts.output_dir;
+    ds.p_exx->output_exx_mat_k = opts.output_exx_mat_k == LIBRPA_SWITCH_ON;
+    ds.p_exx->output_exx_mat_r = opts.output_exx_mat_r == LIBRPA_SWITCH_ON;
     global::profiler.stop("initialize_ds_exx");
 }
 
 void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_chi0");
+    if (opts.n_bands_exclude_chi0 < 0 || opts.n_bands_exclude_chi0 > ds.mf.get_n_bands())
+        throw LIBRPA_RUNTIME_ERROR("n_bands_exclude_chi0 must be between 0 and the number of input bands");
     const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
     if (use_symmetry)
     {
@@ -281,6 +312,7 @@ void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
     ds.p_chi0->libri_collect_s0_chunk = opts.libri_chi0_collect_s0_chunk;
     ds.p_chi0->libri_collect_max_bytes = opts.libri_chi0_collect_max_bytes;
     ds.p_chi0->nbands_G = opts.n_bands_chi0;
+    ds.p_chi0->n_bands_exclude = opts.n_bands_exclude_chi0;
     ds.p_chi0->libri_threshold_C = opts.libri_chi0_threshold_C;
     ds.p_chi0->libri_threshold_G = opts.libri_chi0_threshold_G;
     global::profiler.stop("initialize_ds_chi0");
@@ -289,6 +321,8 @@ void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts)
 void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_g0w0");
+    if (opts.n_bands_exclude_sigc < 0 || opts.n_bands_exclude_sigc > ds.mf.get_n_bands())
+        throw LIBRPA_RUNTIME_ERROR("n_bands_exclude_sigc must be between 0 and the number of input bands");
     const bool use_symmetry = opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
     if (use_symmetry)
     {
@@ -305,12 +339,16 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
                                                    desc_scf_wfc, ds.desc_band_wfc_kb,
                                                    is_eigvec_k_distributed,
                                                    use_symmetry);
+    ds.p_g0w0->nbands_G = opts.n_bands_sigc;
+    ds.p_g0w0->n_bands_exclude = opts.n_bands_exclude_sigc;
     ds.p_g0w0->libri_threshold_C = opts.libri_g0w0_threshold_C;
     ds.p_g0w0->libri_threshold_G = opts.libri_g0w0_threshold_G;
     ds.p_g0w0->libri_threshold_Wc = opts.libri_g0w0_threshold_Wc;
     ds.p_g0w0->output_dir = opts.output_dir;
     ds.p_g0w0->output_sigc_ks_kf = opts.output_gw_sigc_ks_kf == LIBRPA_SWITCH_ON;
     ds.p_g0w0->output_sigc_ks_mat_kf = opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_ON;
+    ds.p_g0w0->istate_output_mat_start = opts.istate_output_mat_start;
+    ds.p_g0w0->istate_output_mat_end = opts.istate_output_mat_end;
     ds.p_g0w0->output_sigc_mat_kf = opts.output_gw_sigc_mat_kf == LIBRPA_SWITCH_ON;
     ds.p_g0w0->output_sigc_mat_rt = opts.output_gw_sigc_mat_rt == LIBRPA_SWITCH_ON;
     ds.p_g0w0->output_sigc_mat_rf = opts.output_gw_sigc_mat_rf == LIBRPA_SWITCH_ON;
@@ -324,7 +362,8 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
 void initialize_ds_headwing(Dataset &ds, const LibrpaOptions &opts, const bool need_wing)
 {
     if (opts.replace_w_head != LIBRPA_SWITCH_ON ||
-        (opts.option_dielect_func != 3 && opts.option_dielect_func != 4))
+        (opts.option_dielect_func != 3 && opts.option_dielect_func != 4 &&
+         opts.option_dielect_func != 53))
     {
         return;
     }

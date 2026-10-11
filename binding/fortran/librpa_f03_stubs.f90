@@ -177,6 +177,10 @@ module librpa_f03
       integer :: n_bands_chi0
       !> Experimental: maximum number of bands for correlation self-energy construction.
       integer :: n_bands_sigc
+      !> Lowest bands excluded from response Green's functions at each k-point and spin.
+      integer :: n_bands_exclude_chi0
+      !> Lowest bands excluded from correlation self-energy Green's functions at each k-point and spin.
+      integer :: n_bands_exclude_sigc
       !> BvK remapping option for band interpolation: 0 single nearest image, 1 Wigner-Seitz.
       integer :: option_bvk_remap
       !> Real-space Green's function screening threshold for response function.
@@ -237,6 +241,7 @@ module librpa_f03
       !> Experimental: use the 2D dielectric-function branch where supported.
       logical :: use_2d_dielectric
       !> First regular Coulomb-eigenbasis channel used by RPA head/wing correction.
+      !> -1 keeps all retained positive channels for Sternheimer finite-part Coulomb input.
       integer :: rpa_headwing_body_start
       !> Experimental: read NAO correlation self-energy matrix in real-space/frequency form.
       logical :: read_sigc_mat_rf
@@ -264,7 +269,17 @@ module librpa_f03
       logical :: output_gw_sigc_ks_kf
       !> Experimental: output KS-basis correlation self-energy matrix in k-space and imaginary frequencies.
       logical :: output_gw_sigc_ks_mat_kf
-      !> Experimental: output NAO-basis correlation self-energy matrix in k-space and imaginary frequencies.
+      !> Experimental: output the exact-exchange matrix in the KS basis and k-space.
+      logical :: output_exx_ks_mat_k
+      !> Experimental: output the NAO-basis exact-exchange matrix in k-space as dense binary files.
+      logical :: output_exx_mat_k
+      !> Experimental: output real-space NAO exact-exchange blocks as dense binary files.
+      logical :: output_exx_mat_r
+      !> First zero-based KS state included when exporting KS-basis matrices.
+      integer :: istate_output_mat_start
+      !> Half-open KS-basis matrix export end index; negative means all remaining states.
+      integer :: istate_output_mat_end
+      !> Experimental: output dense binary NAO-basis correlation self-energy matrices in k-space and imaginary frequencies.
       logical :: output_gw_sigc_mat_kf
       !> Experimental: output NAO-basis correlation self-energy matrix in real space and imaginary time.
       logical :: output_gw_sigc_mat_rt
@@ -417,6 +432,7 @@ contains
    end subroutine librpa_finalize_global
 
    !> @brief Set global LibRPA stdout verbosity.
+   !> @param[in] output_level Verbosity level.
    subroutine librpa_set_output_level(output_level)
       implicit none
       integer, intent(in) :: output_level
@@ -424,6 +440,7 @@ contains
    end subroutine librpa_set_output_level
 
    !> @brief Get global LibRPA stdout verbosity.
+   !> @return Current verbosity level.
    integer function librpa_get_output_level() result(output_level)
       implicit none
       output_level = -1
@@ -569,6 +586,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_wfc  Number of wave-function basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_wfc(this, natoms, nbs_wfc, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -584,6 +603,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_aux  Number of auxiliary basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux(this, natoms, nbs_aux, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -599,6 +620,8 @@ contains
    !> @param[in,out] this            Handler.
    !> @param[in]     natoms          Number of atoms.
    !> @param[in]     nbs_aux_shrink  Number of shrink auxiliary basis functions on each atom.
+   !> @param[in]     nshells         Optional number of angular shells on each atom.
+   !> @param[in]     l_shells        Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux_shrink(this, natoms, nbs_aux_shrink, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this

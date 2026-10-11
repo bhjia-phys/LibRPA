@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/gw.h"
 
+#include <string>
 #include <vector>
 
 namespace librpa_int

@@ -70,9 +70,13 @@ public:
     double libri_threshold_C;
     double libri_threshold_Wc;
     double libri_threshold_G;
+    int nbands_G = -1;
+    int n_bands_exclude = 0;
 
     bool output_sigc_ks_mat_kf;
     bool output_sigc_ks_kf;
+    int istate_output_mat_start;
+    int istate_output_mat_end;
     bool output_sigc_mat_kf;
     bool output_sigc_mat_rt;
     bool output_sigc_mat_rf;
