@@ -51,7 +51,7 @@ double librpa_get_rpa_correlation_energy(LibrpaHandler *h, const LibrpaOptions *
     const auto &opts = *p_opts;
     if (opts.option_dielect_func == 5)
         throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func = 5 is a standalone G0W0 driver preset; "
+            "option_dielect_func = 5 is a standalone G0W0/QSGW driver preset; "
             "API callers must supply velocity and use option_dielect_func = 3");
     initialize_ds_global_ddla(*pds, opts);
 
