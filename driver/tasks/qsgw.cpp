@@ -472,6 +472,7 @@ void run_qsgw()
 
     VelocityMatrix reference_velocity;
     std::optional<HeadwingAoOperators> ao_operators;
+    std::optional<HeadwingAoOperators> export_operators;
     if (update_head && driver_params.qsgw_headwing_velocity == "current_hr")
     {
         collective_all_stage(
@@ -481,6 +482,42 @@ void run_qsgw()
                 ao_operators = driver::qsgw::read_headwing_ao_operators(
                     resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_sr),
                     resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_rr));
+            });
+    }
+    else if (driver_params.qsgw_export_hamiltonian_for_pyatb)
+    {
+        collective_root_stage(
+            dataset->comm_h, "QSGW HR export AO input",
+            [&]
+            {
+                ao_operators = driver::qsgw::read_headwing_ao_operators(
+                    resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_sr),
+                    resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_rr));
+            });
+    }
+    if (driver_params.qsgw_export_hamiltonian_for_pyatb)
+    {
+        collective_root_stage(
+            dataset->comm_h, "QSGW native DFT Hamiltonian export input",
+            [&]
+            {
+                // Export preserves the producer's DFT H(R) and transforms only
+                // the current correction. Keep this separate from the entering
+                // current_hr velocity/checkpoint operators: changing their
+                // off-grid derivative would change the QSGW iteration map.
+                export_operators = *ao_operators;
+                for (int spin = 0; spin < reference.get_n_spins(); ++spin)
+                {
+                    const std::string filename =
+                        "hrs" + std::to_string(spin + 1) + "_nao.csr";
+                    export_operators->native_dft_hamiltonian.push_back(
+                        driver::qsgw::read_headwing_hamiltonian_csr(
+                            resolve_input_path(driver_params.input_dir, filename), 0.5));
+                }
+                lib_printf(
+                    "QSGW HR export: preserve native DFT H(R), Fourier-transform only "
+                    "the complete current correction; %d physical spin channel(s)\n",
+                    reference.get_n_spins());
             });
     }
     if (update_head && driver_params.qsgw_headwing_velocity != "current_hr")
@@ -524,11 +561,12 @@ void run_qsgw()
 
     HamiltonianCutOptions cut_options;
     cut_options.unoccupied_keep =
-        driver_params.qsgw_band0_unoccupied_keep;
+        driver_params.qsgw_unoccupied_keep;
     cut_options.mode = hamiltonian_cut_mode_from_int(
-        driver_params.qsgw_band0_cut_mode);
-    cut_options.shift_ha = driver_params.qsgw_band0_cut_shift_ha;
-    SpinKMatrixMap current_hamiltonian = compute_band
+        driver_params.qsgw_cut_mode);
+    cut_options.shift_ha = driver_params.qsgw_cut_shift_ha;
+    const bool apply_cut = cut_options.mode != HamiltonianCutMode::Uncut;
+    SpinKMatrixMap current_hamiltonian = apply_cut
         ? apply_hamiltonian_cut(
               reference_hamiltonian, reference_hamiltonian, dataset->mf,
               cut_options)
@@ -546,9 +584,9 @@ void run_qsgw()
                                                dataset->pbc.weight_k,
                                                dft_vxc,
                                                dft_vxc_band,
-                                               driver_params.qsgw_band0_cut_mode,
-                                               driver_params.qsgw_band0_unoccupied_keep,
-                                               driver_params.qsgw_band0_cut_shift_ha,
+                                               driver_params.qsgw_cut_mode,
+                                               driver_params.qsgw_unoccupied_keep,
+                                               driver_params.qsgw_cut_shift_ha,
                                                mixing_beta,
                                                opts.nfreq,
                                                update_head ? opts.option_dielect_func : 0,
@@ -663,6 +701,35 @@ void run_qsgw()
 
     bool converged = false;
     int completed_iterations = starting_iteration;
+    const auto export_hamiltonian = [&](const int iteration,
+                                        const SpinKMatrixMap& hamiltonian)
+    {
+        if (!driver_params.qsgw_export_hamiltonian_for_pyatb) return;
+        collective_root_stage(
+            dataset->comm_h, "QSGW complete Hamiltonian HR export",
+            [&]
+            {
+                const auto exported = reconstruct_qsgw_hamiltonian(
+                    reference, hamiltonian, *export_operators, dataset->pbc.kfrac_list,
+                    dataset->pbc.period, dataset->pbc.latvec);
+                for (int spin = 0; spin < reference.get_n_spins(); ++spin)
+                {
+                    std::ostringstream name;
+                    name << "hrs" << spin + 1 << "_nao_qsgw_iter_"
+                         << std::setfill('0') << std::setw(4) << iteration << ".csr";
+                    driver::qsgw::write_qsgw_hamiltonian_csr(
+                        join_path(opts.output_dir, name.str()), exported.hamiltonian.at(spin),
+                        *ao_operators, iteration, reference.get_n_spins(), spin + 1);
+                }
+                lib_printf("QSGW HR iteration %d: full complex Ry, metric %.8e FT_Ha %.8e\n",
+                           iteration, exported.reference_metric_residual,
+                           exported.fourier_roundtrip_residual_ha);
+            });
+    };
+    // Validate export inputs before the first GW build and retain the actual
+    // entering state. Fresh iteration 0 is PBE; a restart keeps its saved index.
+    export_hamiltonian(starting_iteration,
+                       starting_iteration == 0 ? reference_hamiltonian : current_hamiltonian);
     for (int iteration = starting_iteration + 1;
          iteration <= driver_params.qsgw_max_iter; ++iteration)
     {
@@ -676,7 +743,7 @@ void run_qsgw()
                 dataset->comm_h, "QSGW live head/wing velocity",
                 [&]
                 {
-                    if (ao_operators)
+                    if (driver_params.qsgw_headwing_velocity == "current_hr")
                     {
                         auto velocity = compute_live_headwing_velocity(
                             reference, dataset->mf,
@@ -849,7 +916,7 @@ void run_qsgw()
             }
             const SpinKMatrixMap raw_uncut = assemble_effective_hamiltonian(
                 reference_hamiltonian, dft_vxc, exchange, correlation);
-            const SpinKMatrixMap raw = compute_band
+            const SpinKMatrixMap raw = apply_cut
                 ? apply_hamiltonian_cut(
                       raw_uncut, reference_hamiltonian, dataset->mf,
                       cut_options)
@@ -875,14 +942,15 @@ void run_qsgw()
             if (compute_band)
                 mixed_band_hamiltonian = mix_spin_k_hamiltonian(
                     current_band_hamiltonian, raw_band, mixing_beta);
-            if (compute_band)
+            if (apply_cut)
             {
                 mixed_hamiltonian = apply_hamiltonian_cut(
                     mixed_hamiltonian, reference_hamiltonian, dataset->mf,
                     cut_options);
-                mixed_band_hamiltonian = apply_hamiltonian_cut(
-                    mixed_band_hamiltonian, band_reference_hamiltonian,
-                    dataset->mf_band, cut_options);
+                if (compute_band)
+                    mixed_band_hamiltonian = apply_hamiltonian_cut(
+                        mixed_band_hamiltonian, band_reference_hamiltonian,
+                        dataset->mf_band, cut_options);
             }
             if (driver_params.qsgw_write_iteration_matrices)
             {
@@ -931,6 +999,10 @@ void run_qsgw()
         // advance with the live eigenpairs, not remain a root-only residual map.
         current_hamiltonian = mixed_hamiltonian;
         if (compute_band) current_band_hamiltonian = mixed_band_hamiltonian;
+        // Export the exact mixed/post-cut operator about to be diagonalized.
+        // AO reconstruction uses the immutable initial coefficients, so the
+        // eigenpairs produced below are not needed for this output.
+        export_hamiltonian(iteration, current_hamiltonian);
         const FixedBasisDiagonalizationResult diagonalization =
             diagonalize_in_reference_basis(
                 dataset->mf, reference, mixed_hamiltonian);

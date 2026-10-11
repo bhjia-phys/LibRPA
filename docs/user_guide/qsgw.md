@@ -28,9 +28,9 @@ does not infer a path from molecular or periodic geometry.
 been removed. Band-path selection still follows the input metadata. Option 5
 uses the unchanged current-HR prescription described below.
 
-The existing `qsgw_band0_unoccupied_keep`, `qsgw_band0_cut_mode`, and
-`qsgw_band0_cut_shift_ha` keys retain their cut behavior and apply only when
-band-path inputs are present.
+`qsgw_unoccupied_keep`, `qsgw_cut_mode`, and `qsgw_cut_shift_ha` select the cut.
+The former `qsgw_band0_*` names are removed and rejected. An explicitly selected cut
+applies to the SCF grid and the optional band path, including grid-only runs.
 
 ## Vxc input
 
@@ -43,6 +43,7 @@ directly from `input_dir`, using spin and k-point filenames with these defaults:
 | FHI-aims | `xc_matr_spin_1_kpt_000001.csc` | `band_vxc_mat_spin_1_k_00001.csc` |
 | ABACUS, one spin channel | `vxck1_nao.txt` | `band_vxck1_nao.txt` |
 | ABACUS, two spin channels | `vxck1s1_nao.txt` | `band_vxck1s1_nao.txt` |
+| ABACUS, SOC/noncollinear (`nspin=4`) | `vxck1s4_nao.txt` | `band_vxck1s4_nao.txt` |
 
 No additional file list or manifest is required. Optional `prefix_vxc_scf` and
 `prefix_vxc_band` override the prefixes shown above (`xc_matr`/`band_vxc_mat`
@@ -53,6 +54,8 @@ renaming; the default `band_vxc` prefix distinguishes files staged alongside
 SCF input. Spin and k indices are one-based and must follow
 the same ordering as the corresponding SCF or band reference. Vxc files do not
 provide an independent k-coordinate check.
+Gamma-only ABACUS output can omit the k suffix; the reader also accepts
+`vxc_nao.txt`, `vxcs1_nao.txt`, or `vxcs4_nao.txt` for the corresponding mode.
 
 Use `constants_choice = aims` for FHI-aims ELSI matrices in Hartree, and
 `constants_choice = internal` for ABACUS complex text matrices in Ry, which are
@@ -62,6 +65,39 @@ despite its `_nao` filename suffix. Set `qsgw_vxc_basis = nao` only for genuine
 ABACUS AO matrices; the driver then projects them with the reference
 wavefunctions. This setting applies to both SCF and band matrices. Matrix
 dimensions, finiteness and Hermiticity are checked on input.
+For native ABACUS SOC `out_mat_xc`, keep the default state basis: the producer
+writes the complete complex KS-state matrix. A genuine SOC AO input instead
+has dimension `2 * N_AO`, ordered `(AO0 up, AO0 down, AO1 up, AO1 down, ...)`;
+its explicit `nao` projection includes all four spinor blocks.
+
+## Hamiltonian cut
+
+`qsgw_cut_mode` accepts `0` (uncut, the default) and `1` (shifted DFT
+reference diagonal, formerly mode 2). The former unshifted cut is removed;
+the old numeric value `2` is rejected. For mode 1, the fixed-reference matrix retains the leading block whose size
+is the current occupied-state count plus `qsgw_unoccupied_keep`
+(default 10), bounded by the complete state dimension. Every other diagonal
+is restored to its initial DFT energy plus `qsgw_cut_shift_ha`
+(default 2 eV, converted to about 0.07349864435131 Ha); all other off-diagonal entries are zero. The matrix and
+reference basis remain complete.
+
+The selected cut applies when assembling the SCF-grid update and again after
+mixing; an optional band-path update uses the same rule. The HR exporter
+serializes this actual post-cut operator immediately before diagonalization.
+To select the shifted-cut HR requested for topology, use:
+
+```ini
+qsgw_cut_mode = 1
+```
+
+HR export is enabled by default. The omitted keep and shift defaults are
+10 empty states and exactly 2 eV under the selected constants. Explicit
+`qsgw_cut_shift_ha` values remain in Hartree; its suffix states the input unit.
+A fresh iteration `0000` remains the actual entering PBE
+operator; update files `0001`, `0002`, etc. contain the
+mode-1 shifted operator. The complete DFT/IFT preserves that operator on the original
+SCF mesh, including the shifted high states. This identity does not prescribe
+or establish interpolation accuracy at points outside the mesh.
 
 ## Analytic head and wing feedback
 
@@ -102,8 +138,6 @@ replace_w_head = true
 option_dielect_func = 5
 use_scalapack_gw_wc = true
 use_pyatb = false
-qsgw_fn_sr = srs1_nao.csr
-qsgw_fn_rr = rr.csr
 use_kpara_scf_eigvec = false
 use_symmetry_rpa = false
 use_symmetry_gw = false
@@ -117,7 +151,9 @@ option_dielect_func = 3
 qsgw_headwing_velocity = current_hr
 ```
 
-Paths are relative to `input_dir` unless absolute. This mode requires a full,
+`qsgw_fn_sr` defaults to `srs1_nao.csr` and `qsgw_fn_rr` to `rr.csr`; ordinary
+ABACUS files need no filename overrides. Paths are relative to `input_dir`
+unless absolute. This mode requires a full,
 unshifted uniform mesh, replicated wavefunctions and a complete square AO/state
 basis, with symmetry reduction disabled. The native SOC reader accepts a
 complete two-component spinor reference with matching full-dimension S/r,
@@ -125,9 +161,7 @@ one physical spin channel and `2 * N_AO` states. Both reference and live
 coefficients use AO-major/spinor-minor ordering; the entire complex Hamiltonian,
 including cross-spinor entries, enters the same velocity projector. For this
 SOC route all EXX/GW/RPA symmetry switches must be off; IBZ input and k-parallel
-wavefunctions are unsupported. SOC uses full KS-state Vxc matrices
-(`qsgw_vxc_basis = state`) with the ABACUS `s4` filename suffix; SOC AO-basis
-Vxc projection is outside this route. S/r remain fixed; a separate
+wavefunctions are unsupported. S/r remain fixed; a separate
 producer H(R) input is not needed. At each entering iteration, the driver
 embeds the reference-basis Hamiltonian as `H_AO = S U0 h U0† S`, then Fourier
 transforms the *whole* effective Hamiltonian and evaluates velocity in the
@@ -238,6 +272,143 @@ provide the data for band plotting; the driver does not generate PNG figures.
 Optional matrix diagnostics are enabled by
 `qsgw_write_iteration_matrices`.
 
+## Complete Hamiltonian export for PyATB
+
+QSGW retains a complete real-space Hamiltonian at every update by default,
+independently of head/wing corrections, matrix diagnostics and band-path inputs.
+To disable this output, set:
+
+```ini
+qsgw_export_hamiltonian_for_pyatb = false
+```
+
+The export switch defaults to `true`. The input filenames default to
+`qsgw_fn_sr = srs1_nao.csr` and `qsgw_fn_rr = rr.csr`; specify overrides only
+for a different filename or path. Export also reads the original DFT
+`hrs1_nao.csr` from `input_dir`, and `hrs2_nao.csr` for a second physical
+collinear spin channel. Scalar and SOC use one original H file. These are
+the regular ABACUS H/S/r output names. The original DFT H files must be
+available and in Ry; no fallback to whole-H interpolation is made if they
+are absent. Existing molecular or FHI-aims inputs without this matching native
+ABACUS H/S/r set must explicitly disable export with
+`qsgw_export_hamiltonian_for_pyatb = false`.
+An overlap-only
+`get_s` output named `sr_nao.csr` needs an explicit S override.
+S(R) is dimensionless and r(R) is in
+Bohr; filenames are relative to `input_dir` unless absolute. They retain their
+original real-space support. The exporter requires a complete square AO
+reference and a full, unshifted uniform SCF mesh. IBZ or shifted-mesh export
+is rejected before the first GW update; the old
+`qsgw_hr_export_full_mp_rgrid` selector is not needed or supported.
+
+After mixing and the cut actually selected by the task, but **before
+diagonalization**, the driver writes
+`output_dir/hrsS_nao_qsgw_iter_NNNN.csr`, with a one-based spin index S and
+global iteration N. This is the exact fixed-reference operator passed to
+diagonalization, including all retained and cut-state blocks. Its AO
+embedding uses the immutable initial KS coefficients and S, so it does not
+require the new eigenvectors. A fresh calculation also writes iteration 0000
+for the actual entering PBE Hamiltonian. A restart writes its restored state
+under the saved iteration number and then continues global numbering.
+
+The selected export reconstruction preserves the matching native DFT
+Hamiltonian and inverse-transforms only the complete current correction:
+
+$$
+H_{\rm export}(R)=H_{0,\rm native}(R)
++\mathcal F^{-1}\!\left[
+H_{\rm current}^{AO}(k_i)-H_{0,\rm native}^{AO}(k_i)
+\right](R).
+$$
+
+The correction includes any selected post-mixing cut and all high-state
+blocks; it is not merely the bare exchange-correlation potential difference.
+The original DFT H must match the loaded immutable reference on the full
+SCF grid. Every complex entry and native H/S/r support is retained; the
+existing Fourier roundtrip check still compares the complete exported
+operator with the current AO grid matrices. Native baseline preservation
+improves the tested Si path but does not establish off-mesh convergence.
+
+This selection applies to HR export. The `current_hr` velocity calculation
+continues to differentiate its existing finite-BvK reconstruction, so the
+QSGW head/wing update map and checkpoint convention are unchanged. Adopting
+the native-baseline reconstruction for velocity would also change its
+k derivative and requires a separate controlled iteration comparison.
+
+The output mode follows the loaded reference's spin-channel and spinor
+dimensions automatically. The same export switch covers all three native modes:
+
+| Native ABACUS mode | Reference channels / spinor components | Files at iteration NNNN | Matrix dimension per file |
+| --- | --- | --- | --- |
+| Non-spin-polarized, `nspin=1` | 1 / 1 | `hrs1_nao_qsgw_iter_NNNN.csr` | `N_AO` |
+| Collinear spin-polarized, `nspin=2` | 2 / 1 | `hrs1_nao_qsgw_iter_NNNN.csr` and `hrs2_nao_qsgw_iter_NNNN.csr` | `N_AO` for each channel |
+| SOC/noncollinear, `nspin=4` | 1 / 2 | `hrs1_nao_qsgw_iter_NNNN.csr` | `2 * N_AO`, including cross-spinor blocks |
+
+For collinear input, the two HR files use their own channel's Hamiltonian
+and reference coefficients; they share the unchanged `srs1_nao.csr` and
+`rr.csr` inputs. Their headers record two spin directions and indices 1 and 2.
+Scalar and SOC headers record one spin direction and index 1. SOC output
+retains both spinor components and their coupling in one complete matrix.
+
+The files use the modern native ABACUS HContainer matrix grammar:
+`--- Ionic Step N ---`, spin/basis/R counts, `# CSR Format`, and the native
+values/column-indices/row-pointers markers. They contain full complex CSR
+entries in **Ry**, with 17 significant digits and no imaginary projection or
+sparsity threshold. The matrix file does not embed an ABACUS cell/atom block;
+the consumer takes geometry from the matching original input.
+For SOC (`use_spinor_wfc = true`, also accepted as `use_soc = true`), one
+`hrs1_nao_qsgw_iter_NNNN.csr` retains the complete `2 * N_AO` matrix,
+including off-diagonal spin blocks, in the native interleaved ordering.
+The S reader accepts both legacy and modern native CSR; native SOC S is
+complex, while `rr.csr` uses real entries at the same full spinor dimension.
+No spatial-AO-only S/r is replicated implicitly.
+H is padded with exact-zero blocks to the complete H/S/r support
+union; S/r are neither trimmed nor folded into the BvK mesh. Each complete
+CSR file is published through a temporary-file rename. These files differ
+from the entering-state `qsgw_head_HR_updateN_spinS.eV.csr` diagnostic, whose
+unit remains eV and whose state precedes update N.
+
+HR N is an operator snapshot written before diagonalization. If a later
+diagonalization or occupation update fails, this file can exist without a
+completed iteration N checkpoint. Successful iterations continue to write
+the normal checkpoint after occupations update; its default filename still
+retains only the latest completed iteration. Per-iteration HR output does
+not create per-iteration checkpoint archives or replace the native input
+required for continuation.
+
+`utilities/pyatb_qsgw.py` supplies `load_qsgw_model`: `nspin=1` loads a scalar
+model or a selected collinear channel, and `nspin=4` loads the complete SOC
+model as `tb(4)`. It uses PyATB's existing complex-H reader in Ry, the native
+real or complex S reader as appropriate, and the real r reader. All five
+operators are aligned on their full support union with exact-zero padding.
+`load_qsgw_spin_channel` remains a scalar-channel wrapper. With `utilities`
+on the Python import path, a scalar example is:
+
+```python
+from pyatb_qsgw import load_qsgw_model
+
+model = load_qsgw_model(
+    "librpa.d/hrs1_nao_qsgw_iter_0001.csr",
+    lattice_constant_angstrom=5.43,
+    lattice_vector=[[0, 0.5, 0.5], [0.5, 0, 0.5], [0.5, 0.5, 0]],
+    n_kpoints=64,
+    nspin=1,
+)
+```
+
+Use the actual producer lattice, not the illustrative numbers above;
+`n_kpoints` is the solver's k-point batch capacity. For SOC, set `nspin=4`
+and supply the matching SOC geometry and complete spinor S/r files.
+For collinear output, load each HR file separately with `nspin=1` and the
+same original scalar S/r and geometry.
+This adapter requires NumPy, SciPy and an installed PyATB and does not
+implement a topology algorithm. Its energy conversion follows the installed PyATB
+Ry reader; the earlier eV-based velocity-oracle tolerance is not a new
+numerical validation of this Ry export. Ordinary scalar PyATB inputs that
+expect real CSR tokens cannot directly parse the complex H file. Native
+mesh reconstruction alone also does not accept off-mesh material bands,
+an occupied projector, a gap or a topological invariant.
+
 ## Checkpoint continuation
 
 QSGW saves the last completed update by default in
@@ -294,6 +465,13 @@ Live velocity maps write version 5, recording their convention and actual
 immutable velocity or S/r operators (plus current-HR geometry). A restart
 cannot switch maps or replace those numerical operators. Version 4 belongs to
 a separate equation/mixer branch and is not interpreted here.
+The newly numbered shifted mode 1 uses checkpoint version 8, or version 9
+when a live velocity contract is present, on both grid-only and band-enabled
+routes, with the existing state payload. Older cut checkpoints, including
+the former unshifted mode 1 and the previous mode-2 versions 6/7, cannot be
+silently reinterpreted under this numbering. Mode-0 files retain their old
+format; saved keep/shift settings must still match explicitly when a default
+has changed.
 This implementation supports `qsgw_mixer = none` and `linear`; adaptive
 automatic-mixing history requires the separate mixer-aware extension.
 

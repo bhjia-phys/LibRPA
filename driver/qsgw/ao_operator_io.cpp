@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
+#include <locale>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
@@ -153,6 +157,69 @@ Matz matrix(std::istream& input, const int n, const int nnz, const bool empty_ha
     return result;
 }
 
+std::set<Vector3_Order<int>> csr_support(const librpa_int::qsgw::LocalizedMatrix& blocks,
+                                       const int n, const double scale)
+{
+    if (n <= 0 || n > std::numeric_limits<int>::max() / n)
+        throw std::runtime_error("Invalid QSGW Hamiltonian CSR dimension");
+    std::set<Vector3_Order<int>> support;
+    for (const auto& [r, block] : blocks)
+    {
+        if (block.nr() != n || block.nc() != n)
+            throw std::runtime_error("Invalid QSGW Hamiltonian CSR shape");
+        for (std::size_t j = 0; j < block.size(); ++j)
+        {
+            const auto value = block.ptr()[j] * scale;
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+                throw std::runtime_error("Non-finite QSGW Hamiltonian CSR value");
+        }
+        support.insert(r);
+    }
+    return support;
+}
+
+void write_full_hamiltonian_csr(std::ostream& output,
+                               const librpa_int::qsgw::LocalizedMatrix& blocks,
+                               const std::set<Vector3_Order<int>>& support, const int n,
+                               const double scale, const int iteration, const int precision,
+                               const bool modern = false, const int spin_directions = 1,
+                               const int spin_index = 1)
+{
+    if (modern)
+    {
+        output << " --- Ionic Step " << iteration << " ---\n"
+               << " # print H matrix in real space H(R)\n"
+               << ' ' << spin_directions << " # number of spin directions\n " << spin_index
+               << " # spin index\n " << n
+               << " # number of localized basis\n " << support.size()
+               << " # number of Bravais lattice vector R\n\n # CSR Format\n";
+    }
+    else
+    {
+        output << "STEP: " << iteration << "\nMatrix Dimension of H(R): " << n
+               << "\nMatrix number of H(R): " << support.size() << '\n';
+    }
+    output << std::setprecision(precision) << std::scientific;
+    for (const auto& r : support)
+    {
+        const auto found = blocks.find(r);
+        // Explicit full CSR also represents all-zero padded blocks, avoiding
+        // the consumers' different zero-nnz payload conventions.
+        output << r.x << ' ' << r.y << ' ' << r.z << ' ' << n * n << '\n';
+        if (modern) output << " # CSR values\n";
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                output << (found == blocks.end() ? cplxdb{} : found->second(i, j) * scale) << ' ';
+        output << '\n';
+        if (modern) output << " # CSR column indices\n";
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j) output << j << ' ';
+        output << '\n';
+        if (modern) output << " # CSR row pointers\n";
+        for (int i = 0; i <= n; ++i) output << i * n << ' ';
+        output << '\n';
+    }
+}
 }  // namespace
 
 librpa_int::qsgw::HeadwingAoOperators read_headwing_ao_operators(const std::string& overlap_file,
@@ -234,26 +301,56 @@ void write_headwing_hamiltonian_csr(const std::string& filename,
 {
     if (blocks.empty()) throw std::runtime_error("Empty QSGW head/wing Hamiltonian");
     const int n = blocks.begin()->second.nr();
+    const auto support = csr_support(blocks, n, librpa_int::HA2EV);
     std::ofstream output(filename);
     if (!output) throw std::runtime_error("Cannot write QSGW head/wing Hamiltonian: " + filename);
-    output << "STEP: 0\nMatrix Dimension of H(R): " << n
-           << "\nMatrix number of H(R): " << blocks.size() << '\n'
-           << std::setprecision(17) << std::scientific;
-    for (const auto& [r, matrix] : blocks)
-    {
-        if (matrix.nr() != n || matrix.nc() != n)
-            throw std::runtime_error("Invalid QSGW head/wing Hamiltonian shape");
-        output << r.x << ' ' << r.y << ' ' << r.z << ' ' << n * n << '\n';
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j) output << matrix(i, j) * librpa_int::HA2EV << ' ';
-        output << '\n';
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j) output << j << ' ';
-        output << '\n';
-        for (int i = 0; i <= n; ++i) output << i * n << ' ';
-        output << '\n';
-    }
+    write_full_hamiltonian_csr(output, blocks, support, n, librpa_int::HA2EV, 0, 17);
     output.flush();
     if (!output) throw std::runtime_error("Cannot flush QSGW head/wing Hamiltonian: " + filename);
+}
+
+void write_qsgw_hamiltonian_csr(const std::string& filename,
+                               const librpa_int::qsgw::LocalizedMatrix& blocks,
+                               const librpa_int::qsgw::HeadwingAoOperators& operators,
+                               const int iteration, const int spin_directions, const int spin_index)
+{
+    if (blocks.empty()) throw std::runtime_error("Empty QSGW Hamiltonian for export");
+    if (iteration < 0) throw std::runtime_error("Invalid QSGW Hamiltonian export iteration");
+    if ((spin_directions != 1 && spin_directions != 2) || spin_index < 1 ||
+        spin_index > spin_directions)
+        throw std::runtime_error("Invalid QSGW Hamiltonian export spin channel");
+    const int n = blocks.begin()->second.nr();
+    if (operators.dimension != n || operators.overlap.empty())
+        throw std::runtime_error("QSGW Hamiltonian export AO operators differ from H(R)");
+    auto support = csr_support(blocks, n, 2.0);
+    const auto add_support = [&](const librpa_int::qsgw::LocalizedMatrix& localized)
+    {
+        const auto extra = csr_support(localized, n, 1.0);
+        support.insert(extra.begin(), extra.end());
+    };
+    add_support(operators.overlap);
+    for (const auto& component : operators.position) add_support(component);
+
+    const std::string temporary = filename + ".tmp";
+    try
+    {
+        std::ofstream output(temporary);
+        if (!output) throw std::runtime_error("Cannot write QSGW Hamiltonian: " + temporary);
+        output.imbue(std::locale::classic());
+        // Scientific precision 16 gives 17 significant decimal digits.
+        write_full_hamiltonian_csr(output, blocks, support, n, 2.0, iteration, 16, true,
+                                   spin_directions, spin_index);
+        output.flush();
+        if (!output) throw std::runtime_error("Cannot flush QSGW Hamiltonian: " + temporary);
+        output.close();
+        if (!output) throw std::runtime_error("Cannot close QSGW Hamiltonian: " + temporary);
+        std::filesystem::rename(temporary, filename);
+    }
+    catch (...)
+    {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        throw;
+    }
 }
 }  // namespace driver::qsgw

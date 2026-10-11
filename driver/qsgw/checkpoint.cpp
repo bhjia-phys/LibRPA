@@ -171,6 +171,13 @@ bool live_velocity_checkpoint(const CheckpointContext& context)
     return context.head_mode != 0 && context.velocity_mode != "reference";
 }
 
+bool shifted_cut_checkpoint(const CheckpointContext& context)
+{
+    if (context.cut_mode != 0 && context.cut_mode != 1)
+        throw std::runtime_error("QSGW checkpoint cut mode must be 0 or 1");
+    return context.cut_mode == 1;
+}
+
 int velocity_mode_code(const CheckpointContext& context)
 {
     if (context.velocity_mode == "current_hr") return 1;
@@ -357,11 +364,17 @@ void write_qsgw_checkpoint(const std::string& filename, const CheckpointContext&
     std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
     if (!output) throw std::runtime_error("Cannot write QSGW checkpoint: " + temporary);
     output.write("LIBRPA_QSGW", 11);
+    // Versions 8/9 retain the v3/v5 payload and identify shifted cut mode 1
+    // on either grid-only or band-enabled runs. Earlier mode 1 was unshifted;
+    // versions 6/7 identified the older grid-only mode-2 shifted cut.
     // Version 4 belongs to another equation/mixer branch. Do not reinterpret it.
-    put(output, std::uint32_t(live_velocity_checkpoint(context) ? 5 : 3));
+    const bool live_velocity = live_velocity_checkpoint(context);
+    const std::uint32_t version = shifted_cut_checkpoint(context)
+        ? (live_velocity ? 9 : 8) : (live_velocity ? 5 : 3);
+    put(output, version);
     put(output, std::uint32_t(0x01020304));  // reject incompatible byte order
     write_context(output, context);
-    if (live_velocity_checkpoint(context)) write_velocity_context(output, context);
+    if (live_velocity) write_velocity_context(output, context);
     put(output, std::int32_t(summary.iteration));
     for (const double value :
          {summary.maximum_eigenvalue_change_ev, summary.residual_l2_ha, summary.residual_max_ha,
@@ -394,12 +407,27 @@ IterationSummary read_qsgw_checkpoint(const std::string& filename, const Checkpo
     if (!input || std::string(magic, sizeof(magic)) != "LIBRPA_QSGW")
         throw std::runtime_error("Unsupported QSGW checkpoint format");
     const auto version = get<std::uint32_t>(input);
-    if ((version < 1 || (version > 3 && version != 5)) || get<std::uint32_t>(input) != 0x01020304)
+    if ((version < 1 || (version > 3 && version != 5 && version != 6 && version != 7 &&
+                        version != 8 && version != 9)) ||
+        get<std::uint32_t>(input) != 0x01020304)
         throw std::runtime_error("Unsupported QSGW checkpoint format or byte order");
-    if ((version == 5) != live_velocity_checkpoint(context))
+    if (version == 6 || version == 7)
+        throw std::runtime_error(
+            "QSGW checkpoint versions 6/7 use the historical mode-2 cut; "
+            "automatic migration to shifted mode 1 is unsupported");
+    const bool shifted_cut = version == 8 || version == 9;
+    const bool requested_shifted_cut = shifted_cut_checkpoint(context);
+    if (requested_shifted_cut && !shifted_cut)
+        throw std::runtime_error(
+            "Legacy QSGW cut checkpoints cannot continue shifted mode 1; "
+            "this convention requires checkpoint version 8 or 9");
+    if (shifted_cut != requested_shifted_cut)
+        throw std::runtime_error("QSGW checkpoint shifted-cut convention differs from the input");
+    const bool live_velocity = version == 5 || version == 9;
+    if (live_velocity != live_velocity_checkpoint(context))
         throw std::runtime_error("QSGW checkpoint lacks the requested head/wing velocity contract");
     check_context(input, context, version);
-    if (version == 5) check_velocity_context(input, context);
+    if (live_velocity) check_velocity_context(input, context);
     IterationSummary summary;
     summary.iteration = get<std::int32_t>(input);
     if (summary.iteration < 1) throw std::runtime_error("Invalid QSGW checkpoint iteration");
