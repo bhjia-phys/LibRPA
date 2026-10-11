@@ -286,10 +286,13 @@ std::vector<std::complex<double>> build_symmetry_kstar_member_target_gauge_phase
  * @brief Resolve the spin-space operation of one k-star member through the
  * action_id -> kspace_actions -> spin_operations link.
  *
+ * The member stores the full-to-representative operation. Return its inverse
+ * spin action to match representative-to-full orbital restoration.
+ *
  * Throws LIBRPA_RUNTIME_ERROR when the link is missing or inconsistent with
  * the member's legacy (spatial_isym, time_reversal) fields.
  */
-const SymmetrySpinOperation& resolve_symmetry_kstar_member_spin_operation(
+SymmetrySpinOperation resolve_symmetry_kstar_member_spin_operation(
     const SymmetryContext& ctx,
     const SymmetryKStarMember& member);
 
@@ -340,14 +343,17 @@ bool symmetry_rspace_restore_member_is_antiunitary(
     const SymmetryRSpaceRestoreMember& member);
 
 /*!
- * @brief Resolve the full (g, U_s, eta) operation behind a real-space restore member.
+ * @brief Resolve the source-to-target spin action for a real-space restore member.
  *
- * Members built without spin-operation metadata (`operation_id ==
- * kOperationIdNone`) resolve to a shared identity operation so legacy scalar
- * contexts keep their established behavior. For metadata-bearing members the
- * link is validated against `member.isym`; an inconsistent link throws.
+ * Sector-star members store an operation whose spatial inverse maps the
+ * irreducible block to the full target. The matching source-to-target spin
+ * action is therefore `U_s^dagger`; the antiunitary flag is retained. Members
+ * without spin-operation metadata (`operation_id == kOperationIdNone`) resolve
+ * to identity so legacy scalar contexts keep their established behavior. For
+ * metadata-bearing members the link is validated against `member.isym`; an
+ * inconsistent link throws.
  */
-const SymmetrySpinOperation& resolve_symmetry_rspace_restore_member_spin_operation(
+SymmetrySpinOperation resolve_symmetry_rspace_restore_member_spin_operation(
     const SymmetryContext& ctx,
     const SymmetryRSpaceRestoreMember& member);
 

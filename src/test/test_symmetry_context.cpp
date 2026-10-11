@@ -1788,11 +1788,16 @@ void test_rspace_restore_member_spin_operation_resolution()
     SymmetrySpinOperation spin_tg;
     spin_tg.spatial_id = 1;
     spin_tg.antiunitary = true;
+    spin_tg.spin_source = SymmetrySpinActionSource::ExplicitSpinSpace;
+    const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
+    spin_tg.spin_u = {
+        std::complex<double>(inv_sqrt2, -inv_sqrt2), 0.0,
+        0.0, std::complex<double>(inv_sqrt2, inv_sqrt2)};
     ctx.set_symmetry_spin_operations({spin_e, spin_tg}, false);
 
     SymmetryRSpaceRestoreMember legacy_member;
     legacy_member.isym = 1;
-    const auto& identity_op =
+    const auto identity_op =
         resolve_symmetry_rspace_restore_member_spin_operation(ctx, legacy_member);
     assert(identity_op.spin_source == SymmetrySpinActionSource::Identity);
     assert(!identity_op.antiunitary);
@@ -1800,9 +1805,17 @@ void test_rspace_restore_member_spin_operation_resolution()
     SymmetryRSpaceRestoreMember linked_member;
     linked_member.isym = 1;
     linked_member.operation_id = 1;
-    const auto& resolved =
+    const auto resolved =
         resolve_symmetry_rspace_restore_member_spin_operation(ctx, linked_member);
     assert(resolved.antiunitary);
+    const std::array<std::complex<double>, 4> expected_inverse{
+        std::conj(spin_tg.spin_u[0]), std::conj(spin_tg.spin_u[2]),
+        std::conj(spin_tg.spin_u[1]), std::conj(spin_tg.spin_u[3])};
+    for (std::size_t i = 0; i != expected_inverse.size(); ++i)
+    {
+        assert(std::abs(resolved.spin_u[i] - expected_inverse[i]) < 1e-12);
+    }
+    assert(std::abs(resolved.spin_u[0] - spin_tg.spin_u[0]) > 1e-6);
 
     SymmetryRSpaceRestoreMember mismatched_member;
     mismatched_member.isym = 0;

@@ -967,10 +967,17 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     const std::array<std::complex<double>, 4> U_s{
         inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
         std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
+    // U_s above is the physical representative-to-member action used by the
+    // independently generated full-grid wavefunctions below. Generated k-star
+    // metadata records the member-to-representative operation; the production
+    // resolve_symmetry_kstar_member_spin_operation reverses it for restoration.
+    const std::array<std::complex<double>, 4> U_s_inverse{
+        std::conj(U_s[0]), std::conj(U_s[2]),
+        std::conj(U_s[1]), std::conj(U_s[3])};
     ctx.spin_operations.push_back(SymmetrySpinOperation{
         0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
     ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, U_s, true, SymmetrySpinActionSource::ExplicitSpinSpace});
+        0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{1, {1}});
 
@@ -1121,8 +1128,16 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
     const std::array<std::complex<double>, 4> U_s{
         inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
         std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
+    // Keep the physical forward action for both independent references. Only
+    // the stored k-star action runs from member to representative, as in
+    // generated metadata and resolve_symmetry_kstar_member_spin_operation.
+    const SymmetrySpinOperation forward_op{
+        0, U_s, true, SymmetrySpinActionSource::ExplicitSpinSpace};
+    const std::array<std::complex<double>, 4> U_s_inverse{
+        std::conj(U_s[0]), std::conj(U_s[2]),
+        std::conj(U_s[1]), std::conj(U_s[3])};
     ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, U_s, true, SymmetrySpinActionSource::ExplicitSpinSpace});
+        0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
 
     SymmetryKStar star;
@@ -1166,7 +1181,7 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
         return block;
     };
     const auto kernel_ref = transform_spinor_bilinear(
-        ctx.spin_operations[0], source, identity_orbit,
+        forward_op, source, identity_orbit,
         BilinearConvention::SourceToTarget_DXDdag);
     assert_complex_matrix_near(restored.b00, kernel_ref.b00, 1e-12,
                                "antiunitary dmat restore vs kernel b00");
