@@ -620,6 +620,10 @@ void map_block_to_IJ_storage_new(std::map<int, std::map<int, matrix_m<T>>> &IJma
     const int n_Is = as_int(Is.size());
     const int n_Js = as_int(Js.size());
 
+    // Empty BLACS ranks own no entries to map. This routine is rank-local;
+    // returning here preserves the collectives performed by its caller.
+    if (n_pairs_total == 0) return;
+
     // Create necessay atom-pair blocks
 #pragma omp parallel for collapse(2) schedule(dynamic)
     for (int i_I = 0; i_I != n_Is; i_I++)
