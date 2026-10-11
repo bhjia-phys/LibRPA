@@ -3383,10 +3383,25 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                         n_nonsingular, sqrt_coulomb_threshold, use_cholesky_gw_wc,
                         use_gpu_replace_scalapack);
 
-                // Subtract the retained-space identity before rotating back.
-                // Subtracting the full auxiliary-space identity after rotation
-                // would introduce screening in discarded bare-Coulomb modes.
-                for (int i = 0; i != n_nonsingular_int; ++i)
+                // The rewrite returns the retained inverse in ABF space, with
+                // zero filtered channels. Add their thin projector F, then
+                // subtract I: eps_inv + F - I = eps_inv - U_r * U_r^H.
+                // Use the existing host eigenvectors before the device upload;
+                // all BLACS ranks participate, including empty local blocks.
+                const int n_filtered = n_abf - as_int(n_nonsingular);
+                if (n_filtered > 0)
+                {
+                    const int first_filtered = as_int(n_nonsingular) + 1;
+                    ScalapackConnector::pgemm_f(
+                        'N', 'C', n_abf, n_abf, n_filtered, C_ONE,
+                        coul_eigen_block.ptr(), 1, first_filtered,
+                        desc_nabf_nabf_opt.desc,
+                        coul_eigen_block.ptr(), 1, first_filtered,
+                        desc_nabf_nabf_opt.desc,
+                        C_ONE, chi0_block.ptr(), 1, 1,
+                        desc_nabf_nabf_opt.desc);
+                }
+                for (int i = 0; i != n_abf; ++i)
                 {
                     const int ilo = desc_nabf_nabf_opt.indx_g2l_r(i);
                     if (ilo < 0) continue;
@@ -3533,7 +3548,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
             }
             else if (gamma_full_headwing)
             {
-                // The retained identity was subtracted before rotation; multiply
+                // The retained projector was subtracted in ABF space; multiply
                 // the correlation-only inverse by sqrt(coulwc) on both sides.
 #if defined(LIBRPA_USE_HIP) || defined(LIBRPA_USE_CUDA)
                 if(use_gpu_replace_scalapack)
