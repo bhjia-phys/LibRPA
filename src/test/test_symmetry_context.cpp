@@ -2610,6 +2610,51 @@ void test_explicit_unitary_only_list_widens_kstars()
     }
 }
 
+void test_realspace_restore_uses_only_active_spin_operation_subgroup()
+{
+    // The spatial pool may contain operations absent from the selected
+    // magnetic subgroup. Identity-only input permits arbitrary R dependence;
+    // an unused C2z must not discard or rotate those blocks.
+    const auto pbc = make_cubic_mesh_pbc({3, 3, 1});
+    auto ctx = make_single_atom_cubic_context(
+        pbc, {SpaceGroupSymOp::IDENTITY,
+              make_row_symmetry_operation({-1, 0, 0, 0, -1, 0, 0, 0, 1})});
+    ctx.set_symmetry_spin_operations({SymmetrySpinOperation{}}, false);
+    build_ctx_periodic_mappings(ctx, pbc);
+    ctx.build_rsh_rotations({-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL,
+                              LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
+
+    std::array<symmetry_rspace_block_map_t, 4> reference;
+    for (const auto& R : pbc.Rlist)
+    {
+        const std::pair<int, std::array<int, 3>> key{0, {R.x, R.y, R.z}};
+        for (int channel = 0; channel != 4; ++channel)
+        {
+            ComplexMatrix block(1, 1);
+            block(0, 0) = {0.7 + 0.1 * channel + 0.03 * (R.x * R.x + R.y * R.y),
+                           (channel + 1) * (0.07 * R.x + 0.11 * R.y)};
+            reference[channel][0][key] = block;
+        }
+    }
+    auto selected = reference;
+    for (auto& channel : selected)
+        for (auto it = channel.at(0).begin(); it != channel.at(0).end();)
+        {
+            if (ctx.irreducible_sector.at({0, 0}).count(it->first.second) == 0)
+                it = channel.at(0).erase(it);
+            else
+                ++it;
+        }
+    const auto restored = restore_symmetry_spinor_rspace_blocks(
+        selected, ctx, ctx.rspace_sector_stars, {{"X", {0}}}, {1});
+    for (int channel = 0; channel != 4; ++channel)
+    {
+        assert(restored[channel].at(0).size() == reference[channel].at(0).size());
+        for (const auto& entry : reference[channel].at(0))
+            assert_matrix_close(restored[channel].at(0).at(entry.first), entry.second);
+    }
+}
+
 void test_antiunitary_translation_k_action_ignores_translation()
 {
     // AFM-type anti-translation: spatial {E|(1/2,0,0)} enters the k-star table
@@ -2964,6 +3009,7 @@ int main()
     test_spin_operation_validation_rejects_bad_input();
     test_spin_u_equal_pm_invariance();
     test_explicit_unitary_only_list_widens_kstars();
+    test_realspace_restore_uses_only_active_spin_operation_subgroup();
     test_antiunitary_translation_k_action_ignores_translation();
     test_inversion_member_is_unitary_not_time_reversal();
     test_pure_spin_duplicates_dedup_actions();
