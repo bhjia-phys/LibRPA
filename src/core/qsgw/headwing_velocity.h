@@ -6,7 +6,7 @@
 
 #include "../../math/matrix3.h"
 #include "../../math/vector3_order.h"
-#include "../../math/matrix_m.h"
+#include "fixed_basis.h"
 
 namespace librpa_int::qsgw
 {
@@ -53,11 +53,31 @@ LocalizedVelocityResult solve_localized_velocity(const LocalizedMatrix& hamilton
                                                  const Matrix3& lattice_bohr);
 
 // Evaluate the same model in an already selected complete eigenframe. This
-// preserves the original SCF E/C frame instead of introducing a new solve and
+// preserves the live QSGW C/E frame instead of introducing a new solve and
 // arbitrary phases or rotations inside a degenerate subspace.
 LocalizedVelocityResult compute_localized_velocity_in_frame(
     const LocalizedMatrix& hamiltonian, const HeadwingAoOperators& operators,
     const Vector3_Order<double>& kpoint_fractional, const Matrix3& lattice_bohr,
     const std::vector<double>& eigenvalues_ha, const Matz& ket_coefficients);
+
+struct LiveVelocityResult
+{
+    VelocityMatrix velocity;
+    double reference_metric_residual = 0.0;
+    double live_metric_residual = 0.0;
+    double hamiltonian_frame_residual_ha = 0.0;
+    double fourier_roundtrip_residual_ha = 0.0;
+    double velocity_upper_diagonal_imaginary_ha_bohr = 0.0;
+    // Complete finite-BvK Hamiltonian; every even-direction boundary has
+    // equally weighted images. The velocity differentiates this same model.
+    std::vector<LocalizedMatrix> hamiltonian;
+};
+
+LiveVelocityResult compute_live_headwing_velocity(const MeanField& reference, const MeanField& live,
+                                                  const SpinKMatrixMap& current_hamiltonian,
+                                                  const HeadwingAoOperators& operators,
+                                                  const std::vector<Vector3_Order<double>>& kpoints,
+                                                  const Vector3_Order<int>& period,
+                                                  const Matrix3& lattice_bohr);
 
 }  // namespace librpa_int::qsgw

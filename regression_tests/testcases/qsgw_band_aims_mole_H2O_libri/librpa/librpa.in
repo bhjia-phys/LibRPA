@@ -1,5 +1,5 @@
 # Driver parameters
-task = qsgw_band
+task = qsgw
 input_dir = ../dataset
 constants_choice = aims
 

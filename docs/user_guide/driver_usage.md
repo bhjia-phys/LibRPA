@@ -93,6 +93,40 @@ If `stru_out` contains symmetry operations, the driver builds a symmetry context
 the structure, basis metadata, and k-point grids. Runtime `use_symmetry_*` switches
 then decide whether calculation paths use that context.
 
+### QSGW with an optional band path
+
+Use `task = qsgw` for molecular and periodic QSGW. The driver also computes the
+band-path channel when the file selected by `fn_band_kpath_info` (default
+`band_kpath_info`) exists under `input_dir`; this requires matching band
+energies, wavefunctions, and full Vxc matrices. Without the metadata file,
+only the SCF grid is computed, including for periodic inputs. The driver
+does not infer geometry or create a path. `qsgw` is the only QSGW task name;
+older inputs must switch their task value to `qsgw`.
+
+Mixing is selected automatically after SCF input validation. One global SCF k
+point with a full BvK mesh product of 1 permits `none` or `linear`; other SCF
+meshes force effective `none` with beta 1, including a one-point IBZ of a larger
+mesh. The default mixer remains `none`. For a single-k supercell, for example:
+
+```ini
+qsgw_mixer = linear
+qsgw_mixing_beta = 0.2
+```
+
+The log records requested/effective mixer, SCF count and mesh. This input
+convention does not detect physical isolation: a Gamma-only solid also enters
+the single-k route and can use `none`. Band-path presence/count does not affect
+the route; grid and path use the same effective beta. Geometry, Coulomb and
+head/wing settings remain unchanged. Remove the obsolete `qsgw_system_type`
+key from input files.
+
+With band inputs, the existing band-cut options remain active and each
+iteration writes `KS_band_spin_S_N.dat`, `EXX_band_spin_S_N.dat`, and
+`QSGW_band_spin_S_N.dat` for plotting. The driver writes energy data rather
+than PNG figures. Continue a checkpoint with the same band-channel presence
+and original band inputs. See [QSGW](qsgw.md) for the full Vxc input, option-5
+head/wing feedback, output and restart requirements.
+
 ### Native G0W0 head/wing velocity
 
 For analytic head/wing correction, the standalone `g0w0` driver and its
@@ -127,9 +161,12 @@ Option 5 requires `replace_w_head = true`, `use_scalapack_gw_wc = true`, and
 `use_pyatb = false`. It selects `g0w0_headwing_velocity = native` when the selector
 is omitted; an explicit `native` is also accepted, while an explicit `file` is
 rejected. The driver log records requested option 5 and effective numerical
-option 3. Other tasks reject option 5. Direct library/API callers must use
-option 3 and supply velocity through the public velocity setter; option 5 is
-resolved only by the standalone G0W0 driver.
+option 3. The `qsgw` task also accepts option 5, selecting
+`qsgw_headwing_velocity = current_hr` to rebuild velocity from each iteration's
+complete current Hamiltonian and eigenpairs; see [QSGW](qsgw.md#analytic-head-and-wing-feedback).
+Other tasks reject option 5. Direct library/API callers must use option 3 and
+supply velocity through the public velocity setter; option 5 is resolved only
+by these standalone drivers.
 
 The previous explicit selection remains supported with the same H/S/r inputs
 and other settings:
