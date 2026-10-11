@@ -2465,8 +2465,23 @@ symmetry_irreducible_sector_t build_symmetry_rspace_irreducible_sector(
         generic_atom_to_type[static_cast<int>(atom)] = type;
     }
 
+    // The pool can include spatial operations outside the selected magnetic
+    // subgroup. Use the same active geometric actions as the restore table;
+    // pure-spin duplicates must not change the irreducible sector.
+    SpaceGroupSymOps active_spatial_operations;
+    if (ctx.spin_operations.empty())
+    {
+        active_spatial_operations = ctx.rspace_operations;
+    }
+    else
+    {
+        std::set<std::size_t> used_spatial_ids;
+        for (const auto& op : ctx.spin_operations)
+            if (used_spatial_ids.insert(op.spatial_id).second)
+                active_spatial_operations.push_back(ctx.rspace_operations.at(op.spatial_id));
+    }
     const auto generic_sector = build_space_group_rspace_irreducible_sector(
-        ctx.rspace_operations,
+        active_spatial_operations,
         generic_coord_frac,
         generic_atom_to_type,
         Rlist,
