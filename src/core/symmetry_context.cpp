@@ -723,7 +723,8 @@ void SymmetryContext::set_symmetry_spin_operations(
             throw LIBRPA_INVALID_ARGUMENT(
                 "grey-group expansion expects a unitary-only spin operation table");
         }
-        if (op.spin_source == SymmetrySpinActionSource::DerivedFromSpatialSOC)
+        if (op.spin_source == SymmetrySpinActionSource::DerivedFromSpatialSOC
+            && !op.spin_u_provided)
         {
             // U_s = U[det(Q) Q], reconstructed from the Cartesian axial part
             // of the spatial rotation (SOC magnetic group contract).
