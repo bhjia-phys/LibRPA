@@ -166,6 +166,114 @@ SpinKMatrixMap read_matrices(std::istream& input, const MeanField& reference)
     return result;
 }
 
+bool live_velocity_checkpoint(const CheckpointContext& context)
+{
+    return context.head_mode != 0 && context.velocity_mode != "reference";
+}
+
+int velocity_mode_code(const CheckpointContext& context)
+{
+    if (context.velocity_mode == "current_hr") return 1;
+    if (context.velocity_mode == "rotate_reference") return 2;
+    throw std::runtime_error("Unsupported QSGW checkpoint velocity convention");
+}
+
+// Save the immutable numerical operators, not their filenames. A resumed run
+// must use the same map even if files move or keep their names but change.
+void write_velocity_context(std::ostream& output, const CheckpointContext& context)
+{
+    put(output, std::uint32_t(0x48575631));  // HWV1, distinct from mixer formats
+    const int mode = velocity_mode_code(context);
+    put(output, std::int32_t(mode));
+    if (mode == 1)
+    {
+        if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
+            throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
+        const auto& period = *context.velocity_period;
+        for (int value : {period.x, period.y, period.z}) put(output, std::int32_t(value));
+        const auto& lattice = *context.velocity_lattice;
+        for (double value : {lattice.e11, lattice.e12, lattice.e13, lattice.e21, lattice.e22,
+                             lattice.e23, lattice.e31, lattice.e32, lattice.e33})
+            put(output, value);
+        put(output, std::int32_t(context.ao_operators->dimension));
+        const auto write_localized = [&](const LocalizedMatrix& blocks)
+        {
+            put(output, std::uint64_t(blocks.size()));
+            for (const auto& [r, matrix] : blocks)
+            {
+                for (int value : {r.x, r.y, r.z}) put(output, std::int32_t(value));
+                for (int i = 0; i < matrix.nr(); ++i)
+                    for (int j = 0; j < matrix.nc(); ++j) put_complex(output, matrix(i, j));
+            }
+        };
+        write_localized(context.ao_operators->overlap);
+        for (const auto& blocks : context.ao_operators->position) write_localized(blocks);
+    }
+    else
+    {
+        if (!context.reference_velocity)
+            throw std::runtime_error("Missing reference velocity for QSGW checkpoint");
+        for (const auto& by_k : *context.reference_velocity)
+            for (const auto& by_direction : by_k)
+                for (const auto& matrix : by_direction)
+                    for (int i = 0; i < matrix.size; ++i) put_complex(output, matrix.c[i]);
+    }
+}
+
+void check_velocity_context(std::istream& input, const CheckpointContext& context)
+{
+    if (get<std::uint32_t>(input) != 0x48575631 ||
+        get<std::int32_t>(input) != velocity_mode_code(context))
+        throw std::runtime_error(
+            "QSGW checkpoint head/wing velocity convention differs from the input");
+    if (context.velocity_mode == "current_hr")
+    {
+        if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
+            throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
+        const auto& period = *context.velocity_period;
+        for (int value : {period.x, period.y, period.z})
+            require_equal(get<std::int32_t>(input), value);
+        const auto& lattice = *context.velocity_lattice;
+        for (double value : {lattice.e11, lattice.e12, lattice.e13, lattice.e21, lattice.e22,
+                             lattice.e23, lattice.e31, lattice.e32, lattice.e33})
+            require_equal(get_real(input), value);
+        const int n = context.ao_operators->dimension;
+        require_equal(get<std::int32_t>(input), n);
+        const auto check_localized = [&](const LocalizedMatrix& blocks)
+        {
+            if (get<std::uint64_t>(input) != blocks.size())
+                throw std::runtime_error("QSGW checkpoint AO support differs from the input");
+            for (const auto& [r, matrix] : blocks)
+            {
+                for (int value : {r.x, r.y, r.z}) require_equal(get<std::int32_t>(input), value);
+                for (int i = 0; i < n; ++i)
+                    for (int j = 0; j < n; ++j)
+                    {
+                        const auto value = get_complex(input);
+                        require_equal(value.real(), matrix(i, j).real());
+                        require_equal(value.imag(), matrix(i, j).imag());
+                    }
+            }
+        };
+        check_localized(context.ao_operators->overlap);
+        for (const auto& blocks : context.ao_operators->position) check_localized(blocks);
+    }
+    else
+    {
+        if (!context.reference_velocity)
+            throw std::runtime_error("Missing reference velocity for QSGW checkpoint");
+        for (const auto& by_k : *context.reference_velocity)
+            for (const auto& by_direction : by_k)
+                for (const auto& matrix : by_direction)
+                    for (int i = 0; i < matrix.size; ++i)
+                    {
+                        const auto value = get_complex(input);
+                        require_equal(value.real(), matrix.c[i].real());
+                        require_equal(value.imag(), matrix.c[i].imag());
+                    }
+    }
+}
+
 void write_context(std::ostream& output, const CheckpointContext& context)
 {
     put(output, std::int32_t(context.band_reference != nullptr));
@@ -249,9 +357,11 @@ void write_qsgw_checkpoint(const std::string& filename, const CheckpointContext&
     std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
     if (!output) throw std::runtime_error("Cannot write QSGW checkpoint: " + temporary);
     output.write("LIBRPA_QSGW", 11);
-    put(output, std::uint32_t(3));           // format version, including coefficient metric
+    // Version 4 belongs to another equation/mixer branch. Do not reinterpret it.
+    put(output, std::uint32_t(live_velocity_checkpoint(context) ? 5 : 3));
     put(output, std::uint32_t(0x01020304));  // reject incompatible byte order
     write_context(output, context);
+    if (live_velocity_checkpoint(context)) write_velocity_context(output, context);
     put(output, std::int32_t(summary.iteration));
     for (const double value :
          {summary.maximum_eigenvalue_change_ev, summary.residual_l2_ha, summary.residual_max_ha,
@@ -284,9 +394,12 @@ IterationSummary read_qsgw_checkpoint(const std::string& filename, const Checkpo
     if (!input || std::string(magic, sizeof(magic)) != "LIBRPA_QSGW")
         throw std::runtime_error("Unsupported QSGW checkpoint format");
     const auto version = get<std::uint32_t>(input);
-    if ((version < 1 || version > 3) || get<std::uint32_t>(input) != 0x01020304)
+    if ((version < 1 || (version > 3 && version != 5)) || get<std::uint32_t>(input) != 0x01020304)
         throw std::runtime_error("Unsupported QSGW checkpoint format or byte order");
+    if ((version == 5) != live_velocity_checkpoint(context))
+        throw std::runtime_error("QSGW checkpoint lacks the requested head/wing velocity contract");
     check_context(input, context, version);
+    if (version == 5) check_velocity_context(input, context);
     IterationSummary summary;
     summary.iteration = get<std::int32_t>(input);
     if (summary.iteration < 1) throw std::runtime_error("Invalid QSGW checkpoint iteration");

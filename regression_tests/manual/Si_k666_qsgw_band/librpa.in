@@ -1,6 +1,6 @@
 # Si PBE, full 6x6x6 mesh, 201-point band path; two numerical updates.
 # Fixed-basis, analytic head only, no Hartree/wing update; not a convergence study.
-task = qsgw_band
+task = qsgw
 input_dir = ../dataset
 output_level = info
 constants_choice = internal
