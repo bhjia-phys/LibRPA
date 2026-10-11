@@ -86,31 +86,79 @@ static void set_atom_block(ComplexMatrix& matrix,
     }
 }
 
-static std::vector<int> build_rspace_inverse_map(const SymmetryContext& ctx)
+static std::vector<int> build_rspace_inverse_map(const SymmetryContext& ctx,
+                                                 const bool require_affine_inverse)
 {
     std::vector<int> inverse_map(ctx.rspace_operations.size(), -1);
     for (std::size_t isym = 0; isym < ctx.rspace_operations.size(); ++isym)
     {
+        int inverse_rotation = -1;
         for (std::size_t jsym = 0; jsym < ctx.rspace_operations.size(); ++jsym)
         {
             const auto composed = compose_space_group_symmetry_operations(
                 ctx.rspace_operations[isym], ctx.rspace_operations[jsym]);
-            const bool is_inverse =
-                composed.is_identity_rotation()
-                && nearly_integer_vector(composed.translation, kSymmetryCoordTol);
-
-            if (is_inverse)
+            if (!composed.is_identity_rotation())
+            {
+                continue;
+            }
+            if (inverse_rotation < 0)
+            {
+                inverse_rotation = static_cast<int>(jsym);
+            }
+            if (nearly_integer_vector(composed.translation, kSymmetryCoordTol))
             {
                 inverse_map[isym] = static_cast<int>(jsym);
                 break;
             }
         }
+        if (inverse_map[isym] < 0 && !require_affine_inverse)
+        {
+            inverse_map[isym] = inverse_rotation;
+        }
         if (inverse_map[isym] < 0)
         {
-            throw LIBRPA_RUNTIME_ERROR("Failed to build inverse symmetry-operation map for symmetry");
+            const char* error_message =
+                "Failed to build inverse symmetry-operation map for symmetry";
+            if (!require_affine_inverse)
+            {
+                error_message = "Failed to build inverse rotation map for symmetry";
+            }
+            throw LIBRPA_RUNTIME_ERROR(error_message);
         }
     }
     return inverse_map;
+}
+
+// Supercell coset operations do not necessarily close under composition, so the
+// real-space operations may not form an affine group. Detect that case instead of
+// assuming a full affine inverse exists for every operation.
+static bool rspace_operations_form_affine_group(const SymmetryContext& ctx)
+{
+    if (ctx.rspace_operations.empty())
+    {
+        return false;
+    }
+    for (const auto& lhs : ctx.rspace_operations)
+    {
+        for (const auto& rhs : ctx.rspace_operations)
+        {
+            const auto composed = compose_space_group_symmetry_operations(lhs, rhs);
+            const auto matching_operation = std::find_if(
+                ctx.rspace_operations.begin(), ctx.rspace_operations.end(),
+                [&composed](const SpaceGroupSymOp& candidate)
+                {
+                    return is_same_matrix(composed.rotation, candidate.rotation,
+                                          kSymmetryCoordTol) &&
+                           nearly_integer_vector(composed.translation - candidate.translation,
+                                                 kSymmetryCoordTol);
+                });
+            if (matching_operation == ctx.rspace_operations.end())
+            {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static Vector3_Order<int> rotate_rspace_vector(
@@ -425,7 +473,7 @@ static void store_generated_symmetry_kstars(
     ctx.kstar_member_fold_G.clear();
     ctx.kspace_actions.clear();
     ctx.kstars.reserve(generated_stars.size());
-    const auto inverse_map = build_rspace_inverse_map(ctx);
+    const auto inverse_map = build_rspace_inverse_map(ctx, false);
 
     for (std::size_t istar = 0; istar != generated_stars.size(); ++istar)
     {
@@ -903,7 +951,8 @@ void SymmetryContext::build_periodic_mappings(const PeriodicBoundaryData& pbc,
 
 void SymmetryContext::generate_irreducible_sector(const std::vector<Vector3_Order<int>> &Rlist)
 {
-    if (!atom_to_type.empty() && !input_coord_frac.empty() && !Rlist.empty())
+    if (!atom_to_type.empty() && !input_coord_frac.empty() && !Rlist.empty() &&
+        rspace_operations_form_affine_group(*this))
     {
         irreducible_sector = build_symmetry_rspace_irreducible_sector(*this, Rlist);
     }
@@ -1039,6 +1088,71 @@ void SymmetryContext::build_rsh_rotations(const BasisConvention& basis_conventio
             }
         }
     }
+}
+
+SymmetryKStarMember build_symmetry_kspace_operation_member(
+    const SymmetryContext& ctx,
+    const int spatial_isym,
+    const bool time_reversal,
+    const Vector3_Order<double>& k_bz,
+    const Vector3_Order<double>& k_ibz,
+    const int lmax)
+{
+    if (lmax < 0)
+    {
+        throw LIBRPA_INVALID_ARGUMENT("K-space operation member requires non-negative lmax");
+    }
+    if (spatial_isym < 0
+        || spatial_isym >= static_cast<int>(ctx.rspace_operations.size()))
+    {
+        throw LIBRPA_INVALID_ARGUMENT("K-space operation member has an invalid symmetry index");
+    }
+    if (ctx.atom_to_type.empty() || ctx.input_coord_frac.empty())
+    {
+        throw LIBRPA_RUNTIME_ERROR("K-space operation member is missing atom metadata");
+    }
+    if (!is_basis_convention_set(ctx.basis_convention))
+    {
+        throw LIBRPA_RUNTIME_ERROR("K-space operation member is missing the basis convention");
+    }
+
+    SymmetryKStarMember member;
+    member.spatial_isym = spatial_isym;
+    member.time_reversal = time_reversal;
+    member.k_bz = k_bz;
+    member.atom_rotations.reserve(ctx.atom_to_type.size());
+    const auto &operation =
+        ctx.rspace_operations.at(static_cast<std::size_t>(spatial_isym));
+    for (const auto &[atom_from, atom_type] : ctx.atom_to_type)
+    {
+        Vector3_Order<int> return_lattice{0, 0, 0};
+        const atom_t atom_to =
+            find_symmetry_atom_target(ctx, atom_from, spatial_isym, return_lattice);
+
+        SymmetryKAtomRotation atom_rotation;
+        atom_rotation.atom_from = static_cast<int>(atom_from);
+        atom_rotation.atom_to = static_cast<int>(atom_to);
+        atom_rotation.atom_type = atom_type;
+        atom_rotation.lmax = lmax;
+        auto k_source_spatial = k_bz;
+        if (time_reversal)
+        {
+            k_source_spatial = k_source_spatial * -1.0;
+        }
+        atom_rotation.bloch_rsh_rotations =
+            build_symmetry_kspace_shell_rotations(
+                operation,
+                ctx.lattice_vectors,
+                lmax,
+                ctx.basis_convention,
+                k_source_spatial,
+                k_ibz,
+                coord_frac_vector(ctx.input_coord_frac, atom_from),
+                coord_frac_vector(ctx.input_coord_frac, atom_to),
+                return_lattice);
+        member.atom_rotations.push_back(std::move(atom_rotation));
+    }
+    return member;
 }
 
 void SymmetryContext::build_kstar_member_rotations(const int lmax)
@@ -1367,8 +1481,21 @@ void SymmetryContext::generate_kstar_grid_mapping(const PeriodicBoundaryData& pb
                                      kfrac.x * G.e13 + kfrac.y * G.e23 + kfrac.z * G.e33};
     };
 
+    // `PeriodicBoundaryData::klist` and `map_irk_ks` store internal (Cartesian)
+    // wave vectors, whereas `same_fractional_kpoint` compares fractional
+    // coordinates modulo integer reciprocal translations. Convert the internal
+    // vectors back through the direct lattice before comparing; comparing the
+    // Cartesian components directly can make distinct q points appear equal or
+    // fail to match equivalent boundary points.
+    const auto same_internal_kpoint = [this](const Vector3_Order<double>& lhs,
+                                             const Vector3_Order<double>& rhs) {
+        return same_fractional_kpoint(Vector3_Order<double>{lattice_vectors * lhs},
+                                      Vector3_Order<double>{lattice_vectors * rhs},
+                                      kSymmetryCoordTol);
+    };
+
     auto find_matching_ibz_full_list =
-        [&irk_to_full_kpoints](const Vector3_Order<double>& q_ibz_key)
+        [&irk_to_full_kpoints, &same_internal_kpoint](const Vector3_Order<double>& q_ibz_key)
         -> std::map<Vector3_Order<double>, std::vector<Vector3_Order<double>>>::const_iterator {
         const auto exact_iter = irk_to_full_kpoints.find(q_ibz_key);
         if (exact_iter != irk_to_full_kpoints.end())
@@ -1377,9 +1504,8 @@ void SymmetryContext::generate_kstar_grid_mapping(const PeriodicBoundaryData& pb
         }
 
         return std::find_if(irk_to_full_kpoints.begin(), irk_to_full_kpoints.end(),
-                            [&q_ibz_key](const auto& entry) {
-                                return same_fractional_kpoint(
-                                    entry.first, q_ibz_key, kSymmetryCoordTol);
+                            [&q_ibz_key, &same_internal_kpoint](const auto& entry) {
+                                return same_internal_kpoint(entry.first, q_ibz_key);
                             });
     };
 
@@ -1425,8 +1551,7 @@ void SymmetryContext::generate_kstar_grid_mapping(const PeriodicBoundaryData& pb
             for (std::size_t ifull = 0; ifull < full_q_keys->size(); ++ifull)
             {
                 if (matched_full_q[ifull]
-                    || !same_fractional_kpoint(
-                        (*full_q_keys)[ifull], member_q_internal, kSymmetryCoordTol))
+                    || !same_internal_kpoint((*full_q_keys)[ifull], member_q_internal))
                 {
                     continue;
                 }
@@ -2089,11 +2214,15 @@ static ComplexMatrix build_symmetry_kspace_rotation_matrix_impl(
             block *= phase;
         }
 
-        const int row_offset = offsets.at(atom);
-        const int col_offset = offsets.at(static_cast<std::size_t>(atom_rotation->atom_to));
-        const int nrows = offsets.at(atom + 1) - row_offset;
-        const int ncols = offsets.at(static_cast<std::size_t>(atom_rotation->atom_to) + 1)
-                          - col_offset;
+        // Row-major band coefficients multiply this matrix on the right, i.e.
+        // C_bz = C_ibz * rotation. The block rows therefore index the IBZ atom
+        // (atom_to) and the block columns the BZ atom (atom_from, the loop
+        // index `atom`). The Bloch/target-gauge phase stays with atom_from.
+        const int row_offset = offsets.at(static_cast<std::size_t>(atom_rotation->atom_to));
+        const int col_offset = offsets.at(atom);
+        const int nrows = offsets.at(static_cast<std::size_t>(atom_rotation->atom_to) + 1)
+                          - row_offset;
+        const int ncols = offsets.at(atom + 1) - col_offset;
         if (block.nr != nrows || block.nc != ncols)
         {
             throw LIBRPA_RUNTIME_ERROR("K-space rotation matrix block dimension mismatch");
@@ -2198,11 +2327,11 @@ std::array<ComplexMatrix, 3> build_symmetry_kspace_rotation_matrix_derivatives(
             from_coord_cart.x, from_coord_cart.y, from_coord_cart.z,
         }};
 
-        const int row_offset = offsets.at(static_cast<std::size_t>(atom_rotation.atom_from));
-        const int col_offset = offsets.at(static_cast<std::size_t>(atom_rotation.atom_to));
-        const int nrows = offsets.at(static_cast<std::size_t>(atom_rotation.atom_from) + 1)
+        const int row_offset = offsets.at(static_cast<std::size_t>(atom_rotation.atom_to));
+        const int col_offset = offsets.at(static_cast<std::size_t>(atom_rotation.atom_from));
+        const int nrows = offsets.at(static_cast<std::size_t>(atom_rotation.atom_to) + 1)
                           - row_offset;
-        const int ncols = offsets.at(static_cast<std::size_t>(atom_rotation.atom_to) + 1)
+        const int ncols = offsets.at(static_cast<std::size_t>(atom_rotation.atom_from) + 1)
                           - col_offset;
         if (nrows != ncols)
         {
@@ -2514,7 +2643,7 @@ void build_symmetry_rspace_sector_stars(const SymmetryContext& ctx,
                 preserves_lattice_metric(ctx.rspace_operations[isym].rotation, ctx.lattice_vectors);
         }
     }
-    const auto inverse_map = build_rspace_inverse_map(ctx);
+    const auto inverse_map = build_rspace_inverse_map(ctx, true);
 
     sector_stars.clear();
     std::set<Vector3_Order<int>> Rset(Rlist.begin(), Rlist.end());
@@ -2653,6 +2782,35 @@ ComplexMatrix rotate_symmetry_rspace_block(const SymmetryContext& ctx,
 {
     return rotate_symmetry_rspace_block(
         ctx, layouts, layouts, isym, atom_from_i, atom_from_j, matrix_source);
+}
+
+ComplexMatrix rotate_symmetry_rspace_operator_block(
+    const SymmetryContext& ctx, const std::vector<SpeciesBasisLayout>& layouts_i,
+    const std::vector<SpeciesBasisLayout>& layouts_j, const int isym, const atom_t atom_from_i,
+    const atom_t atom_from_j, const ComplexMatrix& matrix_source)
+{
+    const int type_i = ctx.atom_to_type.at(atom_from_i);
+    const int type_j = ctx.atom_to_type.at(atom_from_j);
+    const ComplexMatrix T_i = ctx.get_rotation_matrix(layouts_i, type_i, isym);
+    const ComplexMatrix T_j = ctx.get_rotation_matrix(layouts_j, type_j, isym);
+
+    if (matrix_source.nr != T_i.nr || matrix_source.nc != T_j.nr)
+    {
+        throw LIBRPA_RUNTIME_ERROR("Real-space operator rotation has incompatible AO dimensions");
+    }
+
+    // Sigma/H is an AO operator: H_bz[I,J] = T_i^dagger H_ir T_j.
+    return transpose(T_i, true) * matrix_source * T_j;
+}
+
+ComplexMatrix rotate_symmetry_rspace_operator_block(const SymmetryContext& ctx,
+                                                    const std::vector<SpeciesBasisLayout>& layouts,
+                                                    const int isym, const atom_t atom_from_i,
+                                                    const atom_t atom_from_j,
+                                                    const ComplexMatrix& matrix_source)
+{
+    return rotate_symmetry_rspace_operator_block(ctx, layouts, layouts, isym, atom_from_i,
+                                                 atom_from_j, matrix_source);
 }
 
 bool symmetry_rspace_restore_member_is_antiunitary(

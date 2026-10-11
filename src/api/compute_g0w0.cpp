@@ -673,7 +673,17 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    if (opts.option_dielect_func == 5)
+        throw LIBRPA_RUNTIME_ERROR(
+            "option_dielect_func = 5 is a standalone G0W0/QSGW driver preset; "
+            "API callers must supply velocity and use option_dielect_func = 3");
     const bool debug = global::should_output(LIBRPA_VERBOSE_DEBUG);
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON && opts.option_dielect_func == 53 &&
+        (opts.use_2d_dielectric == LIBRPA_SWITCH_ON ||
+         opts.use_scalapack_gw_wc != LIBRPA_SWITCH_ON))
+        throw LIBRPA_RUNTIME_ERROR(
+            "option_dielect_func=53 requires use_2d_dielectric=false and use_scalapack_gw_wc=true");
+    const bool need_wing = opts.option_dielect_func == 3 || opts.option_dielect_func == 53;
     pds->is_band_calc_done = false;
     initialize_ds_global_ddla(*pds, opts);
 
@@ -681,12 +691,13 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
 
     // Prepare time-frequency grids
     initialize_ds_tfgrids(*pds, opts);
-    if (opts.replace_w_head == LIBRPA_SWITCH_ON && opts.option_dielect_func == 0
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON
+        && (opts.option_dielect_func == 0 || opts.option_dielect_func == 5)
         && !pds->epsmacs_imagfreq.empty()
         && pds->epsmacs_imagfreq.size() != pds->tfg.get_freq_nodes().size())
     {
         throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func=0 requires dielectric function data on the current "
+            "option_dielect_func=0 or 5 requires dielectric function data on the current "
             "frequency grid: got " + std::to_string(pds->epsmacs_imagfreq.size()) +
             " input points for " + std::to_string(pds->tfg.get_freq_nodes().size()) +
             " target points. Regenerate dielecfunc_out for this grid or set "
@@ -720,13 +731,14 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
         const auto &cs_data_exx = use_shrink_abfs ? pds->cs_data_shrink : pds->cs_data;
         const auto &coul = opts.use_fullcoul_exx ? pds->vq : pds->vq_cut;
         profiler.start("ft_vq_cut", "Fourier transform truncated Coulomb");
+        bool coul_mat_is_replicated = false;
         const auto VR = librpa_int::FT_Vq(
             pds->comm_h, basis_aux_exx, pds->symmetry_context, coul, pds->pbc, true,
-            opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
+            opts.use_symmetry_exx == LIBRPA_SWITCH_ON, &coul_mat_is_replicated);
         profiler.stop("ft_vq_cut");
 
         profiler.start("g0w0_exx_real_work");
-        pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR);
+        pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
         // pds->p_exx->build_KS_kgrid_blacs(pds->blacs_h);
         profiler.stop("g0w0_exx_real_work");
         profiler.stop("g0w0_exx");
@@ -739,7 +751,7 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
     // Redistribute 2D Coulomb matrices to atom-pair blocks if they are parsed
     pds->redistribute_coulomb_blacs2ap();
 
-    initialize_ds_headwing(*pds, opts, opts.option_dielect_func == 3);
+    initialize_ds_headwing(*pds, opts, need_wing);
 
     // Initialize response function object
     initialize_ds_chi0(*pds, opts);
@@ -799,10 +811,23 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
     std::vector<double> epsmac_LF_imagfreq_re;
     if (opts.replace_w_head == LIBRPA_SWITCH_ON && pds->epsmacs_imagfreq.size() > 0)
     {
-        if (opts.option_dielect_func == 3 || opts.option_dielect_func == 4)
+        if (need_wing || opts.option_dielect_func == 4)
         {
             if (pds->epsmacs_imagfreq.size() != chi0.tfg.get_freq_nodes().size())
                 throw LIBRPA_RUNTIME_ERROR("analytic head/wing dielectric data must match chi0 frequency grid");
+            if (pds->p_headwing)
+            {
+                const auto &nodes = pds->p_headwing->get_frequency_nodes();
+                const auto &body_nodes = chi0.tfg.get_freq_nodes();
+                if (nodes.size() != body_nodes.size())
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "analytic head/wing and body frequency nodes differ");
+                for (std::size_t i = 0; i < nodes.size(); ++i)
+                    if (std::abs(nodes[i] - body_nodes[i]) >
+                        1e-12 * std::max(1.0, std::abs(body_nodes[i])))
+                        throw LIBRPA_RUNTIME_ERROR(
+                            "analytic head/wing and body frequency nodes differ");
+            }
             epsmac_LF_imagfreq_re = pds->epsmacs_imagfreq;
         }
         else
@@ -825,22 +850,35 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
     }
     std::vector<std::complex<double>> epsmac_LF_imagfreq(epsmac_LF_imagfreq_re.cbegin(), epsmac_LF_imagfreq_re.cend());
 
-    std::map<double, std::map<Vector3_Order<double>, librpa_int::matrix_m<std::complex<double>>>> Wc_freq_q;
+    const bool strict_2d_complete_wc = strict_2d_complete_wc_requested(
+        opts.replace_w_head == LIBRPA_SWITCH_ON, opts.option_dielect_func,
+        opts.use_2d_dielectric == LIBRPA_SWITCH_ON);
+    validate_strict_2d_complete_wc_runtime(strict_2d_complete_wc, !epsmac_LF_imagfreq.empty(),
+                                           opts.use_scalapack_gw_wc == LIBRPA_SWITCH_ON,
+                                           pds->p_headwing != nullptr &&
+                                               pds->p_headwing->strict_2d_coulomb_head_configured());
+    validate_strict_2d_gw_coulomb_choices(strict_2d_complete_wc,
+                                          opts.use_fullcoul_eps == LIBRPA_SWITCH_ON,
+                                          opts.use_fullcoul_wc == LIBRPA_SWITCH_ON);
+
+    std::map<double, std::map<Vector3_Order<double>, librpa_int::matrix_m<std::complex<double>>>>
+        Wc_freq_q;
     const auto &wc_desc_abf = use_shrink_abfs ? pds->desc_abf_shrink : pds->desc_abf;
     const auto &coul_eps = opts.use_fullcoul_eps ? pds->vq : pds->vq_cut;
     auto &coul_wc = opts.use_fullcoul_wc ? pds->vq : pds->vq_cut;
     if (opts.use_scalapack_gw_wc == LIBRPA_SWITCH_ON)
     {
         bool replace_w_head = opts.replace_w_head == LIBRPA_SWITCH_ON;
-        Wc_freq_q = compute_Wc_freq_q_blacs(chi0, coul_eps, coul_wc, opts.sqrt_coulomb_threshold,
-                                            replace_w_head, opts.option_dielect_func,
-                                            epsmac_LF_imagfreq, pds->p_headwing.get(), pds->blacs_h, wc_desc_abf,
-                                            debug, opts.output_dir, opts.use_cholesky_gw_wc, opts.use_gpu_replace_scalapack, opts.use_elpa_sqrt_coulomb);
+        Wc_freq_q = compute_Wc_freq_q_blacs(
+            chi0, coul_eps, coul_wc, opts.sqrt_coulomb_threshold, replace_w_head,
+            opts.option_dielect_func, epsmac_LF_imagfreq, pds->p_headwing.get(), pds->blacs_h,
+            wc_desc_abf, debug, opts.output_dir, opts.use_cholesky_gw_wc,
+            opts.use_gpu_replace_scalapack, opts.use_elpa_sqrt_coulomb);
     }
     else
     {
         Wc_freq_q = compute_Wc_freq_q(chi0, coul_eps, coul_wc, opts.sqrt_coulomb_threshold,
-                                      epsmac_LF_imagfreq, debug, opts.output_dir);
+                                      epsmac_LF_imagfreq, debug, opts.output_dir, opts.option_dielect_func);
     }
 
     std::map<double, atom_mapping<std::map<Vector3_Order<double>, Matz>>::pair_t_old>

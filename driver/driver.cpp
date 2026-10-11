@@ -1,6 +1,8 @@
 #include "driver.h"
 
 #include <ios>
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <sstream>
 #include <string>
@@ -13,6 +15,7 @@ namespace driver
 DriverParams::DriverParams():
     task("unset"),
     constants_choice("internal"),
+    input_preset("fhi-aims"),
     input_dir("./"),
     output_level(LIBRPA_VERBOSE_INFO),
     use_spinor_wfc(false),
@@ -20,6 +23,18 @@ DriverParams::DriverParams():
     prefix_lri_coeff_shrink("Cs_shrinked_data"),
     prefix_shrink_sinvS("shrink_sinvS_"),
     prefix_coul_full("coulomb_mat"),
+    prefix_sternheimer_chi0("v1_sternheimer_chi0_iq_"),
+    fn_sternheimer_qpoints(""),
+    fn_sternheimer_partial_manifest(""),
+    fn_sternheimer_symmetry_routes(""),
+    fn_sternheimer_qstar_routes(""),
+    prefix_sternheimer_reconstructed(""),
+    prefix_sternheimer_kresolved(""),
+    prefix_sternheimer_symmetry_diagnostic(""),
+    sternheimer_iq(1),
+    sternheimer_qweight(1.0),
+    use_rpa_gamma(true),
+    sternheimer_matrix_only(false),
     prefix_coul_cut("coulomb_cut"),
     prefix_eigvecs_scf("KS_eigenvector"),
     fn_stru("stru_out"),
@@ -31,6 +46,14 @@ DriverParams::DriverParams():
     fn_eigocc_scf("band_out"),
     fn_dielfunc("dielecfunc_out"),
     fn_vxc_scf("vxc_out"),
+    prefix_velocity("mommat_ks_kpt_"),
+    g0w0_headwing_velocity("file"),
+    g0w0_fn_hr(""),
+    g0w0_fn_hr_spin1(""),
+    g0w0_fn_sr(""),
+    g0w0_fn_rr(""),
+    g0w0_hr_unit("Ry"),
+    g0w0_rr_unit("Bohr"),
     fn_band_kpath_info("band_kpath_info"),
     version_coul_reader(-1),
     version_lri_reader(-1),
@@ -46,7 +69,9 @@ DriverParams::DriverParams():
     sf_omega_step(0.1),
     sf_state_start(-1),
     sf_state_end(-1),
-    qsgw_input_contract("qsgw_input.contract"),
+    prefix_vxc_scf(""),
+    prefix_vxc_band(""),
+    qsgw_vxc_basis("state"),
     qsgw_mixer("none"),
     qsgw_mixing_beta(0.2),
     qsgw_min_iter(1),
@@ -55,8 +80,63 @@ DriverParams::DriverParams():
     qsgw_band0_cut_mode(0),
     qsgw_band0_cut_shift_ha(20.0),
     qsgw_write_iteration_matrices(false),
+    qsgw_headwing_velocity("reference"),
+    qsgw_fn_sr(""),
+    qsgw_fn_rr(""),
+    qsgw_restart_file("none"),
+    qsgw_checkpoint_file("qsgw_checkpoint.bin"),
     qsgw_convergence_tolerance_ev(1.0e-4)
 {
+}
+
+void DriverParams::apply_input_preset()
+{
+    if (input_preset == "aims")
+        input_preset = "fhi-aims";
+
+    if (input_preset != "fhi-aims" && input_preset != "abacus" &&
+        input_preset != "abacus-legacy")
+        throw std::invalid_argument("Unsupported input_preset: " + input_preset
+                                    + "; expected fhi-aims (alias aims), abacus, or abacus-legacy");
+
+    // The FHI-aims preset preserves the historical LibRPA driver defaults.
+    fn_stru = "stru_out";
+    fn_bz_sampling = "bz_sampling_out";
+    fn_basis = "basis_out";
+    fn_basis_wfc = "basis_wfc_out";
+    fn_basis_aux = "basis_aux_out";
+    fn_basis_aux_shrink = "basis_aux_shrink_out";
+    fn_eigocc_scf = "band_out";
+    fn_dielfunc = "dielecfunc_out";
+    fn_vxc_scf = "vxc_out";
+    prefix_lri_coeff = "Cs_data";
+    prefix_lri_coeff_shrink = "Cs_shrinked_data";
+    prefix_shrink_sinvS = "shrink_sinvS_";
+    prefix_coul_full = "coulomb_mat";
+    prefix_coul_cut = "coulomb_cut";
+    prefix_eigvecs_scf = "KS_eigenvector";
+    prefix_velocity = "mommat_ks_kpt_";
+    fn_band_kpath_info = "band_kpath_info";
+
+    if (input_preset == "abacus")
+    {
+        fn_stru = "stru_out.txt";
+        fn_bz_sampling = "bz_sample.txt";
+        fn_basis = "basis_map.txt";
+        fn_basis_wfc = "wfc_basis.txt";
+        fn_basis_aux = "aux_basis.txt";
+        fn_basis_aux_shrink = "aux_basis_s.txt";
+        fn_eigocc_scf = "band_out.txt";
+        fn_vxc_scf = "vxc.txt";
+        prefix_lri_coeff = "Cs_";
+        prefix_lri_coeff_shrink = "Cs_shrink_";
+        prefix_shrink_sinvS = "sinvS_";
+        prefix_coul_full = "V_full_";
+        prefix_coul_cut = "V_cut_";
+        prefix_eigvecs_scf = "KS_wfc_";
+    }
+    if (input_preset == "abacus" || input_preset == "abacus-legacy")
+        prefix_velocity = "velocity_matrix";
 }
 
 std::string DriverParams::format()
@@ -68,11 +148,20 @@ std::string DriverParams::format()
         {
             normal_pair(task),
             normal_pair(constants_choice),
+            normal_pair(input_preset),
             normal_pair(input_dir),
             normal_pair(prefix_lri_coeff),
             normal_pair(prefix_lri_coeff_shrink),
             normal_pair(prefix_shrink_sinvS),
             normal_pair(prefix_coul_full),
+            normal_pair(prefix_sternheimer_chi0),
+            normal_pair(fn_sternheimer_qpoints),
+            normal_pair(fn_sternheimer_partial_manifest),
+            normal_pair(fn_sternheimer_symmetry_routes),
+            normal_pair(fn_sternheimer_qstar_routes),
+            normal_pair(prefix_sternheimer_reconstructed),
+            normal_pair(prefix_sternheimer_kresolved),
+            normal_pair(prefix_sternheimer_symmetry_diagnostic),
             normal_pair(prefix_coul_cut),
             normal_pair(prefix_eigvecs_scf),
             normal_pair(fn_stru),
@@ -84,6 +173,7 @@ std::string DriverParams::format()
             normal_pair(fn_eigocc_scf),
             normal_pair(fn_dielfunc),
             normal_pair(fn_vxc_scf),
+            normal_pair(prefix_velocity),
             normal_pair(fn_band_kpath_info),
         };
     for (const auto &[k, v]: str_params)
@@ -93,6 +183,8 @@ std::string DriverParams::format()
     const std::vector<std::pair<std::string, bool>> bool_params
         {
             normal_pair(use_spinor_wfc),
+            normal_pair(use_rpa_gamma),
+            normal_pair(sternheimer_matrix_only),
             normal_pair(output_energy_qp),
             normal_pair(output_gw_spec_func),
             normal_pair(output_hamgnn),
@@ -104,12 +196,43 @@ std::string DriverParams::format()
 
     ss << "version_coul_reader = " << version_coul_reader << std::endl;
     ss << "version_lri_reader = " << version_lri_reader << std::endl;
+    ss << "sternheimer_iq = " << sternheimer_iq << std::endl;
+    ss << "sternheimer_qweight = " << sternheimer_qweight << std::endl;
     ss << "cs_R_threshold = " << cs_threshold << std::endl;
     ss << "i_state_low = " << i_state_low << std::endl;
     ss << "i_state_high = " << i_state_high << std::endl;
-    if (task == "qsgw" || task == "qsgw_band")
+    std::string normalized_task = task;
+    std::transform(normalized_task.begin(), normalized_task.end(),
+                   normalized_task.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (requested_option_dielect_func == 5)
     {
-        ss << "qsgw_input_contract = " << qsgw_input_contract << std::endl;
+        ss << "option_dielect_func_requested = 5" << std::endl;
+        ss << "option_dielect_func_effective = 3" << std::endl;
+    }
+    if (normalized_task == "g0w0" || normalized_task == "g0w0_band")
+    {
+        ss << "g0w0_headwing_velocity = " << g0w0_headwing_velocity << std::endl;
+        if (g0w0_headwing_velocity == "native")
+        {
+            ss << "g0w0_fn_hr = " << g0w0_fn_hr << std::endl;
+            ss << "g0w0_fn_hr_spin1 = " << g0w0_fn_hr_spin1 << std::endl;
+            ss << "g0w0_fn_sr = " << g0w0_fn_sr << std::endl;
+            ss << "g0w0_fn_rr = " << g0w0_fn_rr << std::endl;
+            ss << "g0w0_hr_unit = " << g0w0_hr_unit << std::endl;
+            ss << "g0w0_rr_unit = " << g0w0_rr_unit << std::endl;
+        }
+    }
+    if (normalized_task == "qsgw")
+    {
+        const bool aims_input = constants_choice == "aims";
+        ss << "prefix_vxc_scf = " << (prefix_vxc_scf.empty()
+            ? (aims_input ? "xc_matr" : "vxc") : prefix_vxc_scf) << std::endl;
+        ss << "prefix_vxc_band = " << (prefix_vxc_band.empty()
+            ? (aims_input ? "band_vxc_mat" : "band_vxc") : prefix_vxc_band) << std::endl;
+        ss << "qsgw_vxc_basis = " << qsgw_vxc_basis << std::endl;
+        ss << "qsgw_headwing_velocity = " << qsgw_headwing_velocity << std::endl;
+        ss << "qsgw_fn_sr = " << qsgw_fn_sr << std::endl;
+        ss << "qsgw_fn_rr = " << qsgw_fn_rr << std::endl;
         ss << "qsgw_mixer = " << qsgw_mixer << std::endl;
         ss << "qsgw_mixing_beta = " << qsgw_mixing_beta << std::endl;
         ss << "qsgw_min_iter = " << qsgw_min_iter << std::endl;
@@ -124,6 +247,8 @@ std::string DriverParams::format()
            << qsgw_convergence_tolerance_ev << std::endl;
         ss << "qsgw_write_iteration_matrices = " << std::boolalpha
            << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_restart_file = " << qsgw_restart_file << std::endl;
+        ss << "qsgw_checkpoint_file = " << qsgw_checkpoint_file << std::endl;
     }
     if (output_gw_spec_func)
     {
@@ -140,37 +265,36 @@ DriverParams driver_params;
 
 const std::string input_filename = "librpa.in";
 
-std::vector<int> atom_types;
-size_t n_atoms;
-
-int n_spins = 0;
-int n_kpoints = 0;
-int n_kpoints_band = 0;
-int n_ibz_kpoints = 0;
-int n_states = 0;
-int n_basis_wfc = 0;
-int n_basis_ao = 0;
-int n_spinor = 1;
-std::vector<size_t> nbs_wfc;
-std::vector<size_t> nbs_aux;
-std::vector<size_t> nbs_aux_shrink;
-
-std::vector<int> iks_eigvec_this;
-std::vector<int> iks_band_eigvec_this;
+// Preserve the driver metadata names while sharing their storage with readers.
+librpa::reader::ReaderState reader_state;
+std::vector<int> &atom_types = reader_state.atom_types;
+size_t &n_atoms = reader_state.n_atoms;
+int &n_spins = reader_state.n_spins;
+int &n_kpoints = reader_state.n_kpoints;
+int &n_ibz_kpoints = reader_state.n_ibz_kpoints;
+int &n_kpoints_band = reader_state.n_kpoints_band;
+int &n_states = reader_state.n_states;
+int &n_basis_wfc = reader_state.n_basis_wfc;
+int &n_basis_ao = reader_state.n_basis_ao;
+int &n_spinor = reader_state.n_spinor;
+std::vector<size_t> &nbs_wfc = reader_state.nbs_wfc;
+std::vector<size_t> &nbs_aux = reader_state.nbs_aux;
+std::vector<size_t> &nbs_aux_shrink = reader_state.nbs_aux_shrink;
+std::vector<int> &iks_eigvec_this = reader_state.iks_eigvec_this;
+std::vector<int> &iks_band_eigvec_this = reader_state.iks_band_eigvec_this;
+std::vector<librpa_int::Vector3_Order<double>> &ibz_kpoints = reader_state.ibz_kpoints;
+std::vector<librpa_int::Vector3_Order<double>> &kfrac_band = reader_state.kfrac_band;
+bool &is_basis_convention_read = reader_state.is_basis_convention_read;
+std::string &basis_convention_label = reader_state.basis_convention_label;
 
 // Used to read Coulomb matrix data.
 // Should be consistent with the internal `atpairs_local` of the Dataset object
 std::vector<std::pair<size_t, size_t>> local_atpair;
 
-std::vector<librpa_int::Vector3_Order<double>> ibz_kpoints;
-std::vector<librpa_int::Vector3_Order<double>> kfrac_band;
-
-bool is_basis_convention_read = false;
-std::string basis_convention_label("unknown");
-
 librpa::Handler h;
 
 librpa::Options opts;
+int requested_option_dielect_func = 0;
 
 #define normal_pair(name) {#name, opts.name}
 #define bool_pair(name) {#name, get_bool(opts.name)}
@@ -208,6 +332,8 @@ std::string format_runtime_options(const librpa::Options &opts) noexcept
             normal_pair(nfreq),
             normal_pair(n_bands_chi0),
             normal_pair(n_bands_sigc),
+            normal_pair(n_bands_exclude_chi0),
+            normal_pair(n_bands_exclude_sigc),
             normal_pair(n_params_anacon),
             normal_pair(n_params_anacon_resample),
             normal_pair(anacon_nfreq),
@@ -220,6 +346,8 @@ std::string format_runtime_options(const librpa::Options &opts) noexcept
             normal_pair(istate_ref_hedin_shift),
             normal_pair(ifreq_output_wc_start),
             normal_pair(ifreq_output_wc_end),
+            normal_pair(istate_output_mat_start),
+            normal_pair(istate_output_mat_end),
         };
 
     const std::vector<std::pair<std::string, std::string>> str_params
@@ -254,6 +382,9 @@ std::string format_runtime_options(const librpa::Options &opts) noexcept
             bool_pair(read_sigc_mat_rf),
             bool_pair(output_gw_sigc_ks_kf),
             bool_pair(output_gw_sigc_ks_mat_kf),
+            bool_pair(output_exx_ks_mat_k),
+            bool_pair(output_exx_mat_k),
+            bool_pair(output_exx_mat_r),
             bool_pair(output_gw_sigc_mat_kf),
             bool_pair(output_gw_sigc_mat_rf),
             bool_pair(output_gw_sigc_mat_rt),

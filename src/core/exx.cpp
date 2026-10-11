@@ -4,6 +4,7 @@
 #include <omp.h>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <iterator>
 #include <set>
 #include <sstream>
@@ -11,7 +12,9 @@
 #include <utility>
 #include <vector>
 
+#include "../io/fs.h"
 #include "../io/global_io.h"
+#include "../io/output_matrix.h"
 #include "../io/stl_io_helper.h"
 #include "../math/lapack_connector.h"
 #include "../math/utils_matrix_m_mpi.h"
@@ -37,6 +40,9 @@ using namespace ddla;
 #include "pbc.h"
 #include "utils_atomic_basis_blacs.h"
 #ifdef LIBRPA_USE_LIBRI
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+#include <RI/parallel/Parallel_LRI_Equally_Weighted.h>
+#endif
 #include <RI/physics/Exx.h>
 #include <RI/physics/symmetry/Symmetry_Filter.h>
 #include <RI/ri/Cell_Nearest.h>
@@ -224,6 +230,19 @@ class OutputOnlyFilter_Atom_Symmetry : public RI::Filter_Atom<TA, std::pair<TA, 
     RI::Symmetry_Filter<TA, TC, Tdata> symmetry;
 };
 #endif
+
+static void write_exx_nao_k_matrix(const Matz &mat, const ArrayDesc &desc,
+                                   const std::string &output_dir, const std::string &source,
+                                   const int ispin, const int ispinor_bra, const int ispinor_ket,
+                                   const int n_spinor, const int ik)
+{
+    std::ostringstream ss;
+    ss << path_as_directory(output_dir) << "ExxK_" << source << "_ispin_" << ispin;
+    if (n_spinor > 1) ss << "_spinor_" << ispinor_bra << "_" << ispinor_ket;
+    ss << "_ik_" << ik << ".bin";
+    // The internal NAO matrix carries the opposite sign; KS rotation applies -1.
+    write_matrix_binary_parallel(mat * (-1.0), desc, ss.str());
+}
 
 Exx::Exx(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
          const PeriodicBoundaryData &pbc_in, const SymmetryContext &symmetry_context_in,
@@ -567,9 +586,77 @@ static void build_dmat_libri_kblacs_para(
 }
 #endif
 
+void Exx::write_rspace_matrices_binary() const
+{
+#ifdef LIBRPA_USE_LIBRI
+    using RI::Communicate_Tensors_Map_Judge::comm_map2_first;
+    const int n_atoms = as_int(atbasis_wfc.n_atoms);
+    for (int isp = 0; isp != mf.get_n_spins(); ++isp)
+        for (int bra = 0; bra != mf.get_n_spinor(); ++bra)
+            for (int ket = 0; ket != mf.get_n_spinor(); ++ket)
+            {
+                auto write_channel = [&](const auto &blocks)
+                {
+                    for (int I = 0; I != n_atoms; ++I)
+                    {
+                        std::map<int, std::map<std::pair<int, std::array<int, 3>>,
+                                               RI::Tensor<cplxdb>>> local;
+                        const auto channel = find_nested_int_map_3(blocks, isp, bra, ket);
+                        if (channel != nullptr && channel->count(I))
+                            for (const auto &[J, R_blocks] : channel->at(I))
+                                for (const auto &[R, mat] : R_blocks)
+                                {
+                                    auto block = make_exx_ijk_complex_block(mat);
+                                    local[I][{as_int(J), {R.x, R.y, R.z}}] =
+                                        RI::Tensor<cplxdb>({as_size(block.nr()), as_size(block.nc())},
+                                                          block.sptr());
+                                }
+                        std::set<int> rows, columns;
+                        if (comm_h.is_root())
+                        {
+                            rows.insert(I);
+                            for (int J = 0; J != n_atoms; ++J)
+                                columns.insert(J);
+                        }
+                        // Sum distributed contributions before writing rank-independent files.
+                        const auto gathered = comm_map2_first(comm_h.comm, local, rows, columns);
+                        int write_ok = 1;
+                        for (const auto &[atom, JR_blocks] : gathered)
+                            for (const auto &[JR, tensor] : JR_blocks)
+                            {
+                                const auto &R = JR.second;
+                                std::ostringstream fn;
+                                fn << path_as_directory(output_dir) << "ExxR_ispin_" << isp
+                                   << "_spinor_" << bra << "_" << ket << "_I_" << atom
+                                   << "_J_" << JR.first << "_R_" << R[0] << "_" << R[1]
+                                   << "_" << R[2] << ".bin";
+                                const Matz block(as_int(atbasis_wfc.get_atom_nb(atom)),
+                                                 as_int(atbasis_wfc.get_atom_nb(JR.first)),
+                                                 tensor.data, MAJOR::ROW);
+                                const ap_p_map<std::map<Vector3_Order<int>, Matz>> output_blocks{
+                                    {{as_atom(atom), as_atom(JR.first)},
+                                     {{{R[0], R[1], R[2]}, block * (-1.0)}}}};
+                                if (!librpa_int::write_rspace_matrices_binary(
+                                        output_blocks, atbasis_wfc, pbc, fn.str()))
+                                    write_ok = 0;
+                            }
+                        MPI_Allreduce(MPI_IN_PLACE, &write_ok, 1, MPI_INT, MPI_MIN, comm_h.comm);
+                        if (!write_ok)
+                            throw LIBRPA_RUNTIME_ERROR("failed to write real-space EXX matrix output");
+                    }
+                };
+                if (mf.get_n_spinor() > 1)
+                    write_channel(exx_IJR_cplx);
+                else
+                    write_channel(exx_IJR);
+            }
+#endif
+}
+
 void Exx::build(const LibrpaParallelRouting routing,
                 const AtomicBasis &atbasis_abf, const Cs_LRI &Cs,
-                const atpair_R_mat_t &coul_mat)
+                const atpair_R_mat_t &coul_mat,
+                const bool coul_mat_is_replicated)
 {
     using std::endl;
     using global::profiler;
@@ -601,6 +688,10 @@ void Exx::build(const LibrpaParallelRouting routing,
     // Use either one
     RI::Exx<int, int, 3, double> exx_libri;
     RI::Exx<int, int, 3, cplxdb> exx_libri_cplx;
+#ifdef LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK
+    exx_libri.lri.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+    exx_libri_cplx.lri.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+#endif
 
     std::map<int,std::array<double,3>> atoms_pos;
     for (int i = 0; i < n_atoms; i++)
@@ -608,11 +699,23 @@ void Exx::build(const LibrpaParallelRouting routing,
     const auto atom_nw = atbasis_wfc.get_atom_nb_map<int>();
 
     if (use_complex_exx_r)
-        libri_set_parallel(exx_libri_cplx, comm_h.comm, atoms_pos, this->pbc.latvec_array,
-                           this->pbc.period_array, atom_nw);
+    {
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+        exx_libri_cplx.lri.parallel =
+            std::make_shared<RI::Parallel_LRI_Equally_Weighted<int, int, 3, cplxdb>>(atom_nw);
+#endif
+        exx_libri_cplx.set_parallel(comm_h.comm, atoms_pos, this->pbc.latvec_array,
+                                    this->pbc.period_array);
+    }
     else
-        libri_set_parallel(exx_libri, comm_h.comm, atoms_pos, this->pbc.latvec_array,
-                           this->pbc.period_array, atom_nw);
+    {
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+        exx_libri.lri.parallel =
+            std::make_shared<RI::Parallel_LRI_Equally_Weighted<int, int, 3, double>>(atom_nw);
+#endif
+        exx_libri.set_parallel(comm_h.comm, atoms_pos, this->pbc.latvec_array,
+                               this->pbc.period_array);
+    }
 
     const auto &symmetry_ctx = this->symmetry_context;
     const auto wfc_layouts = atbasis_wfc.build_species_basis_layouts(symmetry_ctx.atom_to_type);
@@ -776,8 +879,12 @@ void Exx::build(const LibrpaParallelRouting routing,
         exx_coul_mat_ptr = &exx_coul_mat_restored;
     }
     const auto& exx_coul_mat = *exx_coul_mat_ptr;
+    // Identity-only q-stars can replicate V(R) without reducing any spatial
+    // sector. Ownership is independent of whether a symmetry restore ran.
     const bool use_replicated_symmetry_exx_coulomb =
-        use_input_exx_coulomb_restore && comm_h.nprocs > 1;
+        (coul_mat_is_replicated || use_input_exx_coulomb_restore) && comm_h.nprocs > 1;
+    if (use_replicated_symmetry_exx_coulomb)
+        global::lib_printf_root("Partitioning replicated EXX Coulomb blocks before additive LibRI communication\n");
 
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<double>>> V_libri;
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<cplxdb>>> V_libri_cplx;
@@ -1182,6 +1289,8 @@ void Exx::build(const LibrpaParallelRouting routing,
 #endif
 
     release_free_mem();
+    if (output_exx_mat_r)
+        write_rspace_matrices_binary();
     is_rspace_built_= true;
 }
 
@@ -1197,7 +1306,7 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
                          const AtomPairBvKRemap<atom_t> &bvk_remap,
                          const BlacsCtxtHandler &blacs_ctxt_h,
                          bool use_gpu_replace_scalapack,
-                         bool target_is_band_path)
+                         const std::string &source)
 {
     using RI::Communicate_Tensors_Map_Judge::comm_map2;
     using RI::Communicate_Tensors_Map_Judge::comm_map2_first;
@@ -1221,6 +1330,7 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
     const bool use_complex_exx_r = n_spinor > 1 ? true : false;
     const int n_target_kpoints = static_cast<int>(kfrac_target.size());
     const bool use_klocal_rotation = is_mf_eigvec_k_distributed_;
+    const bool target_is_band_path = source.rfind("band_", 0) == 0;
     const KPointBlacsParallelContext &target_kblacs_ctxt =
         target_is_band_path ? band_kblacs_ctxt : kblacs_ctxt;
     if (use_klocal_rotation)
@@ -1290,6 +1400,11 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
     desc_wfc_device.init(n_aos, n_bands, block_nao, block_nband,
                          use_klocal_rotation ? desc_wfc_target.irsrc() : 0,
                          use_klocal_rotation ? desc_wfc_target.icsrc() : 0);
+    desc_exx_KS.reset_handler(rotation_blacs_h);
+    if (use_klocal_rotation)
+        desc_exx_KS.init(n_bands, n_bands, block_nband, block_nband, 0, 0);
+    else
+        desc_exx_KS.init(n_bands, n_bands, n_bands, n_bands, 0, 0);
 
     auto Hexx_nao_nao_opt = init_local_mat<complex<double>>(desc_nao_nao_opt, MAJOR::COL);
     auto Hexx_nband_nband_opt = init_local_mat<complex<double>>(desc_nband_nband_opt, MAJOR::COL);
@@ -1667,6 +1782,10 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
                             complex<double>{1.0, 0.0}, exx_I_Jik);
                         global::profiler.stop("build_real_space_exx_6");
 
+                        if (output_exx_mat_k)
+                            write_exx_nao_k_matrix(Hexx_nao_nao, desc_nao_nao, output_dir,
+                                                  source, isp, ispn_bra, ispn_ket, n_spinor, ik);
+
                         global::profiler.start("build_real_space_exx_7", "Rotate Hexx ij -> KS");
                         ScalapackConnector::pgemr2d_f(n_aos, n_aos,
                                                       Hexx_nao_nao.ptr(), 1, 1, desc_nao_nao.desc,
@@ -1804,6 +1923,9 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
                                     this->atbasis_wfc, this->atbasis_wfc, fourier, exx_is_local);
                         global::profiler.stop("build_real_space_exx_6");
                         // global::lib_printf("%s\n", str(Hexx_nao_nao).c_str());
+                        if (output_exx_mat_k)
+                            write_exx_nao_k_matrix(Hexx_nao_nao, desc_nao_nao, output_dir,
+                                                  source, isp, ispn_bra, ispn_ket, n_spinor, ik);
                         if (use_root_dense_projection)
                         {
                             global::profiler.start(
@@ -1970,7 +2092,7 @@ void Exx::build_KS_kgrid_blacs(const BlacsCtxtHandler &blacs_ctxt_h,
                               bool use_gpu_replace_scalapack)
 {
     this->build_KS_blacs(this->mf.get_eigenvectors(), this->pbc.kfrac_list, {}, blacs_ctxt_h,
-                         use_gpu_replace_scalapack, false);
+                         use_gpu_replace_scalapack, "kgrid");
 }
 
 // void Exx::build_KS0_kgrid_blacs()
@@ -1982,10 +2104,49 @@ void Exx::build_KS_band_blacs(const std::map<int, std::map<int, std::map<int, Co
                               const std::vector<Vector3_Order<double>> &kfrac_band,
                               const AtomPairBvKRemap<atom_t> &bvk_remap,
                               const BlacsCtxtHandler &blacs_ctxt_h,
-                              bool use_gpu_replace_scalapack)
+                              bool use_gpu_replace_scalapack,
+                              const int band_index)
 {
     this->build_KS_blacs(wfc_band, kfrac_band, bvk_remap, blacs_ctxt_h,
-                         use_gpu_replace_scalapack, true);
+                         use_gpu_replace_scalapack, "band_" + std::to_string(band_index));
+}
+
+void Exx::write_exx_matrices_KS_binary(const std::string &output_dir,
+                                       const std::string &source,
+                                       const int istate_start,
+                                       const int istate_end_option) const
+{
+    const int istate_end =
+        istate_end_option < 0 ? desc_exx_KS.m() : istate_end_option;
+    char fn[100];
+    for (const auto &[ispin, exx_ik]: exx_KS)
+    {
+        for (const auto &[ik, exx]: exx_ik)
+        {
+            const Matz *exx_local = &exx;
+            Matz exx_empty;
+            if (exx.nr() != desc_exx_KS.m_loc() ||
+                exx.nc() != desc_exx_KS.n_loc())
+            {
+                const bool root_dense_layout =
+                    desc_exx_KS.mb() == desc_exx_KS.m() &&
+                    desc_exx_KS.nb() == desc_exx_KS.n();
+                if (!root_dense_layout || desc_exx_KS.is_src())
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "EXX matrix local block does not match its descriptor");
+                exx_empty =
+                    init_local_mat<complex<double>>(desc_exx_KS, MAJOR::COL);
+                exx_local = &exx_empty;
+            }
+
+            std::snprintf(fn, sizeof(fn),
+                          "Exx_k_mn_%s_ispin_%d_ik_%d.bin",
+                          source.c_str(), ispin, ik);
+            write_matrix_binary_parallel(
+                *exx_local, desc_exx_KS, path_as_directory(output_dir) + fn,
+                istate_start, istate_end);
+        }
+    }
 }
 
 void Exx::reset_rspace()

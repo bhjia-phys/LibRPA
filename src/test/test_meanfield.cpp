@@ -310,7 +310,7 @@ void test_symmetry_context_full_grid_kstar_route_matches_direct_full_k()
     const std::vector<double> taus{-1e-12, 1e-12};
     const auto direct_gf = mf.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_list, taus, Rs);
     const auto restored_gf = get_symmetry_restored_gf_cplx_imagtimes_Rs(
-        ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, taus, Rs, atom_nw, -1,
+        ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{},
         &member_kfrac_targets, &representative_indices);
     for (const auto tau : taus)
     {
@@ -587,7 +587,7 @@ void test_spinor_kstar_gf_restore_full_grid_tr_round_trip()
         build_symmetry_full_grid_kstar_member_kfrac_targets(ctx, kfrac_list);
 
     const auto restored = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, -1,
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{},
         &member_kfrac_targets, &representative_indices);
 
     for (const auto tau : taus)
@@ -668,7 +668,7 @@ void test_spinor_kstar_gf_restore_unitary_matches_scalar_with_gauge()
         {{0.0, 0.0, 0.0}, {1.5, 0.0, 0.0}}};
 
     const auto restored_spinor = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, -1,
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{},
         &member_kfrac_targets);
 
     for (const auto tau : taus)
@@ -682,7 +682,7 @@ void test_spinor_kstar_gf_restore_unitary_matches_scalar_with_gauge()
             {
                 const auto scalar = get_symmetry_restored_gf_cplx_imagtimes_Rs(
                     ctx, wfc_layouts, mf, 0, s / 2, s % 2, kfrac_list, {tau}, {R},
-                    atom_nw, -1, &member_kfrac_targets);
+                    atom_nw, std::vector<bool>{}, &member_kfrac_targets);
                 assert_complex_matrix_near(*channel_blocks[s], scalar.at(tau).at(R), 1e-12,
                                            "spinor unitary restore vs scalar restore with gauge");
             }
@@ -747,7 +747,7 @@ void test_spinor_kstar_gf_restore_pure_spin_average()
     const std::map<atom_t, size_t> atom_nw{{0, 1}};
 
     const auto restored = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, -1);
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{});
 
     for (const auto tau : taus)
     {
@@ -814,7 +814,7 @@ void test_spinor_kstar_gf_restore_tr_remap_at_gamma()
     const std::map<atom_t, size_t> atom_nw{{0, 1}};
 
     const auto restored = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, -1);
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{});
 
     for (const auto tau : taus)
     {
@@ -830,7 +830,7 @@ void test_spinor_kstar_gf_restore_tr_remap_at_gamma()
     }
 }
 
-//! Phase 4 rule A: a band cutoff slicing through a degenerate multiplet is
+//! Phase 4 rule A: a band-mask boundary slicing through a degenerate multiplet is
 //! rejected, both directly and through the spinor restore entry point.
 void test_validate_kstar_band_cutoff_closure_rejects_degenerate_cut()
 {
@@ -843,22 +843,24 @@ void test_validate_kstar_band_cutoff_closure_rejects_degenerate_cut()
 
     SymmetryContext ctx;
 
-    bool threw = false;
-    try
-    {
-        validate_kstar_band_cutoff_closure(ctx, mf, 1);
-    }
-    catch (const std::runtime_error &)
-    {
-        threw = true;
-    }
-    if (!threw)
-        throw std::runtime_error("degenerate band cutoff was not rejected");
+    const auto expect_throw = [&ctx, &mf](const std::vector<bool> &band_mask) {
+        try
+        {
+            validate_kstar_band_cutoff_closure(ctx, mf, band_mask);
+        }
+        catch (const std::runtime_error &)
+        {
+            return;
+        }
+        throw std::runtime_error("degenerate band-mask boundary was not rejected");
+    };
+    expect_throw(std::vector<bool>{true, false, false});
+    expect_throw(std::vector<bool>{false, true, true});
 
-    // no throw: gap above tolerance, no truncation, truncation outside window
-    validate_kstar_band_cutoff_closure(ctx, mf, 2);
-    validate_kstar_band_cutoff_closure(ctx, mf, -1);
-    validate_kstar_band_cutoff_closure(ctx, mf, 3);
+    // no throw: gap above tolerance, no truncation, and the full band window
+    validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{true, true, false});
+    validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{});
+    validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{true, true, true});
 }
 
 //! Phase 4: missing (bra, ket) wfc channels are zero-filled; with only the
@@ -905,12 +907,13 @@ void test_spinor_kstar_gf_restore_zero_fills_missing_channels()
     const std::map<atom_t, size_t> atom_nw{{0, 1}};
 
     const auto restored = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, -1);
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, std::vector<bool>{});
 
     for (const auto tau : taus)
     {
         const auto scalar = get_symmetry_restored_gf_cplx_imagtimes_Rs(
-            ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, {tau}, Rs, atom_nw, -1);
+            ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, {tau}, Rs, atom_nw,
+            std::vector<bool>{});
         for (const auto &R : Rs)
         {
             const auto &blocks = restored.at(tau).at(R);
@@ -929,19 +932,42 @@ void test_spinor_kstar_gf_restore_zero_fills_missing_channels()
     }
 }
 
-//! Phase 4 EXX: the four-channel spinor k-star density-matrix restore must
-//! reproduce the direct full-grid density matrix when the full grid is
-//! generated by a complex-U_s antiunitary operation (Theta combined with a
-//! genuine spinor rotation, the NiO failure mode), including a non-trivial
-//! target-k-point gauge. k2 = -k1 is the Theta image of k1 and the wfc at k2
-//! is built as c(k2) = i sigma_y conj(U_s) conj(c(k1)) (J_s = i sigma_y
-//! kernel convention, i sigma_y = [[0, 1], [-1, 0]]). The full grid stores
-//! the image at the re-gauged k2' = k2 + (1,0,0) = (3/4,0,0), so each atom
-//! block of the stored wfc carries the reciprocal-gauge phase
-//! exp(-i 2 pi bloch_phase bloch_ratom (k_shift . tau)); atom 1 sits at the
-//! non-special position tau = (0.2,0,0) and the k_shift = (1,0,0) makes the
-//! phase non-trivial. The per-channel scalar restore only conjugates each
-//! channel elementwise and must differ from the reference here.
+void test_gf_band_mask()
+{
+    using namespace librpa_int;
+    MeanField mf(1, 1, 3, 3);
+    mf.get_efermi() = 0.0;
+    auto &wfc = mf.get_eigenvectors()[0][0][0];
+    wfc.create(3, 3);
+    for (int ib = 0; ib < 3; ++ib)
+    {
+        wfc(ib, ib) = 1.0;
+        mf.get_eigenvals()[0](0, ib) = ib - 1.0;
+        mf.get_weight()[0](0, ib) = 0.5;
+    }
+    const std::vector<Vector3_Order<double>> ks{{0, 0, 0}};
+    const std::vector<Vector3_Order<int>> Rs{{0, 0, 0}};
+    for (const std::vector<bool> &mask : {std::vector<bool>{}, {true, false, false}, {false, true, true},
+                                         {false, true, false}, {false, false, false}})
+        for (double tau : {-0.5, 0.5})
+        {
+            const auto single = mf.get_gf_cplx_imagtime(0, 0, 0, 0, tau, mask);
+            const auto summed = mf.get_gf_cplx_imagtimes_Rs(0, 0, 0, ks, {tau}, Rs, mask);
+            for (int ib = 0; ib < 3; ++ib)
+            {
+                const double expected = !mask.empty() && !mask[ib] ? 0.0
+                    : (tau > 0 ? 0.75 : -0.25) * std::exp(std::min(0.0, -tau * (ib - 1.0)));
+                assert(std::abs(single(ib, ib) - expected) < 1e-12);
+                assert(std::abs(summed.at(tau).at(Rs.front())(ib, ib) - expected) < 1e-12);
+            }
+        }
+    bool rejected = false;
+    try { mf.get_gf_cplx_imagtime(0, 0, 0, 0, -0.5, {true}); }
+    catch (const std::runtime_error &) { rejected = true; }
+    assert(rejected);
+    assert(std::abs(mf.get_dmat_cplx(0, 0, 0, 0)(1, 1) - 0.25) < 1e-12);
+}
+
 void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip()
 {
     using namespace librpa_int;
@@ -1100,12 +1126,6 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
             "scalar per-channel restore accidentally matches the spinor reference");
 }
 
-//! Phase 4 EXX: for a single antiunitary member at Gamma with a complex U_s,
-//! the joint density-matrix restore must equal (i) transform_spinor_bilinear
-//! applied directly to the four source blocks and (ii) the explicit
-//! Kronecker formula X' = J_s conj(U_s X U_s^dagger) J_s^dagger on the merged
-//! channel-outermost matrix with J_s = i sigma_y. The per-channel scalar
-//! restore (elementwise conjugation) differs from both references.
 void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
 {
     using namespace librpa_int;
@@ -1216,11 +1236,6 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
             "scalar per-channel restore accidentally matches the Kronecker reference");
 }
 
-//! Phase 4 EXX: with only the channel-0 wfc present, an antiunitary member
-//! must not manufacture the (0,0) block out of thin air: the Theta remap
-//! pulls the restored (0,0) channel from the source (1,1) channel, which is
-//! zero-filled, so b00 vanishes while the scalar per-channel restore would
-//! return the non-zero conj(D00). The present channel lands in b11.
 void test_spinor_kstar_dmat_restore_zero_fills_missing_channels()
 {
     using namespace librpa_int;
@@ -1275,10 +1290,6 @@ void test_spinor_kstar_dmat_restore_zero_fills_missing_channels()
         throw std::runtime_error("scalar restore unexpectedly vanishes: test is vacuous");
 }
 
-//! Phase 4 EXX: for unitary U_s = I members the four-channel density-matrix
-//! restore must agree channel-by-channel with the validated scalar restore,
-//! including the target-kpoint gauge (member k_bz = (1/2,0,0) re-gauged to
-//! (3/2,0,0), one atom at a non-special position).
 void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
 {
     using namespace librpa_int;
@@ -1360,6 +1371,7 @@ void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
 int main(int argc, char *argv[])
 {
     test_BCC_He_gamma_minimal_basis_aims();
+    test_gf_band_mask();
     test_state_index_energy_bounds();
     test_find_highest_occupied_state();
     test_dmat_cplx_Rs_matches_single_R_accumulation();

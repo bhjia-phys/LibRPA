@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -22,6 +21,7 @@
 #include "../io/fs.h"
 #include "../io/global_io.h"
 #include "../io/output_gw.h"
+#include "../io/output_matrix.h"
 #include "../io/stl_io_helper.h"
 // #include "../math/utils_matrix_m.h"
 #include "../math/utils_matrix_m_mpi.h"
@@ -52,6 +52,9 @@ using namespace ddla;
 
 #ifdef LIBRPA_USE_LIBRI
 #include <RI/global/Tensor.h>
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+#include <RI/parallel/Parallel_LRI_Equally_Weighted.h>
+#endif
 #include <RI/physics/GW.h>
 #include <RI/physics/symmetry/Symmetry_Filter.h>
 using RI::Tensor;
@@ -445,7 +448,8 @@ restore_symmetry_ao_rspace_tensor_map_gw(
                 convert_libri_tensor_to_complex_matrix(jr_entry.second, nao_I, nao_J);
             for (const auto& restore_member : pair_iter->second.at(ir_R))
             {
-                const ComplexMatrix sigma_full = rotate_symmetry_rspace_block(
+                // Self-energy is an AO operator, unlike the density-like blocks.
+                const ComplexMatrix sigma_full = rotate_symmetry_rspace_operator_block(
                     symmetry_ctx, wfc_layouts, restore_member.isym, ir_I, ir_J, sigma_ir);
                 auto& target = tensors_full[restore_member.full_atom_pair.first][{
                     static_cast<int>(restore_member.full_atom_pair.second),
@@ -617,21 +621,41 @@ static void write_wc_rf_full_matrix_from_atom_blocks(
     const PeriodicBoundaryData &pbc, const std::string &output_dir, const int ifreq,
     const double freq)
 {
+    // Hermitian completion keeps the transposed atom block on the same rank
+    // as its source. That rank need not own its BLACS matrix elements.
+    // Elect one source per block (also handles replicated symmetry output),
+    // then redistribute with the same communicator as the output descriptor.
+    const int nat = as_int(atbasis_abf.n_atoms);
+    std::vector<int> owners(nat * nat, ad_Wc.nprocs());
+    for (const auto &[I, J_RWc] : Wc_R)
+        for (const auto &[J, R_Wc] : J_RWc)
+            if (!R_Wc.empty()) owners[I * nat + J] = ad_Wc.myid();
+    MPI_Allreduce(MPI_IN_PLACE, owners.data(), as_int(owners.size()), MPI_INT,
+                  MPI_MIN, ad_Wc.comm());
+    std::map<int, std::set<atpair_t>> map_proc_IJs;
+    for (int I = 0; I < nat; ++I)
+        for (int J = 0; J < nat; ++J)
+            if (owners[I * nat + J] < ad_Wc.nprocs())
+                map_proc_IJs[owners[I * nat + J]].insert({I, J});
+    IndexScheduler sched;
+    sched.init(map_proc_IJs, atbasis_abf, atbasis_abf, ad_Wc, false);
+
     for (const auto &R : pbc.Rlist)
     {
         Matz Wc(ad_Wc.m_loc(), ad_Wc.n_loc(), MAJOR::COL);
         Wc.zero_out();
-        for (const auto &[I, J_RWc] : Wc_R)
+        ap_p_map<Matz> blocks;
+        for (const auto &[I, J] : sched.atpairs)
         {
-            for (const auto &[J, R_Wc] : J_RWc)
-            {
-                const auto Wc_iter = R_Wc.find(R);
-                if (Wc_iter == R_Wc.end()) continue;
-                collect_block_from_IJ_storage(
-                    Wc, ad_Wc, atbasis_abf, atbasis_abf, as_int(I), as_int(J),
-                    cplxdb{1.0, 0.0}, Wc_iter->second.ptr(), Wc_iter->second.major());
-            }
+            const auto &R_Wc = Wc_R.at(I).at(J);
+            const auto it = R_Wc.find(R);
+            auto &block = blocks[{I, J}];
+            if (it != R_Wc.end()) block = it->second.copy();
+            else block = Matz(atbasis_abf[I], atbasis_abf[J], MAJOR::COL);
+            block.swap_to_col_major();
         }
+        fill_local_mat_from_ap_dist_scheduler(Wc, blocks, sched,
+                                              atbasis_abf, atbasis_abf, ad_Wc);
 
         const auto iR = pbc.get_R_index(R);
         std::stringstream ss;
@@ -640,58 +664,9 @@ static void write_wc_rf_full_matrix_from_atom_blocks(
                            " ) and ifreq " + std::to_string(ifreq) + " ( " +
                            std::to_string(freq) + " a.u. )";
         ss << path_as_directory(output_dir)
-           << "Wc_iR_" << std::setfill('0') << std::setw(5) << iR
-           << "_ifreq_" << std::setfill('0') << std::setw(5) << ifreq
-           << ".mtx";
+           << "Wc_iR_" << iR << "_ifreq_" << ifreq << ".mtx";
         print_matrix_mm_file_parallel(ss.str(), Wc, ad_Wc, info, 1e-10);
     }
-}
-
-static void write_sigc_matrix_binary(const Matz &mat, const std::string &fn)
-{
-    const std::int32_t n_states = mat.nr();
-    const std::int32_t type_bytes = sizeof(double);
-    if (mat.nr() != mat.nc())
-        throw LIBRPA_RUNTIME_ERROR("SigC matrix output expects a square matrix");
-
-    std::ofstream ofs(fn, std::ios::binary);
-    if (!ofs)
-        throw LIBRPA_RUNTIME_ERROR("failed to open SigC matrix output file: " + fn);
-
-    ofs.write(reinterpret_cast<const char *>(&n_states), sizeof(n_states));
-    ofs.write(reinterpret_cast<const char *>(&type_bytes), sizeof(type_bytes));
-    for (int i = 0; i != mat.nr(); ++i)
-    {
-        for (int j = 0; j != mat.nc(); ++j)
-        {
-            const auto v = mat(i, j);
-            const double re = v.real();
-            const double im = v.imag();
-            ofs.write(reinterpret_cast<const char *>(&re), sizeof(re));
-            ofs.write(reinterpret_cast<const char *>(&im), sizeof(im));
-        }
-    }
-}
-
-static void write_sigc_matrix_binary_parallel(const Matz &mat_loc,
-                                              const ArrayDesc &desc,
-                                              const std::string &fn)
-{
-    if (!desc.is_initialized())
-        throw LIBRPA_RUNTIME_ERROR("SigC matrix output descriptor is not initialized");
-    if (mat_loc.nr() != desc.m_loc() || mat_loc.nc() != desc.n_loc())
-        throw LIBRPA_RUNTIME_ERROR("SigC matrix local block does not match its descriptor");
-
-    ArrayDesc desc_full(desc.ictxt());
-    desc_full.init(desc.m(), desc.n(), desc.m(), desc.n(), desc.irsrc(), desc.icsrc());
-    Matz mat_full(desc_full.m_loc(), desc_full.n_loc(), mat_loc.major());
-    ScalapackConnector::pgemr2d_f(desc.m(), desc.n(),
-                                  mat_loc.ptr(), 1, 1, desc.desc,
-                                  mat_full.ptr(), 1, 1, desc_full.desc,
-                                  desc.ictxt());
-    if (desc_full.is_src())
-        write_sigc_matrix_binary(mat_full, fn);
-    desc.barrier();
 }
 
 static void write_sigc_nao_kf_matrix(const Matz &mat, const ArrayDesc &desc,
@@ -707,8 +682,8 @@ static void write_sigc_nao_kf_matrix(const Matz &mat, const ArrayDesc &desc,
     {
         ss << "_spinor_" << ispinor_bra << "_" << ispinor_ket;
     }
-    ss << "_ik_" << ik << "_ifreq_" << ifreq << ".mtx";
-    print_matrix_mm_file_parallel(ss.str(), mat, desc, "", 1e-10);
+    ss << "_ik_" << ik << "_ifreq_" << ifreq << ".bin";
+    write_matrix_binary_parallel(mat, desc, ss.str());
 }
 
 G0W0::G0W0(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
@@ -748,6 +723,8 @@ G0W0::G0W0(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
     output_dir = "./";  // POSIX
     output_sigc_ks_mat_kf = false;
     output_sigc_ks_kf = false;
+    istate_output_mat_start = 0;
+    istate_output_mat_end = -1;
     output_sigc_mat_kf = false;
     output_sigc_mat_rt = false;
     output_sigc_mat_rf = false;
@@ -967,38 +944,12 @@ void G0W0::write_sigc_rf_output_files() const
                         make_sigc_rf_filenames(output_dir, ispin, ispinor_bra, ispinor_ket,
                                                n_spinor, as_int(iomega), global::myid_global)
                             .front();
-                    std::ofstream ofs_sigmac_r(fn, std::ios::out | std::ios::binary);
-                    if (!ofs_sigmac_r)
-                        throw LIBRPA_RUNTIME_ERROR("cannot open SigC output file: " + fn);
-
-                    std::size_t n_IJR_myid = 0;
-                    ofs_sigmac_r.write(reinterpret_cast<const char *>(&n_IJR_myid),
-                                       sizeof(n_IJR_myid));
-
                     const auto omega = tfg.get_freq_nodes()[iomega];
                     const auto &sigc_IJ_R =
                         sigc_is_f_IJ_R.at(ispin).at(ispinor_bra).at(ispinor_ket).at(omega);
-                    for (const auto &[IJ, R_sigc] : sigc_IJ_R)
-                    {
-                        const int I = IJ.first;
-                        const int J = IJ.second;
-                        const auto n_I = atbasis_wfc.get_atom_nb(I);
-                        const auto n_J = atbasis_wfc.get_atom_nb(J);
-                        for (const auto &[R, sigc] : R_sigc)
-                        {
-                            const std::size_t dims[5] = {as_size(pbc.get_R_index(R)), as_size(I),
-                                                         as_size(J), n_I, n_J};
-                            assert(sigc.size() == n_I * n_J);
-                            ++n_IJR_myid;
-                            ofs_sigmac_r.write(reinterpret_cast<const char *>(dims), sizeof(dims));
-                            ofs_sigmac_r.write(reinterpret_cast<const char *>(sigc.ptr()),
-                                               sigc.size() * sizeof(cplxdb));
-                        }
-                    }
-                    ofs_sigmac_r.seekp(0);
-                    ofs_sigmac_r.write(reinterpret_cast<const char *>(&n_IJR_myid),
-                                       sizeof(n_IJR_myid));
-                    if (!ofs_sigmac_r)
+                    int write_ok = write_rspace_matrices_binary(sigc_IJ_R, atbasis_wfc, pbc, fn);
+                    MPI_Allreduce(MPI_IN_PLACE, &write_ok, 1, MPI_INT, MPI_MIN, comm_h.comm);
+                    if (!write_ok)
                         throw LIBRPA_RUNTIME_ERROR("failed to write SigC output file: " + fn);
                 }
             }
@@ -1009,6 +960,8 @@ void G0W0::write_sigc_rf_output_files() const
 void G0W0::write_sigc_matrices_KS_binary(const std::string &output_dir,
                                          const std::string &source) const
 {
+    const int istate_end =
+        istate_output_mat_end < 0 ? desc_sigc_is_ik_f_KS.m() : istate_output_mat_end;
     char fn[100];
     for (const auto &ispin_sigc: sigc_is_ik_f_KS)
     {
@@ -1021,9 +974,10 @@ void G0W0::write_sigc_matrices_KS_binary(const std::string &output_dir,
                 const auto ifreq = tfg.get_freq_index(freq_sigc.first);
                 std::snprintf(fn, sizeof(fn), "Sigc_fk_mn_%s_ispin_%d_ik_%d_ifreq_%d.bin",
                               source.c_str(), ispin, ik, ifreq);
-                write_sigc_matrix_binary_parallel(
+                write_matrix_binary_parallel(
                     freq_sigc.second, desc_sigc_is_ik_f_KS,
-                    path_as_directory(output_dir) + fn);
+                    path_as_directory(output_dir) + fn,
+                    istate_output_mat_start, istate_end);
             }
         }
     }
@@ -1153,13 +1107,13 @@ static void build_gf_libri_kserial(
             return extract_spinor_gf_block(
                 get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
                     symmetry_context, wfc_layouts, mf, ispin, kfrac_list, taus_sel, Rs_sel,
-                    atom_nw, -1, &member_kfrac_targets,
+                    atom_nw, std::vector<bool>{}, &member_kfrac_targets,
                     restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr),
                 ispinor_bra, ispinor_ket);
         }
         return get_symmetry_restored_gf_cplx_imagtimes_Rs(
             symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list,
-            taus_sel, Rs_sel, atom_nw, -1, &member_kfrac_targets,
+            taus_sel, Rs_sel, atom_nw, std::vector<bool>{}, &member_kfrac_targets,
             restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr);
     };
     // Full-grid wavefunctions can carry a gauge that is not reproduced exactly from k-star
@@ -1247,7 +1201,7 @@ static void build_gf_libri_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri)
 {
-    global::profiler.start("g0w0_build_gf_libri_kblacs_para");
+    global::profiler.start("g0w0_build_gf_libri_kblacs_para", LIBRPA_VERBOSE_DEBUG);
 
     tau_gf_libri.clear();
     for (auto tau: taus)
@@ -1501,8 +1455,8 @@ void G0W0::build_spacetime(
             {
                 const auto freq = tfg.get_freq_nodes()[ifreq];
                 auto freq_iter = Wc_freq_q_atom_pair->find(freq);
-                if (freq_iter == Wc_freq_q_atom_pair->end()) continue;
-                auto Wc_q = freq_iter->second;
+                atom_mapping<std::map<Vector3_Order<double>, Matz>>::pair_t_old Wc_q;
+                if (freq_iter != Wc_freq_q_atom_pair->end()) Wc_q = freq_iter->second;
 
                 profiler.start("unfold_Wc_abfs", "Do shrink transformation");
                 unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, pbc.klist_coul,
@@ -1658,6 +1612,10 @@ void G0W0::build_spacetime(
 
     RI::GW<int, int, 3, double> gw_libri;
     RI::GW<int, int, 3, cplxdb> gw_libri_cplx;
+#ifdef LIBRPA_LIBRI_HAS_FINE_GRAINED_LOCK
+    gw_libri.lri.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+    gw_libri_cplx.lri.cal_mode = RI::LRI_Cal_Mode::CPU_fine_grained_lock;
+#endif
 
     std::map<int,std::array<double,3>> atoms_pos;
     // Dummy atoms position
@@ -1668,8 +1626,11 @@ void G0W0::build_spacetime(
     global::profiler.start("g0w0_build_spacetime_2", "Setup LibRI G0W0 object and C data");
     if (use_complex_tensor)
     {
-        libri_set_parallel(gw_libri_cplx, comm_h.comm, atoms_pos, pbc.latvec_array,
-                           pbc.period_array, atom_nw);
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+        gw_libri_cplx.lri.parallel =
+            std::make_shared<RI::Parallel_LRI_Equally_Weighted<int, int, 3, cplxdb>>(atom_nw);
+#endif
+        gw_libri_cplx.set_parallel(comm_h.comm, atoms_pos, pbc.latvec_array, pbc.period_array);
         ztensor_map data_libri;
         for (const auto &I_JR_C : LRI_Cs.data_libri)
         {
@@ -1687,8 +1648,11 @@ void G0W0::build_spacetime(
     }
     else
     {
-        libri_set_parallel(gw_libri, comm_h.comm, atoms_pos, pbc.latvec_array,
-                           pbc.period_array, atom_nw);
+#if !defined(__DDLA_RI) && !defined(__CUDA_RI) && !defined(__HIP_RI)
+        gw_libri.lri.parallel =
+            std::make_shared<RI::Parallel_LRI_Equally_Weighted<int, int, 3, double>>(atom_nw);
+#endif
+        gw_libri.set_parallel(comm_h.comm, atoms_pos, pbc.latvec_array, pbc.period_array);
         gw_libri.set_Cs(LRI_Cs.data_libri, this->libri_threshold_C);
     }
 
@@ -1790,7 +1754,11 @@ void G0W0::build_spacetime(
         // global::lib_printf("task %d itau %d start\n", mpi_comm_global_h.myid, itau);
         const auto tau = tfg.get_time_nodes()[itau];
         // global::lib_printf("task %d Wc_tau_R.count(tau) %zu\n", mpi_comm_global_h.myid, Wc_tau_R.count(tau));
+        profiler.start("g0w0_setup_wc_entry_wait", LIBRPA_VERBOSE_DEBUG);
+        comm_h.barrier();
+        profiler.stop("g0w0_setup_wc_entry_wait");
         profiler.start("g0w0_build_spacetime_3", "Setup LibRI Wc");
+        profiler.start("g0w0_setup_wc_set_Ws", LIBRPA_VERBOSE_DEBUG);
         size_t n_obj_wc_libri = 0;
         if (use_complex_tensor)
         {
@@ -1814,7 +1782,10 @@ void G0W0::build_spacetime(
             gw_libri.set_Ws(Wc_libri, this->libri_threshold_Wc);
             if (it != tau_Wc_libri.end()) tau_Wc_libri.erase(it);
         }
+        profiler.stop("g0w0_setup_wc_set_Ws");
+        profiler.start("g0w0_setup_wc_malloc_trim", LIBRPA_VERBOSE_DEBUG);
         release_free_mem();
+        profiler.stop("g0w0_setup_wc_malloc_trim");
         profiler.stop("g0w0_build_spacetime_3");
 
         const int n_spinor = mf.get_n_spinor();
@@ -1981,7 +1952,11 @@ void G0W0::build_spacetime(
                     dtensor_map sigc_posi_tau, sigc_nega_tau;
                     ztensor_map sigc_posi_tau_cplx, sigc_nega_tau_cplx;
 
-                    profiler.start("g0w0_build_spacetime_4", "Compute G(R,t) and G(R,-t)");
+                    profiler.start("g0w0_gf_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                    comm_h.barrier();
+                    profiler.stop("g0w0_gf_entry_wait");
+                    profiler.start("g0w0_build_spacetime_4", "Compute G(R,t) and G(R,-t)",
+                                   LIBRPA_VERBOSE_DEBUG);
                     // global::ofs_myid << "gf size " << gf.size() << endl;
                     // global::ofs_myid << "t " << gf[tau].size() << " ; -t " << gf[-tau].size() << endl;
                     std::map<double, dtensor_map> tau_gf_libri;
@@ -2053,7 +2028,12 @@ void G0W0::build_spacetime(
                             for (const auto &gf: gf_libri)
                                 n_obj_gf_libri += gf.second.size();
 
+                            global::profiler.start("g0w0_set_Gs", LIBRPA_VERBOSE_DEBUG);
                             gw_libri_cplx.set_Gs(gf_libri, this->libri_threshold_G);
+                            global::profiler.stop("g0w0_set_Gs");
+                            global::profiler.start("g0w0_cal_sigc_entry_wait", LIBRPA_VERBOSE_DEBUG);
+                            comm_h.barrier();
+                            global::profiler.stop("g0w0_cal_sigc_entry_wait");
                             global::profiler.start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
                             gw_libri_cplx.cal_Sigmas();
                             if (restore_input_sigc_output && !defer_spinor_sigc_restore)
@@ -2063,8 +2043,11 @@ void G0W0::build_spacetime(
                                         gw_libri_cplx.Sigmas, symmetry_ctx,
                                         symmetry_sector_stars, this->atbasis_wfc);
                             }
-                            release_free_mem();
                             global::profiler.stop("g0w0_build_spacetime_5");
+                            global::profiler.start("g0w0_cal_sigc_malloc_trim",
+                                                   LIBRPA_VERBOSE_DEBUG);
+                            release_free_mem();
+                            global::profiler.stop("g0w0_cal_sigc_malloc_trim");
                             global::profiler.start("g0w0_build_spacetime_5_clean",
                                                    LIBRPA_VERBOSE_DEBUG);
                             gw_libri_cplx.free_Gs();
@@ -2144,7 +2127,13 @@ void G0W0::build_spacetime(
                             //         }
                             //     }
                             // }
+	                            global::profiler.start("g0w0_set_Gs", LIBRPA_VERBOSE_DEBUG);
 	                            gw_libri.set_Gs(gf_libri, this->libri_threshold_G);
+	                            global::profiler.stop("g0w0_set_Gs");
+	                            global::profiler.start("g0w0_cal_sigc_entry_wait",
+	                                                   LIBRPA_VERBOSE_DEBUG);
+	                            comm_h.barrier();
+	                            global::profiler.stop("g0w0_cal_sigc_entry_wait");
 	                            global::profiler.start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
 	                            gw_libri.cal_Sigmas();
 	                            if (restore_input_sigc_output)

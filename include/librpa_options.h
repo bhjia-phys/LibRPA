@@ -87,7 +87,7 @@ typedef struct
 
     //! Number of time/frequency points.
     //! @par Default
-    //! 6
+    //! 16
     int nfreq;
 
     /* ============================================================================= */
@@ -157,12 +157,17 @@ typedef struct
     //! false
     LibrpaSwitch use_fullcoul_exx;
 
-    //! Switch of using full Coulomb interaction in \f$\varepsilon = 1 - v \chi^0\f$
+    //! Switch of using full Coulomb interaction in \f$\varepsilon = 1 - v \chi^0\f$.
+    //! The strict 2D analytic head/wing path requires this switch to be true so that
+    //! the fixed Gamma Coulomb eigenbasis is defined by the full Ewald matrix.
     //! @par Default
     //! true
     LibrpaSwitch use_fullcoul_eps;
 
     //! Switch of using full Coulomb interaction in \f$W^c = (\varepsilon^{-1} - 1) v\f$.
+    //! The strict 2D analytic head/wing path requires this switch to be true. It uses
+    //! the full 2D Ewald interaction at every finite q and analytically replaces the
+    //! singular Gamma head/wing of the complete Wc matrix.
     //! @par Default
     //! false
     LibrpaSwitch use_fullcoul_wc;
@@ -211,6 +216,24 @@ typedef struct
     //! @par Status
     //! Experimental
     int n_bands_sigc;
+
+    //! Number of lowest bands excluded from both Green's functions forming the response function.
+    //!
+    //! Applies independently at each input k-point and spin, for both signs of imaginary time.
+    //! Valid range: 0 through the number of input bands. The input band ordering is retained.
+    //! Does not modify occupations, EXX, output state ranges, or analytic/external head corrections.
+    //! @par Default
+    //! 0
+    int n_bands_exclude_chi0;
+
+    //! Number of lowest bands excluded from the Green's function multiplying Wc in the correlation self-energy.
+    //!
+    //! Applies independently at each input k-point and spin, for both signs of imaginary time.
+    //! Valid range: 0 through the number of input bands. The input band ordering is retained.
+    //! Does not modify occupations, EXX, output state ranges, or analytic/external head corrections.
+    //! @par Default
+    //! 0
+    int n_bands_exclude_sigc;
 
     //! BvK remapping convention for band interpolation.
     /*!
@@ -434,19 +457,44 @@ typedef struct
 
     //! Option of computing dielectric function on imaginary axis.
     /*!
-     * Available values:
+     * Available numerical API values:
      * - 0: use data directly read from input
      * - 1: cubic-spline interpolation from input data
      * - 2: dielectric model fitting from input data
      * - 3: analytic head and wing correction
      * - 4: analytic head correction
+     * - 5: use input data directly; replace the head along the largest-eigenvalue
+     *   vector of the Gamma s-only Coulomb submatrix, zero-padded to all ABFs.
+     *   Includes all s shells, preserves wings, and requires auxiliary l-shell
+     *   metadata. Input data must match the current frequency grid.
+     * - 53: analytic head and wing correction along the Gamma s-submatrix
+     *   head direction, projected onto the retained Coulomb space and normalized.
+     *   Requires auxiliary l-shell metadata and the ScaLAPACK Wc path.
+     *   Supported for three-dimensional G0W0 and G0W0 band calculations only.
+     *
+     * Standalone g0w0/g0w0_band and qsgw drivers also accept 5:
+     * compute native velocity, then resolve to numerical API option 3 for
+     * analytic head and wing. G0W0 uses original H(R), S(R), and r(R) in
+     * the loaded SCF frame. QSGW uses fixed S/r and the entire current
+     * finite-BvK Hamiltonian in each entering iteration's E/C frame.
+     * This driver preset requires replace_w_head and use_scalapack_gw_wc,
+     * selects g0w0_headwing_velocity=native or qsgw_headwing_velocity=current_hr
+     * according to the task, and rejects use_pyatb=true.
+     * Direct library/API callers must select 3 and supply velocity through
+     * the public setter; do not pass 5 to LibrpaOptions.
      *
      * @par Default
      * 0
      */
     int option_dielect_func;
 
-    //! Switch of using 2D dielectric function.
+    //! Switch of using the strict 2D analytic dielectric function.
+    //! With `replace_w_head=true` and `option_dielect_func=3`, the Gamma-cell average
+    //! uses the 2D \f$2\pi/q\f$ asymptotics in the fixed full-Ewald Coulomb eigenbasis.
+    //! Both dielectric screening and finite-q Wc use full 2D Ewald Coulomb; no cut
+    //! Coulomb matrix is used by this path. The standalone reader-v1 driver obtains
+    //! the auxiliary-basis monopole norm from producer metadata and computes the
+    //! PW-to-auxiliary normalization internally; it is not a runtime parameter.
     //! @par Default
     //! false
     //! @par Status
@@ -455,6 +503,8 @@ typedef struct
 
     //! First regular Coulomb-eigenbasis channel used by RPA head/wing correction.
     //! Zero uses channel 1 in the current analytic 3D/2D head/wing path.
+    //! Minus one is reserved for Sternheimer finite-part Coulomb input and keeps
+    //! every retained positive Coulomb eigenchannel as a regular body channel.
     //! @par Default
     //! 0
     //! @par Status
@@ -535,7 +585,65 @@ typedef struct
     //! Experimental
     LibrpaSwitch output_gw_sigc_ks_mat_kf;
 
+    //! Output exact-exchange matrix in KS basis and k-space.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    LibrpaSwitch output_exx_ks_mat_k;
+
+    //! Output exact-exchange matrix in NAO basis and k-space as dense binary files.
+    //! Files in output_dir are named ExxK_kgrid_ispin_S_ik_K.bin or
+    //! ExxK_band_B_ispin_S_ik_K.bin, with zero-based indices. Spinor blocks
+    //! include _spinor_BRA_KET before _ik. Values are in Hartree and include
+    //! the exchange minus sign. All NAOs are exported, independently of the
+    //! KS-state output range, when the k-space EXX potential is constructed.
+    //! Binary layout: native-endian int32 dimension and int32 scalar byte size (8),
+    //! then row-major real/imaginary float64 pairs, without threshold filtering.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    LibrpaSwitch output_exx_mat_k;
+
+    //! Output real-space NAO exact-exchange blocks after symmetry restoration,
+    //! before redistribution for k-space projection. Files in output_dir:
+    //! ExxR_ispin_S_spinor_BRA_KET_I_I_J_J_R_X_Y_Z.bin (zero-based indices).
+    //! Uses the Sigma_c(R,iw) checkpoint layout: native size_t block count (1),
+    //! size_t[5] (R index in Rlist, I, J, rows, columns), then row-major complex
+    //! doubles in Hartree, including the exchange minus sign.
+    //! Only stored blocks are written, without additional
+    //! threshold filtering. MPI contributions are summed on rank zero, one
+    //! row atom at a time. Independent of the KS-state output range.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    LibrpaSwitch output_exx_mat_r;
+
+    //! First zero-based KS state included in both dimensions when exporting the
+    //! KS-basis exact-exchange and correlation self-energy matrices. Matrix
+    //! construction is unaffected.
+    //! @par Default
+    //! 0
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_start;
+
+    //! Half-open KS-state end index when exporting KS-basis matrices; negative
+    //! means all remaining states.
+    //! @par Default
+    //! -1
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_end;
+
     //! Output correlation self-energy matrix in NAO basis (k-space, imaginary frequency domain).
+    //! Dense binary files in output_dir use the same layout as output_exx_mat_k:
+    //! SigcKF_kgrid_ispin_S_ik_K_ifreq_F.bin or
+    //! SigcKF_band_B_ispin_S_ik_K_ifreq_F.bin, with zero-based indices.
+    //! Spinor blocks include _spinor_BRA_KET before _ik. Values are in Hartree;
+    //! all NAOs are exported without threshold filtering.
     //! @par Default
     //! false
     //! @par Status

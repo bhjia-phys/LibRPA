@@ -204,6 +204,95 @@ static ComplexMatrix matz_to_complex_matrix(const Matz &mat)
     return block;
 }
 
+// The k-BLACS density/Green matrices are formed from row-major wavefunctions
+// as C^T C*. Consequently their symmetry restore uses the wavefunction
+// rotation convention directly: D_bz = M^H D_ibz M (unitary operations),
+// rather than the AO-operator convention used by the Coulomb/GW path.
+static symmetry_atom_block_matrix_map_t rotate_wfc_product_blocks(
+    const SymmetryContext &ctx,
+    const std::vector<SpeciesBasisLayout> &layouts,
+    const SymmetryKStarMember &member,
+    const symmetry_atom_block_matrix_map_t &source_blocks,
+    const std::map<atom_t, size_t> &atom_nbasis,
+    const Vector3_Order<double> &k_ibz,
+    const std::set<atpair_t> *target_pairs,
+    const Vector3_Order<double> *k_bz_target)
+{
+    const auto rotation = build_symmetry_kspace_rotation_matrix(
+        ctx, layouts, member, atom_nbasis, k_ibz, member.time_reversal, k_bz_target);
+    std::vector<int> offsets(atom_nbasis.size() + 1, 0);
+    for (std::size_t atom = 0; atom != atom_nbasis.size(); ++atom)
+        offsets[atom + 1] = offsets[atom] + static_cast<int>(atom_nbasis.at(static_cast<atom_t>(atom)));
+
+    std::vector<const SymmetryKAtomRotation *> by_from(atom_nbasis.size(), nullptr);
+    for (const auto &atom_rotation : member.atom_rotations)
+    {
+        if (atom_rotation.atom_from < 0
+            || atom_rotation.atom_from >= static_cast<int>(atom_nbasis.size()))
+            throw LIBRPA_RUNTIME_ERROR("k-star density restore has an invalid atom map");
+        by_from[static_cast<std::size_t>(atom_rotation.atom_from)] = &atom_rotation;
+    }
+
+    const auto get_source_block = [&source_blocks](const atom_t atom_i, const atom_t atom_j) {
+        const auto row_iter = source_blocks.find(atom_i);
+        if (row_iter != source_blocks.end())
+        {
+            const auto col_iter = row_iter->second.find(atom_j);
+            if (col_iter != row_iter->second.end()) return col_iter->second;
+        }
+        const auto col_iter = source_blocks.find(atom_j);
+        if (col_iter != source_blocks.end())
+        {
+            const auto row_iter = col_iter->second.find(atom_i);
+            if (row_iter != col_iter->second.end()) return transpose(row_iter->second, true);
+        }
+        throw LIBRPA_RUNTIME_ERROR("missing atom block while restoring a wavefunction product");
+    };
+
+    symmetry_atom_block_matrix_map_t rotated;
+    for (std::size_t atom_i = 0; atom_i != atom_nbasis.size(); ++atom_i)
+    {
+        const auto *rotation_i = by_from[atom_i];
+        if (rotation_i == nullptr) throw LIBRPA_RUNTIME_ERROR("incomplete k-star atom map");
+        const auto source_i = static_cast<atom_t>(rotation_i->atom_to);
+        const int row_i = offsets.at(static_cast<std::size_t>(source_i));
+        const int col_i = offsets.at(atom_i);
+        const int n_i = static_cast<int>(atom_nbasis.at(static_cast<atom_t>(atom_i)));
+        const int n_source_i = static_cast<int>(atom_nbasis.at(source_i));
+        ComplexMatrix M_i(n_source_i, n_i);
+        for (int i = 0; i != n_source_i; ++i)
+            for (int j = 0; j != n_i; ++j)
+                M_i(i, j) = rotation(row_i + i, col_i + j);
+
+        for (std::size_t atom_j = 0; atom_j != atom_nbasis.size(); ++atom_j)
+        {
+            const atpair_t pair{static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j)};
+            if (target_pairs != nullptr && target_pairs->count(pair) == 0) continue;
+            const auto *rotation_j = by_from[atom_j];
+            if (rotation_j == nullptr) throw LIBRPA_RUNTIME_ERROR("incomplete k-star atom map");
+            const auto source_j = static_cast<atom_t>(rotation_j->atom_to);
+            const int row_j = offsets.at(static_cast<std::size_t>(source_j));
+            const int col_j = offsets.at(atom_j);
+            const int n_j = static_cast<int>(atom_nbasis.at(static_cast<atom_t>(atom_j)));
+            const int n_source_j = static_cast<int>(atom_nbasis.at(source_j));
+            ComplexMatrix M_j(n_source_j, n_j);
+            for (int i = 0; i != n_source_j; ++i)
+                for (int j = 0; j != n_j; ++j)
+                    M_j(i, j) = rotation(row_j + i, col_j + j);
+
+            const auto source = get_source_block(source_i, source_j);
+            ComplexMatrix transformed;
+            if (member.time_reversal)
+                transformed = transpose(M_i, false) * conj(source) * conj(M_j);
+            else
+                transformed = transpose(M_i, true) * source * M_j;
+            rotated[static_cast<atom_t>(atom_i)][static_cast<atom_t>(atom_j)] =
+                std::move(transformed);
+        }
+    }
+    return rotated;
+}
+
 static Matz complex_matrix_to_colmajor_matz(const ComplexMatrix &block)
 {
     Matz mat(block.nr, block.nc, MAJOR::COL);
@@ -330,6 +419,9 @@ static void pgemm_wfc_scaled_wfc_h(const int n_aos, const int n_cols,
     DEVICE_CHECK(deviceFreeAsync(d_B, handle->stream));
     DEVICE_CHECK(deviceFreeAsync(d_C, handle->stream));
 #else
+    global::profiler.start("pgemm_entry_wait", LIBRPA_VERBOSE_DEBUG);
+    blacs_h.barrier();
+    global::profiler.stop("pgemm_entry_wait");
     global::profiler.start("pgemm", LIBRPA_VERBOSE_DEBUG);
     ScalapackConnector::pgemm_f('N', 'C', n_aos, n_aos, n_cols, C_ONE,
                                 wfc_bra, 1, 1,
@@ -339,13 +431,21 @@ static void pgemm_wfc_scaled_wfc_h(const int n_aos, const int n_cols,
                                 C_ZERO, out_opt, 1, 1,
                                 workspace.desc_out_opt.desc);
     global::profiler.stop("pgemm");
+    global::profiler.start("pgemm_exit_wait", LIBRPA_VERBOSE_DEBUG);
+    blacs_h.barrier();
+    global::profiler.stop("pgemm_exit_wait");
 #endif
+    global::profiler.start("pgemr2d", LIBRPA_VERBOSE_DEBUG);
     ScalapackConnector::pgemr2d_f(n_aos, n_aos,
                                   out_opt, 1, 1,
                                   workspace.desc_out_opt.desc,
                                   out.ptr() == nullptr ? dummy.data() : out.ptr(),
                                   1, 1, desc_out.desc,
                                   blacs_h.ictxt);
+    global::profiler.stop("pgemr2d");
+    global::profiler.start("pgemr2d_exit_wait", LIBRPA_VERBOSE_DEBUG);
+    blacs_h.barrier();
+    global::profiler.stop("pgemr2d_exit_wait");
     global::profiler.stop(__FUNCTION__);
 }
 
@@ -449,7 +549,7 @@ std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h)
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask)
 {
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> gf;
 
@@ -483,7 +583,7 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagti
         // TODO: this part is the same as denstiy matrix calculation, so it may be extracted to a common function
         for (int ik_local = 0; ik_local < nk_local; ik_local++)
         {
-            const auto dmat_k = mf.get_gf_cplx_imagtime(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local], tau);
+            const auto dmat_k = mf.get_gf_cplx_imagtime(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local], tau, band_mask);
             memcpy(kmat.ptr() + size * ik_local, dmat_k.c, size * sizeof(Matz::type));
         }
 
@@ -539,9 +639,9 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagti
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, const MeanField &mf, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h)
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask)
 {
-    return get_gf_cplx_imagtimes_Rs_kpara(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, comm_h);
+    return get_gf_cplx_imagtimes_Rs_kpara(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, comm_h, band_mask);
 }
 
 std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
@@ -615,9 +715,11 @@ std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
         if ((wfc_bra == nullptr || wfc_ket == nullptr) && wfc_size_loc > 0)
             throw LIBRPA_RUNTIME_ERROR("missing local wave-function block for k-point " +
                                       std::to_string(ik));
-        if (wfc_bra != nullptr && static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
+        if (wfc_size_loc > 0 && wfc_bra != nullptr &&
+            static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
             throw LIBRPA_RUNTIME_ERROR("wave-function bra block size is inconsistent with descriptor");
-        if (wfc_ket != nullptr && static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
+        if (wfc_size_loc > 0 && wfc_ket != nullptr &&
+            static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
             throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
         int nocc = 0;
@@ -849,9 +951,11 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
             if ((wfc_bra == nullptr || wfc_ket == nullptr) && wfc_size_loc > 0)
                 throw LIBRPA_RUNTIME_ERROR("missing local wave-function block for k-point " +
                                           std::to_string(ik));
-            if (wfc_bra != nullptr && static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
+            if (wfc_size_loc > 0 && wfc_bra != nullptr &&
+                static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
                 throw LIBRPA_RUNTIME_ERROR("wave-function bra block size is inconsistent with descriptor");
-            if (wfc_ket != nullptr && static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
+            if (wfc_size_loc > 0 && wfc_ket != nullptr &&
+                static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
                 throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
             int nocc = 0;
@@ -922,9 +1026,9 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
                     source_blocks[pair.first][pair.second] = matz_to_complex_matrix(mat);
                 }
 
-                auto rotated_blocks = rotate_symmetry_kspace_operator_blocks(
+                auto rotated_blocks = rotate_wfc_product_blocks(
                     symmetry_context, wfc_layouts, member, source_blocks, atom_nw,
-                    k_ibz, member.time_reversal, &target_pairs_local_set, k_bz_target);
+                    k_ibz, &target_pairs_local_set, k_bz_target);
 
                 for (int iR = 0; iR != nR_this; ++iR)
                 {
@@ -1011,9 +1115,13 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm)
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const std::vector<bool> &band_mask)
 {
-    global::profiler.start(__FUNCTION__);
+    if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
+        throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
+
+    global::profiler.start(__FUNCTION__, LIBRPA_VERBOSE_DEBUG);
 
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
@@ -1034,11 +1142,15 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     if (desc_wfc.ictxt() != desc_dm.ictxt())
         throw LIBRPA_RUNTIME_ERROR("wave-function and Green's-function descriptors must use the same BLACS context");
 
+    global::profiler.start("gf_check_same_imagtimes", LIBRPA_VERBOSE_DEBUG);
     check_same_imagtimes(imagtimes, kblacs_ctxt.comm_global_h);
+    global::profiler.stop("gf_check_same_imagtimes");
 
     std::vector<int> n_Rs_all, Rs_all;
     int nR_max;
+    global::profiler.start("gf_collect_Rs", LIBRPA_VERBOSE_DEBUG);
     collect_Rs(Rs, n_Rs_all, Rs_all, nR_max, kblacs_ctxt.comm_kpoint_h);
+    global::profiler.stop("gf_collect_Rs");
 
     std::map<double, std::map<Vector3_Order<int>, Matz>> gf;
     if (imagtimes.empty())
@@ -1062,17 +1174,21 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     const auto &iks_local = kblacs_ctxt.kpoints_local();
     const int nk_local = iks_local.size();
     int nk_sum = 0;
+    global::profiler.start("gf_check_kpoint_distribution", LIBRPA_VERBOSE_DEBUG);
     MPI_Allreduce(&nk_local, &nk_sum, 1, mpi_datatype<int>::value, MPI_SUM,
                   kblacs_ctxt.comm_kpoint_h.comm);
+    global::profiler.stop("gf_check_kpoint_distribution");
     if (nk_sum != n_kpoints)
         throw LIBRPA_RUNTIME_ERROR("k-point BLACS context has inconsistent k-point distribution");
 
+    global::profiler.start("gf_workspace_init", LIBRPA_VERBOSE_DEBUG);
     std::vector<cplxdb> dummy(1, C_ZERO);
     Matz scaled_wfc_ket(desc_wfc.m_loc(), desc_wfc.n_loc(), MAJOR::COL);
     Matz gf_k(desc_dm.m_loc(), desc_dm.n_loc(), MAJOR::COL);
     auto wfc_gemm_workspace = create_wfc_gemm_workspace(desc_wfc, desc_dm,
                                                         kblacs_ctxt.blacs_h);
     Matz kmat(nk_local, n_elem, MAJOR::COL);
+    global::profiler.stop("gf_workspace_init");
 
     const double scale_spin = 0.5 * mf.get_n_spins() * mf.get_n_spinor();
     for (const auto tau: imagtimes)
@@ -1091,11 +1207,14 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
             if ((wfc_bra == nullptr || wfc_ket == nullptr) && wfc_size_loc > 0)
                 throw LIBRPA_RUNTIME_ERROR("missing local wave-function block for k-point " +
                                           std::to_string(ik));
-            if (wfc_bra != nullptr && static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
+            if (wfc_size_loc > 0 && wfc_bra != nullptr &&
+                static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
                 throw LIBRPA_RUNTIME_ERROR("wave-function bra block size is inconsistent with descriptor");
-            if (wfc_ket != nullptr && static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
+            if (wfc_size_loc > 0 && wfc_ket != nullptr &&
+                static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
                 throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
+            global::profiler.start("gf_scale_wfc", LIBRPA_VERBOSE_DEBUG);
             std::vector<double> scales(n_states);
 #pragma omp parallel for schedule(static) if (n_states > 64)
             for (int ib = 0; ib != n_states; ++ib)
@@ -1106,7 +1225,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
                 const double prefac = tau > 0 ? wg_empty : wg_occ;
                 double scale = -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
                 if (scale > 0.0) scale = 0.0;
-                scales[ib] = std::exp(scale) * prefac;
+                scales[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0 : std::exp(scale) * prefac;
             }
 
             scaled_wfc_ket = C_ZERO;
@@ -1128,15 +1247,18 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
             }
 
             gf_k = C_ZERO;
+            global::profiler.stop("gf_scale_wfc");
             const cplxdb *wfc_bra_ptr = wfc_bra == nullptr ? dummy.data() : wfc_bra->c;
             pgemm_wfc_scaled_wfc_h(n_aos, n_states, wfc_bra_ptr, scaled_wfc_ket.ptr(),
                                    desc_wfc, wfc_gemm_workspace, gf_k, desc_dm,
                                    kblacs_ctxt.blacs_h);
+            global::profiler.start("gf_pack_kmat", LIBRPA_VERBOSE_DEBUG);
 #pragma omp parallel for schedule(static) if (n_elem > 4096)
             for (int i = 0; i != n_elem; ++i)
             {
                 kmat.ptr()[ik_local + static_cast<size_t>(i) * nk_local] = gf_k.ptr()[i];
             }
+            global::profiler.stop("gf_pack_kmat");
         }
 
         for (int pid = 0; pid != kblacs_ctxt.comm_kpoint_h.nprocs; ++pid)
@@ -1144,6 +1266,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
             const int nR_this = n_Rs_all[pid];
             if (nR_this < 1) continue;
 
+            global::profiler.start("gf_k_to_R_local", LIBRPA_VERBOSE_DEBUG);
             Matz transmat(nR_this, nk_local, MAJOR::COL);
             const double tau_sign = tau > 0 ? 1.0 : -1.0;
             const size_t n_trans = static_cast<size_t>(nR_this) * nk_local;
@@ -1168,14 +1291,25 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
                                         transmat.ptr(), nR_this, kmat.ptr(), nk_local, C_ZERO,
                                         rmat.ptr(), nR_this);
             }
+            global::profiler.stop("gf_k_to_R_local");
 
             const size_t count = static_cast<size_t>(nR_this) * n_elem;
             if (count > static_cast<size_t>(std::numeric_limits<int>::max()))
                 throw LIBRPA_RUNTIME_ERROR("local Green's-function Fourier block is too large for MPI collectives");
             const int count_int = static_cast<int>(count);
+            global::profiler.start("gf_k_to_R_reduce", LIBRPA_VERBOSE_DEBUG);
             if (kblacs_ctxt.comm_kpoint_h.myid == pid)
             {
                 kblacs_ctxt.comm_kpoint_h.reduce(MPI_IN_PLACE, rmat.ptr(), count_int, pid, MPI_SUM);
+            }
+            else
+            {
+                kblacs_ctxt.comm_kpoint_h.reduce(MPI_IN_PLACE, rmat.ptr(), count_int, pid, MPI_SUM);
+            }
+            global::profiler.stop("gf_k_to_R_reduce");
+            if (kblacs_ctxt.comm_kpoint_h.myid == pid)
+            {
+                global::profiler.start("gf_store_R", LIBRPA_VERBOSE_DEBUG);
                 for (int iR = 0; iR != nR_this; ++iR)
                 {
                     const int index = pid * nR_max * 3 + iR * 3;
@@ -1189,10 +1323,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
                         m.ptr()[i] = rmat_iR[static_cast<size_t>(i) * nR_this];
                     }
                 }
-            }
-            else
-            {
-                kblacs_ctxt.comm_kpoint_h.reduce(MPI_IN_PLACE, rmat.ptr(), count_int, pid, MPI_SUM);
+                global::profiler.stop("gf_store_R");
             }
         }
         gf.emplace(tau, std::move(gf_tau));
@@ -1209,8 +1340,11 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc)
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask)
 {
+    if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
+        throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
+
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
 
@@ -1241,7 +1375,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     {
         return get_gf_cplx_imagtimes_Rs_kblacs_para(
             ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, imagtimes, Rs,
-            kblacs_ctxt, desc_wfc, desc_dm);
+            kblacs_ctxt, desc_wfc, desc_dm, band_mask);
     }
 
     std::vector<int> n_Rs_all, Rs_all;
@@ -1329,9 +1463,11 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                 if ((wfc_bra == nullptr || wfc_ket == nullptr) && wfc_size_loc > 0)
                     throw LIBRPA_RUNTIME_ERROR("missing local wave-function block for k-point " +
                                               std::to_string(ik));
-                if (wfc_bra != nullptr && static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
+                if (wfc_size_loc > 0 && wfc_bra != nullptr &&
+                    static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
                     throw LIBRPA_RUNTIME_ERROR("wave-function bra block size is inconsistent with descriptor");
-                if (wfc_ket != nullptr && static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
+                if (wfc_size_loc > 0 && wfc_ket != nullptr &&
+                    static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
                     throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
                 const auto &k_ibz = kfrac_list[static_cast<std::size_t>(ik)];
@@ -1351,7 +1487,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                         : wg_occ;
                     double scale = -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
                     if (scale > 0.0) scale = 0.0;
-                    scales[ib] = std::exp(scale) * prefac;
+                    scales[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0 : std::exp(scale) * prefac;
                 }
 
                 scaled_wfc_ket = C_ZERO;
@@ -1401,9 +1537,9 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                         source_blocks[pair.first][pair.second] = matz_to_complex_matrix(mat);
                     }
 
-                    auto rotated_blocks = rotate_symmetry_kspace_operator_blocks(
+                    auto rotated_blocks = rotate_wfc_product_blocks(
                         symmetry_context, wfc_layouts, member, source_blocks, atom_nw,
-                        k_ibz, member.time_reversal, &target_pairs_local_set, k_bz_target);
+                        k_ibz, &target_pairs_local_set, k_bz_target);
 
                     for (int iR = 0; iR != nR_this; ++iR)
                     {
@@ -1491,9 +1627,10 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm)
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const std::vector<bool> &band_mask)
 {
-    return get_gf_cplx_imagtimes_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, kblacs_ctxt, desc_wfc, desc_dm);
+    return get_gf_cplx_imagtimes_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, kblacs_ctxt, desc_wfc, desc_dm, band_mask);
 }
 
 //! Fetch one atom-pair block from a block map, zero-filled when absent.
@@ -1691,9 +1828,11 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
                     const int ispinor_ket = s % 2;
                     const auto *wfc_bra = mf.find_wfc(ispin, ispinor_bra, ik);
                     const auto *wfc_ket = mf.find_wfc(ispin, ispinor_ket, ik);
-                    if (wfc_bra != nullptr && static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
+                    if (wfc_size_loc > 0 && wfc_bra != nullptr &&
+                        static_cast<size_t>(wfc_bra->size) != wfc_size_loc)
                         throw LIBRPA_RUNTIME_ERROR("wave-function bra block size is inconsistent with descriptor");
-                    if (wfc_ket != nullptr && static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
+                    if (wfc_size_loc > 0 && wfc_ket != nullptr &&
+                        static_cast<size_t>(wfc_ket->size) != wfc_size_loc)
                         throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
                     scaled_wfc_ket = C_ZERO;

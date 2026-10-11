@@ -228,8 +228,11 @@ static ComplexMatrix build_gf_cplx_imagtime_with_prefactor(
     const int ikpt,
     const double tau,
     const std::vector<double>& prefactors,
-    const int nbands_G)
+    const std::vector<bool> &band_mask)
 {
+    if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
+        throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
+
     const int n_aos = mf.get_n_aos();
     const int n_bands = mf.get_n_bands();
     const auto wfc_bra = mf.find_wfc(ispin, ispinor_bra, ikpt);
@@ -244,20 +247,119 @@ static ComplexMatrix build_gf_cplx_imagtime_with_prefactor(
     {
         const double energy_scale = -tau * (mf.get_eigenvals()[ispin](ikpt, ib) - mf.get_efermi());
         const double bounded_scale = energy_scale > 0.0 ? 0.0 : energy_scale;
-        const double scale = std::exp(bounded_scale) * prefactors[static_cast<std::size_t>(ib)];
+        const double scale = !band_mask.empty() && !band_mask[ib] ? 0.0
+            : std::exp(bounded_scale) * prefactors[static_cast<std::size_t>(ib)];
         LapackConnector::scal(n_aos, scale, scaled_wfc_conj.c + n_aos * ib, 1);
     }
-    if (nbands_G >= 0)
+    return transpose(*wfc_bra, false) * scaled_wfc_conj;
+}
+
+//! Zero-fill variant of build_gf_cplx_imagtime_with_prefactor: spinor source
+//! blocks whose wfc channel is missing contribute a zero block.
+static ComplexMatrix build_gf_cplx_imagtime_with_prefactor_zero_fill(
+    const MeanField& mf,
+    const int ispin,
+    const int ispinor_bra,
+    const int ispinor_ket,
+    const int ikpt,
+    const double tau,
+    const std::vector<double>& prefactors,
+    const std::vector<bool>& band_mask)
+{
+    if (mf.find_wfc(ispin, ispinor_bra, ikpt) == nullptr
+        || mf.find_wfc(ispin, ispinor_ket, ikpt) == nullptr)
     {
-        for (int ib = nbands_G; ib < n_bands; ++ib)
+        ComplexMatrix zero(mf.get_n_aos(), mf.get_n_aos());
+        zero.zero_out();
+        return zero;
+    }
+    return build_gf_cplx_imagtime_with_prefactor(
+        mf, ispin, ispinor_bra, ispinor_ket, ikpt, tau, prefactors, band_mask);
+}
+
+void validate_kstar_band_cutoff_closure(
+    const SymmetryContext& ctx,
+    const MeanField& mf,
+    const std::vector<bool>& band_mask,
+    const double degen_tol)
+{
+    (void)ctx;
+    if (band_mask.empty())
+    {
+        return;
+    }
+    if (band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "Green's-function band mask size does not match the mean-field band count");
+    }
+    for (int ispin = 0; ispin != mf.get_n_spins(); ++ispin)
+    {
+        for (int ik = 0; ik != mf.get_n_kpoints(); ++ik)
         {
-            for (int iao = 0; iao != n_aos; ++iao)
+            for (int ib = 1; ib != mf.get_n_bands(); ++ib)
             {
-                scaled_wfc_conj(ib, iao) = 0.0;
+                if (band_mask[static_cast<std::size_t>(ib - 1)]
+                    == band_mask[static_cast<std::size_t>(ib)])
+                {
+                    continue;
+                }
+                const double gap = mf.get_eigenvals()[ispin](ik, ib)
+                                 - mf.get_eigenvals()[ispin](ik, ib - 1);
+                if (std::abs(gap) < degen_tol)
+                {
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "Green's-function band mask slices through a degenerate band "
+                        "multiplet: ispin " + std::to_string(ispin)
+                        + ", k-point " + std::to_string(ik)
+                        + ", bands " + std::to_string(ib - 1) + "/"
+                        + std::to_string(ib)
+                        + " separated by " + std::to_string(gap)
+                        + " Ha (< " + std::to_string(degen_tol)
+                        + "). Symmetry restore is disabled for this truncation; "
+                        "adjust the band mask or use the full band grid");
+                }
             }
         }
     }
-    return transpose(*wfc_bra, false) * scaled_wfc_conj;
+}
+
+//! Multiply the four blocks by the plain unitary re-gauging phases
+//! block(I, J) *= phase[I] * conj(phase[J]) (applied after the kernel, so
+//! antiunitary members keep the scalar restore convention).
+static void apply_spinor_member_gauge_phases(
+    SpinorBlocks4<ComplexMatrix>& blocks,
+    const std::map<atom_t, size_t>& atom_nw,
+    const std::vector<std::complex<double>>& phases)
+{
+    std::vector<int> offsets;
+    offsets.reserve(atom_nw.size() + 1);
+    offsets.push_back(0);
+    for (const auto& atom_entry : atom_nw)
+    {
+        offsets.push_back(offsets.back() + static_cast<int>(atom_entry.second));
+    }
+    const auto scale_block = [&offsets, &phases](ComplexMatrix& block) {
+        for (std::size_t ai = 0; ai + 1 != offsets.size(); ++ai)
+        {
+            const std::complex<double> phase_i = phases[ai];
+            for (int i = offsets[ai]; i != offsets[ai + 1]; ++i)
+            {
+                for (std::size_t aj = 0; aj + 1 != offsets.size(); ++aj)
+                {
+                    const auto factor = phase_i * std::conj(phases[aj]);
+                    for (int j = offsets[aj]; j != offsets[aj + 1]; ++j)
+                    {
+                        block(i, j) *= factor;
+                    }
+                }
+            }
+        }
+    };
+    scale_block(blocks.b00);
+    scale_block(blocks.b01);
+    scale_block(blocks.b10);
+    scale_block(blocks.b11);
 }
 
 //! Zero-fill variant of build_gf_cplx_imagtime_with_prefactor: spinor source
@@ -547,7 +649,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
     const std::vector<double>& imagtimes,
     const std::vector<Vector3_Order<int>>& Rs,
     const std::map<atom_t, size_t>& atom_nw,
-    const int nbands_G,
+    const std::vector<bool> &band_mask,
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets,
     const symmetry_kstar_representative_indices_t* representative_k_indices)
 {
@@ -586,7 +688,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
             }
 
             const auto gf_ibz = build_gf_cplx_imagtime_with_prefactor(
-                mf, ispin, ispinor_bra, ispinor_ket, entry.ik_mf, tau, prefactors, nbands_G);
+                mf, ispin, ispinor_bra, ispinor_ket, entry.ik_mf, tau, prefactors, band_mask);
 
             for (std::size_t imember = 0; imember != star.members.size(); ++imember)
             {
@@ -623,7 +725,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
     const std::vector<double>& imagtimes,
     const std::vector<Vector3_Order<int>>& Rs,
     const std::map<atom_t, size_t>& atom_nw,
-    const int nbands_G,
+    const std::vector<bool>& band_mask,
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets,
     const symmetry_kstar_representative_indices_t* representative_k_indices)
 {
@@ -632,7 +734,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
         throw LIBRPA_RUNTIME_ERROR(
             "spinor k-star Green's-function restore requires n_spinor == 2");
     }
-    validate_kstar_band_cutoff_closure(ctx, mf, nbands_G);
+    validate_kstar_band_cutoff_closure(ctx, mf, band_mask);
     const auto restore_entries = build_symmetry_kstar_restore_entries(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
@@ -671,13 +773,13 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
             // (bra, ket) wfc channel is missing.
             const SpinorBlocks4<ComplexMatrix> gf_ibz{
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 0, 0, entry.ik_mf, tau, prefactors, nbands_G),
+                    mf, ispin, 0, 0, entry.ik_mf, tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 0, 1, entry.ik_mf, tau, prefactors, nbands_G),
+                    mf, ispin, 0, 1, entry.ik_mf, tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 1, 0, entry.ik_mf, tau, prefactors, nbands_G),
+                    mf, ispin, 1, 0, entry.ik_mf, tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 1, 1, entry.ik_mf, tau, prefactors, nbands_G),
+                    mf, ispin, 1, 1, entry.ik_mf, tau, prefactors, band_mask),
             };
 
             for (std::size_t imember = 0; imember != star.members.size(); ++imember)
@@ -1098,8 +1200,12 @@ std::map<Vector3_Order<int>, ComplexMatrix> MeanField::get_dmat_cplx_Rs(
     return dmat_cplx_all;
 }
 
-ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int ispinor_ket, int ikpt, double tau) const
+ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int ispinor_ket, int ikpt, double tau,
+    const std::vector<bool> &band_mask) const
 {
+    if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(n_states))
+        throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
+
     assert(ispin < this->n_spins);
     assert(ikpt < this->n_kpoints);
 
@@ -1120,7 +1226,8 @@ ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int is
     {
         scale[ib] = -tau * (scale[ib] - efermi);
         if (scale[ib] > 0) scale[ib] = 0.0;
-        scale[ib] = std::exp(scale[ib]) * prefac_occ[ib];
+        scale[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0
+            : std::exp(scale[ib]) * prefac_occ[ib];
         if (tau <= 0) scale[ib] *= -1.0;
     }
     const auto wfc_bra = find_wfc(ispin, ispinor_bra, ikpt);
@@ -1139,8 +1246,11 @@ ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int is
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_cplx_imagtimes_Rs(
     int ispin, int ispinor_bra, int ispinor_ket, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs) const
+    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask) const
 {
+    if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(n_states))
+        throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
+
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> gf_tau_R;
     const double scale_spin = 0.5 * n_spins * n_spinor;
     // NOTE: occupation must be copied here, not reference
@@ -1177,7 +1287,10 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
                 throw LIBRPA_RUNTIME_ERROR("wfc of ispinor_ket not found");
             auto scaled_wfc_conj = conj(*wfc_ket);
             for (int ib = 0; ib != n_states; ib++)
-                LapackConnector::scal(n_aos, scale(ik, ib), scaled_wfc_conj.c + n_aos * ib, 1);
+            {
+                const auto scale_ib = !band_mask.empty() && !band_mask[ib] ? 0.0 : scale(ik, ib);
+                LapackConnector::scal(n_aos, scale_ib, scaled_wfc_conj.c + n_aos * ib, 1);
+            }
             const auto wfc_bra = find_wfc(ispin, ispinor_bra, ik);
             if (wfc_bra == nullptr)
                 throw LIBRPA_RUNTIME_ERROR("wfc of ispinor_bra not found");
@@ -1207,11 +1320,11 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
 std::map<double, std::map<Vector3_Order<int>, matrix>> MeanField::get_gf_real_imagtimes_Rs(
     int ispin, int ispinor_bra, int ispinor_ket,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs) const
+    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask) const
 {
     std::map<double, std::map<Vector3_Order<int>, matrix>> gf_tau_R;
     for (const auto &tau_gf_cplx_R :
-         this->get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, imagtimes, Rs))
+         this->get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, imagtimes, Rs, band_mask))
     {
         const auto &tau = tau_gf_cplx_R.first;
         gf_tau_R[tau] = {};

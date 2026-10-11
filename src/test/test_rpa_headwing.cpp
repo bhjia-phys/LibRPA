@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -5,12 +6,14 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
 #include <valarray>
 
 #include "../core/chi0.h"
+#include "../core/coulmat.h"
 #include "../core/dielecmodel.h"
 #include "../core/epsilon.h"
 #include "../core/qpoint_view.h"
@@ -22,10 +25,13 @@
 #include "../mpi/base_mpi.h"
 #include "../mpi/kpoint_blacs_parallel_context.h"
 #include "../utils/constants.h"
+#include "mpi_test_config.h"
 
 using librpa_int::ArrayDesc;
 using librpa_int::AtomicBasis;
+using librpa_int::atom_mapping;
 using librpa_int::atpair_k_cplx_mat_t;
+using librpa_int::atpair_R_mat_t;
 using librpa_int::BlacsCtxtHandler;
 using librpa_int::ComplexMatrix;
 using librpa_int::diele_func;
@@ -43,6 +49,8 @@ using librpa_int::SymmetryContext;
 using librpa_int::SymmetryKAtomRotation;
 using librpa_int::SymmetryKStarMember;
 using librpa_int::SymmetryOperation;
+using librpa_int::SymmetryQPointRestoreMode;
+using librpa_int::TFGrids;
 using librpa_int::Vector3_Order;
 using librpa_int::atom_t;
 
@@ -77,6 +85,15 @@ void require_double_close(const double actual, const double expected, const doub
     {
         std::cerr << "actual=" << actual << " expected=" << expected
                   << " diff=" << std::abs(actual - expected) << std::endl;
+        std::abort();
+    }
+}
+
+void require_condition(const bool condition, const char *message)
+{
+    if (!condition)
+    {
+        std::cerr << message << std::endl;
         std::abort();
     }
 }
@@ -685,8 +702,803 @@ void test_rpa_headwing_gamma_cell_volume_uses_reciprocal_lattice()
                          vol_2d / 64.0, 1e-14);
 }
 
-void test_rpa_chi0v_wing_desc_uses_global_rows(const BlacsCtxtHandler &blacs_h)
+void test_strict_2d_headwing_prefactors_use_inplane_area()
 {
+    constexpr double area = 15.0;
+    require_double_close(librpa_int::strict_2d_head_prefactor(area), librpa_int::TWO_PI / area,
+                         1e-14);
+    require_double_close(librpa_int::strict_2d_wing_prefactor(area),
+                         2.0 * std::sqrt(librpa_int::TWO_PI / area), 1e-14);
+}
+
+void test_strict_2d_auxiliary_normalization_is_computed_from_basis_metadata()
+{
+    PeriodicBoundaryData pbc;
+    pbc.set_latvec({19.390653825130212, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 30.0});
+
+    constexpr double multipole_norm_squared = 2205.0673846924301;
+    const auto normalization = librpa_int::strict_2d_coulomb_head_normalization(
+        pbc, multipole_norm_squared);
+
+    require_double_close(normalization.inplane_area_bohr2, 19.390653825130212, 1e-13);
+    require_double_close(normalization.auxiliary_head_coefficient,
+                         8978.8175111265446, 1e-10);
+    require_double_close(normalization.pw_to_auxiliary_scale,
+                         37.802423070695596, 1e-12);
+
+    bool rejected = false;
+    try
+    {
+        (void)librpa_int::strict_2d_coulomb_head_normalization(pbc, 0.0);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected = true;
+    }
+    assert(rejected);
+}
+
+void test_strict_2d_gamma_cell_uses_physical_reciprocal_measure()
+{
+    constexpr double internal_q = 0.2;
+    constexpr double internal_area = 0.07;
+    require_double_close(librpa_int::strict_2d_physical_q(internal_q),
+                         librpa_int::TWO_PI * internal_q, 1e-14);
+    require_double_close(librpa_int::strict_2d_physical_gamma_cell_area(internal_area),
+                         librpa_int::TWO_PI * librpa_int::TWO_PI * internal_area, 1e-14);
+}
+
+void test_strict_2d_radial_integrals_match_analytic_values()
+{
+    const std::complex<double> a{2.0, 0.0};
+    constexpr double qmax = 0.5;
+    const auto expected_i0 = (1.0 - std::log(2.0)) / 4.0;
+    const auto expected_i1 = (0.5 - 1.0 + std::log(2.0)) / 8.0;
+
+    assert_complex_close(librpa_int::strict_2d_radial_i0(a, qmax), expected_i0, 1e-14);
+    assert_complex_close(librpa_int::strict_2d_radial_i1(a, qmax), expected_i1, 1e-14);
+
+    constexpr double small_qmax = 0.3;
+    assert_complex_close(librpa_int::strict_2d_radial_i0(0.0, small_qmax),
+                         small_qmax * small_qmax / 2.0, 1e-15);
+    assert_complex_close(librpa_int::strict_2d_radial_i1(0.0, small_qmax),
+                         small_qmax * small_qmax * small_qmax / 3.0, 1e-15);
+    const std::complex<double> small_a{1.0e-10, -2.0e-10};
+    const auto small_expected_i0 = small_qmax * small_qmax / 2.0 -
+                                   small_a * std::pow(small_qmax, 3) / 3.0;
+    const auto small_expected_i1 = std::pow(small_qmax, 3) / 3.0 -
+                                   small_a * std::pow(small_qmax, 4) / 4.0;
+    assert_complex_close(librpa_int::strict_2d_radial_i0(small_a, small_qmax),
+                         small_expected_i0, 1e-15);
+    assert_complex_close(librpa_int::strict_2d_radial_i1(small_a, small_qmax),
+                         small_expected_i1, 1e-15);
+}
+
+void test_strict_2d_radial_log_integral_matches_numeric_quadrature()
+{
+    constexpr std::complex<double> a{0.37, 0.0};
+    constexpr double qmax = 0.61;
+    constexpr int n = 200000;
+    const double dq = qmax / n;
+    std::complex<double> numeric = 0.0;
+    for (int i = 0; i != n; ++i)
+    {
+        const double q = (i + 0.5) * dq;
+        numeric += q * std::log(1.0 + a * q) * dq;
+    }
+    assert_complex_close(librpa_int::strict_2d_radial_log_integral(a, qmax), numeric, 2e-13);
+}
+
+void test_strict_2d_radial_log_integral_is_stable_at_zero_and_small_a()
+{
+    assert_complex_close(librpa_int::strict_2d_radial_log_integral(0.0, 0.7), 0.0, 1e-15);
+    constexpr std::complex<double> a{1.0e-10, 0.0};
+    constexpr double qmax = 0.7;
+    const auto expected = a * std::pow(qmax, 3) / 3.0 - a * a * std::pow(qmax, 4) / 8.0;
+    assert_complex_close(librpa_int::strict_2d_radial_log_integral(a, qmax), expected, 1e-24);
+}
+
+void test_strict_2d_rpa_trace_log_average_matches_dense_radial_quadrature()
+{
+    matrix_m<std::complex<double>> head(3, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    head(0, 0) = -0.28;
+    head(0, 1) = 0.03;
+    head(1, 0) = 0.03;
+    head(1, 1) = -0.16;
+    lind(0, 0) = 1.41;
+    lind(0, 1) = 0.04;
+    lind(1, 0) = 0.04;
+    lind(1, 1) = 1.23;
+    lind(2, 2) = 1.0;
+
+    const std::vector<double> qx{1.0, 0.0, -1.0, 0.0};
+    const std::vector<double> qy{0.0, 1.0, 0.0, -1.0};
+    const std::vector<double> angular_weights(4, librpa_int::TWO_PI / 4.0);
+    const std::vector<double> qmax{0.21, 0.14, 0.21, 0.14};
+    double gamma_area = 0.0;
+    for (std::size_t i = 0; i != qmax.size(); ++i)
+        gamma_area += angular_weights[i] * qmax[i] * qmax[i] / 2.0;
+
+    const std::complex<double> trace_body{0.12, 0.0};
+    const std::complex<double> logdet_body = std::log(0.88);
+    const auto analytic = librpa_int::compute_strict_2d_rpa_chi0v_trace_log_average(
+        head, lind, trace_body, logdet_body, qx, qy, angular_weights, qmax, gamma_area);
+
+    std::complex<double> numeric = 0.0;
+    constexpr int radial_points = 200000;
+    for (std::size_t idir = 0; idir != qx.size(); ++idir)
+    {
+        const double nx = qx[idir];
+        const double ny = qy[idir];
+        const auto directional_head =
+            nx * (nx * head(0, 0) + ny * head(0, 1)) + ny * (nx * head(1, 0) + ny * head(1, 1));
+        const auto a = librpa_int::strict_2d_schur_coefficient(lind, nx, ny);
+        const double dq = qmax[idir] / radial_points;
+        for (int ir = 0; ir != radial_points; ++ir)
+        {
+            const double q = (ir + 0.5) * dq;
+            const auto integrand =
+                trace_body + logdet_body + directional_head * q + std::log(1.0 + a * q);
+            numeric += angular_weights[idir] * q * dq * integrand / gamma_area;
+        }
+    }
+    assert_complex_close(analytic, numeric, 2e-11);
+}
+
+void test_strict_2d_inverse_head_average_has_linear_q_screening()
+{
+    const std::complex<double> a{1.7, 0.0};
+    constexpr double qmax = 0.2;
+    const auto inverse_head_average =
+        2.0 * librpa_int::strict_2d_radial_i0(a, qmax) / (qmax * qmax);
+    const auto old_2d_formula = 1.0 / a;
+
+    assert(std::abs(inverse_head_average - 1.0) < 0.2);
+    assert(std::abs(inverse_head_average - old_2d_formula) > 0.1);
+}
+
+void test_strict_2d_schur_coefficient_removes_identity()
+{
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    lind(0, 0) = 1.4;
+    lind(1, 1) = 1.9;
+    lind(2, 2) = 1.0;
+
+    constexpr double qx = 0.6;
+    constexpr double qy = 0.8;
+    const auto expected = 0.4 * qx * qx + 0.9 * qy * qy;
+    assert_complex_close(librpa_int::strict_2d_schur_coefficient(lind, qx, qy), expected, 1e-14);
+}
+
+void test_strict_2d_screening_denominator_must_stay_on_physical_branch()
+{
+    librpa_int::validate_strict_2d_screening_denominator({0.7, 1.0e-12}, 0.4);
+
+    bool rejected_zero = false;
+    try
+    {
+        librpa_int::validate_strict_2d_screening_denominator(-2.5, 0.4);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_zero = true;
+    }
+    assert(rejected_zero);
+
+    bool rejected_negative = false;
+    try
+    {
+        librpa_int::validate_strict_2d_screening_denominator(-3.0, 0.4);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_negative = true;
+    }
+    assert(rejected_negative);
+}
+
+void test_strict_2d_gw_uses_full_coulomb_at_all_q()
+{
+    librpa_int::validate_strict_2d_gw_coulomb_choices(false, false, true);
+    librpa_int::validate_strict_2d_gw_coulomb_choices(true, true, true);
+
+    bool rejected_cut_coulomb_finite_q = false;
+    try
+    {
+        librpa_int::validate_strict_2d_gw_coulomb_choices(true, true, false);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_cut_coulomb_finite_q = true;
+    }
+    if (!rejected_cut_coulomb_finite_q)
+    {
+        std::cerr << "strict 2D GW accepted non-Ewald finite-q Wc legs" << std::endl;
+        std::abort();
+    }
+
+    bool rejected_cut_coulomb_basis = false;
+    try
+    {
+        librpa_int::validate_strict_2d_gw_coulomb_choices(true, false, true);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_cut_coulomb_basis = true;
+    }
+    if (!rejected_cut_coulomb_basis)
+    {
+        std::cerr << "strict 2D GW accepted a non-Ewald dielectric basis" << std::endl;
+        std::abort();
+    }
+}
+
+void test_strict_2d_gw_routes_gamma_through_complete_wc_average()
+{
+    require_condition(librpa_int::use_strict_2d_complete_wc_gamma_route(true, 3, true, true, true),
+                  "strict 2D Gamma must use the complete-Wc route");
+    require_condition(!librpa_int::use_strict_2d_complete_wc_gamma_route(false, 3, true, true, true),
+                  "disabled head/wing replacement must keep the standard route");
+    require_condition(!librpa_int::use_strict_2d_complete_wc_gamma_route(true, 2, true, true, true),
+                  "non-full head/wing dielectric mode must keep the standard route");
+    require_condition(!librpa_int::use_strict_2d_complete_wc_gamma_route(true, 3, false, true, true),
+                  "3D dielectric calculations must keep the standard route");
+    require_condition(!librpa_int::use_strict_2d_complete_wc_gamma_route(true, 3, true, false, true),
+                  "finite q must keep the standard route");
+    require_condition(!librpa_int::use_strict_2d_complete_wc_gamma_route(true, 3, true, true, false),
+                  "missing head/wing data must keep the standard route");
+}
+
+void test_strict_2d_gw_fails_closed_for_incomplete_runtime_configuration()
+{
+    require_condition(librpa_int::strict_2d_complete_wc_requested(true, 3, true),
+                      "strict 2D complete-Wc request was not recognized");
+    require_condition(!librpa_int::strict_2d_complete_wc_requested(false, 3, true),
+                      "disabled replacement was classified as strict 2D");
+    require_condition(!librpa_int::strict_2d_complete_wc_requested(true, 2, true),
+                      "non-head/wing dielectric mode was classified as strict 2D");
+    require_condition(!librpa_int::strict_2d_complete_wc_requested(true, 3, false),
+                      "3D dielectric mode was classified as strict 2D");
+
+    librpa_int::validate_strict_2d_complete_wc_runtime(false, false, false, false);
+    librpa_int::validate_strict_2d_complete_wc_runtime(true, true, true, true);
+
+    bool rejected_missing_metadata = false;
+    try
+    {
+        librpa_int::validate_strict_2d_complete_wc_runtime(true, true, true, false);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_missing_metadata = true;
+    }
+    require_condition(rejected_missing_metadata,
+                      "strict 2D GW silently accepted missing producer metadata");
+
+    bool rejected_missing_data = false;
+    try
+    {
+        librpa_int::validate_strict_2d_complete_wc_runtime(true, false, true, true);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_missing_data = true;
+    }
+    require_condition(rejected_missing_data,
+                      "strict 2D GW silently accepted missing analytic head/wing data");
+
+    bool rejected_dense_wc = false;
+    try
+    {
+        librpa_int::validate_strict_2d_complete_wc_runtime(true, true, false, true);
+    }
+    catch (const std::logic_error &)
+    {
+        rejected_dense_wc = true;
+    }
+    require_condition(rejected_dense_wc,
+                      "strict 2D GW silently accepted a path without complete-Wc support");
+}
+
+void test_strict_2d_pw_wc_transforms_to_auxiliary_coulomb_basis()
+{
+    constexpr double scale = 5.0;
+
+    matrix_m<std::complex<double>> pw_wc(3, 3, MAJOR::COL);
+    pw_wc(0, 0) = {2.0, -0.5};
+    pw_wc(0, 1) = {3.0, 4.0};
+    pw_wc(0, 2) = {-1.0, 0.25};
+    pw_wc(1, 0) = std::conj(pw_wc(0, 1));
+    pw_wc(2, 0) = std::conj(pw_wc(0, 2));
+    pw_wc(1, 1) = {5.0, 0.0};
+    pw_wc(1, 2) = {0.75, -0.2};
+    pw_wc(2, 1) = std::conj(pw_wc(1, 2));
+    pw_wc(2, 2) = {7.0, 0.0};
+
+    const auto auxiliary_wc =
+        librpa_int::strict_2d_transform_pw_wc_to_auxiliary_basis(pw_wc, scale);
+    assert_complex_close(auxiliary_wc(0, 0), scale * scale * pw_wc(0, 0), 1e-13);
+    for (int i = 1; i != 3; ++i)
+    {
+        assert_complex_close(auxiliary_wc(0, i), scale * pw_wc(0, i), 1e-13);
+        assert_complex_close(auxiliary_wc(i, 0), scale * pw_wc(i, 0), 1e-13);
+        for (int j = 1; j != 3; ++j)
+            assert_complex_close(auxiliary_wc(i, j), pw_wc(i, j), 1e-13);
+    }
+}
+
+void test_strict_2d_wc_blocks_match_dense_finite_q_inverse()
+{
+    const std::complex<double> body{1.6, 0.0};
+    const std::complex<double> left_wing{0.25, 0.04};
+    const std::complex<double> right_wing = std::conj(left_wing);
+    const std::complex<double> head_coefficient{0.9, 0.0};
+    const std::complex<double> body_inv = 1.0 / body;
+    const std::complex<double> bw_direction = body_inv * left_wing;
+    const std::complex<double> wb_direction = right_wing * body_inv;
+    const std::complex<double> schur_a = head_coefficient - right_wing * body_inv * left_wing;
+    constexpr double q = 0.17;
+    constexpr double cut_body_sqrt = 1.3;
+
+    matrix_m<std::complex<double>> body_inv_matrix(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> bw(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> wb(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> cut_sqrt(1, 1, MAJOR::COL);
+    body_inv_matrix(0, 0) = body_inv;
+    bw(0, 0) = bw_direction;
+    wb(0, 0) = wb_direction;
+    cut_sqrt(0, 0) = cut_body_sqrt;
+
+    const auto actual =
+        librpa_int::strict_2d_wc_blocks_at_q(body_inv_matrix, bw, wb, schur_a, cut_sqrt, q);
+
+    const std::complex<double> eps00 = 1.0 + q * head_coefficient;
+    const std::complex<double> eps01 = std::sqrt(q) * right_wing;
+    const std::complex<double> eps10 = std::sqrt(q) * left_wing;
+    const std::complex<double> determinant = eps00 * body - eps01 * eps10;
+    const std::complex<double> inv00 = body / determinant;
+    const std::complex<double> inv01 = -eps01 / determinant;
+    const std::complex<double> inv10 = -eps10 / determinant;
+    const std::complex<double> inv11 = eps00 / determinant;
+    const double head_sqrt = std::sqrt(librpa_int::TWO_PI / q);
+
+    assert_complex_close(actual(0, 0), head_sqrt * head_sqrt * (inv00 - 1.0), 1e-13);
+    assert_complex_close(actual(0, 1), head_sqrt * (inv01 * cut_body_sqrt), 1e-13);
+    assert_complex_close(actual(1, 0), cut_body_sqrt * inv10 * head_sqrt, 1e-13);
+    assert_complex_close(actual(1, 1), cut_body_sqrt * cut_body_sqrt * (inv11 - 1.0), 1e-13);
+}
+
+void test_strict_2d_wc_cell_average_matches_anisotropic_radial_quadrature()
+{
+    matrix_m<std::complex<double>> body_inv(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> bw_cart(1, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> wb_cart(3, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> cut_sqrt(1, 1, MAJOR::COL);
+    body_inv(0, 0) = 0.72;
+    bw_cart(0, 0) = {0.18, 0.03};
+    bw_cart(0, 1) = {-0.07, 0.02};
+    wb_cart(0, 0) = std::conj(bw_cart(0, 0));
+    wb_cart(1, 0) = std::conj(bw_cart(0, 1));
+    lind(0, 0) = 1.55;
+    lind(0, 1) = 0.08;
+    lind(1, 0) = 0.08;
+    lind(1, 1) = 1.25;
+    lind(2, 2) = 1.0;
+    cut_sqrt(0, 0) = 1.4;
+
+    const std::vector<double> qx{1.0, 0.0, -1.0, 0.0};
+    const std::vector<double> qy{0.0, 1.0, 0.0, -1.0};
+    const std::vector<double> weights(4, librpa_int::TWO_PI / 4.0);
+    const std::vector<double> qmax{0.21, 0.14, 0.21, 0.14};
+    double gamma_area = 0.0;
+    for (std::size_t i = 0; i != qmax.size(); ++i)
+        gamma_area += weights[i] * qmax[i] * qmax[i] / 2.0;
+
+    const auto analytic = librpa_int::strict_2d_average_wc_coulomb_basis(
+        body_inv, bw_cart, wb_cart, lind, cut_sqrt, qx, qy, weights, qmax, gamma_area);
+
+    matrix_m<std::complex<double>> numeric(2, 2, MAJOR::COL);
+    constexpr int radial_points = 200000;
+    for (std::size_t idir = 0; idir != qx.size(); ++idir)
+    {
+        matrix_m<std::complex<double>> bw_direction(1, 1, MAJOR::COL);
+        matrix_m<std::complex<double>> wb_direction(1, 1, MAJOR::COL);
+        bw_direction(0, 0) = bw_cart(0, 0) * qx[idir] + bw_cart(0, 1) * qy[idir];
+        wb_direction(0, 0) = wb_cart(0, 0) * qx[idir] + wb_cart(1, 0) * qy[idir];
+        const auto a = librpa_int::strict_2d_schur_coefficient(lind, qx[idir], qy[idir]);
+        const double dq = qmax[idir] / radial_points;
+        for (int ir = 0; ir != radial_points; ++ir)
+        {
+            const double q = (ir + 0.5) * dq;
+            const auto point = librpa_int::strict_2d_wc_blocks_at_q(body_inv, bw_direction,
+                                                                    wb_direction, a, cut_sqrt, q);
+            const double measure = weights[idir] * q * dq / gamma_area;
+            for (int i = 0; i != 2; ++i)
+                for (int j = 0; j != 2; ++j) numeric(i, j) += measure * point(i, j);
+        }
+    }
+
+    for (int i = 0; i != 2; ++i)
+        for (int j = 0; j != 2; ++j) assert_complex_close(analytic(i, j), numeric(i, j), 2e-11);
+    assert(std::abs(analytic(0, 1)) < 1e-13);
+    assert(std::abs(analytic(1, 0)) < 1e-13);
+}
+
+struct Point2d
+{
+    double x;
+    double y;
+};
+
+double dot(const Point2d &point, const Point2d &normal)
+{
+    return point.x * normal.x + point.y * normal.y;
+}
+
+double cross(const Point2d &left, const Point2d &right)
+{
+    return left.x * right.y - left.y * right.x;
+}
+
+std::vector<Point2d> clip_polygon_halfplane(const std::vector<Point2d> &polygon,
+                                            const Point2d &normal, const double bound)
+{
+    std::vector<Point2d> clipped;
+    if (polygon.empty()) return clipped;
+    Point2d previous = polygon.back();
+    double previous_distance = dot(previous, normal) - bound;
+    for (const auto &current : polygon)
+    {
+        const double current_distance = dot(current, normal) - bound;
+        const bool previous_inside = previous_distance <= 1e-14;
+        const bool current_inside = current_distance <= 1e-14;
+        if (previous_inside != current_inside)
+        {
+            const double denominator = previous_distance - current_distance;
+            if (std::abs(denominator) < 1e-18) std::abort();
+            const double fraction = previous_distance / denominator;
+            clipped.push_back({previous.x + fraction * (current.x - previous.x),
+                               previous.y + fraction * (current.y - previous.y)});
+        }
+        if (current_inside) clipped.push_back(current);
+        previous = current;
+        previous_distance = current_distance;
+    }
+    return clipped;
+}
+
+std::pair<double, Point2d> polygon_area_centroid(const std::vector<Point2d> &polygon)
+{
+    if (polygon.size() < 3) return {0.0, {0.0, 0.0}};
+    double twice_area = 0.0;
+    Point2d weighted{0.0, 0.0};
+    for (std::size_t i = 0; i != polygon.size(); ++i)
+    {
+        const auto &left = polygon[i];
+        const auto &right = polygon[(i + 1) % polygon.size()];
+        const double edge_cross = cross(left, right);
+        twice_area += edge_cross;
+        weighted.x += (left.x + right.x) * edge_cross;
+        weighted.y += (left.y + right.y) * edge_cross;
+    }
+    if (!(twice_area > 0.0)) std::abort();
+    return {0.5 * twice_area, {weighted.x / (3.0 * twice_area), weighted.y / (3.0 * twice_area)}};
+}
+
+std::vector<Point2d> gamma_cell_neighbors(const Point2d &g1, const Point2d &g2)
+{
+    std::vector<Point2d> neighbors;
+    for (int i = -1; i <= 1; ++i)
+        for (int j = -1; j <= 1; ++j)
+            if (i != 0 || j != 0) neighbors.push_back({i * g1.x + j * g2.x, i * g1.y + j * g2.y});
+    return neighbors;
+}
+
+std::vector<Point2d> gamma_voronoi_polygon(const Point2d &g1, const Point2d &g2)
+{
+    const double extent = 4.0 * std::max(std::hypot(g1.x, g1.y), std::hypot(g2.x, g2.y));
+    std::vector<Point2d> polygon{
+        {-extent, -extent}, {extent, -extent}, {extent, extent}, {-extent, extent}};
+    for (const auto &neighbor : gamma_cell_neighbors(g1, g2))
+        polygon = clip_polygon_halfplane(polygon, neighbor, 0.5 * dot(neighbor, neighbor));
+    return polygon;
+}
+
+double gamma_cell_boundary(const Point2d &direction, const std::vector<Point2d> &neighbors)
+{
+    double qmax = std::numeric_limits<double>::infinity();
+    for (const auto &neighbor : neighbors)
+    {
+        const double denominator = dot(direction, neighbor);
+        if (denominator > 1e-14) qmax = std::min(qmax, 0.5 * dot(neighbor, neighbor) / denominator);
+    }
+    if (!(qmax > 0.0) || !std::isfinite(qmax)) std::abort();
+    return qmax;
+}
+
+matrix_m<std::complex<double>> cartesian_gamma_subgrid_average(
+    const matrix_m<std::complex<double>> &body_inv, const matrix_m<std::complex<double>> &bw_cart,
+    const matrix_m<std::complex<double>> &wb_cart, const matrix_m<std::complex<double>> &lind,
+    const matrix_m<std::complex<double>> &regular_body_sqrt, const std::vector<Point2d> &polygon,
+    const int subdivisions, double &covered_area)
+{
+    if (subdivisions < 2) std::abort();
+    double xmin = polygon.front().x, xmax = polygon.front().x;
+    double ymin = polygon.front().y, ymax = polygon.front().y;
+    for (const auto &point : polygon)
+    {
+        xmin = std::min(xmin, point.x);
+        xmax = std::max(xmax, point.x);
+        ymin = std::min(ymin, point.y);
+        ymax = std::max(ymax, point.y);
+    }
+    const double dx = (xmax - xmin) / subdivisions;
+    const double dy = (ymax - ymin) / subdivisions;
+    const double gamma_area = polygon_area_centroid(polygon).first;
+    matrix_m<std::complex<double>> average(body_inv.nr() + 1, body_inv.nc() + 1, MAJOR::COL);
+    covered_area = 0.0;
+
+    for (int ix = 0; ix != subdivisions; ++ix)
+        for (int iy = 0; iy != subdivisions; ++iy)
+        {
+            const double xlo = xmin + ix * dx;
+            const double xhi = xlo + dx;
+            const double ylo = ymin + iy * dy;
+            const double yhi = ylo + dy;
+            auto cell = clip_polygon_halfplane(polygon, {1.0, 0.0}, xhi);
+            cell = clip_polygon_halfplane(cell, {-1.0, 0.0}, -xlo);
+            cell = clip_polygon_halfplane(cell, {0.0, 1.0}, yhi);
+            cell = clip_polygon_halfplane(cell, {0.0, -1.0}, -ylo);
+            const auto area_centroid = polygon_area_centroid(cell);
+            const double area = area_centroid.first;
+            const auto centroid = area_centroid.second;
+            if (area == 0.0) continue;
+            const double q = std::hypot(centroid.x, centroid.y);
+            if (!(q > 1e-14)) std::abort();
+            const double qx = centroid.x / q;
+            const double qy = centroid.y / q;
+            matrix_m<std::complex<double>> bw_direction(body_inv.nr(), 1, MAJOR::COL);
+            matrix_m<std::complex<double>> wb_direction(1, body_inv.nc(), MAJOR::COL);
+            for (int i = 0; i != body_inv.nr(); ++i)
+            {
+                bw_direction(i, 0) = bw_cart(i, 0) * qx + bw_cart(i, 1) * qy;
+                wb_direction(0, i) = wb_cart(0, i) * qx + wb_cart(1, i) * qy;
+            }
+            const auto a = librpa_int::strict_2d_schur_coefficient(lind, qx, qy);
+            const auto point = librpa_int::strict_2d_wc_blocks_at_q(
+                body_inv, bw_direction, wb_direction, a, regular_body_sqrt, q);
+            for (int i = 0; i != average.nr(); ++i)
+                for (int j = 0; j != average.nc(); ++j)
+                    average(i, j) += area * point(i, j) / gamma_area;
+            covered_area += area;
+        }
+    return average;
+}
+
+double submatrix_frobenius(const matrix_m<std::complex<double>> &matrix, const int row_start,
+                           const int column_start)
+{
+    double squared = 0.0;
+    for (int i = row_start; i != matrix.nr(); ++i)
+        for (int j = column_start; j != matrix.nc(); ++j) squared += std::norm(matrix(i, j));
+    return std::sqrt(squared);
+}
+
+double matrix_hermiticity_residual(const matrix_m<std::complex<double>> &matrix)
+{
+    double residual = 0.0;
+    for (int i = 0; i != matrix.nr(); ++i)
+        for (int j = 0; j != matrix.nc(); ++j)
+            residual = std::max(residual, std::abs(matrix(i, j) - std::conj(matrix(j, i))));
+    return residual;
+}
+
+double wing_frobenius(const matrix_m<std::complex<double>> &matrix, const bool head_body)
+{
+    double squared = 0.0;
+    for (int i = 1; i != matrix.nr(); ++i)
+        squared += head_body ? std::norm(matrix(0, i)) : std::norm(matrix(i, 0));
+    return std::sqrt(squared);
+}
+
+void test_strict_2d_wc_cell_average_matches_cartesian_voronoi_subgrid()
+{
+    matrix_m<std::complex<double>> body_inv(2, 2, MAJOR::COL);
+    matrix_m<std::complex<double>> bw_cart(2, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> wb_cart(3, 2, MAJOR::COL);
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> regular_body_sqrt(2, 2, MAJOR::COL);
+    body_inv(0, 0) = 0.72;
+    body_inv(0, 1) = {0.03, 0.01};
+    body_inv(1, 0) = std::conj(body_inv(0, 1));
+    body_inv(1, 1) = 0.81;
+    bw_cart(0, 0) = {0.18, 0.03};
+    bw_cart(0, 1) = {-0.07, 0.02};
+    bw_cart(1, 0) = {0.09, -0.01};
+    bw_cart(1, 1) = {0.11, 0.04};
+    wb_cart = bw_cart.get_transpose(true);
+    lind(0, 0) = 1.55;
+    lind(0, 1) = 0.08;
+    lind(1, 0) = 0.08;
+    lind(1, 1) = 1.25;
+    lind(2, 2) = 1.0;
+    regular_body_sqrt(0, 0) = 1.4;
+    regular_body_sqrt(0, 1) = 0.05;
+    regular_body_sqrt(1, 0) = 0.05;
+    regular_body_sqrt(1, 1) = 1.1;
+
+    const Point2d g1{0.08702149160639744, 0.05024962446042246};
+    const Point2d g2{0.0, 0.1004992489208449};
+    const auto neighbors = gamma_cell_neighbors(g1, g2);
+    const auto polygon = gamma_voronoi_polygon(g1, g2);
+    const double gamma_area = polygon_area_centroid(polygon).first;
+    require_double_close(gamma_area, std::abs(cross(g1, g2)), 1e-14);
+
+    constexpr int nangle = 5000;
+    std::vector<double> qx(nangle), qy(nangle), weights(nangle), qmax(nangle);
+    for (int i = 0; i != nangle; ++i)
+    {
+        const double angle = librpa_int::TWO_PI * i / nangle;
+        qx[i] = std::cos(angle);
+        qy[i] = std::sin(angle);
+        weights[i] = librpa_int::TWO_PI / nangle;
+        qmax[i] = gamma_cell_boundary({qx[i], qy[i]}, neighbors);
+    }
+    const auto analytic = librpa_int::strict_2d_average_wc_coulomb_basis(
+        body_inv, bw_cart, wb_cart, lind, regular_body_sqrt, qx, qy, weights, qmax, gamma_area);
+
+    double covered_area = 0.0;
+    const auto grid80 = cartesian_gamma_subgrid_average(
+        body_inv, bw_cart, wb_cart, lind, regular_body_sqrt, polygon, 80, covered_area);
+    require_double_close(covered_area, gamma_area, 1e-14);
+    if (matrix_hermiticity_residual(analytic) >= 1e-12 ||
+        matrix_hermiticity_residual(grid80) >= 1e-12)
+        std::abort();
+
+    const double head_relative = std::abs(grid80(0, 0) - analytic(0, 0)) / std::abs(analytic(0, 0));
+    const double body_relative =
+        submatrix_frobenius(grid80 - analytic, 1, 1) / submatrix_frobenius(analytic, 1, 1);
+    const double wing_absolute =
+        std::max(wing_frobenius(grid80, true), wing_frobenius(grid80, false));
+    if (head_relative >= 1e-4 || body_relative >= 1e-4 || wing_absolute >= 1e-10) std::abort();
+}
+
+void test_strict_2d_wc_blocks_have_finite_small_q_limits()
+{
+    matrix_m<std::complex<double>> body_inv(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> bw(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> wb(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> cut_sqrt(1, 1, MAJOR::COL);
+    body_inv(0, 0) = 0.75;
+    bw(0, 0) = {0.12, 0.03};
+    wb(0, 0) = std::conj(bw(0, 0));
+    cut_sqrt(0, 0) = 1.25;
+    const std::complex<double> a{0.6, 0.0};
+    constexpr double q = 1.0e-9;
+
+    const auto wc = librpa_int::strict_2d_wc_blocks_at_q(body_inv, bw, wb, a, cut_sqrt, q);
+    assert_complex_close(wc(0, 0), -librpa_int::TWO_PI * a, 3e-9);
+    assert_complex_close(wc(1, 0), -std::sqrt(librpa_int::TWO_PI) * cut_sqrt(0, 0) * bw(0, 0),
+                         3e-9);
+    assert_complex_close(wc(0, 1), -std::sqrt(librpa_int::TWO_PI) * wb(0, 0) * cut_sqrt(0, 0),
+                         3e-9);
+    assert_complex_close(wc(1, 1), cut_sqrt(0, 0) * (body_inv(0, 0) - 1.0) * cut_sqrt(0, 0), 3e-9);
+}
+
+void test_strict_2d_wc_average_is_covariant_under_regular_body_rotation()
+{
+    matrix_m<std::complex<double>> body_inv(2, 2, MAJOR::COL);
+    matrix_m<std::complex<double>> bw_cart(2, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> wb_cart(3, 2, MAJOR::COL);
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> cut_sqrt(2, 2, MAJOR::COL);
+    body_inv(0, 0) = 0.70;
+    body_inv(0, 1) = 0.04;
+    body_inv(1, 0) = 0.04;
+    body_inv(1, 1) = 0.82;
+    bw_cart(0, 0) = 0.13;
+    bw_cart(0, 1) = -0.05;
+    bw_cart(1, 0) = 0.08;
+    bw_cart(1, 1) = 0.11;
+    wb_cart = bw_cart.get_transpose(true);
+    lind(0, 0) = 1.4;
+    lind(0, 1) = 0.06;
+    lind(1, 0) = 0.06;
+    lind(1, 1) = 1.7;
+    lind(2, 2) = 1.0;
+    cut_sqrt(0, 0) = 1.15;
+    cut_sqrt(0, 1) = 0.03;
+    cut_sqrt(1, 0) = 0.03;
+    cut_sqrt(1, 1) = 0.95;
+
+    const std::vector<double> qx{1.0, 0.0, -1.0, 0.0};
+    const std::vector<double> qy{0.0, 1.0, 0.0, -1.0};
+    const std::vector<double> weights(4, librpa_int::TWO_PI / 4.0);
+    const std::vector<double> qmax(4, 0.18);
+    const double gamma_area = librpa_int::TWO_PI * 0.18 * 0.18 / 2.0;
+    const auto wc = librpa_int::strict_2d_average_wc_coulomb_basis(
+        body_inv, bw_cart, wb_cart, lind, cut_sqrt, qx, qy, weights, qmax, gamma_area);
+
+    constexpr double angle = 0.37;
+    matrix_m<std::complex<double>> rotation(2, 2, MAJOR::COL);
+    rotation(0, 0) = std::cos(angle);
+    rotation(0, 1) = -std::sin(angle);
+    rotation(1, 0) = std::sin(angle);
+    rotation(1, 1) = std::cos(angle);
+    const auto rotation_h = rotation.get_transpose(true);
+    const auto body_rotated = rotation_h * body_inv * rotation;
+    const auto bw_rotated = rotation_h * bw_cart;
+    const auto wb_rotated = wb_cart * rotation;
+    const auto cut_rotated = rotation_h * cut_sqrt * rotation;
+    const auto wc_rotated = librpa_int::strict_2d_average_wc_coulomb_basis(
+        body_rotated, bw_rotated, wb_rotated, lind, cut_rotated, qx, qy, weights, qmax, gamma_area);
+
+    matrix_m<std::complex<double>> full_rotation(3, 3, MAJOR::COL);
+    full_rotation(0, 0) = 1.0;
+    for (int i = 0; i != 2; ++i)
+        for (int j = 0; j != 2; ++j) full_rotation(i + 1, j + 1) = rotation(i, j);
+    const auto expected = full_rotation.get_transpose(true) * wc * full_rotation;
+    for (int i = 0; i != 3; ++i)
+        for (int j = 0; j != 3; ++j) assert_complex_close(wc_rotated(i, j), expected(i, j), 2e-13);
+}
+
+void test_strict_2d_wc_average_is_bounded_as_gamma_cell_shrinks()
+{
+    matrix_m<std::complex<double>> body_inv(1, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> bw_cart(1, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> wb_cart(3, 1, MAJOR::COL);
+    matrix_m<std::complex<double>> lind(3, 3, MAJOR::COL);
+    matrix_m<std::complex<double>> cut_sqrt(1, 1, MAJOR::COL);
+    body_inv(0, 0) = 0.76;
+    bw_cart(0, 0) = {0.14, 0.02};
+    bw_cart(0, 1) = {-0.05, 0.01};
+    wb_cart(0, 0) = std::conj(bw_cart(0, 0));
+    wb_cart(1, 0) = std::conj(bw_cart(0, 1));
+    lind(0, 0) = 1.45;
+    lind(0, 1) = 0.04;
+    lind(1, 0) = 0.04;
+    lind(1, 1) = 1.30;
+    lind(2, 2) = 1.0;
+    cut_sqrt(0, 0) = 1.2;
+
+    const std::vector<double> qx{1.0, 0.0, -1.0, 0.0};
+    const std::vector<double> qy{0.0, 1.0, 0.0, -1.0};
+    const std::vector<double> weights(4, librpa_int::TWO_PI / 4.0);
+    const std::array<int, 4> meshes{12, 14, 16, 20};
+    double previous_weighted_norm = std::numeric_limits<double>::infinity();
+
+    for (const int mesh : meshes)
+    {
+        const double gamma_area = 1.0 / static_cast<double>(mesh * mesh);
+        const double radial_extent = std::sqrt(2.0 * gamma_area / librpa_int::TWO_PI);
+        const std::vector<double> qmax(4, radial_extent);
+        const auto average = librpa_int::strict_2d_average_wc_coulomb_basis(
+            body_inv, bw_cart, wb_cart, lind, cut_sqrt, qx, qy, weights, qmax, gamma_area);
+
+        double average_norm_squared = 0.0;
+        for (int i = 0; i != average.nr(); ++i)
+            for (int j = 0; j != average.nc(); ++j)
+                average_norm_squared += std::norm(average(i, j));
+        const double average_norm = std::sqrt(average_norm_squared);
+        assert(std::isfinite(average_norm));
+        assert(average_norm < 10.0);
+
+        const double weighted_norm = average_norm / static_cast<double>(mesh * mesh);
+        assert(weighted_norm < previous_weighted_norm);
+        previous_weighted_norm = weighted_norm;
+    }
+}
+
+void test_rpa_chi0v_wing_desc_matches_producer_layout(const BlacsCtxtHandler &blacs_h)
+{
+    const auto require = [](const bool condition)
+    {
+        if (!condition) std::abort();
+    };
     ArrayDesc desc_body(blacs_h);
     desc_body.init_square_blk(10, 10, 0, 0);
 
@@ -698,14 +1510,36 @@ void test_rpa_chi0v_wing_desc_uses_global_rows(const BlacsCtxtHandler &blacs_h)
 
     if (desc_body.nprows() > 1)
     {
-        assert(desc_full_wing.m_loc() < desc_full_wing.m());
+        require(desc_full_wing.m_loc() < desc_full_wing.m());
     }
-    assert(desc_wing.m() == 11);
-    assert(desc_wing.n() == 3);
-    assert(desc_wing.mb() == desc_body.mb());
-    assert(desc_wing.nb() == 1);
-    assert(desc_wing.m_loc() == desc_full_wing.m_loc());
-    assert(desc_wing.n_loc() == desc_full_wing.n_loc());
+    require(desc_wing.m() == 11);
+    require(desc_wing.n() == 3);
+    require(desc_wing.mb() == desc_body.mb());
+    require(desc_wing.nb() == 1);
+    require(desc_wing.m_loc() == desc_full_wing.m_loc());
+    require(desc_wing.n_loc() == desc_full_wing.n_loc());
+    require(std::equal(desc_wing.desc, desc_wing.desc + 9, desc_full_wing.desc));
+    require(desc_wing.l2g_r() == desc_full_wing.l2g_r());
+    require(desc_wing.l2g_c() == desc_full_wing.l2g_c());
+}
+
+void test_rpa_headwing_matrix_descriptor_contract(const BlacsCtxtHandler &blacs_h)
+{
+    const auto require = [](const bool condition)
+    {
+        if (!condition) std::abort();
+    };
+    ArrayDesc storage_desc(blacs_h);
+    storage_desc.init(8, 8, 2, 2, 0, 0);
+    const auto matrix = init_local_mat<std::complex<double>>(storage_desc, MAJOR::COL);
+
+    ArrayDesc same_desc(blacs_h);
+    same_desc.init(8, 8, 2, 2, 0, 0);
+    require(librpa_int::rpa_headwing_matrix_matches_descriptor(matrix, storage_desc, same_desc));
+
+    ArrayDesc wrong_desc(blacs_h);
+    wrong_desc.init(8, 8, 4, 4, 0, 0);
+    require(!librpa_int::rpa_headwing_matrix_matches_descriptor(matrix, storage_desc, wrong_desc));
 }
 
 void test_headwing_spin_weights()
@@ -975,10 +1809,10 @@ void test_headwing_wfc_restore_applies_atom_permutation()
     const auto wfc_bz = librpa_int::rotate_headwing_wfc_to_kstar_member(
         ctx, member, layouts, atom_nw, {0.0, 0.0, 0.0}, wfc_ibz, nullptr);
 
-    assert_complex_close(wfc_bz(0, 0), wfc_ibz(0, 1) * std::complex<double>{3.0, -0.25},
-                         1e-12);
-    assert_complex_close(wfc_bz(0, 1), wfc_ibz(0, 0) * std::complex<double>{2.0, 0.5},
-                         1e-12);
+    // C_BZ = C_IBZ * R, with R[atom_to, atom_from] = rotation(atom_from).
+    // The independent Si density fixture tests this placement against producer data.
+    assert_complex_close(wfc_bz(0, 0), wfc_ibz(0, 1) * std::complex<double>{2.0, 0.5}, 1e-12);
+    assert_complex_close(wfc_bz(0, 1), wfc_ibz(0, 0) * std::complex<double>{3.0, -0.25}, 1e-12);
 }
 
 void test_headwing_wfc_restore_applies_time_reversal()
@@ -1484,12 +2318,1406 @@ void test_head_initialization_does_not_require_coulomb_diagonalization(
     assert(df.get_head_vec().size() == 1);
 }
 
+// Dense old Coulomb-basis averaged inverse dielectric reference. sqrt(V) is an
+// independent fixed input; U supplies the Coulomb eigenvectors (x1 = U[:,0] and
+// the rotation back to the ABF basis). Returns eps_inv in the ABF basis.
+Matz coulomb_basis_eps_inv_reference(
+    const Matz &U, const Matz &sqrtV, const Matz &chi0,
+    const Matz &wing_mu, const Matz &head,
+    const std::vector<std::array<double, 3>> &q_pts, const std::vector<double> &q_rho,
+    int n_nonsingular = -1)
+{
+    const int n = U.nr();
+    if (n_nonsingular < 0) n_nonsingular = n;
+    assert(n_nonsingular > 0 && n_nonsingular <= n);
+    const int nl = n_nonsingular - 1;
+
+    // sqrtveig = sqrt(V) * U  (= U * diag(sqrt(lambda)) when consistent)
+    const auto sqrtveig = sqrtV * U;
+
+    // E_coul = I - sqrtveig^H * chi0 * sqrtveig = U^H * E_abf * U
+    auto E_coul = sqrtveig.get_transpose(true) * chi0 * sqrtveig;
+    E_coul *= -1.0;
+    for (int i = 0; i < n; ++i) E_coul(i, i) += 1.0;
+
+    if (nl == 0)
+    {
+        // No body channels: L = H and the averaged inverse is a0 * P with
+        // P = x1*x1^H. Avoids a zero-dimensional LAPACK inversion.
+        const auto L00 = head(0, 0), L01 = head(0, 1), L02 = head(0, 2);
+        const auto L10 = head(1, 0), L11 = head(1, 1), L12 = head(1, 2);
+        const auto L20 = head(2, 0), L21 = head(2, 1), L22 = head(2, 2);
+        std::complex<double> a0 = 0.0;
+        for (std::size_t ileb = 0; ileb < q_pts.size(); ++ileb)
+        {
+            const double qx = q_pts[ileb][0], qy = q_pts[ileb][1], qz = q_pts[ileb][2];
+            const auto qLq = qx * (qx * L00 + qy * L01 + qz * L02) +
+                             qy * (qx * L10 + qy * L11 + qz * L12) +
+                             qz * (qx * L20 + qy * L21 + qz * L22);
+            a0 += q_rho[ileb] / qLq;
+        }
+        Matz x1(n, 1, MAJOR::COL);
+        for (int i = 0; i < n; ++i) x1(i, 0) = U(i, 0);
+        return a0 * (x1 * x1.get_transpose(true));
+    }
+
+    // body = E_coul[1:,1:], invert it via LU
+    Matz body(nl, nl, MAJOR::COL);
+    for (int i = 0; i < nl; ++i)
+        for (int j = 0; j < nl; ++j)
+            body(i, j) = E_coul(i + 1, j + 1);
+    auto body_inv = body.copy();
+    std::vector<int> ipiv(static_cast<std::size_t>(nl));
+    std::vector<std::complex<double>> work(static_cast<std::size_t>(nl * nl));
+    int info = 0;
+    librpa_int::LapackConnector::getrf_f(
+        nl, nl, body_inv.ptr(), nl, ipiv.data(), info);
+    assert(info == 0);
+    const int lwork = nl * nl;
+    librpa_int::LapackConnector::getri_f(
+        nl, body_inv.ptr(), nl, ipiv.data(), work.data(), lwork, info);
+    assert(info == 0);
+
+    // wing = sqrtveig[:,1:]^H * wing_mu  (nl x 3)
+    Matz wing(nl, 3, MAJOR::COL);
+    for (int i = 0; i < nl; ++i)
+        for (int j = 0; j < 3; ++j)
+        {
+            std::complex<double> s = 0.0;
+            for (int k = 0; k < n; ++k)
+                s += std::conj(sqrtveig(k, i + 1)) * wing_mu(k, j);
+            wing(i, j) = s;
+        }
+
+    auto Lind = head - wing.get_transpose(true) * body_inv * wing;
+    auto bw = body_inv * wing;
+    auto wb = wing.get_transpose(true) * body_inv;
+
+    const auto L00 = Lind(0, 0), L01 = Lind(0, 1), L02 = Lind(0, 2);
+    const auto L10 = Lind(1, 0), L11 = Lind(1, 1), L12 = Lind(1, 2);
+    const auto L20 = Lind(2, 0), L21 = Lind(2, 1), L22 = Lind(2, 2);
+
+    const int nleb = static_cast<int>(q_pts.size());
+    Matz eps_inv_coul(n, n, MAJOR::COL);
+    eps_inv_coul.zero_out();
+    for (int ileb = 0; ileb < nleb; ++ileb)
+    {
+        const double qx = q_pts[ileb][0], qy = q_pts[ileb][1], qz = q_pts[ileb][2];
+        const auto qLq = qx * (qx * L00 + qy * L01 + qz * L02) +
+                         qy * (qx * L10 + qy * L11 + qz * L12) +
+                         qz * (qx * L20 + qy * L21 + qz * L22);
+        const auto w = q_rho[ileb] / qLq;
+        eps_inv_coul(0, 0) += w;
+        for (int i = 1; i < n_nonsingular; ++i)
+            for (int j = 1; j < n_nonsingular; ++j)
+            {
+                const auto bwq = bw(i - 1, 0) * qx + bw(i - 1, 1) * qy + bw(i - 1, 2) * qz;
+                const auto qwb = qx * wb(0, j - 1) + qy * wb(1, j - 1) + qz * wb(2, j - 1);
+                eps_inv_coul(i, j) += w * bwq * qwb;
+            }
+    }
+    for (int i = 1; i < n_nonsingular; ++i)
+        for (int j = 1; j < n_nonsingular; ++j)
+            eps_inv_coul(i, j) += body_inv(i - 1, j - 1);
+
+    return U * eps_inv_coul * U.get_transpose(true);
+}
+
+// Run the production ABF-space helper on distributed matrices and compare to
+// the dense old Coulomb-basis reference. Returns the observed max abs error.
+double run_abf_case(const BlacsCtxtHandler &blacs_h, int n, int block_size,
+                    const Matz &U, const Matz &sqrtV,
+                    const Matz &chi0, const Matz &wing_mu,
+                    const Matz &head,
+                    const std::vector<std::array<double, 3>> &q_pts,
+                    const std::vector<double> &q_rho, bool use_cholesky, double tol,
+                    int n_nonsingular = -1)
+{
+    if (n_nonsingular < 0) n_nonsingular = n;
+    const auto ref = coulomb_basis_eps_inv_reference(U, sqrtV, chi0, wing_mu, head,
+                                                     q_pts, q_rho, n_nonsingular);
+    // E = I - sqrt(V) * chi0 * sqrt(V)
+    auto E = sqrtV * chi0 * sqrtV;
+    E *= -1.0;
+    for (int i = 0; i < n; ++i) E(i, i) += 1.0;
+
+    ArrayDesc desc(blacs_h);
+    desc.init(n, n, block_size, block_size, 0, 0);
+    auto E_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+    auto sqrtV_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+    auto U_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+    fill_distributed_matrix(E_dist, desc, E);
+    fill_distributed_matrix(sqrtV_dist, desc, sqrtV);
+    fill_distributed_matrix(U_dist, desc, U);
+
+    ArrayDesc desc_head_direction(blacs_h);
+    desc_head_direction.init(n, 1, block_size, block_size, 0, 0);
+    auto head_direction = init_local_mat<std::complex<double>>(desc_head_direction, MAJOR::COL);
+    librpa_int::ScalapackConnector::pgemr2d_f(
+        n, 1, U_dist.ptr(), 1, 1, desc.desc,
+        head_direction.ptr(), 1, 1, desc_head_direction.desc, blacs_h.ictxt);
+
+    std::vector<double> qx(q_pts.size()), qy(q_pts.size()), qz(q_pts.size());
+    for (std::size_t i = 0; i < q_pts.size(); ++i)
+    {
+        qx[i] = q_pts[i][0];
+        qy[i] = q_pts[i][1];
+        qz[i] = q_pts[i][2];
+    }
+
+    librpa_int::rewrite_eps_abf_space(E_dist, sqrtV_dist, U_dist,
+                                      head_direction, desc_head_direction, head, wing_mu, qx, qy,
+                                      qz, q_rho, desc, blacs_h,
+                                      static_cast<std::size_t>(n_nonsingular), 0.0,
+                                      use_cholesky, false);
+
+    double local_max_err = 0.0;
+    for (int ilo = 0; ilo != desc.m_loc(); ++ilo)
+    {
+        const int ig = desc.indx_l2g_r(ilo);
+        for (int jlo = 0; jlo != desc.n_loc(); ++jlo)
+        {
+            const int jg = desc.indx_l2g_c(jlo);
+            local_max_err =
+                std::max(local_max_err, std::abs(E_dist(ilo, jlo) - ref(ig, jg)));
+        }
+    }
+    double max_err = 0.0;
+    MPI_Allreduce(&local_max_err, &max_err, 1, MPI_DOUBLE, MPI_MAX, desc.comm());
+    require_double_close(max_err, 0.0, tol);
+    return max_err;
+}
+
+void test_abf_space_wing_rewrite_matches_coulomb_basis(const BlacsCtxtHandler &blacs_h)
+{
+    // 3D quadrature: 6 points on the unit sphere.
+    const std::vector<std::array<double, 3>> q3d{
+        {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    std::vector<double> rho3d(6);
+    for (auto &r : rho3d) r = (4.0 * M_PI / 6.0) / 3.0;
+
+    // 2D quadrature: 4 points on the unit circle.
+    const std::vector<std::array<double, 3>> q2d{
+        {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
+    std::vector<double> rho2d(4);
+    for (auto &r : rho2d) r = (2.0 * M_PI / 4.0) / 2.0;
+
+    constexpr int n = 4;
+    const double half = 0.5;
+    const Matz U(
+        {{{half, 0.0}, {half, 0.0}, {half, 0.0}, {half, 0.0}},
+         {{half, 0.0}, {-half, 0.0}, {half, 0.0}, {-half, 0.0}},
+         {{half, 0.0}, {half, 0.0}, {-half, 0.0}, {-half, 0.0}},
+         {{half, 0.0}, {-half, 0.0}, {-half, 0.0}, {half, 0.0}}},
+        MAJOR::COL);
+    const std::array<double, n> lambda{{9.0, 4.0, 1.0, 0.25}};
+    Matz sqrtveig(n, n, MAJOR::COL);
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            sqrtveig(i, j) = U(i, j) * std::sqrt(lambda[static_cast<size_t>(j)]);
+    const auto sqrtV = sqrtveig * U.get_transpose(true);
+
+    // Negative-semidefinite chi0 = -v v^H so E (and hence M) is Hermitian
+    // positive definite and Cholesky is valid.
+    Matz chi0(n, n, MAJOR::COL);
+    {
+        const std::array<std::complex<double>, n> v{{
+            {0.20, 0.0}, {0.10, 0.05}, {-0.15, 0.0}, {0.05, -0.10}}};
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                chi0(i, j) = -v[static_cast<size_t>(i)] * std::conj(v[static_cast<size_t>(j)]);
+    }
+
+    const Matz wing_mu(
+        {{{0.11, 0.01}, {0.12, 0.02}, {0.13, 0.03}},
+         {{0.21, 0.04}, {0.22, 0.05}, {0.23, 0.06}},
+         {{0.31, 0.07}, {0.32, 0.08}, {0.33, 0.09}},
+         {{0.41, 0.10}, {0.42, 0.11}, {0.43, 0.12}}},
+        MAJOR::COL);
+    Matz zero_wing_mu(n, 3, MAJOR::COL);
+    zero_wing_mu.zero_out();
+
+    const Matz head(
+        {{{2.0, 0.0}, {0.2, 0.1}, {0.3, -0.1}},
+         {{0.2, -0.1}, {2.2, 0.0}, {0.4, 0.2}},
+         {{0.3, 0.1}, {0.4, -0.2}, {2.4, 0.0}}},
+        MAJOR::COL);
+
+    // LU and Cholesky, 3D and 2D, nonzero and zero wing (square grid).
+    run_abf_case(blacs_h, n, 1, U, sqrtV, chi0, wing_mu, head, q3d, rho3d, false, 1e-10);
+    run_abf_case(blacs_h, n, 2, U, sqrtV, chi0, wing_mu, head, q3d, rho3d, true, 1e-10);
+    run_abf_case(blacs_h, n, 1, U, sqrtV, chi0, wing_mu, head, q2d, rho2d, false, 1e-10);
+    run_abf_case(blacs_h, n, 2, U, sqrtV, chi0, wing_mu, head, q2d, rho2d, true, 1e-10);
+    run_abf_case(blacs_h, n, 1, U, sqrtV, chi0, zero_wing_mu, head, q3d, rho3d, false, 1e-10);
+    run_abf_case(blacs_h, n, 2, U, sqrtV, chi0, zero_wing_mu, head, q3d, rho3d, true, 1e-10);
+
+    // Wing with a deliberately large component parallel to x1 in each
+    // Cartesian column. The Direct-Z path (A = D*Z, no explicit projection)
+    // must still match the Coulomb-basis reference because D*x1 = 0.
+    {
+        auto wing_mu_large_x1 = wing_mu.copy();
+        for (int alpha = 0; alpha != 3; ++alpha)
+            for (int mu = 0; mu != n; ++mu)
+                wing_mu_large_x1(mu, alpha) += 100.0 * U(mu, 0);
+        run_abf_case(blacs_h, n, 1, U, sqrtV, chi0, wing_mu_large_x1, head, q3d, rho3d,
+                     false, 1e-10);
+        run_abf_case(blacs_h, n, 2, U, sqrtV, chi0, wing_mu_large_x1, head, q3d, rho3d,
+                     true, 1e-10);
+    }
+
+    // Rectangular (horizontal) CPU BLACS grid; exercises empty thin local
+    // blocks on ranks that own no rows/columns of the thin descriptors.
+    {
+        BlacsCtxtHandler horizontal_blacs_h(MPI_COMM_WORLD);
+        horizontal_blacs_h.init();
+        horizontal_blacs_h.set_horizontal_grid();
+        run_abf_case(horizontal_blacs_h, n, 1, U, sqrtV, chi0, wing_mu, head, q3d, rho3d,
+                     false, 1e-10);
+        run_abf_case(horizontal_blacs_h, n, 1, U, sqrtV, chi0, wing_mu, head, q3d, rho3d,
+                     true, 1e-10);
+    }
+
+    // n_abf == 1 exercises the n-by-1 thin descriptors at the minimal size.
+    {
+        Matz U1(1, 1, MAJOR::COL);
+        U1(0, 0) = {1.0, 0.0};
+        Matz sqrtV1(1, 1, MAJOR::COL);
+        sqrtV1(0, 0) = {3.0, 0.0};
+        Matz chi01(1, 1, MAJOR::COL);
+        chi01(0, 0) = {-0.04, 0.0};
+        Matz wing_mu1(1, 3, MAJOR::COL);
+        wing_mu1(0, 0) = {0.10, 0.01};
+        wing_mu1(0, 1) = {0.11, 0.02};
+        wing_mu1(0, 2) = {0.12, 0.03};
+        run_abf_case(blacs_h, 1, 1, U1, sqrtV1, chi01, wing_mu1, head, q3d, rho3d, false,
+                     1e-10);
+    }
+
+    // Large orthonormal U with a block-cyclic layout wider than one block, so
+    // ranks own multiple non-contiguous eigenvector columns and the thin
+    // n_abf x m redistribution destination is genuinely block-cyclic. The
+    // 16x16 Sylvester Hadamard matrix scaled by 1/4 has entries +-0.25, which
+    // are exactly representable, so U U^H = I holds bit-exactly and the
+    // reference comparison is not limited by the input's orthogonality.
+    {
+        constexpr int nh = 16;
+        constexpr int blk = 4;
+        Matz U16(nh, nh, MAJOR::COL);
+        for (int i = 0; i < nh; ++i)
+        {
+            for (int j = 0; j < nh; ++j)
+            {
+                const int ii = i, jj = j;
+                int parity = 0;
+                for (int b = 0; b < 4; ++b)
+                    parity ^= ((ii >> b) & 1) & ((jj >> b) & 1);
+                U16(i, j) = std::complex<double>{parity ? -0.25 : 0.25, 0.0};
+            }
+        }
+
+        const std::array<double, nh> lambda16{
+            {64.0, 36.0, 25.0, 16.0, 12.0, 9.0, 7.0, 5.0,
+             3.0, 2.0, 1.5, 1.0, 0.75, 0.5, 0.25, 0.1}};
+
+        // sqrt(V) = U * diag(sqrt(lambda)) * U^H, built with only the retained
+        // channels so the filtered ones carry exactly zero Coulomb weight.
+        auto build_sqrtV16 = [&](int n_nonsing) {
+            Matz sqrtveig(nh, nh, MAJOR::COL);
+            sqrtveig.zero_out();
+            for (int i = 0; i < nh; ++i)
+                for (int j = 0; j < n_nonsing; ++j)
+                    sqrtveig(i, j) = U16(i, j) * std::sqrt(lambda16[static_cast<std::size_t>(j)]);
+            return sqrtveig * U16.get_transpose(true);
+        };
+
+        Matz chi0_16(nh, nh, MAJOR::COL);
+        chi0_16.zero_out();
+        {
+            // Negative-semidefinite chi0 = -v v^H keeps M Hermitian positive
+            // definite, so the Cholesky path is valid.
+            std::array<std::complex<double>, nh> v{};
+            for (int i = 0; i < nh; ++i)
+                v[static_cast<std::size_t>(i)] = {0.05 * (i + 1), 0.02 * ((i % 5) - 2)};
+            for (int i = 0; i < nh; ++i)
+                for (int j = 0; j < nh; ++j)
+                    chi0_16(i, j) = -v[static_cast<std::size_t>(i)] *
+                                    std::conj(v[static_cast<std::size_t>(j)]);
+        }
+
+        Matz wing_mu_16(nh, 3, MAJOR::COL);
+        for (int i = 0; i < nh; ++i)
+            for (int j = 0; j < 3; ++j)
+                wing_mu_16(i, j) = {0.05 + 0.01 * i, 0.02 * (j + 1) - 0.03};
+
+        // m = 3 (n_singular = 2) is the production regime
+        // n_nonsingular >> n_singular; m = 11 > n/2 is the regime where the
+        // low-rank form is admitted to do more flops than forming T directly.
+        const int n_nons_16[] = {14, 6};
+        for (int n_nons : n_nons_16)
+        {
+            const auto sqrtV16 = build_sqrtV16(n_nons);
+            run_abf_case(blacs_h, nh, blk, U16, sqrtV16, chi0_16, wing_mu_16, head,
+                         q3d, rho3d, false, 1e-10, n_nons);
+            run_abf_case(blacs_h, nh, blk, U16, sqrtV16, chi0_16, wing_mu_16, head,
+                         q3d, rho3d, true, 1e-10, n_nons);
+        }
+    }
+
+    // Filtered Coulomb basis: the last eigenchannel has zero eigenvalue and is
+    // excluded. Both inversion paths must agree with the old reduced Coulomb-
+    // basis algorithm and produce no component in the filtered subspace.
+    {
+        constexpr int nr = n - 1;
+        Matz sqrtveig_filtered(n, n, MAJOR::COL);
+        sqrtveig_filtered.zero_out();
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < nr; ++j)
+                sqrtveig_filtered(i, j) =
+                    U(i, j) * std::sqrt(lambda[static_cast<std::size_t>(j)]);
+        const auto sqrtV_filtered = sqrtveig_filtered * U.get_transpose(true);
+
+        run_abf_case(blacs_h, n, 1, U, sqrtV_filtered, chi0, wing_mu, head,
+                     q3d, rho3d, false, 1e-10, nr);
+        run_abf_case(blacs_h, n, 2, U, sqrtV_filtered, chi0, wing_mu, head,
+                     q3d, rho3d, true, 1e-10, nr);
+        run_abf_case(blacs_h, n, 1, U, sqrtV_filtered, chi0, zero_wing_mu, head,
+                     q2d, rho2d, false, 1e-10, nr);
+
+        // Sensitivity to a non-Hermitian E. The rewrite contracts E only as
+        // E*Y, so it is exact for Hermitian E and accurate to O(|E - E^H|)
+        // otherwise: the result differs from the dense reference by 2*P*Delta
+        // with Delta = (E - E^H)/2, so an anti-Hermitian perturbation of size d
+        // must move the answer by O(d) -- here ~1e-12, far under the 1e-10
+        // tolerance. This pins that scaling: a change that amplifies it (for
+        // example reusing one product for two genuinely different operands)
+        // fails here instead of silently biasing production results.
+        {
+            auto chi0_nonherm = chi0.copy();
+            for (int i = 0; i < n; ++i)
+                for (int j = 0; j < n; ++j)
+                    chi0_nonherm(i, j) += std::complex<double>{1e-12 * (i - j), 0.0};
+            const double err = run_abf_case(blacs_h, n, 1, U, sqrtV_filtered, chi0_nonherm,
+                                            wing_mu, head, q3d, rho3d, false, 1e-10, nr);
+            if (blacs_h.myid == 0)
+                std::cout << "non-Hermitian E sensitivity (d=1e-12): max abs err = "
+                          << err << std::endl;
+        }
+
+        // Retained head channel only: T = 0, M = I, D = 0, so the averaged
+        // inverse reduces to a0*P. Exercises the k == 0 projector guard.
+        {
+            Matz sqrtveig_head_only(n, n, MAJOR::COL);
+            sqrtveig_head_only.zero_out();
+            for (int i = 0; i < n; ++i)
+                sqrtveig_head_only(i, 0) = U(i, 0) * std::sqrt(lambda[0]);
+            const auto sqrtV_head_only = sqrtveig_head_only * U.get_transpose(true);
+            run_abf_case(blacs_h, n, 1, U, sqrtV_head_only, chi0, wing_mu, head,
+                         q3d, rho3d, false, 1e-10, 1);
+            run_abf_case(blacs_h, n, 2, U, sqrtV_head_only, chi0, wing_mu, head,
+                         q3d, rho3d, true, 1e-10, 1);
+        }
+    }
+
+    // Without filtering, only the explicit head direction matters; changing
+    // any Coulomb eigenvector column must leave the result unchanged.
+    {
+        auto U_mod = U.copy();
+        for (int col = 0; col < n; ++col)
+            for (int row = 0; row < n; ++row)
+                U_mod(row, col) *= std::complex<double>{0.0, 2.0};
+
+        auto E = sqrtV * chi0 * sqrtV;
+        E *= -1.0;
+        for (int i = 0; i < n; ++i) E(i, i) += 1.0;
+
+        ArrayDesc desc(blacs_h);
+        desc.init(n, n, 1, 1, 0, 0);
+        auto E1 = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+        auto E2 = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+        auto sqrtV_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+        auto U_orig_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+        auto U_mod_dist = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+        fill_distributed_matrix(E1, desc, E);
+        fill_distributed_matrix(E2, desc, E);
+        fill_distributed_matrix(sqrtV_dist, desc, sqrtV);
+        fill_distributed_matrix(U_orig_dist, desc, U);
+        fill_distributed_matrix(U_mod_dist, desc, U_mod);
+
+        ArrayDesc desc_head_direction(blacs_h);
+        desc_head_direction.init(n, 1, 2, 1, 0, 0);
+        auto head_direction = init_local_mat<std::complex<double>>(desc_head_direction, MAJOR::COL);
+        librpa_int::ScalapackConnector::pgemr2d_f(
+            n, 1, U_orig_dist.ptr(), 1, 1, desc.desc,
+            head_direction.ptr(), 1, 1, desc_head_direction.desc, blacs_h.ictxt);
+
+        std::vector<double> qx(6), qy(6), qz(6);
+        for (std::size_t i = 0; i < q3d.size(); ++i)
+        {
+            qx[i] = q3d[i][0];
+            qy[i] = q3d[i][1];
+            qz[i] = q3d[i][2];
+        }
+
+        librpa_int::rewrite_eps_abf_space(E1, sqrtV_dist, U_orig_dist,
+                                          head_direction, desc_head_direction, head, wing_mu, qx, qy,
+                                          qz, rho3d, desc, blacs_h,
+                                          static_cast<std::size_t>(n), 0.0, false, false);
+        librpa_int::rewrite_eps_abf_space(E2, sqrtV_dist, U_mod_dist,
+                                          head_direction, desc_head_direction, head, wing_mu, qx, qy,
+                                          qz, rho3d, desc, blacs_h,
+                                          static_cast<std::size_t>(n), 0.0, false, false);
+
+        double local_max_err = 0.0;
+        for (int ilo = 0; ilo != desc.m_loc(); ++ilo)
+            for (int jlo = 0; jlo != desc.n_loc(); ++jlo)
+                local_max_err =
+                    std::max(local_max_err, std::abs(E1(ilo, jlo) - E2(ilo, jlo)));
+        double max_err = 0.0;
+        MPI_Allreduce(&local_max_err, &max_err, 1, MPI_DOUBLE, MPI_MAX, desc.comm());
+        require_double_close(max_err, 0.0, 1e-10);
+    }
+}
 }  // namespace
+
+void add_wq_blocks(
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old &wq,
+    const Vector3_Order<double> &q, const librpa_int::symmetry_atom_block_matrix_map_t &blocks)
+{
+    for (const auto &[atom_i, row] : blocks)
+    {
+        for (const auto &[atom_j, source] : row)
+        {
+            auto &target = wq[atom_i][atom_j][q];
+            target = matrix_m<std::complex<double>>(source.nr, source.nc, MAJOR::ROW);
+            for (int i = 0; i != source.nr; ++i)
+                for (int j = 0; j != source.nc; ++j) target(i, j) = source(i, j);
+        }
+    }
+}
+
+void add_vq_blocks(atpair_k_cplx_mat_t &vq, const Vector3_Order<double> &q,
+                   const librpa_int::symmetry_atom_block_matrix_map_t &blocks)
+{
+    for (const auto &[atom_i, row] : blocks)
+    {
+        for (const auto &[atom_j, source] : row)
+        {
+            vq[atom_i][atom_j][q] = std::make_shared<ComplexMatrix>(source);
+        }
+    }
+}
+
+librpa_int::symmetry_atom_block_matrix_map_t make_bn_hermitian_wq_blocks(
+    const std::vector<int> &n_by_atom, const double index)
+{
+    const int n = std::accumulate(n_by_atom.begin(), n_by_atom.end(), 0);
+    ComplexMatrix dense(n, n);
+    for (int i = 0; i != n; ++i)
+    {
+        dense(i, i) = {1.0 + 0.09 * index + 0.04 * (i + 1), 0.0};
+        for (int j = i + 1; j != n; ++j)
+        {
+            dense(i, j) = {0.023 * (i + 1) * (j + 2) + 0.011 * index,
+                           0.017 * (j - i) + 0.007 * index};
+            dense(j, i) = std::conj(dense(i, j));
+        }
+    }
+
+    librpa_int::symmetry_atom_block_matrix_map_t blocks;
+    std::vector<int> offsets{0};
+    for (const int n_atom : n_by_atom) offsets.push_back(offsets.back() + n_atom);
+    for (atom_t atom_i = 0; atom_i != 2; ++atom_i)
+    {
+        for (atom_t atom_j = 0; atom_j != 2; ++atom_j)
+        {
+            auto &block = blocks[atom_i][atom_j];
+            block.create(n_by_atom.at(atom_i), n_by_atom.at(atom_j));
+            for (int i = 0; i != n_by_atom.at(atom_i); ++i)
+                for (int j = 0; j != n_by_atom.at(atom_j); ++j)
+                    block(i, j) = dense(offsets.at(atom_i) + i, offsets.at(atom_j) + j);
+        }
+    }
+    return blocks;
+}
+
+std::vector<std::vector<int>> make_bn_test_shells(const int basis_case)
+{
+    if (basis_case == 0) return {{0}, {0}};
+    if (basis_case == 1) return {{0, 1}, {0, 1}};
+    if (basis_case == 2)
+        return {{0, 0, 0, 1, 1, 1, 2, 2}, {0, 0, 0, 1, 1, 1, 2, 2}};
+    if (basis_case == 3)
+        return {{0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
+                 3, 3, 3, 3, 3, 4, 4, 4},
+                {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,
+                 4, 4, 4}};
+    throw std::runtime_error("unknown BN basis test case");
+}
+
+std::vector<int> basis_counts_from_shells(const std::vector<std::vector<int>> &shells)
+{
+    std::vector<int> counts;
+    for (const auto &atom_shells : shells)
+    {
+        int count = 0;
+        for (const int l : atom_shells) count += 2 * l + 1;
+        counts.push_back(count);
+    }
+    return counts;
+}
+
+void test_spacetime_fourier_phases_form_k_minus_q_convolution()
+{
+    constexpr int mesh = 3;
+    const std::array<std::complex<double>, mesh> wc_q{{{1.2, -0.3}, {-0.4, 0.7}, {0.9, 0.2}}};
+    const std::array<std::complex<double>, mesh> weighted_green_k{{{0.13, 0.04},
+                                                                    {-0.08, 0.02},
+                                                                    {0.05, -0.06}}};
+    std::array<std::complex<double>, mesh> wc_R{};
+    std::array<std::complex<double>, mesh> green_R{};
+    for (int iR = 0; iR != mesh; ++iR)
+        for (int iq = 0; iq != mesh; ++iq)
+        {
+            const double angle = -librpa_int::TWO_PI * static_cast<double>(iq * iR) / mesh;
+            const std::complex<double> phase{std::cos(angle), std::sin(angle)};
+            wc_R[iR] += wc_q[iq] * phase / static_cast<double>(mesh);
+            green_R[iR] += weighted_green_k[iq] * phase;
+        }
+    for (int ik = 0; ik != mesh; ++ik)
+    {
+        std::complex<double> spacetime_sigma_k{};
+        std::complex<double> direct_k_minus_q{};
+        std::complex<double> direct_k_plus_q{};
+        for (int iR = 0; iR != mesh; ++iR)
+        {
+            const double angle = librpa_int::TWO_PI * static_cast<double>(ik * iR) / mesh;
+            const std::complex<double> phase{std::cos(angle), std::sin(angle)};
+            spacetime_sigma_k += wc_R[iR] * green_R[iR] * phase;
+        }
+        for (int iq = 0; iq != mesh; ++iq)
+        {
+            direct_k_minus_q += wc_q[iq] * weighted_green_k[(ik - iq + mesh) % mesh];
+            direct_k_plus_q += wc_q[iq] * weighted_green_k[(ik + iq) % mesh];
+        }
+        assert_complex_close(spacetime_sigma_k, direct_k_minus_q, 1.0e-13);
+        if (std::abs(spacetime_sigma_k - direct_k_plus_q) < 1.0e-5)
+            throw std::runtime_error("synthetic data do not distinguish k-q from k+q");
+    }
+}
+
+std::vector<SymmetryOperation> make_bn_hexagonal_operations()
+{
+    const std::array<std::array<int, 9>, 12> rotations{{
+        {{1, 0, 0, 0, 1, 0, 0, 0, 1}}, {{0, 1, 0, -1, -1, 0, 0, 0, -1}},
+        {{-1, -1, 0, 1, 0, 0, 0, 0, 1}}, {{1, 0, 0, 0, 1, 0, 0, 0, -1}},
+        {{0, 1, 0, -1, -1, 0, 0, 0, 1}}, {{-1, -1, 0, 1, 0, 0, 0, 0, -1}},
+        {{-1, 0, 0, 1, 1, 0, 0, 0, 1}}, {{1, 1, 0, 0, -1, 0, 0, 0, -1}},
+        {{0, -1, 0, -1, 0, 0, 0, 0, 1}}, {{-1, 0, 0, 1, 1, 0, 0, 0, -1}},
+        {{1, 1, 0, 0, -1, 0, 0, 0, 1}}, {{0, -1, 0, -1, 0, 0, 0, 0, -1}}}};
+    std::vector<SymmetryOperation> operations;
+    operations.reserve(rotations.size());
+    for (const auto &rotation : rotations)
+    {
+        SymmetryOperation operation;
+        operation.rotation = Matrix3(rotation[0], rotation[1], rotation[2], rotation[3],
+                                     rotation[4], rotation[5], rotation[6], rotation[7],
+                                     rotation[8]);
+        operation.translation = {0.0, 0.0, 0.0};
+        operation.use_row_convention = true;
+        operations.push_back(operation);
+    }
+    return operations;
+}
+
+void set_bn_hexagonal_lattice(PeriodicBoundaryData &pbc)
+{
+    const double sqrt_three = std::sqrt(3.0);
+    pbc.set_latvec({0.5, -0.5 * sqrt_three, 0.0, 0.5, 0.5 * sqrt_three, 0.0, 0.0, 0.0,
+                    8.0});
+}
+
+SymmetryContext make_bn_hexagonal_context(const PeriodicBoundaryData &pbc, const int max_l = 0)
+{
+    SymmetryContext ctx;
+    ctx.set_crystal_structure(pbc.latvec, pbc.G, {{0, 0}, {1, 1}},
+                              {{0, {1.0 / 3.0, 2.0 / 3.0, 0.5}},
+                               {1, {2.0 / 3.0, 1.0 / 3.0, 0.5}}});
+    ctx.set_rspace_operations(make_bn_hexagonal_operations());
+    ctx.set_available();
+    ctx.build_periodic_mappings(pbc, pbc.Rlist);
+    ctx.build_rsh_rotations(
+        {-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M},
+        max_l);
+    ctx.build_kstar_member_rotations(max_l);
+    return ctx;
+}
+
+PeriodicBoundaryData make_bn_hexagonal_full_pbc(const int mesh = 3)
+{
+    PeriodicBoundaryData pbc;
+    set_bn_hexagonal_lattice(pbc);
+    std::vector<double> kvecs;
+    for (const auto &kfrac : librpa_int::build_uniform_kmesh_frac({mesh, mesh, 1}))
+    {
+        const auto kvec = kfrac * pbc.G;
+        kvecs.insert(kvecs.end(), {librpa_int::TWO_PI * kvec.x, librpa_int::TWO_PI * kvec.y,
+                                   librpa_int::TWO_PI * kvec.z});
+    }
+    pbc.set_kgrids_kvec(mesh, mesh, 1, kvecs);
+    return pbc;
+}
+
+PeriodicBoundaryData make_bn_hexagonal_reduced_pbc(const SymmetryContext &ctx,
+                                                   const int mesh = 3)
+{
+    PeriodicBoundaryData pbc;
+    set_bn_hexagonal_lattice(pbc);
+    std::vector<double> kvecs_ibz;
+    std::vector<std::vector<Vector3_Order<double>>> full_kstars;
+    for (const auto &star : ctx.kstars)
+    {
+        const auto kvec = librpa_int::restrict_fractional_coordinate(star.k_ibz) * pbc.G;
+        kvecs_ibz.insert(kvecs_ibz.end(), {librpa_int::TWO_PI * kvec.x,
+                                           librpa_int::TWO_PI * kvec.y,
+                                           librpa_int::TWO_PI * kvec.z});
+        full_kstars.emplace_back();
+        for (const auto &member : star.members)
+            full_kstars.back().push_back(
+                librpa_int::restrict_fractional_coordinate(member.k_bz) * pbc.G);
+    }
+    pbc.set_irreducible_kgrids_kvec(mesh, mesh, 1, kvecs_ibz, full_kstars);
+    return pbc;
+}
+
+std::size_t find_fractional_kpoint_index(
+    const std::vector<Vector3_Order<double>> &kpoints,
+    const Vector3_Order<double> &target)
+{
+    for (std::size_t ik = 0; ik != kpoints.size(); ++ik)
+        if (librpa_int::same_fractional_kpoint(kpoints[ik], target, 1e-8)) return ik;
+    throw std::runtime_error("failed to find a full-grid fractional k-point in the test");
+}
+
+void assert_wq_rspace_maps_close(
+    const atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old
+        &actual,
+    const atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old
+        &expected)
+{
+    for (const auto &[atom_i, expected_row] : expected)
+    {
+        assert(actual.count(atom_i) != 0);
+        for (const auto &[atom_j, expected_Rs] : expected_row)
+        {
+            assert(actual.at(atom_i).count(atom_j) != 0);
+            for (const auto &[R, expected_block] : expected_Rs)
+            {
+                assert(actual.at(atom_i).at(atom_j).count(R) != 0);
+                const auto &actual_block = actual.at(atom_i).at(atom_j).at(R);
+                if (std::abs(actual_block(0, 0) - expected_block(0, 0)) >= 1e-12)
+                {
+                    std::cerr << "atom_pair=(" << atom_i << "," << atom_j << ") R=("
+                              << R.x << "," << R.y << "," << R.z << ")" << std::endl;
+                }
+                assert_complex_close(actual_block(0, 0), expected_block(0, 0), 1e-12);
+            }
+        }
+    }
+}
+
+void assert_vr_rspace_maps_close(const atpair_R_mat_t &actual,
+                                 const atpair_R_mat_t &expected)
+{
+    assert(actual.size() == expected.size());
+    for (const auto &[atom_i, expected_row] : expected)
+    {
+        assert(actual.count(atom_i) != 0);
+        assert(actual.at(atom_i).size() == expected_row.size());
+        for (const auto &[atom_j, expected_Rs] : expected_row)
+        {
+            assert(actual.at(atom_i).count(atom_j) != 0);
+            assert(actual.at(atom_i).at(atom_j).size() == expected_Rs.size());
+            for (const auto &[R, expected_block_ptr] : expected_Rs)
+            {
+                assert(actual.at(atom_i).at(atom_j).count(R) != 0);
+                const auto &actual_block = *actual.at(atom_i).at(atom_j).at(R);
+                const auto &expected_block = *expected_block_ptr;
+                if (actual_block.nr != expected_block.nr || actual_block.nc != expected_block.nc)
+                    throw std::runtime_error("V(R) atom block dimensions differ");
+                for (int i = 0; i != expected_block.nr; ++i)
+                {
+                    for (int j = 0; j != expected_block.nc; ++j)
+                    {
+                        if (std::abs(actual_block(i, j) - expected_block(i, j)) >= 1e-12)
+                        {
+                            std::cerr << "V(R) atom_pair=(" << atom_i << "," << atom_j
+                                      << ") R=(" << R.x << "," << R.y << "," << R.z
+                                      << ") block=(" << i << "," << j << ") actual="
+                                      << actual_block(i, j) << " expected=" << expected_block(i, j)
+                                      << std::endl;
+                        }
+                        assert(std::abs(actual_block(i, j) - expected_block(i, j)) < 1e-12);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void test_bn_qstar_wq_to_wr_matches_explicit_full_bz_for_mesh(
+    const int mesh, const int basis_case, const bool clear_rspace_sector = false)
+{
+    const auto pbc_full = make_bn_hexagonal_full_pbc(mesh);
+    const auto ctx_full = make_bn_hexagonal_context(pbc_full);
+    const auto pbc_sym = make_bn_hexagonal_reduced_pbc(ctx_full, mesh);
+    const auto shells = make_bn_test_shells(basis_case);
+    const auto counts = basis_counts_from_shells(shells);
+    const int max_l = *std::max_element(shells.front().begin(), shells.front().end());
+    auto ctx = make_bn_hexagonal_context(pbc_sym, max_l);
+
+    assert(ctx.count_kstar_members() == static_cast<std::size_t>(mesh * mesh));
+
+    AtomicBasis basis_abf(
+        std::vector<std::size_t>{static_cast<std::size_t>(counts.at(0)),
+                                 static_cast<std::size_t>(counts.at(1))});
+    basis_abf.set_l_shells(shells);
+    const auto layouts = basis_abf.build_species_basis_layouts(ctx.atom_to_type);
+    const std::map<atom_t, size_t> atom_nabf{
+        {0, static_cast<std::size_t>(counts.at(0))},
+        {1, static_cast<std::size_t>(counts.at(1))}};
+    const std::set<std::pair<atom_t, atom_t>> target_pairs{{0, 0}, {0, 1}, {1, 0}, {1, 1}};
+
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_sym;
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_full;
+    const auto full_targets =
+        librpa_int::build_symmetry_full_grid_kstar_member_kfrac_targets(ctx, pbc_sym.kfrac_list);
+    const bool use_full_targets = full_targets.size() == ctx.kstars.size();
+
+    for (std::size_t istar = 0; istar != ctx.kstars.size(); ++istar)
+    {
+        const auto &star = ctx.kstars[istar];
+        const auto mapping_iter =
+            std::find_if(ctx.kstar_grid_mapping.begin(), ctx.kstar_grid_mapping.end(),
+                         [istar](const librpa_int::SymmetryKStarGridMappingEntry &entry)
+                         { return entry.star_list_index == static_cast<int>(istar); });
+        assert(mapping_iter != ctx.kstar_grid_mapping.end());
+        const double index = static_cast<double>(istar + 1);
+        const auto blocks_ibz = make_bn_hermitian_wq_blocks(counts, index);
+        add_wq_blocks(wq_sym, pbc_sym.klist.at(istar), blocks_ibz);
+
+        const auto closure = librpa_int::build_symmetry_upper_atom_pair_closure(star, target_pairs);
+        const auto symmetrized = librpa_int::symmetrize_symmetry_ibz_kspace_operator_blocks(
+            ctx, layouts, star.k_ibz, blocks_ibz, atom_nabf, &closure);
+        for (std::size_t imember = 0; imember != star.members.size(); ++imember)
+        {
+            const auto target = librpa_int::restrict_fractional_coordinate(
+                use_full_targets
+                    ? full_targets.at(istar).at(imember)
+                    : Vector3_Order<double>{pbc_sym.latvec *
+                                            mapping_iter->member_q_bz_keys.at(imember)});
+            const auto rotated = librpa_int::rotate_symmetry_kspace_operator_blocks(
+                ctx, layouts, star.members[imember], symmetrized, atom_nabf, star.k_ibz,
+                star.members[imember].time_reversal, &target_pairs, &target);
+            const auto ifull = find_fractional_kpoint_index(pbc_full.kfrac_list, target);
+            add_wq_blocks(wq_full, pbc_full.klist.at(ifull), rotated);
+        }
+    }
+
+    const double collective_scale =
+        1.0 / static_cast<double>(librpa_int::global::mpi_comm_global_h.nprocs);
+    for (auto &[atom_i, row] : wq_sym)
+        for (auto &[atom_j, q_blocks] : row)
+            for (auto &[q, block] : q_blocks) block *= collective_scale;
+
+    if (clear_rspace_sector)
+    {
+        ctx.irreducible_sector.clear();
+        ctx.rspace_sector_stars.clear();
+    }
+
+    const TFGrids dummy_tfg;
+    SymmetryContext no_symmetry;
+    const auto expected =
+        librpa_int::FT_Wc_q2R(librpa_int::global::mpi_comm_global_h, basis_abf, no_symmetry,
+                              wq_full, dummy_tfg, pbc_full, pbc_full.Rlist, false, "", false);
+    const auto actual =
+        librpa_int::FT_Wc_q2R(librpa_int::global::mpi_comm_global_h, basis_abf, ctx, wq_sym,
+                              dummy_tfg, pbc_sym, pbc_sym.Rlist, false, "", true);
+    assert_wq_rspace_maps_close(actual, expected);
+}
+
+void test_bn_qstar_wq_to_wr_matches_explicit_full_bz_on_odd_and_even_meshes()
+{
+    for (const int basis_case : {0, 1, 3})
+    {
+        test_bn_qstar_wq_to_wr_matches_explicit_full_bz_for_mesh(3, basis_case);
+        test_bn_qstar_wq_to_wr_matches_explicit_full_bz_for_mesh(4, basis_case);
+    }
+}
+
+void test_bn_qstar_wq_to_wr_without_rspace_sector_matches_explicit_full_bz()
+{
+    test_bn_qstar_wq_to_wr_matches_explicit_full_bz_for_mesh(3, 1, true);
+}
+
+void test_bn_qstar_vq_to_vr_without_rspace_sector_matches_explicit_full_bz()
+{
+    constexpr int mesh = 3;
+    constexpr int basis_case = 1;
+    const auto pbc_full = make_bn_hexagonal_full_pbc(mesh);
+    const auto ctx_full = make_bn_hexagonal_context(pbc_full);
+    const auto pbc_sym = make_bn_hexagonal_reduced_pbc(ctx_full, mesh);
+    const auto shells = make_bn_test_shells(basis_case);
+    const auto counts = basis_counts_from_shells(shells);
+    const int max_l = *std::max_element(shells.front().begin(), shells.front().end());
+    auto ctx = make_bn_hexagonal_context(pbc_sym, max_l);
+
+    AtomicBasis basis_abf(
+        std::vector<std::size_t>{static_cast<std::size_t>(counts.at(0)),
+                                 static_cast<std::size_t>(counts.at(1))});
+    basis_abf.set_l_shells(shells);
+    const auto layouts = basis_abf.build_species_basis_layouts(ctx.atom_to_type);
+    const std::map<atom_t, size_t> atom_nabf{
+        {0, static_cast<std::size_t>(counts.at(0))},
+        {1, static_cast<std::size_t>(counts.at(1))}};
+    const std::set<std::pair<atom_t, atom_t>> target_pairs{{0, 0}, {0, 1}, {1, 0}, {1, 1}};
+
+    atpair_k_cplx_mat_t vq_sym;
+    atpair_k_cplx_mat_t vq_full;
+    const auto full_targets =
+        librpa_int::build_symmetry_full_grid_kstar_member_kfrac_targets(ctx, pbc_sym.kfrac_list);
+    const bool use_full_targets = full_targets.size() == ctx.kstars.size();
+
+    for (std::size_t istar = 0; istar != ctx.kstars.size(); ++istar)
+    {
+        const auto &star = ctx.kstars[istar];
+        const auto mapping_iter =
+            std::find_if(ctx.kstar_grid_mapping.begin(), ctx.kstar_grid_mapping.end(),
+                         [istar](const librpa_int::SymmetryKStarGridMappingEntry &entry)
+                         { return entry.star_list_index == static_cast<int>(istar); });
+        assert(mapping_iter != ctx.kstar_grid_mapping.end());
+        const double index = static_cast<double>(istar + 1);
+        const auto blocks_ibz = make_bn_hermitian_wq_blocks(counts, index);
+        add_vq_blocks(vq_sym, pbc_sym.klist.at(istar), blocks_ibz);
+
+        const auto closure = librpa_int::build_symmetry_upper_atom_pair_closure(star, target_pairs);
+        const auto symmetrized = librpa_int::symmetrize_symmetry_ibz_kspace_operator_blocks(
+            ctx, layouts, star.k_ibz, blocks_ibz, atom_nabf, &closure);
+        for (std::size_t imember = 0; imember != star.members.size(); ++imember)
+        {
+            const auto target = librpa_int::restrict_fractional_coordinate(
+                use_full_targets
+                    ? full_targets.at(istar).at(imember)
+                    : Vector3_Order<double>{pbc_sym.latvec *
+                                            mapping_iter->member_q_bz_keys.at(imember)});
+            const auto rotated = librpa_int::rotate_symmetry_kspace_operator_blocks(
+                ctx, layouts, star.members[imember], symmetrized, atom_nabf, star.k_ibz,
+                star.members[imember].time_reversal, &target_pairs, &target);
+            const auto ifull = find_fractional_kpoint_index(pbc_full.kfrac_list, target);
+            add_vq_blocks(vq_full, pbc_full.klist.at(ifull), rotated);
+        }
+    }
+
+    const double collective_scale =
+        1.0 / static_cast<double>(librpa_int::global::mpi_comm_global_h.nprocs);
+    for (auto &[atom_i, row] : vq_sym)
+        for (auto &[atom_j, q_blocks] : row)
+            for (auto &[q, block] : q_blocks) *block *= collective_scale;
+
+    ctx.irreducible_sector.clear();
+    ctx.rspace_sector_stars.clear();
+    SymmetryContext no_symmetry;
+    const auto expected = librpa_int::FT_Vq(librpa_int::global::mpi_comm_global_h, basis_abf,
+                                             no_symmetry, vq_full, pbc_full, true, false);
+    const auto actual = librpa_int::FT_Vq(librpa_int::global::mpi_comm_global_h, basis_abf, ctx,
+                                           vq_sym, pbc_sym, true, true);
+    assert_vr_rspace_maps_close(actual, expected);
+}
+
+ComplexMatrix restore_bn_test_wfc_to_member(const SymmetryContext &ctx,
+                                            const std::vector<SpeciesBasisLayout> &layouts,
+                                            const std::map<atom_t, size_t> &atom_nw,
+                                            const librpa_int::SymmetryKStar &star,
+                                            const SymmetryKStarMember &member,
+                                            const ComplexMatrix &wfc_ibz)
+{
+    const auto rotation = librpa_int::build_symmetry_kspace_rotation_matrix(
+        ctx, layouts, member, atom_nw, star.k_ibz, member.time_reversal, &member.k_bz);
+    return member.time_reversal ? librpa_int::conj(wfc_ibz) * librpa_int::conj(rotation)
+                                : wfc_ibz * rotation;
+}
+
+void test_bn_kstar_green_function_matches_explicit_full_bz_for_mesh(const int mesh,
+                                                                     const int basis_case)
+{
+    const auto pbc_full = make_bn_hexagonal_full_pbc(mesh);
+    const auto ctx_full = make_bn_hexagonal_context(pbc_full);
+    const auto pbc_sym = make_bn_hexagonal_reduced_pbc(ctx_full, mesh);
+    const auto shells = make_bn_test_shells(basis_case);
+    const auto counts = basis_counts_from_shells(shells);
+    const int max_l = *std::max_element(shells.front().begin(), shells.front().end());
+    auto ctx = make_bn_hexagonal_context(pbc_sym, max_l);
+
+    const int n_aos = std::accumulate(counts.begin(), counts.end(), 0);
+    AtomicBasis basis_wfc(
+        std::vector<std::size_t>{static_cast<std::size_t>(counts.at(0)),
+                                 static_cast<std::size_t>(counts.at(1))});
+    basis_wfc.set_l_shells(shells);
+    const auto layouts = basis_wfc.build_species_basis_layouts(ctx.atom_to_type);
+    const std::map<atom_t, size_t> atom_nw{
+        {0, static_cast<std::size_t>(counts.at(0))},
+        {1, static_cast<std::size_t>(counts.at(1))}};
+    const int n_full_kpoints = mesh * mesh;
+
+    MeanField mf_ibz(1, static_cast<int>(ctx.kstars.size()), n_aos, n_aos);
+    MeanField mf_full(1, n_full_kpoints, n_aos, n_aos);
+    mf_ibz.get_efermi() = 0.0;
+    mf_full.get_efermi() = 0.0;
+    std::vector<int> full_owner(static_cast<std::size_t>(n_full_kpoints), -1);
+
+    for (std::size_t istar = 0; istar != ctx.kstars.size(); ++istar)
+    {
+        const auto &star = ctx.kstars[istar];
+        const double star_weight =
+            static_cast<double>(star.members.size()) / static_cast<double>(n_full_kpoints);
+        for (int iband = 0; iband != n_aos; ++iband)
+        {
+            const bool occupied = iband < n_aos / 2;
+            mf_ibz.get_eigenvals()[0](static_cast<int>(istar), iband) =
+                (occupied ? -0.8 - 0.13 * iband : 0.6 + 0.17 * (iband - n_aos / 2)) +
+                0.03 * static_cast<double>(istar);
+            mf_ibz.get_weight()[0](static_cast<int>(istar), iband) =
+                occupied ? 2.0 * star_weight : 0.0;
+        }
+        auto &wfc_ibz = mf_ibz.get_eigenvectors()[0][0][istar];
+        wfc_ibz.create(n_aos, n_aos);
+        for (int iband = 0; iband != n_aos; ++iband)
+            for (int iao = 0; iao != n_aos; ++iao)
+                wfc_ibz(iband, iao) =
+                    std::complex<double>{
+                        0.11 * (iband + 1) + 0.07 * (iao + 1),
+                        0.013 * static_cast<double>((iband + 1) * (iao + 2)) +
+                            0.009 * static_cast<double>(istar + 1)} /
+                    static_cast<double>(n_aos);
+
+        for (const auto &member : star.members)
+        {
+            const auto ifull = find_fractional_kpoint_index(
+                pbc_full.kfrac_list, librpa_int::restrict_fractional_coordinate(member.k_bz));
+            assert(full_owner[ifull] < 0);
+            full_owner[ifull] = static_cast<int>(istar);
+            for (int iband = 0; iband != n_aos; ++iband)
+            {
+                mf_full.get_eigenvals()[0](static_cast<int>(ifull), iband) =
+                    mf_ibz.get_eigenvals()[0](static_cast<int>(istar), iband);
+                mf_full.get_weight()[0](static_cast<int>(ifull), iband) =
+                    iband < n_aos / 2 ? 2.0 / static_cast<double>(n_full_kpoints) : 0.0;
+            }
+            mf_full.get_eigenvectors()[0][0][ifull] =
+                restore_bn_test_wfc_to_member(ctx, layouts, atom_nw, star, member, wfc_ibz);
+        }
+    }
+    assert(std::find(full_owner.begin(), full_owner.end(), -1) == full_owner.end());
+
+    const std::vector<double> taus{-0.35, 0.27};
+    const auto &Rs = pbc_full.Rlist;
+    const auto expected = mf_full.get_gf_cplx_imagtimes_Rs(0, 0, 0, pbc_full.kfrac_list, taus, Rs);
+    const auto actual = librpa_int::get_symmetry_restored_gf_cplx_imagtimes_Rs(
+        ctx, layouts, mf_ibz, 0, 0, 0, pbc_sym.kfrac_list, taus, Rs, atom_nw);
+
+    for (const auto tau : taus)
+    {
+        for (const auto &R : Rs)
+        {
+            const auto diff = actual.at(tau).at(R) - expected.at(tau).at(R);
+            double max_abs = 0.0;
+            for (int i = 0; i != diff.nr; ++i)
+                for (int j = 0; j != diff.nc; ++j)
+                    max_abs = std::max(max_abs, std::abs(diff(i, j)));
+            if (max_abs >= 1e-12)
+            {
+                std::cerr << "BN k-star GF mismatch: mesh=" << mesh << " tau=" << tau << " R=" << R
+                          << " basis_case=" << basis_case << " max_abs=" << max_abs << std::endl;
+                throw std::runtime_error("BN k-star Green function differs from explicit full BZ");
+            }
+        }
+    }
+}
+
+void test_bn_kstar_green_function_matches_explicit_full_bz_on_odd_and_even_meshes()
+{
+    for (const int basis_case : {0, 1, 2})
+    {
+        test_bn_kstar_green_function_matches_explicit_full_bz_for_mesh(3, basis_case);
+        test_bn_kstar_green_function_matches_explicit_full_bz_for_mesh(4, basis_case);
+    }
+}
+
+void add_scalar_wq_block(
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        &wq,
+    const atom_t atom_i,
+    const atom_t atom_j,
+    const Vector3_Order<double> &q,
+    const std::complex<double> value)
+{
+    auto &block = wq[atom_i][atom_j][q];
+    block = matrix_m<std::complex<double>>(1, 1, MAJOR::ROW);
+    block(0, 0) = value;
+}
+
+librpa_int::symmetry_atom_block_matrix_map_t scalar_wq_to_blocks(
+    const std::map<atom_t, std::map<atom_t, std::complex<double>>> &values)
+{
+    librpa_int::symmetry_atom_block_matrix_map_t blocks;
+    for (const auto &[atom_i, row] : values)
+    {
+        for (const auto &[atom_j, value] : row)
+        {
+            blocks[atom_i][atom_j] = ComplexMatrix(1, 1);
+            blocks[atom_i][atom_j](0, 0) = value;
+        }
+    }
+    return blocks;
+}
+
+void add_scalar_wq_blocks(
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        &wq,
+    const Vector3_Order<double> &q,
+    const librpa_int::symmetry_atom_block_matrix_map_t &blocks)
+{
+    for (const auto &[atom_i, row] : blocks)
+    {
+        for (const auto &[atom_j, block] : row)
+        {
+            add_scalar_wq_block(wq, atom_i, atom_j, q, block(0, 0));
+        }
+    }
+}
+
+PeriodicBoundaryData make_wq_full_pbc()
+{
+    PeriodicBoundaryData pbc;
+    pbc.set_latvec({1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0});
+    const std::vector<double> kvecs{
+        0.0, 0.0, 0.0,
+        librpa_int::TWO_PI / 3.0, 0.0, 0.0,
+        librpa_int::TWO_PI * 2.0 / 3.0, 0.0, 0.0};
+    pbc.set_kgrids_kvec(3, 1, 1, kvecs);
+    return pbc;
+}
+
+PeriodicBoundaryData make_wq_reduced_pbc()
+{
+    PeriodicBoundaryData pbc;
+    pbc.set_latvec({1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0});
+    const std::vector<double> kvecs_ibz{
+        0.0, 0.0, 0.0,
+        librpa_int::TWO_PI / 3.0, 0.0, 0.0};
+    const std::vector<std::vector<Vector3_Order<double>>> full_kstars{
+        {{0.0, 0.0, 0.0}},
+        {{1.0 / 3.0, 0.0, 0.0}, {-1.0 / 3.0, 0.0, 0.0}}};
+    pbc.set_irreducible_kgrids_kvec(3, 1, 1, kvecs_ibz, full_kstars);
+    return pbc;
+}
+
+SymmetryContext make_two_atom_inversion_context(const PeriodicBoundaryData &pbc)
+{
+    SymmetryContext ctx;
+    const Matrix3 lattice(1.0, 0.0, 0.0,
+                          0.0, 1.0, 0.0,
+                          0.0, 0.0, 1.0);
+    ctx.set_crystal_structure(
+        lattice, lattice,
+        {{0, 0}, {1, 0}},
+        {{0, {0.25, 0.0, 0.0}}, {1, {0.75, 0.0, 0.0}}});
+
+    SymmetryOperation identity;
+    identity.rotation.Identity();
+    identity.translation = {0.0, 0.0, 0.0};
+
+    SymmetryOperation inversion;
+    inversion.rotation = Matrix3(-1.0, 0.0, 0.0,
+                                  0.0, 1.0, 0.0,
+                                  0.0, 0.0, 1.0);
+    inversion.translation = {0.0, 0.0, 0.0};
+
+    ctx.set_rspace_operations({identity, inversion});
+    ctx.set_available();
+    ctx.build_periodic_mappings(pbc, pbc.Rlist);
+    ctx.build_rsh_rotations({-1,
+                             0,
+                             LIBRPA_ANGULAR_ORDER_NATURAL,
+                             LIBRPA_RSH_COEFF_1_M,
+                             LIBRPA_RSH_COEFF_1_M},
+                            0);
+    ctx.build_kstar_member_rotations(0);
+    return ctx;
+}
+
+Matz dense_wq_from_scalar_blocks(const librpa_int::symmetry_atom_block_matrix_map_t &blocks,
+                                 const ArrayDesc &desc)
+{
+    Matz mat(desc.m_loc(), desc.n_loc(), MAJOR::COL);
+    for (int i_local = 0; i_local < desc.m_loc(); ++i_local)
+    {
+        const int atom_i = desc.indx_l2g_r(i_local);
+        for (int j_local = 0; j_local < desc.n_loc(); ++j_local)
+        {
+            const int atom_j = desc.indx_l2g_c(j_local);
+            mat(i_local, j_local) = blocks.at(static_cast<atom_t>(atom_i))
+                                        .at(static_cast<atom_t>(atom_j))(0, 0);
+        }
+    }
+    return mat;
+}
+
+void assert_dense_wq_rspace_maps_close(
+    const std::map<double, std::map<Vector3_Order<int>, Matz>> &actual,
+    const std::map<double, std::map<Vector3_Order<int>, Matz>> &expected)
+{
+    for (const auto &[freq, expected_Rs] : expected)
+    {
+        assert(actual.count(freq) != 0);
+        for (const auto &[R, expected_mat] : expected_Rs)
+        {
+            assert(actual.at(freq).count(R) != 0);
+            const auto diff = actual.at(freq).at(R) - expected_mat;
+            double max_abs = 0.0;
+            for (int i = 0; i < diff.nr(); ++i)
+            {
+                for (int j = 0; j < diff.nc(); ++j)
+                {
+                    max_abs = std::max(max_abs, std::abs(diff(i, j)));
+                }
+            }
+            if (max_abs >= 1e-12)
+            {
+                std::cerr << "freq=" << freq << " R=(" << R.x << "," << R.y << "," << R.z
+                          << ") max_abs=" << max_abs << std::endl;
+                for (int i = 0; i < diff.nr(); ++i)
+                {
+                    for (int j = 0; j < diff.nc(); ++j)
+                    {
+                        std::cerr << "  (" << i << "," << j << ") actual="
+                                  << actual.at(freq).at(R)(i, j) << " expected="
+                                  << expected_mat(i, j) << " diff=" << diff(i, j) << std::endl;
+                    }
+                }
+            }
+            assert(max_abs < 1e-12);
+        }
+    }
+}
+
+void test_wq_to_wr_symmetry_reduced_q_matches_full_bz()
+{
+    const auto pbc_full = make_wq_full_pbc();
+    const auto pbc_sym = make_wq_reduced_pbc();
+    auto ctx = make_two_atom_inversion_context(pbc_sym);
+
+    AtomicBasis basis_abf(std::vector<std::size_t>{1, 1});
+    basis_abf.set_l_shells({{0}, {0}});
+    const auto layouts = basis_abf.build_species_basis_layouts(ctx.atom_to_type);
+    const std::map<atom_t, size_t> atom_nabf{{0, 1}, {1, 1}};
+
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_sym;
+    const auto q_gamma_sym = pbc_sym.klist.at(0);
+    const auto q_rep_sym = pbc_sym.klist.at(1);
+    const auto gamma_blocks = scalar_wq_to_blocks({
+        {0, {{0, {1.5, 0.0}}, {1, {0.4, 0.0}}}},
+        {1, {{0, {0.4, 0.0}}, {1, {1.5, 0.0}}}}});
+    const auto rep_blocks = scalar_wq_to_blocks({
+        {0, {{0, {2.1, 0.0}}, {1, {-0.7, 0.5}}}},
+        {1, {{0, {-0.7, -0.5}}, {1, {1.4, 0.0}}}}});
+    add_scalar_wq_blocks(wq_sym, q_gamma_sym, gamma_blocks);
+    add_scalar_wq_blocks(wq_sym, q_rep_sym, rep_blocks);
+    const double symmetry_collective_scale =
+        1.0 / static_cast<double>(librpa_int::global::mpi_comm_global_h.nprocs);
+    for (auto &[atom_i, row] : wq_sym)
+    {
+        for (auto &[atom_j, q_blocks] : row)
+        {
+            for (auto &[q, block] : q_blocks)
+            {
+                block *= symmetry_collective_scale;
+            }
+        }
+    }
+
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_full;
+    add_scalar_wq_blocks(wq_full, pbc_full.klist.at(0), gamma_blocks);
+    add_scalar_wq_blocks(wq_full, pbc_full.klist.at(1), rep_blocks);
+    const auto inversion_minus_blocks = scalar_wq_to_blocks({
+        {0, {{0, {1.4, 0.0}}, {1, {-0.7, -0.5}}}},
+        {1, {{0, {-0.7, 0.5}}, {1, {2.1, 0.0}}}}});
+    add_scalar_wq_blocks(wq_full, pbc_full.klist.at(2), inversion_minus_blocks);
+
+    const TFGrids dummy_tfg;
+    SymmetryContext no_symmetry;
+    const auto expected = librpa_int::FT_Wc_q2R(
+        librpa_int::global::mpi_comm_global_h, basis_abf, no_symmetry, wq_full,
+        dummy_tfg, pbc_full, pbc_full.Rlist, false, "", false);
+    const auto actual = librpa_int::FT_Wc_q2R(
+        librpa_int::global::mpi_comm_global_h, basis_abf, ctx, wq_sym,
+        dummy_tfg, pbc_sym, pbc_sym.Rlist, false, "", true);
+
+    assert_wq_rspace_maps_close(actual, expected);
+}
+
+void test_wq_to_wr_symmetry_collective_handles_empty_local_rank()
+{
+    const auto pbc_full = make_wq_full_pbc();
+    const auto pbc_sym = make_wq_reduced_pbc();
+    auto ctx = make_two_atom_inversion_context(pbc_sym);
+
+    AtomicBasis basis_abf(std::vector<std::size_t>{1, 1});
+    basis_abf.set_l_shells({{0}, {0}});
+
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_sym;
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
+        wq_full;
+    if (librpa_int::global::mpi_comm_global_h.is_root())
+    {
+        const auto gamma_blocks = scalar_wq_to_blocks({
+            {0, {{0, {1.5, 0.0}}, {1, {0.4, 0.0}}}},
+            {1, {{0, {0.4, 0.0}}, {1, {1.5, 0.0}}}}});
+        const auto rep_blocks = scalar_wq_to_blocks({
+            {0, {{0, {2.1, 0.0}}, {1, {-0.7, 0.5}}}},
+            {1, {{0, {-0.7, -0.5}}, {1, {1.4, 0.0}}}}});
+        const auto inversion_minus_blocks = scalar_wq_to_blocks({
+            {0, {{0, {1.4, 0.0}}, {1, {-0.7, -0.5}}}},
+            {1, {{0, {-0.7, 0.5}}, {1, {2.1, 0.0}}}}});
+
+        add_scalar_wq_blocks(wq_sym, pbc_sym.klist.at(0), gamma_blocks);
+        add_scalar_wq_blocks(wq_sym, pbc_sym.klist.at(1), rep_blocks);
+        add_scalar_wq_blocks(wq_full, pbc_full.klist.at(0), gamma_blocks);
+        add_scalar_wq_blocks(wq_full, pbc_full.klist.at(1), rep_blocks);
+        add_scalar_wq_blocks(wq_full, pbc_full.klist.at(2), inversion_minus_blocks);
+    }
+
+    const TFGrids dummy_tfg;
+    SymmetryContext no_symmetry;
+    const auto expected = librpa_int::FT_Wc_q2R(
+        librpa_int::global::mpi_comm_global_h, basis_abf, no_symmetry, wq_full,
+        dummy_tfg, pbc_full, pbc_full.Rlist, false, "", false);
+    const auto actual = librpa_int::FT_Wc_q2R(
+        librpa_int::global::mpi_comm_global_h, basis_abf, ctx, wq_sym,
+        dummy_tfg, pbc_sym, pbc_sym.Rlist, false, "", true);
+
+    assert_wq_rspace_maps_close(actual, expected);
+    if (!librpa_int::global::mpi_comm_global_h.is_root())
+    {
+        assert(expected.empty());
+        assert(actual.empty());
+    }
+}
+
+void test_dense_wq_to_wr_symmetry_reduced_q_matches_full_bz(const BlacsCtxtHandler &blacs_h)
+{
+    const auto pbc_full = make_wq_full_pbc();
+    const auto pbc_sym = make_wq_reduced_pbc();
+    auto ctx = make_two_atom_inversion_context(pbc_sym);
+    const auto qpoint_view = build_symmetry_qpoint_view(ctx, pbc_sym, true);
+    assert(qpoint_view.restore_mode == SymmetryQPointRestoreMode::FULL_CRYSTAL);
+
+    AtomicBasis basis_abf(std::vector<std::size_t>{1, 1});
+    basis_abf.set_l_shells({{0}, {0}});
+    const auto layouts = basis_abf.build_species_basis_layouts(ctx.atom_to_type);
+    const std::map<atom_t, size_t> atom_nabf{{0, 1}, {1, 1}};
+    ArrayDesc ad_Wc(blacs_h);
+    ad_Wc.init(2, 2, 2, 2, 0, 0);
+
+    const auto gamma_blocks = scalar_wq_to_blocks({
+        {0, {{0, {1.5, 0.0}}, {1, {0.4, 0.0}}}},
+        {1, {{0, {0.4, 0.0}}, {1, {1.5, 0.0}}}}});
+    const auto rep_blocks = scalar_wq_to_blocks({
+        {0, {{0, {2.1, 0.0}}, {1, {-0.7, 0.5}}}},
+        {1, {{0, {-0.7, -0.5}}, {1, {1.4, 0.0}}}}});
+
+    constexpr double freq = 0.25;
+    std::map<double, std::map<Vector3_Order<double>, Matz>> wq_sym;
+    wq_sym[freq][pbc_sym.klist.at(0)] = dense_wq_from_scalar_blocks(gamma_blocks, ad_Wc);
+    wq_sym[freq][pbc_sym.klist.at(1)] = dense_wq_from_scalar_blocks(rep_blocks, ad_Wc);
+
+    std::map<double, std::map<Vector3_Order<double>, Matz>> wq_full;
+    wq_full[freq][pbc_full.klist.at(0)] = dense_wq_from_scalar_blocks(gamma_blocks, ad_Wc);
+    wq_full[freq][pbc_full.klist.at(1)] = dense_wq_from_scalar_blocks(rep_blocks, ad_Wc);
+    const auto inversion_minus_blocks = scalar_wq_to_blocks({
+        {0, {{0, {1.4, 0.0}}, {1, {-0.7, -0.5}}}},
+        {1, {{0, {-0.7, 0.5}}, {1, {2.1, 0.0}}}}});
+    wq_full[freq][pbc_full.klist.at(2)] =
+        dense_wq_from_scalar_blocks(inversion_minus_blocks, ad_Wc);
+
+    const auto expected = librpa_int::FT_Wc_freq_q(
+        librpa_int::global::mpi_comm_global_h, wq_full, pbc_full, false);
+    const auto actual = librpa_int::FT_Wc_freq_q(
+        librpa_int::global::mpi_comm_global_h, wq_sym, pbc_sym, false,
+        &qpoint_view, &ctx, &basis_abf, &ad_Wc);
+
+    assert_dense_wq_rspace_maps_close(actual, expected);
+}
+
+void test_gamma_only_dense_wq_fourier_weight_scales_as_inverse_bvk_cells()
+{
+    constexpr double frequency = 0.25;
+    const std::complex<double> gamma_value{2.4, -0.3};
+    const std::array<int, 4> meshes{12, 14, 16, 20};
+
+    for (const int mesh : meshes)
+    {
+        PeriodicBoundaryData pbc;
+        pbc.set_latvec({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0});
+        std::vector<double> kvecs;
+        kvecs.reserve(static_cast<std::size_t>(3 * mesh * mesh));
+        for (int ix = 0; ix != mesh; ++ix)
+        {
+            for (int iy = 0; iy != mesh; ++iy)
+            {
+                kvecs.push_back(librpa_int::TWO_PI * ix / mesh);
+                kvecs.push_back(librpa_int::TWO_PI * iy / mesh);
+                kvecs.push_back(0.0);
+            }
+        }
+        pbc.set_kgrids_kvec(mesh, mesh, 1, kvecs);
+
+        std::map<double, std::map<Vector3_Order<double>, Matz>> wq;
+        if (librpa_int::global::mpi_comm_global_h.is_root())
+        {
+            Matz gamma(1, 1, MAJOR::COL);
+            gamma(0, 0) = gamma_value;
+            wq[frequency][pbc.klist.at(0)] = gamma;
+        }
+
+        const auto wr =
+            librpa_int::FT_Wc_freq_q(librpa_int::global::mpi_comm_global_h, wq, pbc, false);
+        if (librpa_int::global::mpi_comm_global_h.is_root())
+        {
+            const Vector3_Order<int> center{0, 0, 0};
+            const auto expected = gamma_value / static_cast<double>(mesh * mesh);
+            assert_complex_close(wr.at(frequency).at(center)(0, 0), expected, 1e-13);
+        }
+        else
+        {
+            assert(wr.empty());
+        }
+    }
+}
 
 int main(int argc, char *argv[])
 {
     int provided = 0;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init_thread(&argc, &argv, LIBRPA_MPI_THREAD_LEVEL, &provided);
     librpa_int::global::init_global_mpi(MPI_COMM_WORLD);
     librpa_int::global::init_global_io(false, "stdout", false);
 
@@ -1509,7 +3737,28 @@ int main(int argc, char *argv[])
         test_rpa_trace_log_average_uses_directional_head_and_wing();
         test_rpa_headwing_regular_body_start_channel();
         test_rpa_headwing_gamma_cell_volume_uses_reciprocal_lattice();
-        test_rpa_chi0v_wing_desc_uses_global_rows(blacs_h);
+        test_strict_2d_headwing_prefactors_use_inplane_area();
+        test_strict_2d_auxiliary_normalization_is_computed_from_basis_metadata();
+        test_strict_2d_gamma_cell_uses_physical_reciprocal_measure();
+        test_strict_2d_radial_integrals_match_analytic_values();
+        test_strict_2d_radial_log_integral_matches_numeric_quadrature();
+        test_strict_2d_radial_log_integral_is_stable_at_zero_and_small_a();
+        test_strict_2d_rpa_trace_log_average_matches_dense_radial_quadrature();
+        test_strict_2d_inverse_head_average_has_linear_q_screening();
+        test_strict_2d_schur_coefficient_removes_identity();
+        test_strict_2d_screening_denominator_must_stay_on_physical_branch();
+        test_strict_2d_gw_uses_full_coulomb_at_all_q();
+        test_strict_2d_gw_routes_gamma_through_complete_wc_average();
+        test_strict_2d_gw_fails_closed_for_incomplete_runtime_configuration();
+        test_strict_2d_pw_wc_transforms_to_auxiliary_coulomb_basis();
+        test_strict_2d_wc_blocks_match_dense_finite_q_inverse();
+        test_strict_2d_wc_cell_average_matches_anisotropic_radial_quadrature();
+        test_strict_2d_wc_cell_average_matches_cartesian_voronoi_subgrid();
+        test_strict_2d_wc_blocks_have_finite_small_q_limits();
+        test_strict_2d_wc_average_is_covariant_under_regular_body_rotation();
+        test_strict_2d_wc_average_is_bounded_as_gamma_cell_shrinks();
+        test_rpa_chi0v_wing_desc_matches_producer_layout(blacs_h);
+        test_rpa_headwing_matrix_descriptor_contract(blacs_h);
         test_headwing_spin_weights();
         test_wing_cartesian_gram_is_invariant_under_row_phases();
         test_velocity_matrix_initialization();
@@ -1529,6 +3778,16 @@ int main(int argc, char *argv[])
         test_kblacs_transform_uses_rectangular_opt_128_blocks();
         test_transform_Cs2mnk_can_keep_spin_channels_separate(blacs_h);
         test_head_initialization_does_not_require_coulomb_diagonalization(blacs_h);
+        test_spacetime_fourier_phases_form_k_minus_q_convolution();
+        test_bn_qstar_wq_to_wr_matches_explicit_full_bz_on_odd_and_even_meshes();
+        test_bn_qstar_wq_to_wr_without_rspace_sector_matches_explicit_full_bz();
+        test_bn_qstar_vq_to_vr_without_rspace_sector_matches_explicit_full_bz();
+        test_bn_kstar_green_function_matches_explicit_full_bz_on_odd_and_even_meshes();
+        test_wq_to_wr_symmetry_reduced_q_matches_full_bz();
+        test_wq_to_wr_symmetry_collective_handles_empty_local_rank();
+        test_dense_wq_to_wr_symmetry_reduced_q_matches_full_bz(blacs_h);
+        test_gamma_only_dense_wq_fourier_weight_scales_as_inverse_bvk_cells();
+        test_abf_space_wing_rewrite_matches_coulomb_basis(blacs_h);
     }
 
     librpa_int::global::finalize_global_io();

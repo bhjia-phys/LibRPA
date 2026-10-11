@@ -189,6 +189,17 @@ std::map<int, ComplexMatrix> build_symmetry_kspace_shell_rotations(
     const Vector3_Order<int>& return_lattice,
     double threshold = 1e-5);
 
+// Build the inverse-route member used to rotate an operator from k_ibz to
+// k_bz. This is also used by fixed-q Sternheimer reconstruction, where both
+// canonical k labels can represent the same q modulo a reciprocal vector.
+SymmetryKStarMember build_symmetry_kspace_operation_member(
+    const SymmetryContext& ctx,
+    int spatial_isym,
+    bool time_reversal,
+    const Vector3_Order<double>& k_bz,
+    const Vector3_Order<double>& k_ibz,
+    int lmax);
+
 ComplexMatrix build_symmetry_rotation_matrix(
     const SpeciesBasisLayout& layout,
     const std::map<int, ComplexMatrix>& shell_rotations);
@@ -325,6 +336,23 @@ ComplexMatrix rotate_symmetry_rspace_block(const SymmetryContext& ctx,
                                            const atom_t atom_from_i,
                                            const atom_t atom_from_j,
                                            const ComplexMatrix& matrix_source);
+
+/*!
+ * @brief Rotate a real-space atom-pair block representing an AO operator.
+ *
+ * Operator blocks use the covariant transform H' = T_i^dagger H T_j,
+ * whereas density-like blocks use the transpose/conjugate transform above.
+ */
+ComplexMatrix rotate_symmetry_rspace_operator_block(
+    const SymmetryContext& ctx, const std::vector<SpeciesBasisLayout>& layouts_i,
+    const std::vector<SpeciesBasisLayout>& layouts_j, int isym, atom_t atom_from_i,
+    atom_t atom_from_j, const ComplexMatrix& matrix_source);
+
+ComplexMatrix rotate_symmetry_rspace_operator_block(const SymmetryContext& ctx,
+                                                    const std::vector<SpeciesBasisLayout>& layouts,
+                                                    int isym, atom_t atom_from_i,
+                                                    atom_t atom_from_j,
+                                                    const ComplexMatrix& matrix_source);
 
 /*!
  * @brief Whether the (g, U_s, eta) operation that generated a real-space

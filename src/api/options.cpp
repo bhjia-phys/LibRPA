@@ -53,7 +53,7 @@ void librpa_init_options(LibrpaOptions *opts)
     opts->use_kpara_scf_eigvec = LIBRPA_SWITCH_OFF;
 
     opts->tfgrids_type = LIBRPA_TFGRID_UNSET;
-    opts->nfreq = 6;
+    opts->nfreq = 16;
     opts->tfgrids_freq_min = 0.005;
     opts->tfgrids_freq_interval = 0.0;
     opts->tfgrids_freq_max = 1000.0;
@@ -74,6 +74,8 @@ void librpa_init_options(LibrpaOptions *opts)
 
     opts->n_bands_chi0 = -1;
     opts->n_bands_sigc = -1;
+    opts->n_bands_exclude_chi0 = 0;
+    opts->n_bands_exclude_sigc = 0;
     opts->option_bvk_remap = 1;
 
     opts->gf_threshold = 0.0e0;
@@ -137,6 +139,11 @@ void librpa_init_options(LibrpaOptions *opts)
 
     opts->output_gw_sigc_ks_kf = LIBRPA_SWITCH_OFF;
     opts->output_gw_sigc_ks_mat_kf = LIBRPA_SWITCH_OFF;
+    opts->output_exx_ks_mat_k = LIBRPA_SWITCH_OFF;
+    opts->output_exx_mat_k = LIBRPA_SWITCH_OFF;
+    opts->output_exx_mat_r = LIBRPA_SWITCH_OFF;
+    opts->istate_output_mat_start = 0;
+    opts->istate_output_mat_end = -1;
     opts->output_gw_sigc_mat_kf = LIBRPA_SWITCH_OFF;
     opts->output_gw_sigc_mat_rt = LIBRPA_SWITCH_OFF;
     opts->output_gw_sigc_mat_rf = LIBRPA_SWITCH_OFF;
