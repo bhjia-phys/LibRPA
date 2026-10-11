@@ -672,7 +672,8 @@ G0W0::G0W0(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
            const KPointBlacsParallelContext &band_kblacs_ctxt_in,
            const ArrayDesc &desc_wfc_in, const ArrayDesc &desc_band_wfc_in,
            bool is_eigvec_k_distributed,
-           const bool use_symmetry_context_in)
+           const bool use_symmetry_context_in,
+           const SymmetryQPointView *screening_qpoint_view)
     : mf(mf_in),
       desc_wfc(desc_wfc_in),
       desc_band_wfc(desc_band_wfc_in),
@@ -680,7 +681,8 @@ G0W0::G0W0(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
       pbc(pbc_in),
       symmetry_context(symmetry_context_in),
       use_symmetry_context(use_symmetry_context_in),
-      qpoint_view(build_symmetry_qpoint_view(symmetry_context_in, pbc_in, use_symmetry_context_in)),
+      qpoint_view(screening_qpoint_view != nullptr ? *screening_qpoint_view
+          : build_symmetry_qpoint_view(symmetry_context_in, pbc_in, use_symmetry_context_in)),
       tfg(tfg_in),
       comm_h(kblacs_ctxt_in.comm_global_h),
       kblacs_ctxt(kblacs_ctxt_in),
@@ -1684,7 +1686,7 @@ void G0W0::build_spacetime(
             "GW real-space self-energy irreducible-sector contraction disabled: "
             "%d response bands do not span the complete %d-state AO space; "
             "k-star and q-star symmetry remain active\n",
-            mf.get_n_bands(), mf.get_n_aos());
+            mf.get_n_bands(), mf.get_n_aos() * mf.get_n_spinor());
     }
     const auto libri_sigc_irreducible_sector =
         use_input_sigc_symmetry

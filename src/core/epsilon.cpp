@@ -293,9 +293,10 @@ static std::vector<int> build_symmetry_atom_offsets(const std::map<atom_t, size_
     return offsets;
 }
 
-static ComplexMatrix build_dense_symmetry_hermitian_matrix_from_local_blocks(
+ComplexMatrix build_dense_symmetry_hermitian_matrix_from_local_blocks(
     const librpa_int::symmetry_atom_block_matrix_map_t& local_blocks,
-    const std::map<atom_t, size_t>& atom_nabf)
+    const std::map<atom_t, size_t>& atom_nabf,
+    const bool hermitize_diagonal_atom_blocks)
 {
     const auto offsets = build_symmetry_atom_offsets(atom_nabf);
     ComplexMatrix dense(offsets.back(), offsets.back());
@@ -321,7 +322,16 @@ static ComplexMatrix build_dense_symmetry_hermitian_matrix_from_local_blocks(
             {
                 for (int col = 0; col < block.nc; ++col)
                 {
-                    const auto value = block(row, col);
+                    auto value = block(row, col);
+                    if (hermitize_diagonal_atom_blocks
+                        && atom_i_pair.first == atom_j_pair.first)
+                    {
+                        // The ordinary chi0 collection path Hermitizes diagonal
+                        // atom blocks before ScaLAPACK.  Apply that contract only
+                        // for the symmetry chi0 path: generic W(q) star members
+                        // may instead obey the q <-> -q conjugation relation.
+                        value = (value + std::conj(block(col, row))) * 0.5;
+                    }
                     dense(row_offset + row, col_offset + col) = value;
                     if (atom_i_pair.first != atom_j_pair.first)
                     {
@@ -373,8 +383,8 @@ static librpa_int::symmetry_atom_block_matrix_map_t gather_symmetry_ibz_blocks_c
         return blocks_ibz_local;
     }
 
-    const auto dense_ibz_local =
-        build_dense_symmetry_hermitian_matrix_from_local_blocks(blocks_ibz_local, atom_nabf);
+    const auto dense_ibz_local = build_dense_symmetry_hermitian_matrix_from_local_blocks(
+        blocks_ibz_local, atom_nabf, false);
     ComplexMatrix dense_ibz_global(dense_ibz_local.nr, dense_ibz_local.nc);
     allreduce_ComplexMatrix(dense_ibz_local, dense_ibz_global, comm_h.comm);
     return build_symmetry_blocks_from_dense_matrix(dense_ibz_global, atom_nabf);
@@ -2954,7 +2964,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                 if (use_symmetry_dense_chi0_collect)
                 {
                     const auto chi0_dense = build_dense_symmetry_hermitian_matrix_from_local_blocks(
-                        to_ordered_symmetry_blocks(chi0_wq), atom_nabf);
+                        to_ordered_symmetry_blocks(chi0_wq), atom_nabf, true);
                     temp_block.zero_out();
                     for (int i_lo = 0; i_lo != desc_nabf_nabf.m_loc(); ++i_lo)
                     {
@@ -3497,7 +3507,7 @@ static Matz restore_symmetry_blacs_wq_to_star_source(const Matz& Wq_source,
     return Wq_star;
 }
 
-static std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
+std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
     const std::map<Vector3_Order<double>, Matz>& Wq_rep_map,
     const PeriodicBoundaryData& pbc,
     const SymmetryQPointView& qpoint_view,

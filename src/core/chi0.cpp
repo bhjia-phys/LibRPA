@@ -447,7 +447,8 @@ static Chi0ExactCollectRequest make_padding_chi0_exact_collect_request(
 bool rspace_symmetry_has_complete_band_space(const MeanField &mf, const int n_bands)
 {
     const int n_bands_used = n_bands < 0 ? mf.get_n_bands() : n_bands;
-    return n_bands_used == mf.get_n_aos()
+    const int n_basis_states = mf.get_n_aos() * mf.get_n_spinor();
+    return n_bands_used == n_basis_states
         && n_bands_used <= mf.get_n_bands();
 }
 
@@ -2051,7 +2052,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             "chi0 real-space irreducible-sector contraction disabled: "
             "%d response bands do not span the complete %d-state AO space; "
             "k-star and q-star symmetry remain active\n",
-            n_bands_used, this->mf.get_n_aos());
+            n_bands_used, this->mf.get_n_aos() * this->mf.get_n_spinor());
     }
     const bool use_q_uhap_split =
         global::dev_opts.use_chi0_q_uhap_split && !use_shrink_chi &&
