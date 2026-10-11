@@ -2,6 +2,15 @@
 
 ## Caveats
 
+### QSGW driver access to library internals
+
+The experimental `qsgw` task currently accesses and modifies
+internal dataset objects owned by a `LibrpaHandler` in `driver/tasks/qsgw.cpp`.
+This uses the early-prototype exception to the driver/API separation guideline;
+the iteration workflow is not yet exposed through the public C API.
+Task-specific input and output remain in `driver/qsgw`, with numerical
+operations in `src/core/qsgw`.
+
 ### `nan` in GW output
 
 `nan` values in the `sigc` output indicate that the quasi-particle equation (QPE) solver was unable to find a stable solution.

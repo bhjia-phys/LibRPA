@@ -26,8 +26,9 @@ target_include_directories(rpa_lib PRIVATE
 )
 
 if(LIBRPA_ELPA_TARGET)
-  # Link either the external ELPA target or the bundled imported target.
-  target_link_libraries(rpa_lib PRIVATE ${LIBRPA_ELPA_TARGET})
+  # Public LibRPA headers include ELPA declarations, so consumers need the
+  # selected ELPA target's include directories as part of the interface.
+  target_link_libraries(rpa_lib PUBLIC ${LIBRPA_ELPA_TARGET})
 endif()
 if(LIBRPA_BUNDLED_ELPA_PROJECT_TARGET)
   # Bundled ELPA is built by ExternalProject_Add, so keep its build step
@@ -46,15 +47,30 @@ if(LIBRPA_BUNDLED_DDLA_PROJECT_TARGET)
   add_dependencies(rpa_lib ${LIBRPA_BUNDLED_DDLA_PROJECT_TARGET})
 endif()
 
+get_filename_component(LIBRPA_PUBLIC_INCLUDE_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/../include" ABSOLUTE)
 target_include_directories(rpa_lib
   PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+    $<BUILD_INTERFACE:${LIBRPA_PUBLIC_INCLUDE_DIR}>
   )
 target_include_directories(rpa_lib PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${LIBRPA_PUBLIC_INCLUDE_DIR}
 )
+
+# Public C++ headers expose types whose declarations depend on these feature
+# switches. Propagate the same definitions to consumers to keep their view of
+# the LibRPA data model ABI-compatible with the library.
+target_compile_definitions(rpa_lib PUBLIC LIBRPA_USE_MPI)
+if(LIBRPA_USE_LIBRI)
+  target_compile_definitions(rpa_lib PUBLIC LIBRPA_USE_LIBRI)
+endif()
+if(LIBRPA_USE_EXTERNAL_ELPA OR LIBRPA_USE_BUNDLED_ELPA)
+  target_compile_definitions(rpa_lib PUBLIC LIBRPA_USE_ELPA)
+endif()
+if(LIBRPA_VERBOSE_OUTPUT)
+  target_compile_definitions(rpa_lib PUBLIC LIBRPA_VERBOSE)
+endif()
 configure_file(utils/envs_cmake.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/envs_cmake.cpp)
 configure_file(utils/envs_cmake.h ${CMAKE_CURRENT_BINARY_DIR}/envs_cmake.h)  # only to make the configured envs_cmake.cpp compile
 
@@ -73,6 +89,16 @@ list(APPEND lib_sources
         api/instance_manager.cpp
         api/librpa.cpp
         api/options.cpp
+        api/file_reader.cpp
+
+        ../driver/driver.cpp
+        ../driver/read_data.cpp
+        ../driver/reader_eigenvec.cpp
+        ../driver/reader_basis.cpp
+        ../driver/reader_structure.cpp
+        ../driver/stru_symops_parser.cpp
+        ../driver/reader_lri.cpp
+        ../driver/reader_coulomb.cpp
 
         core/analycont.cpp
         core/symmetry_context.cpp
@@ -91,6 +117,17 @@ list(APPEND lib_sources
         core/pbc.cpp
         core/qpoint_view.cpp
         core/qpe_solver.cpp
+        core/qsgw/convergence.cpp
+        core/qsgw/correlation_potential.cpp
+        core/qsgw/distributed_matrix.cpp
+        core/qsgw/effective_hamiltonian.cpp
+        core/qsgw/fixed_basis.cpp
+        core/qsgw/headwing_velocity.cpp
+        core/qsgw/hamiltonian_cut.cpp
+        core/qsgw/hamiltonian_mixing.cpp
+        core/qsgw/occupation.cpp
+        core/qsgw/projection_target.cpp
+        core/qsgw/vxc_projection.cpp
         core/ri.cpp
         core/timefreq.cpp
         core/utils_atomic_basis_blacs.cpp
@@ -155,7 +192,6 @@ if(LIBRPA_USE_CUDA OR LIBRPA_USE_HIP)
   )
 endif()
 
-
 if(LIBRPA_USE_EXTERNAL_ELPA OR LIBRPA_USE_BUNDLED_ELPA)
   list(APPEND lib_sources
     elpa/elpa_connector.cpp)
@@ -163,7 +199,6 @@ endif()
 
 # source must be PRIVATE to avoid recompilation when linking driver to this library
 target_sources(rpa_lib PRIVATE ${lib_sources})
-add_subdirectory(qsgw)
 target_link_libraries(rpa_lib PRIVATE ${math_libs} ${parallel_libs})
 
 install(TARGETS rpa_lib

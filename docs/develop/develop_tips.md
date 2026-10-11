@@ -49,6 +49,11 @@ For naming, follow these general conventions:
 - Use `snake_case` for variables, object instances, functions, and namespaces.
 - Use `SCREAMING_SNAKE_CASE` for constants.
 
+## Profiling
+
+When profiling the driver, set `output_level = critical` to reduce output
+overhead while keeping essential results and the timing report visible.
+
 ## Source code structure of LibRPA
 
 ```
@@ -66,6 +71,7 @@ For naming, follow these general conventions:
 |-- src               : Source code for the library target
 |   |-- api           : Public API implementation and handler/dataset glue
 |   |-- core          : Physics objects and algorithms: basis, RPA, EXX, GW, symmetry
+|   |   `-- qsgw      : Fixed-basis QSGW numerical operations
 |   |-- elpa          : ELPA eigensolver integration
 |   |-- gpu           : Optional CUDA/HIP device and linear-algebra adapters
 |   |-- interface     : Thin interfaces to external codes, e.g. BLAS, LAPACK, and ScaLAPACK 

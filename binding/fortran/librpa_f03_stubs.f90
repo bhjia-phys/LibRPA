@@ -264,6 +264,12 @@ module librpa_f03
       logical :: output_gw_sigc_ks_kf
       !> Experimental: output KS-basis correlation self-energy matrix in k-space and imaginary frequencies.
       logical :: output_gw_sigc_ks_mat_kf
+      !> Experimental: output the exact-exchange matrix in the KS basis and k-space.
+      logical :: output_exx_ks_mat_k
+      !> First zero-based KS state included when exporting KS-basis matrices.
+      integer :: istate_output_mat_start
+      !> Half-open KS-basis matrix export end index; negative means all remaining states.
+      integer :: istate_output_mat_end
       !> Experimental: output NAO-basis correlation self-energy matrix in k-space and imaginary frequencies.
       logical :: output_gw_sigc_mat_kf
       !> Experimental: output NAO-basis correlation self-energy matrix in real space and imaginary time.

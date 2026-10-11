@@ -87,7 +87,7 @@ typedef struct
 
     //! Number of time/frequency points.
     //! @par Default
-    //! 6
+    //! 16
     int nfreq;
 
     /* ============================================================================= */
@@ -434,12 +434,23 @@ typedef struct
 
     //! Option of computing dielectric function on imaginary axis.
     /*!
-     * Available values:
+     * Available numerical API values:
      * - 0: use data directly read from input
      * - 1: cubic-spline interpolation from input data
      * - 2: dielectric model fitting from input data
      * - 3: analytic head and wing correction
      * - 4: analytic head correction
+     *
+     * Standalone g0w0/g0w0_band and qsgw drivers also accept 5:
+     * compute native velocity, then resolve to numerical API option 3 for
+     * analytic head and wing. G0W0 uses original H(R), S(R), and r(R) in
+     * the loaded SCF frame. QSGW uses fixed S/r and the entire current
+     * finite-BvK Hamiltonian in each entering iteration's E/C frame.
+     * This driver preset requires replace_w_head and use_scalapack_gw_wc,
+     * selects g0w0_headwing_velocity=native or qsgw_headwing_velocity=current_hr
+     * according to the task, and rejects use_pyatb=true.
+     * Direct library/API callers must select 3 and supply velocity through
+     * the public setter; do not pass 5 to LibrpaOptions.
      *
      * @par Default
      * 0
@@ -534,6 +545,30 @@ typedef struct
     //! @par Status
     //! Experimental
     LibrpaSwitch output_gw_sigc_ks_mat_kf;
+
+    //! Output exact-exchange matrix in KS basis and k-space.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    LibrpaSwitch output_exx_ks_mat_k;
+
+    //! First zero-based KS state included in both dimensions when exporting the
+    //! KS-basis exact-exchange and correlation self-energy matrices. Matrix
+    //! construction is unaffected.
+    //! @par Default
+    //! 0
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_start;
+
+    //! Half-open KS-state end index when exporting KS-basis matrices; negative
+    //! means all remaining states.
+    //! @par Default
+    //! -1
+    //! @par Status
+    //! Experimental
+    int istate_output_mat_end;
 
     //! Output correlation self-energy matrix in NAO basis (k-space, imaginary frequency domain).
     //! @par Default

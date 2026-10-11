@@ -4,7 +4,12 @@
 # - https://stackoverflow.com/questions/19278510/cmake-ctest-add-test-command-appends-extra-quotes-to-my-command-parameters
 macro(config_test TARGET NUMPROC)
   add_executable(${TARGET} ${TARGET}.cpp)
+  target_compile_definitions(${TARGET} PRIVATE "LIBRPA_MPI_THREAD_LEVEL=${LIBRPA_MPI_THREAD_LEVEL}")
   target_link_libraries(${TARGET} PRIVATE rpa_lib)
+  if(LIBRPA_BUNDLED_ELPA_PROJECT_TARGET)
+    # Tests include LibRPA headers directly, including base_blacs.h.
+    add_dependencies(${TARGET} ${LIBRPA_BUNDLED_ELPA_PROJECT_TARGET})
+  endif()
   # Math and MPI symbols will have been included in rpa_lib for static library case.
   # Only link them when shared library is built.
   if(BUILD_SHARED_LIBS)
@@ -42,9 +47,6 @@ foreach(target
     test_base_utility
     test_blas_lapack
     test_complexmatrix
-    test_qsgw_correlation_potential
-    test_qsgw_convergence
-    test_qsgw_effective_hamiltonian
     test_fitting
     test_io
     test_symmetry_context
@@ -58,18 +60,6 @@ foreach(target
     test_meanfield
     test_pbc
     test_profiler
-    test_qsgw_band_output
-    test_qsgw_band_bvk_remap
-    test_qsgw_fixed_basis
-    test_qsgw_hamiltonian_cut
-    test_qsgw_hamiltonian_mixing
-    test_qsgw_input_contract
-    test_qsgw_iteration_trace
-    test_qsgw_mixing
-    test_qsgw_occupation
-    test_qsgw_projection_target
-    test_qsgw_sha256
-    test_qsgw_vxc_io
     test_qpe_solver
     test_rsh
     test_symmetry
@@ -88,8 +78,6 @@ foreach(target
   test_blacs
   test_dataset
   test_epsilon
-  test_qsgw_distributed_matrix
-  test_qsgw_fixed_basis_mpi
   test_matrix_m_mpi
   test_meanfield_mpi
   test_kpoint_blacs_parallel_context

@@ -146,6 +146,41 @@ void invert_headwing_body_with_identity_solve(
     matrix_m<std::complex<double>> &body, ArrayDesc &desc_body,
     const BlacsCtxtHandler &blacs_h, bool use_cholesky, bool use_device);
 
+// ABF-space averaged inverse dielectric rewrite for Gamma option-3 GW Wc,
+// factored out of diele_func so it can be unit tested directly.
+// eps_block holds E = I - sqrt(V)*chi0*sqrt(V) (n_abf x n_abf, distributed) on
+// entry and is overwritten with the averaged inverse dielectric matrix.
+// sqrtv_block is the matrix square root sqrt(V); coul_eigen_block holds the
+// Coulomb eigenvectors U with x1 = U[:,0]. head is the 3x3 dielectric head H
+// (it already includes the identity contribution) and wing_mu the replicated
+// n_abf x 3 ABF wing. qx/qy/qz are unit angular directions and rho the
+// per-point quadrature weights (already including the Gamma-cell volume and
+// q_gamma factors). When the Coulomb matrix has filtered eigenchannels, the
+// rewrite is restricted to its first n_nonsingular eigenvectors; the filtered
+// channels must be the trailing columns of coul_eigen_block, whose complete
+// column set is required to be orthonormal (U U^H = I to O(eps)) -- both
+// bundled eigensolvers redistribute the full set with descending eigenvalues
+// before filtering, so this holds. The filtered projector is applied through
+// its low-rank factor Y = [x1 | trailing filtered columns] (n_abf x m with
+// m = 1 + n_singular), so no n_abf x n_abf projector is ever formed.
+// eps_block must be Hermitian: the routine contracts it only as E*Y rather than
+// forming both E*Y and E^H*Y, so the result is accurate to O(|E - E^H|). The
+// Cholesky branch of the in-place inverse (pposv with uplo='L') already requires
+// this, and E is Hermitian on the imaginary-frequency axis that reaches here.
+// Collective reductions run on the descriptor communicator. The read-only
+// matrix inputs are const; only eps_block is modified.
+void rewrite_eps_abf_space(
+    matrix_m<std::complex<double>> &eps_block,
+    const matrix_m<std::complex<double>> &sqrtv_block,
+    const matrix_m<std::complex<double>> &coul_eigen_block,
+    const matrix_m<std::complex<double>> &head,
+    const matrix_m<std::complex<double>> &wing_mu,
+    const std::vector<double> &qx, const std::vector<double> &qy,
+    const std::vector<double> &qz, const std::vector<double> &rho,
+    const ArrayDesc &desc_nabf_nabf_opt, const BlacsCtxtHandler &blacs_h,
+    std::size_t n_nonsingular,
+    double sqrt_coulomb_threshold, bool use_cholesky, bool use_device);
+
 // All calculation in unit: Bohr and Ha.
 class diele_func
 {
@@ -166,8 +201,6 @@ private:
     matrix_m<std::complex<double>> bw;
     // ( i:3, j:n_lambda )
     matrix_m<std::complex<double>> wb;
-    // ( i:n_lambda, j:n_lambda )
-    matrix_m<std::complex<double>> chi0;
     // ( lambda: n_nonsingular-1, mu: n_abfs)
     // std::vector<std::vector<std::complex<double>>> Coul_vector;
     // ( lambda: n_nonsingular-1 )
@@ -318,6 +351,9 @@ public:
     void test_head();
     std::vector<double> get_head_vec();
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+    const std::vector<double> &get_frequency_nodes() const { return omega; }
+    const std::vector<Matz> &get_head_tensors() const { return head; }
+    const std::vector<Matz> &get_wing_auxiliary() const { return wing_mu; }
 
     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
                   const atpair_k_cplx_mat_t &Vq);  // atpair_k_cplx_mat_t &Vq, Cs_LRI &Cs_data
@@ -383,10 +419,6 @@ public:
     matrix_m<std::complex<double>> get_rpa_chi0v_head(const int ifreq) const;
     matrix_m<std::complex<double>> get_rpa_chi0v_wing(const int ifreq) const;
 
-    ArrayDesc get_body_inv(matrix_m<std::complex<double>> &chi0_block,
-                           ArrayDesc &desc_nabf_nabf_opt, bool use_cholesky,
-                           bool use_device);
-    void construct_L(const int ifreq, ArrayDesc &desc_body);
     void construct_rpa_trace_log_schur(const int ifreq, ArrayDesc &desc_body,
                                        int wing_row_offset = 0);
 
@@ -395,27 +427,25 @@ public:
     void get_g_enclosing_gamma();
     void get_g_enclosing_gamma_2d();
     void calculate_q_gamma();
-    void cal_eps(const int ifreq, ArrayDesc &desc_nabf_nabf_opt, ArrayDesc &desc_body);
     void calculate_q_gamma_2d();
-    double I_q_series(const double q_gamma, const double L, const int nmax = 200);
-    std::complex<double> I_q_simpson_head(double q1, double L, std::complex<double> qLq,
-                                          int N = 1000);
-    std::complex<double> I_q_simpson_wing(double q1, double L, std::complex<double> qLq,
-                                          int N = 1000);
-    inline std::complex<double> integrand_head(double q, double L, std::complex<double> qLq);
-    inline std::complex<double> integrand_wing(double q, double L, std::complex<double> qLq);
-    // not used now due to performance optimization
-    // std::complex<double> compute_chi0_inv_00(const int ifreq);
-    // std::complex<double> compute_chi0_inv_ij(const int ifreq, int i, int j);
-    void rewrite_eps(matrix_m<std::complex<double>> &chi0_block, const int ifreq,
-                     ArrayDesc &desc_nabf_nabf_opt, bool use_cholesky,
-                     bool use_device);
+    // Complete-basis ABF-space wing rewrite for Gamma option-3 GW Wc.
+    // Requires n_nonsingular_in == n_abf (sqrt_coulomb_threshold disabled).
+    // eps_block holds E = I - sqrt(V)*chi0*sqrt(V) on entry and the averaged
+    // inverse dielectric matrix on exit. Delegates to the free
+    // rewrite_eps_abf_space helper using this object's head, wing_mu and
+    // angular quadrature data.
+    void rewrite_eps_abf_space(matrix_m<std::complex<double>> &eps_block, const int ifreq,
+                               const matrix_m<std::complex<double>> &sqrtv_block,
+                               const matrix_m<std::complex<double>> &coul_eigen_block,
+                               const ArrayDesc &desc_nabf_nabf_opt,
+                               std::size_t n_nonsingular_in,
+                               double sqrt_coulomb_threshold,
+                               bool use_cholesky, bool use_device);
     std::complex<double> compute_rpa_trace_log_average(
         matrix_m<std::complex<double>> &response_block, const int ifreq, ArrayDesc &desc_response,
         const RpaHeadwingSettings &settings);
     void rewrite_rpa_response(matrix_m<std::complex<double>> &eps_minus_identity_block,
                               const int ifreq, ArrayDesc &desc_nabf_nabf_opt);
-    void assign_chi0(matrix_m<std::complex<double>> &chi0_block, ArrayDesc &desc_nabf_nabf_opt);
 
 private:
     std::pair<ArrayDesc, matrix_m<complex<double>>> rotate_Cs_nao2mnk_kblacs(

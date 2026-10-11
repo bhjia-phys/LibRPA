@@ -26,6 +26,11 @@ struct DriverParams
     //! `internal` (`internal`, `aims`)
     std::string constants_choice;
 
+    //! Preset for producer-specific input filenames.
+    //! @par Default
+    //! `fhi-aims` (`fhi-aims`, `abacus`)
+    std::string input_preset;
+
     //! Input directory to find and read the AO dataset.
     //! @par Default
     //! `./`
@@ -126,7 +131,66 @@ struct DriverParams
     //! `vxc_out`
     std::string fn_vxc_scf;
 
+    //! Prefix of velocity/momentum-matrix files.
+    //! @par Default
+    //! `mommat_ks_kpt_`
+    std::string prefix_velocity;
+
+    //! G0W0 analytic head/wing velocity source: file (existing reader) or native.
+    //! Native uses the original DFT H(R)/S(R)/r(R) and the loaded SCF E/C frame.
+    //! @par Default
+    //! file
+    //! @par Status
+    //! Experimental
+    std::string g0w0_headwing_velocity;
+
+    //! Original DFT H(R) CSR for spin 0, relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_hr;
+
+    //! Original DFT H(R) CSR for spin 1 in a collinear two-spin calculation.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_hr_spin1;
+
+    //! Dimensionless S(R) CSR with its original full real-space support.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_sr;
+
+    //! Three-component r(R) CSR with its original full real-space support.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_rr;
+
+    //! H(R) input energy unit: Ha, Ry, or eV, converted once into Hartree.
+    //! @par Default
+    //! Ry
+    //! @par Status
+    //! Experimental
+    std::string g0w0_hr_unit;
+
+    //! r(R) input length unit: Bohr or Angstrom, converted once into Bohr.
+    //! @par Default
+    //! Bohr
+    //! @par Status
+    //! Experimental
+    std::string g0w0_rr_unit;
+
     //! Band-path k-point metadata filename.
+    //! For QSGW, presence under input_dir enables the existing band channel
+    //! and requires matching band E/C and full Vxc; absence runs only the
+    //! SCF grid. This input-driven behavior uses task=qsgw.
+    //! Keep band-channel presence and inputs unchanged across a restart.
     //! @par Default
     //! `band_kpath_info`
     std::string fn_band_kpath_info;
@@ -250,50 +314,73 @@ struct DriverParams
     //! Experimental
     int sf_state_end;
 
-    //! Provenance and semantic contract filename for all QSGW input files.
-    //! The path is interpreted relative to `input_dir`.
+    //! Full SCF Vxc matrix prefix, relative to `input_dir` unless absolute.
+    //! Used by QSGW; defaults to `xc_matr` (aims) or `vxc` (ABACUS).
     //! @par Default
-    //! `qsgw_input.contract`
+    //! Empty (producer default)
     //! @par Status
     //! Experimental
-    std::string qsgw_input_contract;
+    std::string prefix_vxc_scf;
+
+    //! Full band Vxc matrix prefix, relative to `input_dir` unless absolute.
+    //! Used by QSGW; defaults to `band_vxc_mat` (aims) or `band_vxc` (ABACUS).
+    //! @par Default
+    //! Empty (producer default)
+    //! @par Status
+    //! Experimental
+    std::string prefix_vxc_band;
+
+    //! Basis of the full Vxc matrices: `state` or `nao` (ABACUS AO input).
+    //! Applies to both SCF and band matrices. The ABACUS `_nao` filename suffix
+    //! does not determine the matrix basis: standard out_mat_xc exports states.
+    //! @par Default
+    //! `state`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_vxc_basis;
 
     //! Fixed-basis Hamiltonian mixing (`none` or `linear`).
+    //! After reading SCF input, `linear` is allowed only for one loaded k point
+    //! on a one-point full BvK mesh. Multi-k meshes automatically use `none`.
+    //! Band-path points do not affect this selection. A Gamma-only solid also
+    //! enters the single-k branch; select `none` for a direct update there.
     //! @par Default
     //! `none`
     //! @par Status
     //! Experimental
     std::string qsgw_mixer;
 
-    //! Linear Hamiltonian mixing fraction.
+    //! Linear Hamiltonian mixing fraction for the single-k SCF branch.
     //! @par Default
     //! 0.2
     //! @par Status
     //! Experimental
     double qsgw_mixing_beta;
 
-    //! Minimum number of QSGW updates before convergence may terminate the run.
+    //! Earliest global QSGW iteration at which convergence may terminate the run.
     //! @par Default
     //! 1
     //! @par Status
     //! Experimental
     int qsgw_min_iter;
 
-    //! Maximum number of QSGW updates.
+    //! Maximum global QSGW iteration, including restored updates.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
     int qsgw_max_iter;
 
-    //! Number of unoccupied states retained by qsgw_band H_QSGW cut.
+    //! Number of unoccupied states retained by the QSGW H_QSGW cut.
+    //! Active only when band-path inputs are present for task=qsgw.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
     int qsgw_band0_unoccupied_keep;
 
-    //! qsgw_band H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
+    //! QSGW H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
+    //! Active only when band-path inputs are present for task=qsgw.
     //! @par Default
     //! 0
     //! @par Status
@@ -301,6 +388,7 @@ struct DriverParams
     int qsgw_band0_cut_mode;
 
     //! Hamiltonian energy shift applied to cut states in mode 2, in Hartree.
+    //! Active only when QSGW band-path inputs are present.
     //! @par Default
     //! 20.0
     //! @par Status
@@ -314,6 +402,49 @@ struct DriverParams
     //! Experimental
     bool qsgw_write_iteration_matrices;
 
+    //! Analytic head/wing velocity convention: reference (legacy head-only),
+    //! rotate_reference (fixed initial operator in current eigenstates), or
+    //! current_hr (velocity of the complete current finite-BvK Hamiltonian).
+    //! Standalone option_dielect_func=5 selects current_hr if omitted and
+    //! rejects an explicit reference or rotate_reference. It resolves to
+    //! numerical option 3, with the same current-HR calculation and scope.
+    //! @par Default
+    //! reference
+    //! @par Status
+    //! Experimental
+    std::string qsgw_headwing_velocity;
+
+    //! S(R) input for current_hr: native ABACUS CSR, dimensionless, with its
+    //! full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_sr;
+
+    //! Three-component r(R) input for current_hr: native ABACUS CSR in Bohr,
+    //! with its full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_rr;
+
+    //! Checkpoint to restore at a completed QSGW iteration; relative to cwd.
+    //! @par Default
+    //! `none`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_restart_file;
+
+    //! Checkpoint written after every complete update; relative to output_dir.
+    //! Use `none` to disable checkpoint output.
+    //! @par Default
+    //! `qsgw_checkpoint.bin`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_checkpoint_file;
+
     //! Maximum eigenvalue change used for convergence, in eV.
     //! @par Default
     //! 1.0e-4
@@ -322,6 +453,9 @@ struct DriverParams
     double qsgw_convergence_tolerance_ev;
 
     std::string format();
+
+    //! Apply producer-specific defaults to input filename and prefix parameters.
+    void apply_input_preset();
 
     DriverParams();
 };
@@ -364,6 +498,10 @@ extern librpa::Handler h;
 
 // Working runtime options
 extern librpa::Options opts;
+
+// Original dielectric-method request for driver diagnostics, before preset
+// resolution. This is not an input keyword or a numerical API option.
+extern int requested_option_dielect_func;
 
 // TODO: consider move to public API
 std::string format_runtime_options(const librpa::Options &opts) noexcept;

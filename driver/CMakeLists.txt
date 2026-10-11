@@ -6,17 +6,9 @@ set_target_properties(rpa_exe PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 list(APPEND exe_sources
-  driver.cpp
   input_parser.cpp
   inputfile.cpp
   main.cpp
-  read_data.cpp
-  reader_eigenvec.cpp
-  reader_basis.cpp
-  reader_structure.cpp
-  stru_symops_parser.cpp
-  reader_lri.cpp
-  reader_coulomb.cpp
   task.cpp
   # Specific task implementations
   tasks/task_helper.cpp
@@ -27,10 +19,14 @@ list(APPEND exe_sources
   tasks/rpa.cpp
   tasks/print_minimax.cpp
   tasks/qsgw.cpp
+  qsgw/vxc_io.cpp
+  qsgw/ao_operator_io.cpp
+  qsgw/band_output.cpp
+  qsgw/iteration_trace.cpp
+  qsgw/checkpoint.cpp
   # tasks/test.cpp
   # task_qsgw.cpp
   # task_qsgwA.cpp
-  # task_qsgw_band.cpp
   # task_hf_band.cpp
   # task_scRPA.cpp
   # task_scRPA_band.cpp
@@ -38,9 +34,14 @@ list(APPEND exe_sources
   )
 
 target_sources(rpa_exe PRIVATE ${exe_sources})
-target_compile_definitions(rpa_exe PRIVATE "LIBRPA_MPI_THREAD_LEVEL=${_LIBRPA_MPI_THREAD_LEVEL}")
+target_compile_definitions(rpa_exe PRIVATE "LIBRPA_MPI_THREAD_LEVEL=${LIBRPA_MPI_THREAD_LEVEL}")
 
 target_link_libraries(rpa_exe PRIVATE rpa_lib)
+if(LIBRPA_BUNDLED_ELPA_PROJECT_TARGET)
+  # base_blacs.h includes ELPA headers, so make them available before compiling
+  # the driver instead of waiting only for the final rpa_lib link dependency.
+  add_dependencies(rpa_exe ${LIBRPA_BUNDLED_ELPA_PROJECT_TARGET})
+endif()
 if(BUILD_SHARED_LIBS)
   target_link_libraries(rpa_exe PRIVATE ${math_libs} ${parallel_libs})
 endif()

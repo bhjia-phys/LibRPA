@@ -226,6 +226,9 @@ module librpa_f03
       ! Output controls
       integer(c_int) :: output_gw_sigc_ks_kf
       integer(c_int) :: output_gw_sigc_ks_mat_kf
+      integer(c_int) :: output_exx_ks_mat_k
+      integer(c_int) :: istate_output_mat_start
+      integer(c_int) :: istate_output_mat_end
       integer(c_int) :: output_gw_sigc_mat_kf
       integer(c_int) :: output_gw_sigc_mat_rt
       integer(c_int) :: output_gw_sigc_mat_rf
@@ -381,6 +384,12 @@ module librpa_f03
       logical :: output_gw_sigc_ks_kf
       !> Experimental: output KS-basis correlation self-energy matrix in k-space and imaginary frequencies.
       logical :: output_gw_sigc_ks_mat_kf
+      !> Experimental: output the exact-exchange matrix in the KS basis and k-space.
+      logical :: output_exx_ks_mat_k
+      !> First zero-based KS state included when exporting KS-basis matrices.
+      integer :: istate_output_mat_start
+      !> Half-open KS-basis matrix export end index; negative means all remaining states.
+      integer :: istate_output_mat_end
       !> Experimental: output NAO-basis correlation self-energy matrix in k-space and imaginary frequencies.
       logical :: output_gw_sigc_mat_kf
       !> Experimental: output NAO-basis correlation self-energy matrix in real space and imaginary time.
@@ -1184,6 +1193,9 @@ contains
       call sync_opt(opts%libri_g0w0_threshold_Wc, opts%opts_c%libri_g0w0_threshold_Wc, direction)
       call sync_opt(opts%output_gw_sigc_ks_kf,    opts%opts_c%output_gw_sigc_ks_kf,    direction)
       call sync_opt(opts%output_gw_sigc_ks_mat_kf, opts%opts_c%output_gw_sigc_ks_mat_kf, direction)
+      call sync_opt(opts%output_exx_ks_mat_k,     opts%opts_c%output_exx_ks_mat_k,     direction)
+      call sync_opt(opts%istate_output_mat_start, opts%opts_c%istate_output_mat_start, direction)
+      call sync_opt(opts%istate_output_mat_end,   opts%opts_c%istate_output_mat_end,   direction)
       call sync_opt(opts%output_gw_sigc_mat_kf,   opts%opts_c%output_gw_sigc_mat_kf,   direction)
       call sync_opt(opts%output_gw_sigc_mat_rt,   opts%opts_c%output_gw_sigc_mat_rt,   direction)
       call sync_opt(opts%output_gw_sigc_mat_rf,   opts%opts_c%output_gw_sigc_mat_rf,   direction)
@@ -1293,6 +1305,7 @@ contains
    end subroutine librpa_finalize_global
 
    !> @brief Set global LibRPA stdout verbosity.
+   !> @param[in] output_level Verbosity level.
    subroutine librpa_set_output_level(output_level)
       implicit none
       integer, intent(in) :: output_level
@@ -1300,6 +1313,7 @@ contains
    end subroutine librpa_set_output_level
 
    !> @brief Get global LibRPA stdout verbosity.
+   !> @return Current verbosity level.
    integer function librpa_get_output_level() result(output_level)
       implicit none
       output_level = librpa_get_output_level_c()
@@ -1590,6 +1604,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_wfc  Number of wave-function basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_wfc(this, natoms, nbs_wfc, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -1606,6 +1622,8 @@ contains
    !> @param[in,out] this     Handler.
    !> @param[in]     natoms   Number of atoms.
    !> @param[in]     nbs_aux  Number of auxiliary basis functions on each atom.
+   !> @param[in]     nshells  Optional number of angular shells on each atom.
+   !> @param[in]     l_shells Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux(this, natoms, nbs_aux, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
@@ -1622,6 +1640,8 @@ contains
    !> @param[in,out] this            Handler.
    !> @param[in]     natoms          Number of atoms.
    !> @param[in]     nbs_aux_shrink  Number of shrink auxiliary basis functions on each atom.
+   !> @param[in]     nshells         Optional number of angular shells on each atom.
+   !> @param[in]     l_shells        Optional concatenated angular momenta, grouped by atom.
    subroutine librpa_set_ao_basis_aux_shrink(this, natoms, nbs_aux_shrink, nshells, l_shells)
       implicit none
       class(LibrpaHandler), intent(inout) :: this
