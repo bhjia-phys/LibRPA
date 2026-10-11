@@ -67,6 +67,38 @@ void test_rspace_symmetry_requires_complete_band_space()
     MeanField complete(1, 1, 3, 3);
     assert(librpa_int::rspace_symmetry_has_complete_band_space(complete, -1));
     assert(!librpa_int::rspace_symmetry_has_complete_band_space(complete, 2));
+
+    // Six entangled spinors form a complete gapped three-AO spinor model.
+    // Its resolution of identity, rather than the spatial AO count, fixes
+    // which band selection can safely enter real-space restoration.
+    MeanField spinor_complete(1, 1, 6, 3, 2);
+    auto &wfc = spinor_complete.get_eigenvectors();
+    for (int spinor = 0; spinor != 2; ++spinor)
+    {
+        wfc[0][spinor][0].create(6, 3);
+        for (int band = 0; band != 6; ++band)
+        {
+            spinor_complete.get_eigenvals()[0](0, band) = band < 3 ? -0.5 : 0.5;
+            for (int ao = 0; ao != 3; ++ao)
+            {
+                const double phase = librpa_int::TWO_PI * band * (3 * spinor + ao) / 6.0;
+                wfc[0][spinor][0](band, ao) = std::polar(1.0 / std::sqrt(6.0), phase);
+            }
+        }
+    }
+    for (int row = 0; row != 6; ++row)
+    {
+        for (int col = 0; col != 6; ++col)
+        {
+            std::complex<double> projector = 0.0;
+            for (int band = 0; band != 6; ++band)
+                projector += wfc[0][row / 3][0](band, row % 3)
+                    * std::conj(wfc[0][col / 3][0](band, col % 3));
+            assert(std::abs(projector - (row == col ? 1.0 : 0.0)) < 1e-12);
+        }
+    }
+    assert(librpa_int::rspace_symmetry_has_complete_band_space(spinor_complete, -1));
+    assert(!librpa_int::rspace_symmetry_has_complete_band_space(spinor_complete, 3));
 }
 
 void test_qsgw_reconstruction_with_finite_reference_metric()
@@ -3067,6 +3099,144 @@ void test_abf_space_wing_rewrite_matches_coulomb_basis(const BlacsCtxtHandler &b
         require_double_close(max_err, 0.0, 1e-10);
     }
 }
+
+void test_spinor_headwing_full_bz_matches_antiunitary_kstar_sum(const BlacsCtxtHandler &blacs_h)
+{
+    const std::vector<Vector3_Order<double>> full_points{{0,0,0}, {1.0/3,0,0}, {-1.0/3,0,0}};
+    const std::vector<Vector3_Order<double>> ibz_points{full_points[0], full_points[1]};
+    const auto make_meanfield = [](int nk) {
+        MeanField mf(1, nk, 4, 2, 2);
+        for (int k = 0; k != nk; ++k)
+        {
+            for (int component = 0; component != 2; ++component)
+            {
+                auto &wfc = mf.get_eigenvectors()[0][component][k];
+                wfc.create(4, 2);
+                for (int band = 0; band != 4; ++band)
+                    for (int ao = 0; ao != 2; ++ao)
+                        wfc(band,ao) = component == band % 2 && ao == band / 2 ? 1.0 : 0.0;
+            }
+            for (int band = 0; band != 4; ++band)
+            {
+                mf.get_eigenvals()[0](k,band) = band < 2 ? -1.0 : 1.0;
+                mf.get_weight()[0](k,band) = band < 2 ? 1.0 / nk : 0.0;
+            }
+        }
+        return mf;
+    };
+    auto full_mf = make_meanfield(3);
+    auto ibz_mf = make_meanfield(2);
+    librpa_int::velocity_matrix_t full_velocity, ibz_velocity;
+    librpa_int::initialize_velocity_matrix(full_velocity, 1, 3, 4);
+    librpa_int::initialize_velocity_matrix(ibz_velocity, 1, 2, 4);
+    for (int k = 0; k != 3; ++k)
+        for (int alpha = 0; alpha != 3; ++alpha)
+            for (int component = 0; component != 2; ++component)
+            {
+                full_velocity[0][k][alpha](component,component+2) = {0,0.1*(alpha+1)};
+                full_velocity[0][k][alpha](component+2,component) = {0,-0.1*(alpha+1)};
+            }
+    for (int k = 0; k != 2; ++k)
+        ibz_velocity[0][k] = full_velocity[0][k];
+
+    AtomicBasis ao(std::vector<std::size_t>{2}), aux(std::vector<std::size_t>{2});
+    ao.set_l_shells({{0,0}});
+    aux.set_l_shells({{0,0}});
+    PeriodicBoundaryData pbc;
+    pbc.set_latvec({5,0,0,0,5,0,0,0,5});
+    pbc.set_kgrids_kvec(3,1,1, {0,0,0, librpa_int::TWO_PI/15,0,0, -librpa_int::TWO_PI/15,0,0});
+    SymmetryContext context;
+    context.set_available();
+    context.lattice_vectors = pbc.latvec;
+    context.atom_to_type = {{0,0}};
+    context.input_coord_frac = {{0,{0,0,0}}};
+    SymmetryOperation identity;
+    identity.rotation.Identity();
+    context.set_rspace_operations({identity});
+    const auto member = [](const Vector3_Order<double> &point, bool antiunitary) {
+        SymmetryKStarMember m;
+        m.k_bz = point;
+        m.spatial_isym = 0;
+        m.time_reversal = antiunitary;
+        SymmetryKAtomRotation atom;
+        atom.atom_from = atom.atom_to = atom.atom_type = atom.lmax = 0;
+        atom.bloch_rsh_rotations[0] = ComplexMatrix(1,1);
+        atom.bloch_rsh_rotations[0](0,0) = 1.0;
+        m.atom_rotations.push_back(atom);
+        return m;
+    };
+    for (int k = 0; k != 2; ++k)
+    {
+        librpa_int::SymmetryKStar star;
+        star.star_index = k;
+        star.k_ibz = ibz_points[k];
+        star.members.push_back(member(ibz_points[k], false));
+        if (k == 1) star.members.push_back(member(full_points[2], true));
+        context.kstars.push_back(star);
+    }
+    assert(context.count_kstar_members() == 3);
+    const std::vector<double> omega{0.5,1.0};
+    diele_func full(full_mf, full_velocity, full_points, ao, aux, omega, 2,4,1,2,
+                    pbc, librpa_int::global::mpi_comm_global_h, blacs_h);
+    diele_func reduced(ibz_mf, ibz_velocity, ibz_points, ao, aux, omega, 2,4,1,2,
+                       pbc, librpa_int::global::mpi_comm_global_h, blacs_h);
+    full.use_soc = reduced.use_soc = true;
+    reduced.use_symmetry = true;
+    reduced.debug = true;
+    reduced.set_symmetry_context(context);
+    reduced.atom_nw = {{0,2}};
+    reduced.coord_frac = context.input_coord_frac;
+    reduced.set_direct_full_bz_headwing_inputs(full_velocity, full_mf, {{0},{1,2}});
+
+    atpair_k_cplx_mat_t coulomb;
+    auto v = std::make_shared<ComplexMatrix>(2,2);
+    (*v)(0,0) = 1.0;
+    (*v)(1,1) = 0.5;
+    coulomb[0][0][{0,0,0}] = v;
+    librpa_int::Cs_LRI coefficients;
+    coefficients.use_libri = true;
+    // Each auxiliary channel has a distinct, nonzero AO product.
+    auto tensor = std::make_shared<std::valarray<double>>(8);
+    (*tensor)[0] = (*tensor)[3] = 0.5;
+    (*tensor)[5] = (*tensor)[6] = 0.5;
+    if (librpa_int::global::mpi_comm_global_h.is_root())
+        coefficients.data_libri[0][{0,{0,0,0}}] = RI::Tensor<double>({2,2,2}, tensor);
+    full.init(0.0, coulomb);
+    reduced.init(0.0, coulomb);
+    full.cal_head();
+    reduced.cal_head();
+    full.cal_wing(coefficients, 0.0, coulomb);
+    reduced.cal_wing(coefficients, 0.0, coulomb);
+    ArrayDesc sqrt_desc(blacs_h);
+    sqrt_desc.init_1b1p(2,2,0,0);
+    auto sqrt_v = init_local_mat<std::complex<double>>(sqrt_desc, MAJOR::COL);
+    fill_distributed_matrix(sqrt_v, sqrt_desc, {{1.0,0.0},{0.0,std::sqrt(0.5)}});
+    full.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
+    reduced.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
+    double head_norm = 0.0, wing_norm_local = 0.0;
+    for (int frequency = 0; frequency != 2; ++frequency)
+    {
+        const auto a = full.get_rpa_chi0v_head(frequency), b = reduced.get_rpa_chi0v_head(frequency);
+        for (int i = 0; i != 3; ++i)
+            for (int j = 0; j != 3; ++j)
+            {
+                assert_complex_close(a(i,j), b(i,j), 1e-12);
+                head_norm = std::max(head_norm, std::abs(a(i,j)));
+            }
+        const auto x = full.get_rpa_chi0v_wing(frequency), y = reduced.get_rpa_chi0v_wing(frequency);
+        assert(x.nr() == y.nr() && x.nc() == y.nc());
+        for (int i = 0; i != x.nr(); ++i)
+            for (int j = 0; j != x.nc(); ++j)
+            {
+                assert_complex_close(x(i,j), y(i,j), 1e-12);
+                wing_norm_local = std::max(wing_norm_local, std::abs(x(i,j)));
+            }
+    }
+    double wing_norm = 0.0;
+    MPI_Allreduce(&wing_norm_local, &wing_norm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    assert(head_norm > 1e-6 && wing_norm > 1e-6);
+}
+
 }  // namespace
 
 void add_wq_blocks(
@@ -4023,6 +4193,7 @@ int main(int argc, char *argv[])
         test_rspace_symmetry_requires_complete_band_space();
         test_qsgw_reconstruction_with_finite_reference_metric();
         test_qsgw_native_baseline_preserves_aliased_tail();
+        test_spinor_headwing_full_bz_matches_antiunitary_kstar_sum(blacs_h);
         test_kpoint_coordinate_mapping_selects_active_klist_from_full_source();
         test_kstar_velocity_mapping_preserves_member_order_and_periodic_gauge();
         test_replace_rpa_response_head_only_keeps_numeric_wings(blacs_h);

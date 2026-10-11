@@ -410,7 +410,10 @@ void initialize_ds_headwing(Dataset &ds, const LibrpaOptions &opts, const bool n
                                        opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
     if (use_headwing_symmetry)
     {
-        reject_spinor_symmetry_speedup(ds, "analytic head/wing");
+        if (mf.get_n_spinor() > 1 && mf.get_n_kpoints() != ds.pbc.get_n_cells_bvk())
+            throw LIBRPA_RUNTIME_ERROR(
+                "SOC analytic head/wing symmetry requires full-BZ velocity and wave-function "
+                "inputs; use the driver's full-BZ PyATB input for an irreducible SCF grid");
         initialize_symmetry_context(ds, true);
         require_symmetry_shell_layouts(ds, "analytic head/wing");
     }
