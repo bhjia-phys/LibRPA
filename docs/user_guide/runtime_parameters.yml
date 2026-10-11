@@ -254,11 +254,14 @@ blocks:
       These experimental parameters apply to `task = qsgw`.
       `option_dielect_func = 5` selects
       `qsgw_headwing_velocity = current_hr` and resolves to existing numerical
-      option 3: rebuild velocity from the entire current finite-BvK Hamiltonian
+      option 3: rebuild velocity from the current native-baseline Hamiltonian
       in the entering E/C frame, then rebuild analytic head/wing using the live
       E/C/f and the body frequency nodes. Previous head/wing data are cleared
       before each rebuild. This needs dimensionless `qsgw_fn_sr` and Bohr
-      `qsgw_fn_rr`, not a separate producer H(R) file or velocity file.
+      `qsgw_fn_rr`, plus matching native `hrs1_nao.csr` in Ry (and
+      `hrs2_nao.csr` for two physical collinear channels). The native DFT
+      baseline and complete current correction use the same reconstruction
+      as formal HR export; no velocity file is needed.
       The preset requires `replace_w_head = true`, `use_scalapack_gw_wc = true`,
       and `use_pyatb = false`. An omitted selector or explicit `current_hr` is
       accepted; explicit `reference` or `rotate_reference` is rejected.

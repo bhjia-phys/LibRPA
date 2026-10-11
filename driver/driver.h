@@ -505,8 +505,8 @@ struct DriverParams
     //! only the complete current correction. Native DFT H input is in Ry;
     //! S/r use qsgw_fn_sr and qsgw_fn_rr defaults. Requires a complete unshifted
     //! mesh, independently of head/wing and band inputs. SOC retains the full
-    //! complex spinor matrix. This export policy does not replace current_hr
-    //! velocity reconstruction or its checkpoint convention.
+    //! complex spinor matrix. current_hr differentiates this same native-baseline
+    //! reconstruction; its checkpoints bind the native DFT H as well as S/r.
     //! @par Default
     //! true
     //! @par Status
@@ -515,7 +515,8 @@ struct DriverParams
 
     //! Analytic head/wing velocity convention: reference (legacy head-only),
     //! rotate_reference (fixed initial operator in current eigenstates), or
-    //! current_hr (velocity of the complete current finite-BvK Hamiltonian).
+    //! current_hr (velocity of the complete current native-baseline Hamiltonian,
+    //! matching formal HR export; requires native hrs1/hrs2_nao.csr in Ry).
     //! Standalone option_dielect_func=5 selects current_hr if omitted and
     //! rejects an explicit reference or rotate_reference. It resolves to
     //! numerical option 3, with the same current-HR calculation and scope.
