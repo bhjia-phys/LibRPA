@@ -270,8 +270,6 @@ SpinKMatrixMap read_qsgw_vxc(const std::string& input_directory,
         (reference.get_n_spinor() != 2 || reference.get_n_spins() != 1))
         throw std::invalid_argument(
             "ABACUS QSGW Vxc requires scalar channels or one two-component spinor channel");
-    if (!aims_input && reference.get_n_spinor() == 2 && basis != VxcBasis::State)
-        throw std::invalid_argument("ABACUS SOC QSGW Vxc requires the full KS-state basis");
     if (aims_input && basis != VxcBasis::State)
         throw std::invalid_argument("FHI-aims QSGW Vxc requires the KS-state basis");
     const std::string default_prefix = aims_input

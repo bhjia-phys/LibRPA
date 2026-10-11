@@ -237,16 +237,19 @@ static void validate_input_parameters()
             params.qsgw_max_iter < params.qsgw_min_iter)
             throw std::runtime_error(
                 "qsgw iteration bounds must satisfy 1 <= min <= max");
-        if (params.qsgw_band0_unoccupied_keep < 0)
+        if (params.qsgw_unoccupied_keep < 0)
             throw std::runtime_error(
-                "qsgw_band0_unoccupied_keep must be non-negative");
-        if (params.qsgw_band0_cut_mode < 0 ||
-            params.qsgw_band0_cut_mode > 2)
+                "qsgw_unoccupied_keep must be non-negative");
+        if (params.qsgw_cut_mode == 2)
             throw std::runtime_error(
-                "qsgw_band0_cut_mode must be 0, 1, or 2");
-        if (!std::isfinite(params.qsgw_band0_cut_shift_ha))
+                "qsgw_cut_mode = 2 was renumbered to 1; use 0 (uncut) or 1 (shifted KS diagonal)");
+        if (params.qsgw_cut_mode != 0 &&
+            params.qsgw_cut_mode != 1)
             throw std::runtime_error(
-                "qsgw_band0_cut_shift_ha must be finite");
+                "qsgw_cut_mode must be 0 or 1");
+        if (!std::isfinite(params.qsgw_cut_shift_ha))
+            throw std::runtime_error(
+                "qsgw_cut_shift_ha must be finite");
         if (!(params.qsgw_convergence_tolerance_ev > 0.0) ||
             !std::isfinite(params.qsgw_convergence_tolerance_ev))
             throw std::runtime_error(
@@ -268,6 +271,9 @@ static void validate_input_parameters()
         if (params.qsgw_headwing_velocity == "current_hr" &&
             (params.qsgw_fn_sr.empty() || params.qsgw_fn_rr.empty()))
             throw std::runtime_error("QSGW current_hr velocity requires qsgw_fn_sr and qsgw_fn_rr");
+        if (params.qsgw_export_hamiltonian_for_pyatb &&
+            (params.qsgw_fn_sr.empty() || params.qsgw_fn_rr.empty()))
+            throw std::runtime_error("QSGW HR export requires qsgw_fn_sr and qsgw_fn_rr");
         // QSGW inherits the upstream EXX, GW, and RPA symmetry switches.
     }
 }
@@ -363,14 +369,22 @@ void parse_inputfile_to_params(const std::string &fn)
                 "k-point input");
         for (const std::string removed :
              {"qsgw_update_hartree", "qsgw_hartree_coulomb", "qsgw_hartree_normalization",
-              "qsgw_export_hamiltonian_for_pyatb", "qsgw_hr_export_full_mp_rgrid"})
+              "qsgw_hr_export_full_mp_rgrid"})
         {
             std::string ignored;
             if (get_last_assigned_value(parser, removed, ignored))
             {
                 throw std::runtime_error(
-                    removed + " is not supported by the head-only QSGW workflow");
+                    removed + " is not supported by the current QSGW workflow");
             }
+        }
+        for (const std::string renamed :
+             {"qsgw_band0_unoccupied_keep", "qsgw_band0_cut_mode", "qsgw_band0_cut_shift_ha"})
+        {
+            std::string ignored;
+            if (get_last_assigned_value(parser, renamed, ignored))
+                throw std::runtime_error(
+                    renamed + " was renamed; remove band0_ from the parameter name");
         }
         parse_qsgw_string(parser, "prefix_vxc_scf", driver_params.prefix_vxc_scf);
         parse_qsgw_string(parser, "prefix_vxc_band", driver_params.prefix_vxc_band);
@@ -386,14 +400,18 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_mixing_beta);
         parse_qsgw_int(parser, "qsgw_min_iter", driver_params.qsgw_min_iter);
         parse_qsgw_int(parser, "qsgw_max_iter", driver_params.qsgw_max_iter);
-        parse_qsgw_int(parser, "qsgw_band0_unoccupied_keep",
-                       driver_params.qsgw_band0_unoccupied_keep);
-        parse_qsgw_int(parser, "qsgw_band0_cut_mode",
-                       driver_params.qsgw_band0_cut_mode);
-        parse_qsgw_double(parser, "qsgw_band0_cut_shift_ha",
-                          driver_params.qsgw_band0_cut_shift_ha);
+        parse_qsgw_int(parser, "qsgw_unoccupied_keep",
+                       driver_params.qsgw_unoccupied_keep);
+        parse_qsgw_int(parser, "qsgw_cut_mode",
+                       driver_params.qsgw_cut_mode);
+        // An omitted shift is exactly 2 eV under the selected producer constants.
+        driver_params.qsgw_cut_shift_ha = 2.0 / librpa_int::HA2EV;
+        parse_qsgw_double(parser, "qsgw_cut_shift_ha",
+                          driver_params.qsgw_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_bool(parser, "qsgw_export_hamiltonian_for_pyatb",
+                        driver_params.qsgw_export_hamiltonian_for_pyatb);
         parse_qsgw_string(parser, "qsgw_headwing_velocity", driver_params.qsgw_headwing_velocity);
         parse_qsgw_string(parser, "qsgw_fn_sr", driver_params.qsgw_fn_sr);
         parse_qsgw_string(parser, "qsgw_fn_rr", driver_params.qsgw_fn_rr);
