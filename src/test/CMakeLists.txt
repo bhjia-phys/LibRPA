@@ -5,6 +5,12 @@
 macro(config_test TARGET NUMPROC)
   add_executable(${TARGET} ${TARGET}.cpp)
   target_compile_definitions(${TARGET} PRIVATE "LIBRPA_MPI_THREAD_LEVEL=${LIBRPA_MPI_THREAD_LEVEL}")
+  # Numerical checks use assert(), including in Release test builds.
+  if(MSVC)
+    target_compile_options(${TARGET} PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(${TARGET} PRIVATE -UNDEBUG)
+  endif()
   target_link_libraries(${TARGET} PRIVATE rpa_lib)
   if(LIBRPA_BUNDLED_ELPA_PROJECT_TARGET)
     # Tests include LibRPA headers directly, including base_blacs.h.
@@ -47,6 +53,8 @@ foreach(target
     test_base_utility
     test_blas_lapack
     test_complexmatrix
+    test_coulmat
+    test_epsilon_symmetry_blocks
     test_fitting
     test_io
     test_symmetry_context
@@ -83,6 +91,14 @@ endforeach()
 target_compile_options(test_sternheimer_rpa PRIVATE -UNDEBUG)
 target_compile_options(test_sternheimer_symmetry PRIVATE -UNDEBUG)
 target_sources(test_task_helper PRIVATE ../../driver/tasks/task_helper.cpp)
+# Exercise the distributed collection in the same focused Coulomb executable.
+add_test(NAME test_coulmat_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_coulmat>)
+
+if(LIBRPA_USE_LIBRI)
+  config_test(test_magnetic_gw_model 1)
+  add_test(NAME test_magnetic_gw_model_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_magnetic_gw_model>)
+endif()
+
 # add 4-process tests
 foreach(target
   test_atomic_basis_blacs

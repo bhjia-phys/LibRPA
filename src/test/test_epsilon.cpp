@@ -175,6 +175,95 @@ void test_trace_logdet_accounts_for_complex_row_pivot(const BlacsCtxtHandler &bl
     assert_complex_close(actual, {-4.0, 0.0}, 1e-12);
 }
 
+// Serial complex LU with partial pivoting and pivot-parity tracking, LAPACK
+// style. Returns ln det = sum_k log(U_kk) with the phase wrapped to (-pi, pi].
+std::complex<double> serial_logdet_with_partial_pivoting(std::vector<std::complex<double>> a)
+{
+    const int n = static_cast<int>(std::llround(std::sqrt(a.size())));
+    int n_swaps = 0;
+    for (int k = 0; k != n; ++k)
+    {
+        int piv = k;
+        double max_abs = std::abs(a[k * n + k]);
+        for (int i = k + 1; i != n; ++i)
+        {
+            const double ai = std::abs(a[i * n + k]);
+            if (ai > max_abs)
+            {
+                max_abs = ai;
+                piv = i;
+            }
+        }
+        if (piv != k)
+        {
+            for (int j = 0; j != n; ++j) std::swap(a[k * n + j], a[piv * n + j]);
+            ++n_swaps;
+        }
+        for (int i = k + 1; i != n; ++i)
+        {
+            const auto f = a[i * n + k] / a[k * n + k];
+            for (int j = k + 1; j != n; ++j) a[i * n + j] -= f * a[k * n + j];
+        }
+    }
+    std::complex<double> ln_det(0.0, 0.0);
+    for (int k = 0; k != n; ++k) ln_det += std::log(a[k * n + k]);
+    if (n_swaps % 2 != 0) ln_det += std::complex<double>{0.0, librpa_int::PI};
+    const double phase = std::remainder(ln_det.imag(), librpa_int::TWO_PI);
+    return {ln_det.real(), phase <= -librpa_int::PI ? phase + librpa_int::TWO_PI : phase};
+}
+
+// With a 4x4 matrix on the 2x2 grid (block size 2), the panel of columns 3-4
+// is factorized inside process column 1, so a row interchange recorded there
+// must still reach the mypcol()==0 pivot counter. M is constructed so that
+// partial pivoting swaps exactly rows 3 and 4 at step 3 (the process-column-1
+// panel), with 2-4x margins so the pivot choice is robust to roundoff. The
+// single swap keeps the pivot parity odd and discriminating.
+void test_trace_logdet_matches_serial_reference_with_cross_column_pivots(const BlacsCtxtHandler &blacs_h)
+{
+    constexpr int n = 4;
+    ArrayDesc desc(blacs_h);
+    desc.init_square_blk(n, n, 0, 0);
+
+    // response = I - M; M's columns: step 1 pivot row 1 (|2| > |0.7|),
+    // step 2 pivot row 2 (|2.925| > |0.69|), step 3 pivot row 4
+    // (|3.94564| > |0.96444|), step 4 no choice.
+    const std::complex<double> m_dense[n][n] = {
+        {{2.0, 0.0}, {0.3, 0.0}, {0.0, 0.0}, {0.0, 0.0}},
+        {{0.5, 0.0}, {3.0, 0.0}, {0.2, 0.0}, {0.0, 0.0}},
+        {{0.4, 0.0}, {0.6, 0.0}, {1.0, 0.0}, {0.0, 0.0}},
+        {{0.7, 0.0}, {0.9, 0.0}, {4.0, 0.0}, {0.5, 0.0}}};
+
+    auto response = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
+    for (int i = 0; i != n; ++i)
+    {
+        const int ilo = desc.indx_g2l_r(i);
+        if (ilo < 0) continue;
+        for (int j = 0; j != n; ++j)
+        {
+            const int jlo = desc.indx_g2l_c(j);
+            if (jlo < 0) continue;
+            response(ilo, jlo) = (i == j ? 1.0 : 0.0) - m_dense[i][j];
+        }
+    }
+
+    const auto actual = librpa_int::compute_rpa_response_trace_logdet_blacs_2d(response, desc);
+
+    std::vector<std::complex<double>> m_flat(n * n);
+    for (int i = 0; i != n; ++i)
+        for (int j = 0; j != n; ++j) m_flat[i * n + j] = m_dense[i][j];
+    std::complex<double> trace(0.0, 0.0);
+    for (int i = 0; i != n; ++i) trace += 1.0 - m_flat[i * n + i];
+    const auto expected = trace + serial_logdet_with_partial_pivoting(m_flat);
+
+    if (blacs_h.myid == 0)
+    {
+        std::cout << "trace_logdet serial-reference check: n=" << n << " grid="
+                  << blacs_h.nprows << "x" << blacs_h.npcols << " actual=" << actual
+                  << " expected=" << expected << std::endl;
+    }
+    assert_complex_close(actual, expected, 1e-10);
+}
+
 void add_scalar_wq_block(
     atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old
         &wq,
@@ -681,6 +770,7 @@ void test_dense_wc_real_ct_projects_large_imaginary_residual()
            1e-12);
 }
 
+
 }  // namespace
 
 int main(int argc, char *argv[])
@@ -698,6 +788,7 @@ int main(int argc, char *argv[])
         test_gamma_s_head_vector(blacs_h);
         test_head_only_trace_logdet_can_use_reduced_response(blacs_h);
         test_trace_logdet_accounts_for_complex_row_pivot(blacs_h);
+        test_trace_logdet_matches_serial_reference_with_cross_column_pivots(blacs_h);
         test_wq_to_wr_symmetry_reduced_q_matches_full_bz();
         test_wq_to_wr_antiunitary_member_conjugates();
         test_wq_to_wr_symmetry_collective_handles_empty_local_rank();
