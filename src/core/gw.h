@@ -59,6 +59,7 @@ public:
     const PeriodicBoundaryData &pbc;
     const SymmetryContext &symmetry_context;
     const bool use_symmetry_context;
+    //! Representation of the supplied screening, independent of Sigma reduction.
     const SymmetryQPointView qpoint_view;
     const TFGrids &tfg;
     const MpiCommHandler &comm_h;
@@ -108,7 +109,8 @@ public:
          const ArrayDesc &desc_wfc_in,
          const ArrayDesc &desc_band_wfc_in,
          bool is_eigvec_k_distributed,
-         bool use_symmetry_context_in = true);
+         bool use_symmetry_context_in = true,
+         const SymmetryQPointView *screening_qpoint_view = nullptr);
     // // delete copy/move constructors
     // G0W0(const G0W0 &s_g0w0) = delete;
     // G0W0(G0W0 &&s_g0w0) = delete;

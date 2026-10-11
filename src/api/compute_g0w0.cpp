@@ -885,6 +885,25 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
         Wc_freq_q_atom_pair;
     if (use_shrink_abfs)
     {
+        // A full-BZ mean-field input may still use representative q points for
+        // screening. The atom-pair CT/unfold/FT path uses pbc.klist_coul and
+        // its full-grid fallback does not restore these missing star members.
+        // Expand while W remains in the compressed basis, using the existing
+        // dense-path rotations; otherwise CT fills the missing q blocks by zero.
+        if (pds->pbc.klist.size() == static_cast<std::size_t>(pds->pbc.get_n_cells_bvk())
+            && chi0.qpoint_view().restore_mode == SymmetryQPointRestoreMode::FULL_CRYSTAL
+            && chi0.active_qpoints().size() < pds->pbc.klist.size())
+        {
+            profiler.start("g0w0_restore_compressed_full_q",
+                           "Restore compressed Wc to full q grid");
+            lib_printf("Restoring compressed Wc from %zu representatives to %zu full q points\n",
+                       chi0.active_qpoints().size(), pds->pbc.klist.size());
+            for (auto &freq_q : Wc_freq_q)
+                freq_q.second = restore_symmetry_dense_wq_map(
+                    freq_q.second, pds->pbc, chi0.qpoint_view(),
+                    pds->symmetry_context, pds->basis_aux_shrink, wc_desc_abf);
+            profiler.stop("g0w0_restore_compressed_full_q");
+        }
         profiler.start("collect_Wc_blacs_to_atom_pairs",
                        "Collect compressed Wc from BLACS to atom pairs");
         Wc_freq_q_atom_pair =

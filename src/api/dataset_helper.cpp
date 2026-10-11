@@ -319,7 +319,8 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
                                                    ds.scfk_blacs_ctxt, ds.bandk_blacs_ctxt,
                                                    desc_scf_wfc, ds.desc_band_wfc_kb,
                                                    is_eigvec_k_distributed,
-                                                   use_symmetry);
+                                                   use_symmetry,
+                                                   ds.p_chi0 ? &ds.p_chi0->qpoint_view() : nullptr);
     ds.p_g0w0->nbands_G = opts.n_bands_sigc;
     ds.p_g0w0->n_bands_exclude = opts.n_bands_exclude_sigc;
     ds.p_g0w0->libri_threshold_C = opts.libri_g0w0_threshold_C;
