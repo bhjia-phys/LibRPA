@@ -3090,6 +3090,18 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                     desc_nabf_nabf_opt, n_nonsingular, sqrt_coulomb_threshold,
                     use_cholesky_gw_wc, use_gpu_replace_scalapack);
 
+                // Subtract the retained-space identity before rotating back.
+                // Subtracting the full auxiliary-space identity after rotation
+                // would introduce screening in discarded bare-Coulomb modes.
+                for (int i = 0; i != n_nonsingular_int; ++i)
+                {
+                    const int ilo = desc_nabf_nabf_opt.indx_g2l_r(i);
+                    if (ilo < 0) continue;
+                    const int jlo = desc_nabf_nabf_opt.indx_g2l_c(i);
+                    if (jlo < 0) continue;
+                    chi0_block(ilo, jlo) -= 1.0;
+                }
+
 #if defined(LIBRPA_USE_HIP) || defined(LIBRPA_USE_CUDA)
                 if (use_gpu_replace_scalapack)
                 {
@@ -3207,6 +3219,9 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
             //     }
             // }
             // debug end
+            // The full Gamma head/wing branch exports the projected
+            // correlation-only inverse, U_r * (epsilon_r^{-1} - I_r) * U_r^H.
+            // Other branches still export their dielectric matrix before solve.
             std::ostringstream epsinv_debug_name;
             epsinv_debug_name << std::fixed << std::setprecision(10)
                               << "epsinv_minus_identity_qx_" << q.x << "_qy_" << q.y
@@ -3217,7 +3232,8 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
             global::profiler.start("epsilon_to_wc");
             if (epsmac_LF_imagfreq.size() > 0 && is_gamma_point(q) && option_dielect_func == 3)
             {
-                // Dielectric matrix is already inverted, only multiply by square root coulwc from both sides
+                // The retained identity was subtracted before rotation; multiply
+                // the correlation-only inverse by sqrt(coulwc) on both sides.
 #if defined(LIBRPA_USE_HIP) || defined(LIBRPA_USE_CUDA)
                 if(use_gpu_replace_scalapack)
                 {
@@ -3225,7 +3241,6 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                     DEVICE_CHECK(deviceMemcpyAsync(coulwc_block_ptr, coulwc_block.ptr(), coulwc_block.size() * sizeof(complex<double>), deviceMemcpyHostToDevice, blacs_h.ddla_handle->stream));
                 }
 #endif
-                LaConnector::pdam(-1.0, chi0_block_ptr, desc_nabf_nabf_opt);
                 global::profiler.start("epsilon_multiply_coulwc_1", "Multiply truncated Coulomb",
                                       LIBRPA_VERBOSE_DEBUG);
                 LaConnector::pgemm('N', 'N', n_abf, n_abf, n_abf, {1.0, 0.0},
