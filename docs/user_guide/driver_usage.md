@@ -184,9 +184,17 @@ once into Ha/Bohr. S is dimensionless, and the structure reader supplies the lat
 in Bohr. Option 4 uses the same native velocity for the existing analytic head-only
 prescription. The `g0w0_band` task alias accepts the same options.
 
-The current native mode requires complete square AO/band frames and a uniform full-BZ
-mesh. SOC, symmetry reduction and k-point-parallel SCF eigenvectors are explicitly
-unsupported. It checks the metric residual against 1e-6, Hamiltonian frame and
+The native mode accepts one/two collinear spin channels, or a two-component SOC
+reference selected by `use_spinor_wfc = true` (`use_soc = true` is an alias).
+SOC has one physical channel, one full complex H file and full-dimension S/r
+files of dimension `2 * N_AO`; do not provide `g0w0_fn_hr_spin1`. Both components
+are assembled as AO-major/spinor-minor ket rows, preserving cross-spinor H and
+all band velocity entries. The original SCF energies, coefficients and occupations
+remain the entering state.
+
+Complete square AO-spinor/band frames and a uniform full-BZ mesh are required.
+Symmetry reduction and k-point-parallel SCF eigenvectors remain unsupported.
+It checks the metric residual against 1e-6, Hamiltonian frame and
 Hermiticity residuals against 1e-4 eV, and the imaginary velocity diagonal against
 1e-8 Ha Bohr. These input checks establish frame consistency within their tolerances;
 they do not certify material or basis convergence.

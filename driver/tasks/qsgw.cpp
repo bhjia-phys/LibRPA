@@ -385,6 +385,27 @@ void run_qsgw()
 
     profiler.start("qsgw", "QSGW fixed-basis self-consistent calculation");
     const auto dataset = api::get_dataset_instance(h);
+    if (update_head && driver_params.qsgw_headwing_velocity == "current_hr")
+    {
+        const auto& mf = dataset->mf;
+        if ((mf.get_n_spinor() != 1 && mf.get_n_spinor() != 2) ||
+            (mf.get_n_spinor() == 2 && mf.get_n_spins() != 1) ||
+            mf.get_n_bands() != mf.get_n_aos() * mf.get_n_spinor())
+            throw LIBRPA_RUNTIME_ERROR(
+                "QSGW current-HR velocity requires a complete scalar or two-spinor AO basis; "
+                "SOC has one physical spin channel");
+        if (dataset->pbc.kfrac_list.size() != dataset->pbc.kfrac_list_full.size() ||
+            mf.get_n_kpoints() != dataset->pbc.get_n_cells_bvk())
+            throw LIBRPA_RUNTIME_ERROR(
+                "QSGW current-HR velocity requires the complete full-BZ SCF mesh; "
+                "IBZ velocity sewing is unsupported");
+        if (mf.get_n_spinor() == 2 &&
+            (driver::get_bool(opts.use_symmetry_exx) || driver::get_bool(opts.use_symmetry_gw) ||
+             driver::get_bool(opts.use_symmetry_rpa)))
+            throw LIBRPA_RUNTIME_ERROR(
+                "QSGW SOC current-HR velocity requires EXX/GW/RPA symmetry switches off; "
+                "magnetic-symmetry velocity sewing is unsupported");
+    }
     if (opts.parallel_routing != LIBRPA_ROUTING_LIBRI &&
         opts.parallel_routing != LIBRPA_ROUTING_AUTO)
     {
