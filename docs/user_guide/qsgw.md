@@ -119,7 +119,15 @@ qsgw_headwing_velocity = current_hr
 
 Paths are relative to `input_dir` unless absolute. This mode requires a full,
 unshifted uniform mesh, replicated wavefunctions and a complete square AO/state
-basis, with SOC and symmetry reduction disabled. S/r remain fixed; a separate
+basis, with symmetry reduction disabled. The native SOC reader accepts a
+complete two-component spinor reference with matching full-dimension S/r,
+one physical spin channel and `2 * N_AO` states. Both reference and live
+coefficients use AO-major/spinor-minor ordering; the entire complex Hamiltonian,
+including cross-spinor entries, enters the same velocity projector. For this
+SOC route all EXX/GW/RPA symmetry switches must be off; IBZ input and k-parallel
+wavefunctions are unsupported. SOC uses full KS-state Vxc matrices
+(`qsgw_vxc_basis = state`) with the ABACUS `s4` filename suffix; SOC AO-basis
+Vxc projection is outside this route. S/r remain fixed; a separate
 producer H(R) input is not needed. At each entering iteration, the driver
 embeds the reference-basis Hamiltonian as `H_AO = S U0 h U0† S`, then Fourier
 transforms the *whole* effective Hamiltonian and evaluates velocity in the
@@ -155,8 +163,19 @@ finite-BvK H(R), preserving the live orbital frame used by the RI response.
 Consequently each head/wing refresh needs no external PyATB process and no
 second eigensolve. These are internal numerical interfaces; no public C or
 Fortran binding is added. Scalar full-matrix controls cover the model solve
-and the retained three entering Si frames; SOC, symmetry reduction and
-fractional-occupation response remain outside this interface benchmark.
+and the retained three entering Si frames. SOC uses the same complex model
+solve and projector. Symmetry sewing and fractional-occupation response require
+separate validation beyond the full-BZ integer-occupation controls.
+
+The SOC controls include complex nonorthogonal and degenerate spinor models,
+all 220 states at four selected Bi2Se3 points, and two actual current-HR updates
+on a four-state model compared with compiled PyATB `tb(4)`. They retain all
+Cartesian complex velocity entries after S-metric frame transport, with declared
+energy/length constants reconciled explicitly. The analytic wing's RI charge
+vertex sums equal spinor components, as required for a spin-independent charge
+operator; `test_rpa_headwing` checks its complete projection and global SU(2)
+rotation invariance. These finite-model controls do not establish a converged
+material spectrum or an accepted off-mesh interpolant.
 
 Fourier round-trip and eigenpair-frame checks establish agreement only on the
 input mesh. Before using `current_hr` for physical band, velocity or topology

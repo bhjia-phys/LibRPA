@@ -219,9 +219,12 @@ blocks:
       their default `file` uses the existing velocity reader.
       The native path retains the loaded SCF energies,
       wavefunctions, and occupations and does not solve a second eigenproblem.
-      It currently requires a complete uniform full-BZ mesh, complete AO/band
-      frames, one or two collinear spin channels, and disabled SOC, symmetry,
-      and k-point-parallel SCF eigenvectors. See the native head/wing example in
+      It requires a complete uniform full-BZ mesh and complete AO-spinor/band
+      frames. One/two collinear spin channels or one two-component SOC channel
+      are supported. SOC requires full complex H and full-dimension S/r of
+      dimension `2 * N_AO`, with `use_spinor_wfc = true`; both spinor components
+      are retained in AO-major/spinor-minor order. Symmetry reduction and
+      k-point-parallel SCF eigenvectors are disabled. See the native head/wing example in
       [Driver Usage](driver_usage.md#native-g0w0-headwing-velocity).
     fields:
       - driver.g0w0_headwing_velocity
@@ -260,7 +263,9 @@ blocks:
       Existing option 3 with `current_hr` remains equivalent; option 3/4 with
       other supported velocity conventions keeps its existing behavior.
       This is an experimental full, unshifted mesh path with complete square
-      AO/state frames, replicated wavefunctions, and disabled SOC/symmetry.
+      AO-spinor/state frames and replicated wavefunctions. SOC uses one physical
+      channel and two components with full-dimension S/r; SOC EXX/GW/RPA symmetry
+      switches and IBZ input are rejected by this native velocity route.
       Finite-BvK interpolation retains the off-mesh and convergence limitations
       described in [QSGW](qsgw.md#analytic-head-and-wing-feedback).
       Independent-grid head/wing and Hartree updates are not supported.

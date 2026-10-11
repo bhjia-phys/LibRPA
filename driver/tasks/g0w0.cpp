@@ -65,6 +65,7 @@ static void prepare_g0w0_native_velocity()
     const auto &comm = ds->comm_h;
     const auto &params = driver::driver_params;
     const int n = mf.get_n_states(), nk = mf.get_n_kpoints(), ns = mf.get_n_spins();
+    const int nao = mf.get_n_aos(), nspinor = mf.get_n_spinor();
     const std::size_t count = static_cast<std::size_t>(ns) * nk * 3 * n * n;
     std::vector<cplxdb> velocity;
     HeadwingAoOperators operators;
@@ -78,10 +79,12 @@ static void prepare_g0w0_native_velocity()
         {
             const auto period = ds->pbc.period;
             const long long nk_full = static_cast<long long>(period.x) * period.y * period.z;
-            if (mf.get_n_spinor() != 1 || (ns != 1 && ns != 2) || n <= 0 || mf.get_n_aos() != n)
+            const bool collinear = nspinor == 1 && (ns == 1 || ns == 2);
+            const bool spinor = nspinor == 2 && ns == 1;
+            if ((!collinear && !spinor) || n <= 0 || nao * nspinor != n)
                 throw LIBRPA_RUNTIME_ERROR(
-                    "G0W0 native velocity requires one or two collinear spins and complete AO/band "
-                    "frames");
+                    "G0W0 native velocity requires one/two collinear spins or one two-component "
+                    "spinor channel and complete AO-spinor/band frames");
             if (nk <= 0 || nk != nk_full || static_cast<int>(ds->pbc.kfrac_list.size()) != nk ||
                 static_cast<int>(ds->pbc.weight_k.size()) != nk)
                 throw LIBRPA_RUNTIME_ERROR(
@@ -120,32 +123,43 @@ static void prepare_g0w0_native_velocity()
     for (int spin = 0; spin < ns; ++spin)
         for (int ik = 0; ik < nk; ++ik)
         {
-            const auto *wfc = mf.find_wfc(spin, 0, ik);
-            Matz ket;
-            g0w0_headwing_stage(
-                comm, "G0W0 native eigenframe shape",
-                [&]
-                {
-                    if (wfc != nullptr && wfc->size != 0 && (wfc->nr != n || wfc->nc != n))
-                        throw LIBRPA_RUNTIME_ERROR(
-                            "G0W0 native velocity found a partial SCF eigenvector block");
-                    ket = Matz(n, n, MAJOR::ROW);
-                });
-            const int owner = find_mpi_owner_rank(wfc != nullptr && wfc->size != 0, comm.comm);
-            if (owner < 0)
-                throw LIBRPA_RUNTIME_ERROR(
-                    "G0W0 native velocity is missing a SCF eigenvector block");
-            g0w0_headwing_stage(comm, "G0W0 native eigenframe transfer",
+            Matz ket, component;
+            g0w0_headwing_stage(comm, "G0W0 native eigenframe shape",
                                 [&]
                                 {
-                                    if (comm.myid != owner) return;
-                                    // MeanField stores band rows and AO columns; the model API
-                                    // takes AO rows.
-                                    for (int ao = 0; ao < n; ++ao)
-                                        for (int band = 0; band < n; ++band)
-                                            ket(ao, band) = (*wfc)(band, ao);
+                                    ket = Matz(n, n, MAJOR::ROW);
+                                    component = Matz(nao, n, MAJOR::ROW);
                                 });
-            comm.bcast(ket.ptr(), n * n, owner);
+            for (int spinor = 0; spinor < nspinor; ++spinor)
+            {
+                const auto *wfc = mf.find_wfc(spin, spinor, ik);
+                g0w0_headwing_stage(
+                    comm, "G0W0 native eigenframe component shape",
+                    [&]
+                    {
+                        if (wfc != nullptr && wfc->size != 0 && (wfc->nr != n || wfc->nc != nao))
+                            throw LIBRPA_RUNTIME_ERROR(
+                                "G0W0 native velocity found a partial SCF spinor block");
+                    });
+                const int owner = find_mpi_owner_rank(wfc != nullptr && wfc->size != 0, comm.comm);
+                if (owner < 0)
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "G0W0 native velocity is missing a SCF spinor block");
+                g0w0_headwing_stage(comm, "G0W0 native eigenframe transfer",
+                                    [&]
+                                    {
+                                        if (comm.myid != owner) return;
+                                        // MeanField has band rows, spatial AO columns. Native
+                                        // H/S/r use AO-major, spinor-minor ket rows.
+                                        for (int ao = 0; ao < nao; ++ao)
+                                            for (int band = 0; band < n; ++band)
+                                                component(ao, band) = (*wfc)(band, ao);
+                                    });
+                comm.bcast(component.ptr(), nao * n, owner);
+                for (int ao = 0; ao < nao; ++ao)
+                    for (int band = 0; band < n; ++band)
+                        ket(ao * nspinor + spinor, band) = component(ao, band);
+            }
             g0w0_headwing_stage(
                 comm, "G0W0 native velocity frame",
                 [&]

@@ -2286,6 +2286,115 @@ void test_transform_Cs2mnk_can_keep_spin_channels_separate(const BlacsCtxtHandle
     assert(spin_channels_differ == 1);
 }
 
+void test_soc_charge_vertex_is_spin_trace_and_rotation_invariant(const BlacsCtxtHandler &blacs_h)
+{
+    const int nprocs = librpa_int::get_mpi_size(MPI_COMM_WORLD);
+    KPointBlacsProcessShape shape(1, nprocs, true);
+    KPointBlacsParallelContext kctx(shape, MPI_COMM_WORLD, 1);
+    const auto desc_wfc = kctx.create_array_desc(2, 4, 2, 4);
+
+    // A complete complex spinor frame in AO-major/spinor-minor order.
+    Matz coefficients(4, 4, MAJOR::ROW);
+    for (int row = 0; row != 4; ++row)
+        for (int band = 0; band != 4; ++band)
+            coefficients(row, band) =
+                std::polar(0.5, librpa_int::TWO_PI * row * band / 4.0 + 0.31 * row + 0.21 * band);
+    Matz rotated(4, 4, MAJOR::ROW);
+    const double c = std::cos(0.63);
+    const auto s = std::polar(std::sin(0.63), 0.41);
+    for (int ao = 0; ao != 2; ++ao)
+        for (int band = 0; band != 4; ++band)
+        {
+            rotated(2 * ao, band) =
+                c * coefficients(2 * ao, band) + s * coefficients(2 * ao + 1, band);
+            rotated(2 * ao + 1, band) =
+                -std::conj(s) * coefficients(2 * ao, band) + c * coefficients(2 * ao + 1, band);
+        }
+    MeanField mf(1, 1, 4, 2, 2);
+    MeanField mf_rotated(1, 1, 4, 2, 2);
+    for (int spinor = 0; spinor != 2; ++spinor)
+    {
+        auto &wfc = mf.get_eigenvectors()[0][spinor][0];
+        auto &wfc_rotated = mf_rotated.get_eigenvectors()[0][spinor][0];
+        wfc.create(4, 2);
+        wfc_rotated.create(4, 2);
+        for (int band = 0; band != 4; ++band)
+            for (int ao = 0; ao != 2; ++ao)
+            {
+                wfc(band, ao) = coefficients(2 * ao + spinor, band);
+                wfc_rotated(band, ao) = rotated(2 * ao + spinor, band);
+            }
+    }
+
+    librpa_int::velocity_matrix_t velocity;
+    librpa_int::initialize_velocity_matrix(velocity, 1, 1, 4);
+    AtomicBasis basis_wfc({2});
+    AtomicBasis basis_abf({1});
+    PeriodicBoundaryData pbc;
+    const std::vector<Vector3_Order<double>> kfrac{{0.0, 0.0, 0.0}};
+    const std::vector<double> omega{0.5};
+    diele_func df(mf, velocity, kfrac, basis_wfc, basis_abf, omega, 2, 4, 1, 1, pbc,
+                  librpa_int::global::mpi_comm_global_h, blacs_h, true, &kctx, &desc_wfc);
+    diele_func df_rotated(mf_rotated, velocity, kfrac, basis_wfc, basis_abf, omega, 2, 4, 1, 1, pbc,
+                          librpa_int::global::mpi_comm_global_h, blacs_h, true, &kctx, &desc_wfc);
+
+    auto tensor_data = std::make_shared<std::valarray<double>>(4);
+    (*tensor_data)[0] = 0.9;
+    (*tensor_data)[1] = 0.31;
+    (*tensor_data)[2] = -0.27;
+    (*tensor_data)[3] = 0.63;
+    std::map<int, std::map<librpa_int::libri_types<int, int>::TAC, RI::Tensor<double>>> Cs_IJ;
+    Cs_IJ[0][{0, {0, 0, 0}}] = RI::Tensor<double>({1UL, 2UL, 2UL}, tensor_data);
+    librpa_int::Cs_LRI Cs_data;
+    Cs_data.use_libri = true;
+    Cs_data.data_libri = Cs_IJ;
+    const auto Cs_IJ_k = librpa_int::fourier_headwing_cs_to_ijk(
+        Cs_data, basis_wfc, basis_abf, librpa_int::build_headwing_full_bz_fourier_targets(kfrac));
+
+    // Independent dense charge operator: (A + A^dagger) tensor I_spin.
+    // Both local RI centres coincide in this one-atom control.
+    Matz charge(4, 4, MAJOR::ROW);
+    std::fill(charge.ptr(), charge.ptr() + charge.size(), std::complex<double>{});
+    for (int row = 0; row != 4; ++row)
+        for (int col = 0; col != 4; ++col)
+            if (row % 2 == col % 2)
+                charge(row, col) = (*tensor_data)[2 * (row / 2) + col / 2] +
+                                   (*tensor_data)[2 * (col / 2) + row / 2];
+    const Matz expected = transpose(coefficients, true) * charge * coefficients;
+    const auto world = df.transform_Cs2mnk(0, 0, Cs_IJ);
+    const auto world_rotated = df_rotated.transform_Cs2mnk(0, 0, Cs_IJ);
+    const auto kblacs = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    const auto kblacs_rotated = df_rotated.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    double local_error = 0.0;
+    const std::array<const char *, 4> route_names{"world", "world_SU2", "kBLACS", "kBLACS_SU2"};
+    int route = 0;
+    for (const auto *actual : {&world, &world_rotated, &kblacs, &kblacs_rotated})
+    {
+        double local_route_error = 0.0;
+        for (int row = 0; row != actual->first.m_loc(); ++row)
+            for (int col = 0; col != actual->first.n_loc(); ++col)
+            {
+                const double difference =
+                    std::abs(actual->second(row, col) - expected(actual->first.indx_l2g_r(row),
+                                                                 actual->first.indx_l2g_c(col)));
+                if (!std::isfinite(difference)) MPI_Abort(MPI_COMM_WORLD, 1);
+                local_route_error = std::max(local_route_error, difference);
+            }
+        double route_error = 0.0;
+        MPI_Allreduce(&local_route_error, &route_error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        if (librpa_int::global::mpi_comm_global_h.is_root())
+            std::cout << "SOC charge " << route_names[route] << " error: " << route_error
+                      << std::endl;
+        ++route;
+        local_error = std::max(local_error, local_route_error);
+    }
+    double error = 0.0;
+    MPI_Allreduce(&local_error, &error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    if (librpa_int::global::mpi_comm_global_h.is_root())
+        std::cout << "SOC charge spin trace / SU(2) maximum error: " << error << std::endl;
+    if (!std::isfinite(error) || error >= 1e-12) MPI_Abort(MPI_COMM_WORLD, 1);
+}
+
 void test_head_initialization_does_not_require_coulomb_diagonalization(
     const BlacsCtxtHandler &blacs_h)
 {
@@ -3760,6 +3869,7 @@ int main(int argc, char *argv[])
         test_kblacs_transform_matches_original_transform(blacs_h);
         test_kblacs_transform_uses_rectangular_opt_128_blocks();
         test_transform_Cs2mnk_can_keep_spin_channels_separate(blacs_h);
+        test_soc_charge_vertex_is_spin_trace_and_rotation_invariant(blacs_h);
         test_head_initialization_does_not_require_coulomb_diagonalization(blacs_h);
         test_spacetime_fourier_phases_form_k_minus_q_convolution();
         test_bn_qstar_wq_to_wr_matches_explicit_full_bz_on_odd_and_even_meshes();
