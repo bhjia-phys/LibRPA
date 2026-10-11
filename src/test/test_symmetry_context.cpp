@@ -2527,6 +2527,13 @@ void test_spin_u_equal_pm_invariance()
     assert(symmetry_spin_u_equal(u_z, u_z));
     assert(symmetry_spin_u_equal(u_z, minus_u_z));
     assert(!symmetry_spin_u_equal(u_z, u_x));
+    // Opposite rotations about y have opposite transverse spin actions.
+    // Their off-diagonal entries differ by a sign, while their diagonals do
+    // not: SU(2)'s double-cover sign must be common to the entire matrix.
+    const double c = std::cos(half_angle), s = std::sin(half_angle);
+    const std::array<std::complex<double>, 4> u_y_plus{c, -s, s, c};
+    const std::array<std::complex<double>, 4> u_y_minus{c, s, -s, c};
+    assert(!symmetry_spin_u_equal(u_y_plus, u_y_minus));
 }
 
 PeriodicBoundaryData make_cubic_mesh_pbc(const Vector3_Order<int>& mesh)
