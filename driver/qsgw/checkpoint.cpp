@@ -171,6 +171,11 @@ bool live_velocity_checkpoint(const CheckpointContext& context)
     return context.head_mode != 0 && context.velocity_mode != "reference";
 }
 
+bool native_velocity_checkpoint(const CheckpointContext& context)
+{
+    return live_velocity_checkpoint(context) && context.velocity_mode == "current_hr";
+}
+
 bool shifted_cut_checkpoint(const CheckpointContext& context)
 {
     if (context.cut_mode != 0 && context.cut_mode != 1)
@@ -185,17 +190,45 @@ int velocity_mode_code(const CheckpointContext& context)
     throw std::runtime_error("Unsupported QSGW checkpoint velocity convention");
 }
 
+void require_native_velocity_context(const CheckpointContext& context)
+{
+    if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
+        throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
+    const auto& operators = *context.ao_operators;
+    if (operators.dimension != context.reference.get_n_aos() * context.reference.get_n_spinor() ||
+        operators.native_dft_hamiltonian.size() !=
+            static_cast<std::size_t>(context.reference.get_n_spins()))
+        throw std::runtime_error(
+            "QSGW current-HR checkpoint requires one native DFT Hamiltonian per spin channel");
+    for (const auto& blocks : operators.native_dft_hamiltonian)
+    {
+        if (blocks.empty())
+            throw std::runtime_error(
+                "Missing native DFT Hamiltonian in QSGW current-HR checkpoint");
+        for (const auto& [r, matrix] : blocks)
+        {
+            if (matrix.nr() != operators.dimension || matrix.nc() != operators.dimension)
+                throw std::runtime_error("Invalid native DFT checkpoint Hamiltonian dimensions");
+            for (int i = 0; i < matrix.nr(); ++i)
+                for (int j = 0; j < matrix.nc(); ++j)
+                    if (!std::isfinite(matrix(i, j).real()) || !std::isfinite(matrix(i, j).imag()))
+                        throw std::runtime_error("Non-finite native DFT checkpoint Hamiltonian");
+        }
+    }
+}
+
 // Save the immutable numerical operators, not their filenames. A resumed run
 // must use the same map even if files move or keep their names but change.
 void write_velocity_context(std::ostream& output, const CheckpointContext& context)
 {
-    put(output, std::uint32_t(0x48575631));  // HWV1, distinct from mixer formats
     const int mode = velocity_mode_code(context);
+    // HWV2 binds current-HR velocities to the method-2 native DFT baseline.
+    // Reference rotation retains its existing HWV1 numerical contract.
+    put(output, std::uint32_t(mode == 1 ? 0x48575632 : 0x48575631));
     put(output, std::int32_t(mode));
     if (mode == 1)
     {
-        if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
-            throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
+        require_native_velocity_context(context);
         const auto& period = *context.velocity_period;
         for (int value : {period.x, period.y, period.z}) put(output, std::int32_t(value));
         const auto& lattice = *context.velocity_lattice;
@@ -215,6 +248,9 @@ void write_velocity_context(std::ostream& output, const CheckpointContext& conte
         };
         write_localized(context.ao_operators->overlap);
         for (const auto& blocks : context.ao_operators->position) write_localized(blocks);
+        const auto& native_h = context.ao_operators->native_dft_hamiltonian;
+        put(output, std::uint32_t(native_h.size()));
+        for (const auto& blocks : native_h) write_localized(blocks);
     }
     else
     {
@@ -229,14 +265,14 @@ void write_velocity_context(std::ostream& output, const CheckpointContext& conte
 
 void check_velocity_context(std::istream& input, const CheckpointContext& context)
 {
-    if (get<std::uint32_t>(input) != 0x48575631 ||
-        get<std::int32_t>(input) != velocity_mode_code(context))
+    const int mode = velocity_mode_code(context);
+    const std::uint32_t expected_marker = mode == 1 ? 0x48575632 : 0x48575631;
+    if (get<std::uint32_t>(input) != expected_marker || get<std::int32_t>(input) != mode)
         throw std::runtime_error(
             "QSGW checkpoint head/wing velocity convention differs from the input");
     if (context.velocity_mode == "current_hr")
     {
-        if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
-            throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
+        require_native_velocity_context(context);
         const auto& period = *context.velocity_period;
         for (int value : {period.x, period.y, period.z})
             require_equal(get<std::int32_t>(input), value);
@@ -264,6 +300,11 @@ void check_velocity_context(std::istream& input, const CheckpointContext& contex
         };
         check_localized(context.ao_operators->overlap);
         for (const auto& blocks : context.ao_operators->position) check_localized(blocks);
+        const auto& native_h = context.ao_operators->native_dft_hamiltonian;
+        if (get<std::uint32_t>(input) != native_h.size())
+            throw std::runtime_error(
+                "QSGW checkpoint native DFT spin channels differ from the input");
+        for (const auto& blocks : native_h) check_localized(blocks);
     }
     else
     {
@@ -367,10 +408,15 @@ void write_qsgw_checkpoint(const std::string& filename, const CheckpointContext&
     // Versions 8/9 retain the v3/v5 payload and identify shifted cut mode 1
     // on either grid-only or band-enabled runs. Earlier mode 1 was unshifted;
     // versions 6/7 identified the older grid-only mode-2 shifted cut.
+    // Versions 10/11 replace whole-H current-HR reconstruction with native
+    // DFT plus correction interpolation and bind H0(R) in the velocity context.
     // Version 4 belongs to another equation/mixer branch. Do not reinterpret it.
     const bool live_velocity = live_velocity_checkpoint(context);
-    const std::uint32_t version = shifted_cut_checkpoint(context)
-        ? (live_velocity ? 9 : 8) : (live_velocity ? 5 : 3);
+    const bool native_velocity = native_velocity_checkpoint(context);
+    const bool shifted_cut = shifted_cut_checkpoint(context);
+    const std::uint32_t version =
+        native_velocity ? (shifted_cut ? 11 : 10)
+                        : (shifted_cut ? (live_velocity ? 9 : 8) : (live_velocity ? 5 : 3));
     put(output, version);
     put(output, std::uint32_t(0x01020304));  // reject incompatible byte order
     write_context(output, context);
@@ -408,22 +454,31 @@ IterationSummary read_qsgw_checkpoint(const std::string& filename, const Checkpo
         throw std::runtime_error("Unsupported QSGW checkpoint format");
     const auto version = get<std::uint32_t>(input);
     if ((version < 1 || (version > 3 && version != 5 && version != 6 && version != 7 &&
-                        version != 8 && version != 9)) ||
+                         version != 8 && version != 9 && version != 10 && version != 11)) ||
         get<std::uint32_t>(input) != 0x01020304)
         throw std::runtime_error("Unsupported QSGW checkpoint format or byte order");
     if (version == 6 || version == 7)
         throw std::runtime_error(
             "QSGW checkpoint versions 6/7 use the historical mode-2 cut; "
             "automatic migration to shifted mode 1 is unsupported");
-    const bool shifted_cut = version == 8 || version == 9;
+    const bool native_velocity = version == 10 || version == 11;
+    const bool requested_native_velocity = native_velocity_checkpoint(context);
+    if (requested_native_velocity && !native_velocity)
+        throw std::runtime_error(
+            "QSGW current-HR native-baseline velocities require checkpoint version 10 or 11; "
+            "legacy whole-H velocity checkpoints cannot continue with this convention");
+    if (native_velocity && !requested_native_velocity)
+        throw std::runtime_error(
+            "QSGW checkpoint uses a different native-baseline head/wing velocity convention");
+    const bool shifted_cut = version == 8 || version == 9 || version == 11;
     const bool requested_shifted_cut = shifted_cut_checkpoint(context);
     if (requested_shifted_cut && !shifted_cut)
         throw std::runtime_error(
             "Legacy QSGW cut checkpoints cannot continue shifted mode 1; "
-            "this convention requires checkpoint version 8 or 9");
+            "this convention requires checkpoint version 8, 9 or 11");
     if (shifted_cut != requested_shifted_cut)
         throw std::runtime_error("QSGW checkpoint shifted-cut convention differs from the input");
-    const bool live_velocity = version == 5 || version == 9;
+    const bool live_velocity = version == 5 || version == 9 || native_velocity;
     if (live_velocity != live_velocity_checkpoint(context))
         throw std::runtime_error("QSGW checkpoint lacks the requested head/wing velocity contract");
     check_context(input, context, version);

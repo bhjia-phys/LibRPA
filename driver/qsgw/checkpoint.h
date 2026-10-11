@@ -12,6 +12,8 @@ namespace qsgw
 
 // The checkpoint remains in the immutable input KS basis. Native producer
 // inputs are still required to rebuild RI, Coulomb and velocity objects.
+// With current_hr, ao_operators includes the immutable native DFT H(R) baseline
+// (in Ha) used by both the exported Hamiltonian and its velocity derivatives.
 struct CheckpointContext
 {
     const MeanField& reference;

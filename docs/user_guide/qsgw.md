@@ -161,14 +161,18 @@ one physical spin channel and `2 * N_AO` states. Both reference and live
 coefficients use AO-major/spinor-minor ordering; the entire complex Hamiltonian,
 including cross-spinor entries, enters the same velocity projector. For this
 SOC route all EXX/GW/RPA symmetry switches must be off; IBZ input and k-parallel
-wavefunctions are unsupported. S/r remain fixed; a separate
-producer H(R) input is not needed. At each entering iteration, the driver
-embeds the reference-basis Hamiltonian as `H_AO = S U0 h U0† S`, then Fourier
-transforms the *whole* effective Hamiltonian and evaluates velocity in the
-already selected current E/C frame. Even-grid Nyquist images have equal weights.
-The differentiated operator is this finite-BvK model;
-its initial velocity can differ from differentiation of the producer's longer
-real-space PBE Hamiltonian. No independent PBE velocity file is used.
+wavefunctions are unsupported. S/r and the native DFT baseline remain fixed.
+This mode also reads matching `hrs1_nao.csr` in Ry, plus `hrs2_nao.csr` for a
+second physical collinear channel, even if HR export is disabled. At each
+entering iteration, the driver embeds the complete reference-basis Hamiltonian
+as `H_AO = S U0 h U0† S`, preserves the original DFT H(R), and inverse-transforms
+only `H_AO - H_DFT_native` on the input mesh. It differentiates this same
+native-baseline reconstruction used by formal HR export, in the already
+selected current E/C frame. Correction Nyquist images have equal weights.
+A fresh first update uses the actual entering PBE operator; subsequent
+updates use the preceding completed mixed/postcut operator. No independent
+velocity file is used. The native DFT H must match the immutable reference
+on the complete input mesh.
 
 The implementation follows the executed PyATB H/S/r velocity convention, with
 energies in Ha and Cartesian derivatives/position in Bohr. It checks the
@@ -193,7 +197,7 @@ extend to arbitrary invalid complex diagonal inputs.
 For the iterative consumer, `compute_localized_velocity_in_frame` accepts
 the already selected complete entering E/C and uses the same numerical core.
 `compute_live_headwing_velocity` calls this form after building the current
-finite-BvK H(R), preserving the live orbital frame used by the RI response.
+native-baseline H(R), preserving the live orbital frame used by the RI response.
 Consequently each head/wing refresh needs no external PyATB process and no
 second eigensolve. These are internal numerical interfaces; no public C or
 Fortran binding is added. Scalar full-matrix controls cover the model solve
@@ -213,13 +217,14 @@ material spectrum or an accepted off-mesh interpolant.
 
 Fourier round-trip and eigenpair-frame checks establish agreement only on the
 input mesh. Before using `current_hr` for physical band, velocity or topology
-predictions, compare the initial interpolant with direct producer bands away
-from that mesh and check mesh convergence. The 26-state Si 4x4x4 control passes
-native-mesh closure but produces spurious off-mesh low-energy states: its
-five-eV near-gap window differs from direct PBE bands by up to 116.74 eV.
-That coarse interpolant is not an accepted physical model. Option 5 uses the
-same finite-BvK interpolation and does not change this acceptance boundary or
-automatically replace whole-H interpolation with an alternative construction.
+predictions, compare the interpolant with direct producer bands away from
+that mesh and check mesh convergence. The earlier whole-H 26-state Si 4x4x4
+control passed native-mesh closure while producing spurious off-mesh states,
+with a five-eV-window discrepancy up to 116.74 eV. The native-baseline route
+now preserves the producer's H0(R) and is shared with method-2 HR export;
+this changes the former derivative/feedback map. Its grid closure and
+same-model velocity checks still do not establish material off-mesh accuracy
+or mesh convergence.
 
 With `qsgw_write_iteration_matrices = true`, traces include all three velocity
 components, the head tensors and auxiliary-space wing arrays. Current-HR mode
@@ -329,11 +334,14 @@ existing Fourier roundtrip check still compares the complete exported
 operator with the current AO grid matrices. Native baseline preservation
 improves the tested Si path but does not establish off-mesh convergence.
 
-This selection applies to HR export. The `current_hr` velocity calculation
-continues to differentiate its existing finite-BvK reconstruction, so the
-QSGW head/wing update map and checkpoint convention are unchanged. Adopting
-the native-baseline reconstruction for velocity would also change its
-k derivative and requires a separate controlled iteration comparison.
+HR export and `current_hr` now use the same native-baseline reconstruction.
+The completed iteration-N output and the entering velocity model for update
+N+1 have the same complete H(R), apart from file units and exact-zero support
+padding. A fresh iteration 0000 and update 1 likewise share the entering PBE
+operator. This changes k derivatives and head/wing feedback relative to the
+former whole-H velocity reconstruction, even though both close on the same
+original-grid H. Current-HR checkpoints therefore use a new velocity contract
+and cannot silently resume the old whole-H map.
 
 The output mode follows the loaded reference's spin-channel and spinor
 dimensions automatically. The same export switch covers all three native modes:
@@ -461,16 +469,19 @@ Other producer files and numerical controls must also remain unchanged; the
 checkpoint does not validate every input. MPI size can change because these
 tasks require replicated wavefunctions. This experimental binary format
 rejects incompatible byte order and accepts legacy fixed-mode versions 1--3.
-Live velocity maps write version 5, recording their convention and actual
-immutable velocity or S/r operators (plus current-HR geometry). A restart
-cannot switch maps or replace those numerical operators. Version 4 belongs to
-a separate equation/mixer branch and is not interpreted here.
-The newly numbered shifted mode 1 uses checkpoint version 8, or version 9
-when a live velocity contract is present, on both grid-only and band-enabled
-routes, with the existing state payload. Older cut checkpoints, including
+The rotated-reference velocity map writes version 5 without cut and version
+9 with shifted mode 1, preserving its immutable-velocity contract. The
+native-baseline `current_hr` map writes version 10 without cut and version 11
+with shifted mode 1. It binds the actual native DFT H(R), S/r, geometry and
+velocity convention. Older whole-H current-HR versions 5/9 cannot continue
+under this changed map. A restart cannot switch maps or replace these
+numerical operators. Version 4 belongs to a separate equation/mixer branch
+and is not interpreted here.
+Reference-velocity shifted mode 1 retains version 8, on both grid-only and
+band-enabled routes. Older cut checkpoints, including
 the former unshifted mode 1 and the previous mode-2 versions 6/7, cannot be
-silently reinterpreted under this numbering. Mode-0 files retain their old
-format; saved keep/shift settings must still match explicitly when a default
+silently reinterpreted under this numbering. Saved keep/shift settings must
+still match explicitly when a default
 has changed.
 This implementation supports `qsgw_mixer = none` and `linear`; adaptive
 automatic-mixing history requires the separate mixer-aware extension.
