@@ -76,13 +76,14 @@ DriverParams::DriverParams():
     qsgw_mixing_beta(0.2),
     qsgw_min_iter(1),
     qsgw_max_iter(10),
-    qsgw_band0_unoccupied_keep(10),
-    qsgw_band0_cut_mode(0),
-    qsgw_band0_cut_shift_ha(20.0),
+    qsgw_unoccupied_keep(10),
+    qsgw_cut_mode(0),
+    qsgw_cut_shift_ha(2.0 / 27.211386245988),
     qsgw_write_iteration_matrices(false),
+    qsgw_export_hamiltonian_for_pyatb(true),
     qsgw_headwing_velocity("reference"),
-    qsgw_fn_sr(""),
-    qsgw_fn_rr(""),
+    qsgw_fn_sr("srs1_nao.csr"),
+    qsgw_fn_rr("rr.csr"),
     qsgw_restart_file("none"),
     qsgw_checkpoint_file("qsgw_checkpoint.bin"),
     qsgw_convergence_tolerance_ev(1.0e-4)
@@ -237,16 +238,18 @@ std::string DriverParams::format()
         ss << "qsgw_mixing_beta = " << qsgw_mixing_beta << std::endl;
         ss << "qsgw_min_iter = " << qsgw_min_iter << std::endl;
         ss << "qsgw_max_iter = " << qsgw_max_iter << std::endl;
-        ss << "qsgw_band0_unoccupied_keep = "
-           << qsgw_band0_unoccupied_keep << std::endl;
-        ss << "qsgw_band0_cut_mode = " << qsgw_band0_cut_mode
+        ss << "qsgw_unoccupied_keep = "
+           << qsgw_unoccupied_keep << std::endl;
+        ss << "qsgw_cut_mode = " << qsgw_cut_mode
            << std::endl;
-        ss << "qsgw_band0_cut_shift_ha = "
-           << qsgw_band0_cut_shift_ha << std::endl;
+        ss << "qsgw_cut_shift_ha = "
+           << qsgw_cut_shift_ha << std::endl;
         ss << "qsgw_convergence_tolerance_ev = "
            << qsgw_convergence_tolerance_ev << std::endl;
         ss << "qsgw_write_iteration_matrices = " << std::boolalpha
            << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_export_hamiltonian_for_pyatb = " << std::boolalpha
+           << qsgw_export_hamiltonian_for_pyatb << std::endl;
         ss << "qsgw_restart_file = " << qsgw_restart_file << std::endl;
         ss << "qsgw_checkpoint_file = " << qsgw_checkpoint_file << std::endl;
     }

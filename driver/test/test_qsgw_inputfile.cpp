@@ -97,9 +97,9 @@ void test_defaults_and_explicit_linear_mixing()
     assert(std::abs(defaults.qsgw_mixing_beta - 0.2) < 1.0e-14);
     assert(defaults.qsgw_min_iter == 1);
     assert(defaults.qsgw_max_iter == 10);
-    assert(defaults.qsgw_band0_unoccupied_keep == 10);
-    assert(defaults.qsgw_band0_cut_mode == 0);
-    assert(std::abs(defaults.qsgw_band0_cut_shift_ha - 20.0) < 1.0e-14);
+    assert(defaults.qsgw_unoccupied_keep == 10);
+    assert(defaults.qsgw_cut_mode == 0);
+    assert(std::abs(defaults.qsgw_cut_shift_ha - 2.0 / 27.211386245988) < 1.0e-14);
 
     parse(valid_qsgw_prefix() +
           "qsgw_input_contract = manifests/si.contract\n"
@@ -173,9 +173,9 @@ void test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls()
           "qsgw_mixing_beta = 0.27\n"
           "qsgw_min_iter = 2\n"
           "qsgw_max_iter = 5\n"
-          "qsgw_band0_unoccupied_keep = 7\n"
-          "qsgw_band0_cut_mode = 1\n"
-          "qsgw_band0_cut_shift_ha = 3.5\n"
+          "qsgw_unoccupied_keep = 7\n"
+          "qsgw_cut_mode = 1\n"
+          "qsgw_cut_shift_ha = 3.5\n"
           "qsgw_write_iteration_matrices = true\n");
     assert(driver::driver_params.qsgw_input_contract ==
            "manifests/si-band.contract");
@@ -184,16 +184,16 @@ void test_qsgw_band_uses_the_qsgw_contract_and_iteration_controls()
            1.0e-14);
     assert(driver::driver_params.qsgw_min_iter == 2);
     assert(driver::driver_params.qsgw_max_iter == 5);
-    assert(driver::driver_params.qsgw_band0_unoccupied_keep == 7);
-    assert(driver::driver_params.qsgw_band0_cut_mode == 1);
-    assert(std::abs(driver::driver_params.qsgw_band0_cut_shift_ha - 3.5) <
+    assert(driver::driver_params.qsgw_unoccupied_keep == 7);
+    assert(driver::driver_params.qsgw_cut_mode == 1);
+    assert(std::abs(driver::driver_params.qsgw_cut_shift_ha - 3.5) <
            1.0e-14);
     assert(driver::driver_params.qsgw_write_iteration_matrices);
     assert(driver::driver_params.format().find(
                "qsgw_input_contract = manifests/si-band.contract") !=
            std::string::npos);
     assert(driver::driver_params.format().find(
-               "qsgw_band0_cut_mode = 1") != std::string::npos);
+               "qsgw_cut_mode = 1") != std::string::npos);
 }
 
 void test_qsgw_does_not_require_the_g0w0_matrix_dump_switch()
@@ -237,12 +237,11 @@ void test_staged_qsgw_rejects_ambiguous_or_unsupported_inputs()
              "qsgw_update_hartree = false\n",
              "qsgw_hartree_coulomb = full\n",
              "qsgw_hartree_normalization = weighted_occupations\n",
-             "qsgw_export_hamiltonian_for_pyatb = false\n",
              "qsgw_hr_export_full_mp_rgrid = false\n"})
     {
         assert_throws_with_message([&] {
             parse(valid_qsgw_prefix() + removed);
-        }, "is not supported by the head-only QSGW workflow");
+        }, "is not supported by the current QSGW workflow");
     }
     assert_throws([&] {
         parse(valid_qsgw_prefix() + "qsgw_mixer = pulay\n");
@@ -256,15 +255,15 @@ void test_staged_qsgw_rejects_ambiguous_or_unsupported_inputs()
     });
     assert_throws([&] {
         parse(valid_qsgw_band_prefix() +
-              "qsgw_band0_unoccupied_keep = -1\n");
+              "qsgw_unoccupied_keep = -1\n");
     });
     assert_throws([&] {
         parse(valid_qsgw_band_prefix() +
-              "qsgw_band0_cut_mode = 3\n");
+              "qsgw_cut_mode = 3\n");
     });
     assert_throws([&] {
         parse(valid_qsgw_band_prefix() +
-              "qsgw_band0_cut_shift_ha = nan\n");
+              "qsgw_cut_shift_ha = nan\n");
     });
     assert_throws_with_message([&] {
         parse(valid_qsgw_prefix() +
@@ -295,18 +294,18 @@ void test_g0w0_parser_defaults_are_unchanged()
         "task = g0w0\n"
         "qsgw_mixer = invalid\n"
         "qsgw_mixing_beta = -1\n"
-        "qsgw_band0_unoccupied_keep = -1\n"
-        "qsgw_band0_cut_mode = 99\n"
-        "qsgw_band0_cut_shift_ha = nan\n"
+        "qsgw_unoccupied_keep = -1\n"
+        "qsgw_cut_mode = 99\n"
+        "qsgw_cut_shift_ha = nan\n"
         "use_symmetry_exx = true\n"
         "use_symmetry_gw = true\n"
         "use_symmetry_rpa = true\n");
     assert(driver::driver_params.qsgw_mixer == "none");
     assert(std::abs(driver::driver_params.qsgw_mixing_beta - 0.2) <
            1.0e-14);
-    assert(driver::driver_params.qsgw_band0_unoccupied_keep == 10);
-    assert(driver::driver_params.qsgw_band0_cut_mode == 0);
-    assert(std::abs(driver::driver_params.qsgw_band0_cut_shift_ha - 20.0) <
+    assert(driver::driver_params.qsgw_unoccupied_keep == 10);
+    assert(driver::driver_params.qsgw_cut_mode == 0);
+    assert(std::abs(driver::driver_params.qsgw_cut_shift_ha - 2.0 / 27.211386245988) <
            1.0e-14);
     assert(driver::opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_OFF);
     assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON);

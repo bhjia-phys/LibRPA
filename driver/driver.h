@@ -467,28 +467,29 @@ struct DriverParams
     int qsgw_max_iter;
 
     //! Number of unoccupied states retained by the QSGW H_QSGW cut.
-    //! Active only when band-path inputs are present for task=qsgw.
+    //! Applies to the SCF grid and optional band path when cut mode 1 is selected.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
-    int qsgw_band0_unoccupied_keep;
+    int qsgw_unoccupied_keep;
 
-    //! QSGW H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
-    //! Active only when band-path inputs are present for task=qsgw.
+    //! QSGW H_QSGW cut: 0 uncut, 1 shifted KS diagonal (formerly mode 2).
+    //! Applies to the SCF grid and optional band path; HR exports the actual cut H.
     //! @par Default
     //! 0
     //! @par Status
     //! Experimental
-    int qsgw_band0_cut_mode;
+    int qsgw_cut_mode;
 
-    //! Hamiltonian energy shift applied to cut states in mode 2, in Hartree.
-    //! Active only when QSGW band-path inputs are present.
+    //! Hamiltonian energy shift applied to cut states in mode 1, in Hartree.
+    //! The omitted default is 2 eV converted using the selected constants.
+    //! Applies to the SCF grid and optional band path.
     //! @par Default
-    //! 20.0
+    //! 2.0 / 27.211386245988 (2 eV in Hartree with internal constants)
     //! @par Status
     //! Experimental
-    double qsgw_band0_cut_shift_ha;
+    double qsgw_cut_shift_ha;
 
     //! Write per-iteration matrices used by numerical regression tests.
     //! @par Default
@@ -496,6 +497,21 @@ struct DriverParams
     //! @par Status
     //! Experimental
     bool qsgw_write_iteration_matrices;
+
+    //! Export the complete SCF-grid Hamiltonian before each QSGW diagonalization.
+    //! Writes full complex Ry CSR as hrsS_nao_qsgw_iter_NNNN.csr, with H padded
+    //! to the actual H/S/r support union. Preserves native DFT hrs1_nao.csr
+    //! (also hrs2_nao.csr for two physical collinear channels) and transforms
+    //! only the complete current correction. Native DFT H input is in Ry;
+    //! S/r use qsgw_fn_sr and qsgw_fn_rr defaults. Requires a complete unshifted
+    //! mesh, independently of head/wing and band inputs. SOC retains the full
+    //! complex spinor matrix. This export policy does not replace current_hr
+    //! velocity reconstruction or its checkpoint convention.
+    //! @par Default
+    //! true
+    //! @par Status
+    //! Experimental
+    bool qsgw_export_hamiltonian_for_pyatb;
 
     //! Analytic head/wing velocity convention: reference (legacy head-only),
     //! rotate_reference (fixed initial operator in current eigenstates), or
@@ -509,18 +525,18 @@ struct DriverParams
     //! Experimental
     std::string qsgw_headwing_velocity;
 
-    //! S(R) input for current_hr: native ABACUS CSR, dimensionless, with its
+    //! S(R) input for current_hr or HR export: native ABACUS CSR, dimensionless, with its
     //! full real-space support; path relative to input_dir or absolute.
     //! @par Default
-    //! empty
+    //! srs1_nao.csr
     //! @par Status
     //! Experimental
     std::string qsgw_fn_sr;
 
-    //! Three-component r(R) input for current_hr: native ABACUS CSR in Bohr,
+    //! Three-component r(R) input for current_hr or HR export: native ABACUS CSR in Bohr,
     //! with its full real-space support; path relative to input_dir or absolute.
     //! @par Default
-    //! empty
+    //! rr.csr
     //! @par Status
     //! Experimental
     std::string qsgw_fn_rr;

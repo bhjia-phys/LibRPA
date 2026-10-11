@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/hamiltonian_cut.h"
+#include "../core/qsgw/hamiltonian_cut.h"
 
 #include <cassert>
 #include <cmath>
@@ -112,7 +112,7 @@ void test_cut_modes_require_a_finite_live_spectrum()
     reference[0][0] = make_matrix(5, -3.0);
 
     HamiltonianCutOptions options;
-    options.mode = HamiltonianCutMode::ReferenceDiagonal;
+    options.mode = HamiltonianCutMode::ShiftedReferenceDiagonal;
     live.get_efermi() = std::numeric_limits<double>::quiet_NaN();
     assert_throws([&] {
         (void)apply_hamiltonian_cut(raw, reference, live, options);
@@ -126,39 +126,7 @@ void test_cut_modes_require_a_finite_live_spectrum()
     });
 }
 
-void test_mode_one_restores_reference_above_legacy_active_limit()
-{
-    const MeanField live = make_live_meanfield();
-    SpinKMatrixMap raw;
-    SpinKMatrixMap reference;
-    raw[0][0] = make_matrix(5, 10.0);
-    reference[0][0] = make_matrix(5, -3.0);
-
-    HamiltonianCutOptions options;
-    options.mode = HamiltonianCutMode::ReferenceDiagonal;
-    options.unoccupied_keep = 1;
-    const auto result = apply_hamiltonian_cut(raw, reference, live, options);
-    const Matz& cut = result.at(0).at(0);
-
-    // Strict energy < efermi gives Nocc=2. Therefore bands 0,1,2 survive
-    // and the cut starts at index 3, matching the frozen 8476213 source.
-    for (int row = 0; row < 3; ++row)
-        for (int column = 0; column < 3; ++column)
-            assert_close(cut(row, column), raw.at(0).at(0)(row, column));
-    for (int row = 0; row < 5; ++row)
-    {
-        for (int column = 0; column < 5; ++column)
-        {
-            if (row < 3 && column < 3) continue;
-            const cplxdb expected = row == column
-                ? reference.at(0).at(0)(row, row)
-                : cplxdb(0.0, 0.0);
-            assert_close(cut(row, column), expected);
-        }
-    }
-}
-
-void test_mode_two_adds_hartree_shift_to_reference_diagonal()
+void test_mode_one_adds_hartree_shift_to_reference_diagonal()
 {
     const MeanField live = make_live_meanfield();
     SpinKMatrixMap raw;
@@ -169,13 +137,13 @@ void test_mode_two_adds_hartree_shift_to_reference_diagonal()
     HamiltonianCutOptions options;
     options.mode = HamiltonianCutMode::ShiftedReferenceDiagonal;
     options.unoccupied_keep = 1;
-    options.shift_ha = 20.0;
+    options.shift_ha = 2.0 / 27.211386245988;
     const auto result = apply_hamiltonian_cut(raw, reference, live, options);
     const Matz& cut = result.at(0).at(0);
 
     assert_close(cut(2, 2), raw.at(0).at(0)(2, 2));
-    assert_close(cut(3, 3), reference.at(0).at(0)(3, 3) + 20.0);
-    assert_close(cut(4, 4), reference.at(0).at(0)(4, 4) + 20.0);
+    assert_close(cut(3, 3), reference.at(0).at(0)(3, 3) + options.shift_ha);
+    assert_close(cut(4, 4), reference.at(0).at(0)(4, 4) + options.shift_ha);
     assert_close(cut(2, 3), 0.0);
     assert_close(cut(3, 2), 0.0);
 }
@@ -208,9 +176,8 @@ void test_invalid_options_and_layouts_fail_closed()
 
     assert(hamiltonian_cut_mode_from_int(0) == HamiltonianCutMode::Uncut);
     assert(hamiltonian_cut_mode_from_int(1) ==
-           HamiltonianCutMode::ReferenceDiagonal);
-    assert(hamiltonian_cut_mode_from_int(2) ==
            HamiltonianCutMode::ShiftedReferenceDiagonal);
+    assert_throws([&] { (void)hamiltonian_cut_mode_from_int(2); });
     assert_throws([&] { (void)hamiltonian_cut_mode_from_int(-1); });
     assert_throws([&] { (void)hamiltonian_cut_mode_from_int(3); });
 
@@ -224,7 +191,7 @@ void test_invalid_options_and_layouts_fail_closed()
     assert_throws([&] {
         (void)apply_hamiltonian_cut(raw, reference, live, options);
     });
-    options.shift_ha = 20.0;
+    options.shift_ha = 2.0 / 27.211386245988;
     SpinKMatrixMap wrong_reference = reference;
     wrong_reference.at(0).at(0) = make_matrix(4, -3.0);
     assert_throws([&] {
@@ -238,8 +205,7 @@ int main()
 {
     test_mode_zero_is_an_exact_uncut_copy();
     test_cut_modes_require_a_finite_live_spectrum();
-    test_mode_one_restores_reference_above_legacy_active_limit();
-    test_mode_two_adds_hartree_shift_to_reference_diagonal();
+    test_mode_one_adds_hartree_shift_to_reference_diagonal();
     test_keep_covering_all_bands_is_uncut();
     test_invalid_options_and_layouts_fail_closed();
     std::cout << "test_qsgw_hamiltonian_cut: all tests passed\n";
