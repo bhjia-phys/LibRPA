@@ -472,8 +472,9 @@ void run_qsgw()
 
     VelocityMatrix reference_velocity;
     std::optional<HeadwingAoOperators> ao_operators;
-    std::optional<HeadwingAoOperators> export_operators;
-    if (update_head && driver_params.qsgw_headwing_velocity == "current_hr")
+    const bool current_hr_velocity =
+        update_head && driver_params.qsgw_headwing_velocity == "current_hr";
+    if (current_hr_velocity)
     {
         collective_all_stage(
             dataset->comm_h, "QSGW head/wing AO input",
@@ -495,30 +496,32 @@ void run_qsgw()
                     resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_rr));
             });
     }
-    if (driver_params.qsgw_export_hamiltonian_for_pyatb)
+    if (current_hr_velocity || driver_params.qsgw_export_hamiltonian_for_pyatb)
     {
-        collective_root_stage(
-            dataset->comm_h, "QSGW native DFT Hamiltonian export input",
-            [&]
+        const auto load_native_hamiltonian = [&]
+        {
+            // Export and current_hr differentiate the same native-baseline
+            // reconstruction of the complete entering/current operator.
+            for (int spin = 0; spin < reference.get_n_spins(); ++spin)
             {
-                // Export preserves the producer's DFT H(R) and transforms only
-                // the current correction. Keep this separate from the entering
-                // current_hr velocity/checkpoint operators: changing their
-                // off-grid derivative would change the QSGW iteration map.
-                export_operators = *ao_operators;
-                for (int spin = 0; spin < reference.get_n_spins(); ++spin)
-                {
-                    const std::string filename =
-                        "hrs" + std::to_string(spin + 1) + "_nao.csr";
-                    export_operators->native_dft_hamiltonian.push_back(
-                        driver::qsgw::read_headwing_hamiltonian_csr(
-                            resolve_input_path(driver_params.input_dir, filename), 0.5));
-                }
+                const std::string filename = "hrs" + std::to_string(spin + 1) + "_nao.csr";
+                ao_operators->native_dft_hamiltonian.push_back(
+                    driver::qsgw::read_headwing_hamiltonian_csr(
+                        resolve_input_path(driver_params.input_dir, filename), 0.5));
+            }
+            if (dataset->comm_h.is_root())
                 lib_printf(
-                    "QSGW HR export: preserve native DFT H(R), Fourier-transform only "
-                    "the complete current correction; %d physical spin channel(s)\n",
+                    "QSGW native-baseline H(R): preserve DFT H(R), Fourier-transform "
+                    "only the complete current correction for HR export/current_hr; "
+                    "%d physical spin channel(s)\n",
                     reference.get_n_spins());
-            });
+        };
+        if (current_hr_velocity)
+            collective_all_stage(dataset->comm_h, "QSGW native DFT Hamiltonian input",
+                                 load_native_hamiltonian);
+        else
+            collective_root_stage(dataset->comm_h, "QSGW native DFT Hamiltonian input",
+                                  load_native_hamiltonian);
     }
     if (update_head && driver_params.qsgw_headwing_velocity != "current_hr")
     {
@@ -528,9 +531,9 @@ void run_qsgw()
         {
             // FHI-aims head input uses only interband velocity elements.
             prepare_interband_velocity(reference_velocity, reference);
-            align_distributed_velocity_to_reference_wfc(
-                dataset->p_headwing->get_meanfield_df(), reference,
-                reference_velocity, dataset->comm_h);
+            align_distributed_velocity_to_reference_wfc(dataset->p_headwing->get_meanfield_df(),
+                                                        reference, reference_velocity,
+                                                        dataset->comm_h);
         }
     }
 
@@ -710,7 +713,7 @@ void run_qsgw()
             [&]
             {
                 const auto exported = reconstruct_qsgw_hamiltonian(
-                    reference, hamiltonian, *export_operators, dataset->pbc.kfrac_list,
+                    reference, hamiltonian, *ao_operators, dataset->pbc.kfrac_list,
                     dataset->pbc.period, dataset->pbc.latvec);
                 for (int spin = 0; spin < reference.get_n_spins(); ++spin)
                 {
