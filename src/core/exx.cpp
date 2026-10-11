@@ -575,7 +575,8 @@ static void build_dmat_libri_kblacs_para(
 
 void Exx::build(const LibrpaParallelRouting routing,
                 const AtomicBasis &atbasis_abf, const Cs_LRI &Cs,
-                const atpair_R_mat_t &coul_mat)
+                const atpair_R_mat_t &coul_mat,
+                const bool coul_mat_replicated_across_ranks)
 {
     using std::endl;
     using global::profiler;
@@ -794,8 +795,18 @@ void Exx::build(const LibrpaParallelRouting routing,
         exx_coul_mat_ptr = &exx_coul_mat_restored;
     }
     const auto& exx_coul_mat = *exx_coul_mat_ptr;
+    // Both the legacy irreducible-sector restore above and the direct full-sector
+    // FT_Vq symmetry route produce the same complete V(R) map on every rank.
+    // LibRI communicates set_Vs inputs, so dispatch a replicated map exactly once
+    // instead of injecting one identical copy per rank.
     const bool use_replicated_symmetry_exx_coulomb =
-        use_input_exx_coulomb_restore && comm_h.nprocs > 1;
+        comm_h.nprocs > 1
+        && (use_input_exx_coulomb_restore || coul_mat_replicated_across_ranks);
+    if (coul_mat_replicated_across_ranks)
+    {
+        global::lib_printf_root(
+            "EXX redistributes replicated full-sector `V(R)` once before LibRI communication\n");
+    }
 
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<double>>> V_libri;
     std::map<int, std::map<std::pair<int,std::array<int,3>>, RI::Tensor<cplxdb>>> V_libri_cplx;
