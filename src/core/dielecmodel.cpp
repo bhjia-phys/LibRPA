@@ -1408,6 +1408,12 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
 {
     this->n_abf = atomic_basis_abf_.nb_total;
     this->nk = this->kfrac_band.size();
+    if (use_soc && use_symmetry && symmetry_context_ != nullptr &&
+        symmetry_context_->count_kstar_members() > kfrac_band.size() &&
+        !has_direct_full_bz_headwing_inputs())
+        throw LIBRPA_RUNTIME_ERROR(
+            "SOC analytic head/wing on an irreducible grid requires paired full-BZ "
+            "velocity and wave-function inputs");
     if (static_cast<int>(velocity_.size()) != n_spin)
         throw LIBRPA_RUNTIME_ERROR(
             "head/wing velocity spin dimension is inconsistent with meanfield");
@@ -1541,7 +1547,7 @@ void diele_func::cal_head()
         can_try_sym ? atomic_basis_wfc_.build_species_basis_layouts(symmetry_context_->atom_to_type)
                     : std::vector<SpeciesBasisLayout>{};
     const bool can_sym =
-        can_try_sym &&
+        can_try_sym && (!use_soc || has_direct_full_bz_headwing_inputs()) &&
         (librpa_int::can_restore_symmetry_kstar_meanfield(
              *symmetry_context_, wfc_layouts, meanfield_df, kfrac_band, atom_nw) ||
          can_use_headwing_single_member_stars(
@@ -1560,6 +1566,8 @@ void diele_func::cal_head()
             reason = "symmetry context is not available";
         else if (symmetry_context_->kstars.empty())
             reason = "k-star table is empty";
+        else if (use_soc && !has_direct_full_bz_headwing_inputs())
+            reason = "SOC uses the supplied full-BZ velocity and wave functions directly";
         else if (meanfield_df.get_n_kpoints() != static_cast<int>(kfrac_band.size()))
             reason = "meanfield and active k-list sizes differ";
         else if (symmetry_context_->kstars.size() != kfrac_band.size())
@@ -1976,7 +1984,7 @@ void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
         can_try_sym ? atomic_basis_wfc_.build_species_basis_layouts(symmetry_context_->atom_to_type)
                     : std::vector<SpeciesBasisLayout>{};
     const bool can_sym =
-        can_try_sym &&
+        can_try_sym && (!use_soc || has_direct_full_bz_headwing_inputs()) &&
         (librpa_int::can_restore_symmetry_kstar_meanfield(
              *symmetry_context_, wfc_layouts, meanfield_df, kfrac_band, atom_nw) ||
          can_use_headwing_single_member_stars(
@@ -1995,6 +2003,8 @@ void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
             reason = "symmetry context is not available";
         else if (symmetry_context_->kstars.empty())
             reason = "k-star table is empty";
+        else if (use_soc && !has_direct_full_bz_headwing_inputs())
+            reason = "SOC uses the supplied full-BZ velocity and wave functions directly";
         else if (meanfield_df.get_n_kpoints() != static_cast<int>(kfrac_band.size()))
             reason = "meanfield and active k-list sizes differ";
         else if (symmetry_context_->kstars.size() != kfrac_band.size())
