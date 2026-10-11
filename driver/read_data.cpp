@@ -1391,7 +1391,12 @@ void read_headwing_input(const string &dir_path, bool need_wing)
     {
         librpa_int::initialize_symmetry_context(*pds, true);
     }
-    if (path_exists(pyatb_velocity.c_str()) && pds->symmetry_context.available &&
+    // A complete active grid already supplies every member directly. Expanding
+    // its k-stars again repeats each orbit and breaks the bijective source map.
+    // Only an irreducible active grid needs the separate full-BZ member cache.
+    if (path_exists(pyatb_velocity.c_str()) &&
+        mf.get_n_kpoints() != pds->pbc.get_n_cells_bvk() &&
+        pds->symmetry_context.available &&
         !pds->symmetry_context.kstars.empty())
     {
         direct_full_bz_velocity_member_source_ik =
@@ -1426,7 +1431,10 @@ void read_headwing_input(const string &dir_path, bool need_wing)
     const bool use_headwing_symmetry = wants_headwing_symmetry;
     if (use_headwing_symmetry)
     {
-        reject_spinor_symmetry_speedup(*pds, "analytic head/wing");
+        if (mf.get_n_spinor() > 1 && !direct_full_bz_wfc.initialized()
+            && mf.get_n_kpoints() != pds->pbc.get_n_cells_bvk())
+            throw LIBRPA_RUNTIME_ERROR(
+                "SOC analytic head/wing symmetry requires full-BZ velocity and wave-function inputs");
         initialize_symmetry_context(*pds, true);
         require_symmetry_shell_layouts(*pds, "analytic head/wing");
     }
