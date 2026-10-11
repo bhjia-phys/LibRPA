@@ -675,7 +675,7 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
     const auto &opts = *p_opts;
     if (opts.option_dielect_func == 5)
         throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func = 5 is a standalone G0W0 driver preset; "
+            "option_dielect_func = 5 is a standalone G0W0/QSGW driver preset; "
             "API callers must supply velocity and use option_dielect_func = 3");
     const bool debug = global::should_output(LIBRPA_VERBOSE_DEBUG);
     pds->is_band_calc_done = false;

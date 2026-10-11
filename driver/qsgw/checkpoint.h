@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../src/core/qsgw/hamiltonian_mixing.h"
+#include "../../src/core/qsgw/headwing_velocity.h"
 #include "../../src/mpi/base_mpi.h"
 #include "iteration_trace.h"
 
@@ -26,6 +27,11 @@ struct CheckpointContext
     double mixing_beta;
     int nfreq;
     int head_mode;
+    std::string velocity_mode = "reference";
+    const HeadwingAoOperators* ao_operators = nullptr;
+    const VelocityMatrix* reference_velocity = nullptr;
+    const Vector3_Order<int>* velocity_period = nullptr;
+    const Matrix3* velocity_lattice = nullptr;
 };
 
 // Root-only file operations; callers propagate failures collectively.

@@ -107,7 +107,7 @@ def main():
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--mpiexec", default="mpirun")
     parser.add_argument("--ranks", type=int, default=4)
-    parser.add_argument("--case", choices=("si-none", "si-linear", "h2o-band"),
+    parser.add_argument("--case", choices=("si-none", "h2o-band"),
                         action="append")
     args = parser.parse_args()
     binary = args.binary.resolve()
@@ -116,8 +116,6 @@ def main():
     testcases = Path(__file__).resolve().parent / "testcases"
     cases = {
         "si-none": ("qsgw_aims_Si_k333_headonly_libri", {}),
-        "si-linear": ("qsgw_aims_Si_k333_headonly_libri",
-                      {"qsgw_mixer": "linear", "qsgw_mixing_beta": "0.3"}),
         "h2o-band": ("qsgw_band_aims_mole_H2O_libri",
                      {"qsgw_mixing_beta": "0.3", "qsgw_band0_unoccupied_keep": "1",
                       "qsgw_band0_cut_shift_ha": "0.05"}),

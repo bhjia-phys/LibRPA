@@ -187,6 +187,10 @@ struct DriverParams
     std::string g0w0_rr_unit;
 
     //! Band-path k-point metadata filename.
+    //! For QSGW, presence under input_dir enables the existing band channel
+    //! and requires matching band E/C and full Vxc; absence runs only the
+    //! SCF grid. This input-driven behavior uses task=qsgw.
+    //! Keep band-channel presence and inputs unchanged across a restart.
     //! @par Default
     //! `band_kpath_info`
     std::string fn_band_kpath_info;
@@ -336,13 +340,17 @@ struct DriverParams
     std::string qsgw_vxc_basis;
 
     //! Fixed-basis Hamiltonian mixing (`none` or `linear`).
+    //! After reading SCF input, `linear` is allowed only for one loaded k point
+    //! on a one-point full BvK mesh. Multi-k meshes automatically use `none`.
+    //! Band-path points do not affect this selection. A Gamma-only solid also
+    //! enters the single-k branch; select `none` for a direct update there.
     //! @par Default
     //! `none`
     //! @par Status
     //! Experimental
     std::string qsgw_mixer;
 
-    //! Linear Hamiltonian mixing fraction.
+    //! Linear Hamiltonian mixing fraction for the single-k SCF branch.
     //! @par Default
     //! 0.2
     //! @par Status
@@ -363,14 +371,16 @@ struct DriverParams
     //! Experimental
     int qsgw_max_iter;
 
-    //! Number of unoccupied states retained by qsgw_band H_QSGW cut.
+    //! Number of unoccupied states retained by the QSGW H_QSGW cut.
+    //! Active only when band-path inputs are present for task=qsgw.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
     int qsgw_band0_unoccupied_keep;
 
-    //! qsgw_band H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
+    //! QSGW H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
+    //! Active only when band-path inputs are present for task=qsgw.
     //! @par Default
     //! 0
     //! @par Status
@@ -378,6 +388,7 @@ struct DriverParams
     int qsgw_band0_cut_mode;
 
     //! Hamiltonian energy shift applied to cut states in mode 2, in Hartree.
+    //! Active only when QSGW band-path inputs are present.
     //! @par Default
     //! 20.0
     //! @par Status
@@ -390,6 +401,34 @@ struct DriverParams
     //! @par Status
     //! Experimental
     bool qsgw_write_iteration_matrices;
+
+    //! Analytic head/wing velocity convention: reference (legacy head-only),
+    //! rotate_reference (fixed initial operator in current eigenstates), or
+    //! current_hr (velocity of the complete current finite-BvK Hamiltonian).
+    //! Standalone option_dielect_func=5 selects current_hr if omitted and
+    //! rejects an explicit reference or rotate_reference. It resolves to
+    //! numerical option 3, with the same current-HR calculation and scope.
+    //! @par Default
+    //! reference
+    //! @par Status
+    //! Experimental
+    std::string qsgw_headwing_velocity;
+
+    //! S(R) input for current_hr: native ABACUS CSR, dimensionless, with its
+    //! full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_sr;
+
+    //! Three-component r(R) input for current_hr: native ABACUS CSR in Bohr,
+    //! with its full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_rr;
 
     //! Checkpoint to restore at a completed QSGW iteration; relative to cwd.
     //! @par Default

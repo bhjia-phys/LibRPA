@@ -220,7 +220,7 @@ static void validate_input_parameters()
                 throw std::runtime_error("G0W0 native velocity requires use_pyatb = false");
         }
     }
-    if (task == "qsgw" || task == "qsgw_band")
+    if (task == "qsgw")
     {
         if (driver::opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
             throw std::runtime_error(
@@ -255,9 +255,19 @@ static void validate_input_parameters()
             throw std::runtime_error(
                 "QSGW independent PyATB head updates are unsupported; use the same-grid velocity input");
         if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
-            driver::opts.option_dielect_func != 4)
+            driver::opts.option_dielect_func != 3 && driver::opts.option_dielect_func != 4)
             throw std::runtime_error(
-                "QSGW supports only analytic head-only mode; set option_dielect_func = 4");
+                "QSGW analytic head/wing requires option_dielect_func = 3 or 4");
+        if (params.qsgw_headwing_velocity != "reference" &&
+            params.qsgw_headwing_velocity != "rotate_reference" &&
+            params.qsgw_headwing_velocity != "current_hr")
+            throw std::runtime_error("Unsupported qsgw_headwing_velocity convention");
+        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON &&
+            driver::opts.option_dielect_func == 3 && params.qsgw_headwing_velocity == "reference")
+            throw std::runtime_error("QSGW wings require rotate_reference or current_hr velocity");
+        if (params.qsgw_headwing_velocity == "current_hr" &&
+            (params.qsgw_fn_sr.empty() || params.qsgw_fn_rr.empty()))
+            throw std::runtime_error("QSGW current_hr velocity requires qsgw_fn_sr and qsgw_fn_rr");
         // QSGW inherits the upstream EXX, GW, and RPA symmetry switches.
     }
 }
@@ -332,8 +342,13 @@ void parse_inputfile_to_params(const std::string &fn)
         parse_qsgw_string(parser, "g0w0_hr_unit", driver_params.g0w0_hr_unit);
         parse_qsgw_string(parser, "g0w0_rr_unit", driver_params.g0w0_rr_unit);
     }
-    if (task_normalized == "qsgw" || task_normalized == "qsgw_band")
+    if (task_normalized == "qsgw")
     {
+        std::string removed_system_type;
+        if (get_last_assigned_value(parser, "qsgw_system_type", removed_system_type))
+            throw std::runtime_error(
+                "qsgw_system_type was removed; QSGW selects mixing automatically from the SCF "
+                "k-point input");
         for (const std::string removed :
              {"qsgw_update_hartree", "qsgw_hartree_coulomb", "qsgw_hartree_normalization",
               "qsgw_export_hamiltonian_for_pyatb", "qsgw_hr_export_full_mp_rgrid"})
@@ -367,6 +382,9 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_band0_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_string(parser, "qsgw_headwing_velocity", driver_params.qsgw_headwing_velocity);
+        parse_qsgw_string(parser, "qsgw_fn_sr", driver_params.qsgw_fn_sr);
+        parse_qsgw_string(parser, "qsgw_fn_rr", driver_params.qsgw_fn_rr);
         parse_qsgw_string(parser, "qsgw_restart_file", driver_params.qsgw_restart_file);
         parse_qsgw_string(parser, "qsgw_checkpoint_file", driver_params.qsgw_checkpoint_file);
         parse_qsgw_double(parser, "qsgw_convergence_tolerance_ev",
@@ -578,28 +596,34 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_double(opts, sf_gf_omega_shift);
     _parse_double(opts, sf_sigc_omega_shift);
 
-    // Option 5 adds driver-side AO velocity preparation to the existing
-    // option-3 head/wing method. The numerical API must receive method 3.
+    // Option 5 selects native G0W0 velocity or the per-update QSGW current-HR
+    // velocity path. Both use the existing numerical option-3 head/wing method.
     requested_option_dielect_func = opts.option_dielect_func;
     if (opts.option_dielect_func == 5)
     {
-        if (task_normalized != "g0w0" && task_normalized != "g0w0_band")
+        const bool is_g0w0 = task_normalized == "g0w0" || task_normalized == "g0w0_band";
+        const bool is_qsgw = task_normalized == "qsgw";
+        if (!is_g0w0 && !is_qsgw)
             throw std::runtime_error(
-                "option_dielect_func = 5 is only supported for task = g0w0 or g0w0_band");
+                "option_dielect_func = 5 is only supported for g0w0, g0w0_band, or qsgw");
         if (opts.replace_w_head != LIBRPA_SWITCH_ON)
             throw std::runtime_error("option_dielect_func = 5 requires replace_w_head = true");
         if (opts.use_scalapack_gw_wc != LIBRPA_SWITCH_ON)
             throw std::runtime_error(
                 "option_dielect_func = 5 requires use_scalapack_gw_wc = true to consume analytic "
                 "wings");
-        std::string velocity_source;
-        if (get_last_assigned_value(parser, "g0w0_headwing_velocity", velocity_source) &&
-            driver_params.g0w0_headwing_velocity != "native")
-            throw std::runtime_error(
-                "option_dielect_func = 5 selects native velocity and conflicts with "
-                "g0w0_headwing_velocity = " +
-                driver_params.g0w0_headwing_velocity);
-        driver_params.g0w0_headwing_velocity = "native";
+        const std::string velocity_key =
+            is_qsgw ? "qsgw_headwing_velocity" : "g0w0_headwing_velocity";
+        const std::string native_mode = is_qsgw ? "current_hr" : "native";
+        std::string &velocity_mode =
+            is_qsgw ? driver_params.qsgw_headwing_velocity : driver_params.g0w0_headwing_velocity;
+        std::string assigned_velocity;
+        if (get_last_assigned_value(parser, velocity_key, assigned_velocity) &&
+            velocity_mode != native_mode)
+            throw std::runtime_error("option_dielect_func = 5 selects " + velocity_key + " = " +
+                                     native_mode + " and conflicts with " + velocity_key + " = " +
+                                     velocity_mode);
+        velocity_mode = native_mode;
         opts.option_dielect_func = 3;
     }
 

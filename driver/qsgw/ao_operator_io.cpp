@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
+
+#include "../../src/utils/constants.h"
 
 namespace driver::qsgw
 {
@@ -23,7 +26,7 @@ std::string line(std::istream& input)
         if (comment != std::string::npos) result.erase(comment);
         if (result.find_first_not_of(" \t\r") != std::string::npos) return result;
     }
-    throw std::runtime_error("Incomplete Head/wing AO CSR input");
+    throw std::runtime_error("Incomplete QSGW AO CSR input");
 }
 
 int last_integer(const std::string& text)
@@ -35,7 +38,7 @@ int last_integer(const std::string& text)
     }
     std::size_t end = 0;
     const int value = std::stoi(token, &end);
-    if (end != token.size()) throw std::runtime_error("Invalid Head/wing AO CSR header");
+    if (end != token.size()) throw std::runtime_error("Invalid QSGW AO CSR header");
     return value;
 }
 
@@ -47,7 +50,7 @@ std::tuple<int, int, bool> header(std::istream& input)
     if (first.find("STEP:") != std::string::npos) first = line(input);
     const int n = last_integer(first);
     const int nr = last_integer(line(input));
-    if (n <= 0 || nr < 0) throw std::runtime_error("Invalid Head/wing AO CSR dimensions");
+    if (n <= 0 || nr < 0) throw std::runtime_error("Invalid QSGW AO CSR dimensions");
     return {n, nr, native};
 }
 
@@ -55,7 +58,7 @@ Matz matrix(std::istream& input, const int n, const int nnz, const bool empty_ha
             const bool upper_only = true)
 {
     if (nnz < 0 || static_cast<long long>(nnz) > static_cast<long long>(n) * n)
-        throw std::runtime_error("Invalid Head/wing AO CSR nonzero count");
+        throw std::runtime_error("Invalid QSGW AO CSR nonzero count");
     Matz result(n, n, MAJOR::ROW);
     std::fill(result.ptr(), result.ptr() + result.size(), cplxdb{});
     if (nnz == 0 && !empty_has_pointers) return result;
@@ -63,23 +66,23 @@ Matz matrix(std::istream& input, const int n, const int nnz, const bool empty_ha
     std::vector<int> columns(nnz), pointers(n + 1);
     for (auto& x : values)
         if (!(input >> x) || !std::isfinite(x.real()) || !std::isfinite(x.imag()))
-            throw std::runtime_error("Invalid Head/wing AO CSR value");
+            throw std::runtime_error("Invalid QSGW AO CSR value");
     for (auto& x : columns)
         if (!(input >> x) || x < 0 || x >= n)
-            throw std::runtime_error("Invalid Head/wing AO CSR column");
+            throw std::runtime_error("Invalid QSGW AO CSR column");
     for (auto& x : pointers)
         if (!(input >> x) || x < 0 || x > nnz)
-            throw std::runtime_error("Invalid Head/wing AO CSR row pointer");
+            throw std::runtime_error("Invalid QSGW AO CSR row pointer");
     if (pointers.front() != 0 || pointers.back() != nnz ||
         !std::is_sorted(pointers.begin(), pointers.end()))
-        throw std::runtime_error("Invalid Head/wing AO CSR row range");
+        throw std::runtime_error("Invalid QSGW AO CSR row range");
     for (int row = 0; row < n; ++row)
     {
         int previous = -1;
         for (int j = pointers[row]; j < pointers[row + 1]; ++j)
         {
             if (columns[j] <= previous)
-                throw std::runtime_error("Head/wing AO CSR columns are not unique and ordered");
+                throw std::runtime_error("QSGW AO CSR columns are not unique and ordered");
             previous = columns[j];
             if (!upper_only || columns[j] >= row) result(row, columns[j]) = values[j];
         }
@@ -95,35 +98,35 @@ librpa_int::qsgw::HeadwingAoOperators read_headwing_ao_operators(const std::stri
     if (!(position_scale_bohr > 0.0) || !std::isfinite(position_scale_bohr))
         throw std::runtime_error("Invalid head/wing position-unit conversion");
     std::ifstream s(overlap_file), r(position_file);
-    if (!s || !r) throw std::runtime_error("Cannot open Head/wing head/wing S(R) or r(R) CSR input");
+    if (!s || !r) throw std::runtime_error("Cannot open QSGW head/wing S(R) or r(R) CSR input");
     const auto [n, ns, native_s] = header(s);
     const auto [nr, nr_blocks, native_r] = header(r);
-    if (n != nr) throw std::runtime_error("Head/wing head/wing S(R) and r(R) dimensions differ");
+    if (n != nr) throw std::runtime_error("QSGW head/wing S(R) and r(R) dimensions differ");
     librpa_int::qsgw::HeadwingAoOperators result;
     result.dimension = n;
     for (int i = 0; i < ns; ++i)
     {
         int x, y, z, nnz;
-        if (!(s >> x >> y >> z >> nnz)) throw std::runtime_error("Incomplete Head/wing overlap R block");
+        if (!(s >> x >> y >> z >> nnz)) throw std::runtime_error("Incomplete QSGW overlap R block");
         if (!result.overlap.emplace(Vector3_Order<int>(x, y, z), matrix(s, n, nnz, false)).second)
-            throw std::runtime_error("Duplicate Head/wing overlap R block");
+            throw std::runtime_error("Duplicate QSGW overlap R block");
     }
     for (int i = 0; i < nr_blocks; ++i)
     {
         int x, y, z;
-        if (!(r >> x >> y >> z)) throw std::runtime_error("Incomplete Head/wing position R block");
+        if (!(r >> x >> y >> z)) throw std::runtime_error("Incomplete QSGW position R block");
         for (int a = 0; a < 3; ++a)
         {
             int nnz;
-            if (!(r >> nnz)) throw std::runtime_error("Incomplete Head/wing position nonzero count");
+            if (!(r >> nnz)) throw std::runtime_error("Incomplete QSGW position nonzero count");
             if (!result.position[a]
                      .emplace(Vector3_Order<int>(x, y, z), matrix(r, n, nnz, !native_r))
                      .second)
-                throw std::runtime_error("Duplicate Head/wing position R block");
+                throw std::runtime_error("Duplicate QSGW position R block");
         }
     }
     std::string trailing;
-    if (s >> trailing || r >> trailing) throw std::runtime_error("Trailing Head/wing AO CSR data");
+    if (s >> trailing || r >> trailing) throw std::runtime_error("Trailing QSGW AO CSR data");
     for (auto& component : result.position)
         for (auto& [cell, block] : component)
             for (std::size_t j = 0; j < block.size(); ++j) block.ptr()[j] *= position_scale_bohr;
@@ -152,5 +155,32 @@ librpa_int::qsgw::LocalizedMatrix read_headwing_hamiltonian_csr(const std::strin
     std::string trailing;
     if (input >> trailing) throw std::runtime_error("Trailing head/wing Hamiltonian CSR data");
     return result;
+}
+void write_headwing_hamiltonian_csr(const std::string& filename,
+                                    const librpa_int::qsgw::LocalizedMatrix& blocks)
+{
+    if (blocks.empty()) throw std::runtime_error("Empty QSGW head/wing Hamiltonian");
+    const int n = blocks.begin()->second.nr();
+    std::ofstream output(filename);
+    if (!output) throw std::runtime_error("Cannot write QSGW head/wing Hamiltonian: " + filename);
+    output << "STEP: 0\nMatrix Dimension of H(R): " << n
+           << "\nMatrix number of H(R): " << blocks.size() << '\n'
+           << std::setprecision(17) << std::scientific;
+    for (const auto& [r, matrix] : blocks)
+    {
+        if (matrix.nr() != n || matrix.nc() != n)
+            throw std::runtime_error("Invalid QSGW head/wing Hamiltonian shape");
+        output << r.x << ' ' << r.y << ' ' << r.z << ' ' << n * n << '\n';
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j) output << matrix(i, j) * librpa_int::HA2EV << ' ';
+        output << '\n';
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j) output << j << ' ';
+        output << '\n';
+        for (int i = 0; i <= n; ++i) output << i * n << ' ';
+        output << '\n';
+    }
+    output.flush();
+    if (!output) throw std::runtime_error("Cannot flush QSGW head/wing Hamiltonian: " + filename);
 }
 }  // namespace driver::qsgw

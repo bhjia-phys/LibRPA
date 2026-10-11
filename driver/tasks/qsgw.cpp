@@ -23,6 +23,7 @@
 #include "../../src/core/qsgw/fixed_basis.h"
 #include "../../src/core/qsgw/hamiltonian_cut.h"
 #include "../../src/core/qsgw/hamiltonian_mixing.h"
+#include "../../src/core/qsgw/headwing_velocity.h"
 #include "../../src/core/qsgw/occupation.h"
 #include "../../src/core/qsgw/projection_target.h"
 #include "../../src/io/fs.h"
@@ -31,6 +32,7 @@
 #include "../../src/utils/constants.h"
 #include "../../src/utils/profiler.h"
 #include "../driver.h"
+#include "../qsgw/ao_operator_io.h"
 #include "../qsgw/band_output.h"
 #include "../qsgw/checkpoint.h"
 #include "../qsgw/iteration_trace.h"
@@ -115,6 +117,36 @@ private:
     MeanField& meanfield_;
     std::vector<librpa_int::matrix> live_weights_;
 };
+
+template <typename Function>
+void collective_all_stage(const librpa_int::MpiCommHandler& communicator, const std::string& label,
+                          Function&& function)
+{
+    std::exception_ptr local_error;
+    int failed = 0, any_failed = 0;
+    try
+    {
+        function();
+    }
+    catch (const std::exception& error)
+    {
+        failed = 1;
+        local_error = std::current_exception();
+        librpa_int::global::lib_printf(LIBRPA_VERBOSE_CRITICAL, "%s failed: %s\n", label.c_str(),
+                                       error.what());
+    }
+    catch (...)
+    {
+        failed = 1;
+        local_error = std::current_exception();
+    }
+    MPI_Allreduce(&failed, &any_failed, 1, MPI_INT, MPI_MAX, communicator.comm);
+    if (any_failed)
+    {
+        if (local_error) std::rethrow_exception(local_error);
+        throw LIBRPA_RUNTIME_ERROR(label + " failed on another rank");
+    }
+}
 
 template <typename Function>
 void collective_root_stage(
@@ -327,16 +359,16 @@ SpinKMatrixMap build_correlation_map(
     return result;
 }
 
-void run_qsgw(const bool compute_band)
+void run_qsgw()
 {
     using namespace driver;
     using namespace librpa_int;
     using namespace librpa_int::global;
     using namespace librpa_int::qsgw;
 
-    const bool update_head =
-        driver::get_bool(opts.replace_w_head) &&
-        opts.option_dielect_func == 4;
+    const bool update_head = driver::get_bool(opts.replace_w_head) &&
+                             (opts.option_dielect_func == 3 || opts.option_dielect_func == 4);
+    const bool update_wing = update_head && opts.option_dielect_func == 3;
     if (driver_params.use_pyatb)
     {
         throw LIBRPA_RUNTIME_ERROR(
@@ -344,8 +376,7 @@ void run_qsgw(const bool compute_band)
     }
     if (driver::get_bool(opts.replace_w_head) && !update_head)
     {
-        throw LIBRPA_RUNTIME_ERROR(
-            "QSGW supports only analytic head-only mode; set option_dielect_func = 4");
+        throw LIBRPA_RUNTIME_ERROR("QSGW analytic head/wing requires option_dielect_func = 3 or 4");
     }
     if (driver::get_bool(opts.use_kpara_scf_eigvec))
     {
@@ -360,13 +391,31 @@ void run_qsgw(const bool compute_band)
     {
         throw LIBRPA_RUNTIME_ERROR("QSGW requires parallel_routing=libri or auto");
     }
+    const std::string band_kpath_path =
+        resolve_input_path(driver_params.input_dir, driver_params.fn_band_kpath_info);
+    int has_band_kpath = 0;
+    collective_root_stage(
+        dataset->comm_h, "QSGW band-path discovery",
+        [&]
+        {
+            has_band_kpath =
+                !driver_params.fn_band_kpath_info.empty() && path_exists(band_kpath_path.c_str());
+            if (has_band_kpath)
+                lib_printf("QSGW band k-path file %s found; include band-path updates\n",
+                           band_kpath_path.c_str());
+            else
+                lib_printf("QSGW band k-path file %s not found; use SCF-grid updates only\n",
+                           band_kpath_path.c_str());
+        });
+    dataset->comm_h.bcast(&has_band_kpath, 1, 0);
+    const bool compute_band = has_band_kpath != 0;
     if (compute_band)
     {
-        const std::string band_kpath_path = resolve_input_path(
-            driver_params.input_dir, driver_params.fn_band_kpath_info);
-        read_band_kpath_info(band_kpath_path);
+        collective_all_stage(dataset->comm_h, "QSGW band k-path input",
+                             [&] { read_band_kpath_info(band_kpath_path); });
         dataset->comm_h.barrier();
-        read_band_meanfield_data(driver_params.input_dir);
+        collective_all_stage(dataset->comm_h, "QSGW band mean-field input",
+                             [&] { read_band_meanfield_data(driver_params.input_dir); });
         dataset->comm_h.barrier();
     }
     read_Vq_row(driver_params.input_dir, driver_params.prefix_coul_cut,
@@ -381,6 +430,19 @@ void run_qsgw(const bool compute_band)
                           });
 
     const MeanField reference = dataset->mf;
+    // Use the full SCF mesh as well as the loaded count: one IBZ representative
+    // of a multi-k mesh must not enter the single-k supercell branch.
+    const bool single_kpoint =
+        reference.get_n_kpoints() == 1 && dataset->pbc.get_n_cells_bvk() == 1;
+    const std::string effective_mixer = single_kpoint ? driver_params.qsgw_mixer : "none";
+    const double mixing_beta = effective_mixer == "linear" ? driver_params.qsgw_mixing_beta : 1.0;
+    if (dataset->comm_h.is_root())
+        lib_printf(
+            "QSGW mixing from SCF input: loaded_kpoints=%d mesh=%dx%dx%d requested=%s effective=%s "
+            "beta=%.8f\n",
+            reference.get_n_kpoints(), dataset->pbc.period.x, dataset->pbc.period.y,
+            dataset->pbc.period.z, driver_params.qsgw_mixer.c_str(), effective_mixer.c_str(),
+            mixing_beta);
     const double electron_count = physical_electron_count(
         reference, dataset->pbc.weight_k);
     const OccupationResult initial_occupations = analyze_qsgw_occupations(
@@ -389,7 +451,19 @@ void run_qsgw(const bool compute_band)
         build_reference_hamiltonian(reference);
 
     VelocityMatrix reference_velocity;
-    if (update_head)
+    std::optional<HeadwingAoOperators> ao_operators;
+    if (update_head && driver_params.qsgw_headwing_velocity == "current_hr")
+    {
+        collective_all_stage(
+            dataset->comm_h, "QSGW head/wing AO input",
+            [&]
+            {
+                ao_operators = driver::qsgw::read_headwing_ao_operators(
+                    resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_sr),
+                    resolve_input_path(driver_params.input_dir, driver_params.qsgw_fn_rr));
+            });
+    }
+    if (update_head && driver_params.qsgw_headwing_velocity != "current_hr")
     {
         read_headwing_input(driver_params.input_dir, false);
         reference_velocity = dataset->velocity_matrix;
@@ -444,17 +518,25 @@ void run_qsgw(const bool compute_band)
               band_reference_hamiltonian, band_reference_hamiltonian,
               dataset->mf_band, cut_options)
         : band_reference_hamiltonian;
-    const double mixing_beta = driver_params.qsgw_mixer == "linear"
-        ? driver_params.qsgw_mixing_beta : 1.0;
 
-    const CheckpointContext checkpoint_context{
-        reference, band_reference ? &*band_reference : nullptr,
-        dataset->pbc.kfrac_list, dataset->kfrac_band_list,
-        dataset->pbc.weight_k, dft_vxc, dft_vxc_band,
-        driver_params.qsgw_band0_cut_mode,
-        driver_params.qsgw_band0_unoccupied_keep,
-        driver_params.qsgw_band0_cut_shift_ha, mixing_beta,
-        opts.nfreq, update_head ? opts.option_dielect_func : 0};
+    const CheckpointContext checkpoint_context{reference,
+                                               band_reference ? &*band_reference : nullptr,
+                                               dataset->pbc.kfrac_list,
+                                               dataset->kfrac_band_list,
+                                               dataset->pbc.weight_k,
+                                               dft_vxc,
+                                               dft_vxc_band,
+                                               driver_params.qsgw_band0_cut_mode,
+                                               driver_params.qsgw_band0_unoccupied_keep,
+                                               driver_params.qsgw_band0_cut_shift_ha,
+                                               mixing_beta,
+                                               opts.nfreq,
+                                               update_head ? opts.option_dielect_func : 0,
+                                               driver_params.qsgw_headwing_velocity,
+                                               ao_operators ? &*ao_operators : nullptr,
+                                               &reference_velocity,
+                                               &dataset->pbc.period,
+                                               &dataset->pbc.latvec};
     int starting_iteration = 0;
     IterationSummary starting_summary;
     starting_summary.fermi_energy_ev = reference.get_efermi() * HA2EV;
@@ -569,13 +651,98 @@ void run_qsgw(const bool compute_band)
         dataset->invalidate_compute_objects();
         if (update_head)
         {
-            dataset->velocity_matrix = reference_velocity;
+            std::optional<LiveVelocityResult> live_velocity;
+            collective_all_stage(
+                dataset->comm_h, "QSGW live head/wing velocity",
+                [&]
+                {
+                    if (ao_operators)
+                    {
+                        auto velocity = compute_live_headwing_velocity(
+                            reference, dataset->mf,
+                            // The initial cut H is a residual reference; update 1
+                            // still screens with the actual entering PBE eigenpairs.
+                            starting_iteration == 0 && iteration == 1 ? reference_hamiltonian
+                                                                      : current_hamiltonian,
+                            *ao_operators, dataset->pbc.kfrac_list, dataset->pbc.period,
+                            dataset->pbc.latvec);
+                        dataset->velocity_matrix = std::move(velocity.velocity);
+                        if (dataset->comm_h.is_root())
+                            lib_printf(
+                                "QSGW update %d current-HR velocity: metric %.8e live_metric %.8e "
+                                "frame_Ha %.8e FT_Ha %.8e\n",
+                                iteration, velocity.reference_metric_residual,
+                                velocity.live_metric_residual,
+                                velocity.hamiltonian_frame_residual_ha,
+                                velocity.fourier_roundtrip_residual_ha);
+                        live_velocity = std::move(velocity);
+                    }
+                    else
+                    {
+                        dataset->velocity_matrix = reference_velocity;
+                        if (driver_params.qsgw_headwing_velocity == "rotate_reference")
+                            align_velocity_to_reference_wfc(reference, dataset->mf,
+                                                            dataset->velocity_matrix);
+                    }
+                });
             dataset->p_headwing.reset();
             initialize_ds_tfgrids(*dataset, opts);
             // Legacy option-4 head reused the first k-point occupation row.
-            // Limit that compatibility behavior to head construction.
-            ScopedLegacyHeadOccupations legacy_head_occupations(dataset->mf);
-            initialize_ds_headwing(*dataset, opts, false);
+            // Preserve it only for the unchanged reference-entries map.
+            if (driver_params.qsgw_headwing_velocity == "reference")
+            {
+                ScopedLegacyHeadOccupations legacy_head_occupations(dataset->mf);
+                initialize_ds_headwing(*dataset, opts, false);
+            }
+            else
+            {
+                initialize_ds_headwing(*dataset, opts, update_wing);
+            }
+            if (update_wing && (!dataset->p_headwing || !dataset->p_headwing->has_wing()))
+                throw LIBRPA_RUNTIME_ERROR("QSGW analytic wing was not rebuilt for the live state");
+            collective_root_stage(
+                dataset->comm_h, "QSGW head/wing numerical trace",
+                [&]
+                {
+                    if (!driver_params.qsgw_write_iteration_matrices ||
+                        driver_params.qsgw_headwing_velocity == "reference")
+                        return;
+                    if (live_velocity)
+                        for (int spin = 0; spin < dataset->mf.get_n_spins(); ++spin)
+                            driver::qsgw::write_headwing_hamiltonian_csr(
+                                join_path(opts.output_dir, "qsgw_head_HR_update" +
+                                                               std::to_string(iteration) + "_spin" +
+                                                               std::to_string(spin) + ".eV.csr"),
+                                live_velocity->hamiltonian.at(spin));
+                    for (int a = 0; a < 3; ++a)
+                    {
+                        SpinKMatrixMap velocities;
+                        for (int spin = 0; spin < dataset->mf.get_n_spins(); ++spin)
+                            for (int ik = 0; ik < dataset->mf.get_n_kpoints(); ++ik)
+                            {
+                                const auto& v = dataset->velocity_matrix[spin][ik][a];
+                                Matz matrix(v.nr, v.nc, MAJOR::ROW);
+                                for (int i = 0; i < v.nr; ++i)
+                                    for (int j = 0; j < v.nc; ++j) matrix(i, j) = v(i, j);
+                                velocities[spin][ik] = std::move(matrix);
+                            }
+                        write_matrix_component_trace(
+                            matrix_trace, iteration, IterationChannel::Grid,
+                            "head_velocity_" + std::to_string(a), velocities);
+                    }
+                    const auto& frequencies = dataset->p_headwing->get_frequency_nodes();
+                    for (const auto& [name, tensors] :
+                         std::vector<std::pair<std::string, const std::vector<Matz>*>>{
+                             {"head_tensor", &dataset->p_headwing->get_head_tensors()},
+                             {"wing_auxiliary", &dataset->p_headwing->get_wing_auxiliary()}})
+                    {
+                        SpinKFrequencyMatrixMap matrices;
+                        for (std::size_t i = 0; i < tensors->size(); ++i)
+                            matrices[0][0][frequencies.at(i)] = tensors->at(i);
+                        write_frequency_matrix_component_trace(
+                            matrix_trace, iteration, IterationChannel::Grid, name, matrices);
+                    }
+                });
         }
         h.build_g0w0_sigma(opts);
         if (!dataset->p_exx || !dataset->p_g0w0)
@@ -697,10 +864,6 @@ void run_qsgw(const bool compute_band)
                     mixed_band_hamiltonian, band_reference_hamiltonian,
                     dataset->mf_band, cut_options);
             }
-            current_hamiltonian = mixed_hamiltonian;
-            if (compute_band)
-                current_band_hamiltonian = mixed_band_hamiltonian;
-
             if (driver_params.qsgw_write_iteration_matrices)
             {
                 std::ostringstream rows;
@@ -744,6 +907,10 @@ void run_qsgw(const bool compute_band)
             broadcast_spin_k_matrix_map(
                 mixed_band_hamiltonian, 0, dataset->comm_h);
         }
+        // The next velocity is evaluated on every rank. Its Hamiltonian must
+        // advance with the live eigenpairs, not remain a root-only residual map.
+        current_hamiltonian = mixed_hamiltonian;
+        if (compute_band) current_band_hamiltonian = mixed_band_hamiltonian;
         const FixedBasisDiagonalizationResult diagonalization =
             diagonalize_in_reference_basis(
                 dataset->mf, reference, mixed_hamiltonian);
@@ -852,7 +1019,7 @@ void run_qsgw(const bool compute_band)
             lib_printf(
                 "QSGW iteration %d: max_delta=% .8e eV gap=% .8f eV mixer=%s%s\n",
                 iteration, maximum_change_ev, occupations.gap * HA2EV,
-                driver_params.qsgw_mixer.c_str(),
+                effective_mixer.c_str(),
                 converged_flag ? ", converged" : "");
         });
         dataset->comm_h.bcast(&converged_flag, 1, 0);
@@ -873,6 +1040,4 @@ void run_qsgw(const bool compute_band)
 
 } // namespace
 
-void driver::task_qsgw() { run_qsgw(false); }
-
-void driver::task_qsgw_band() { run_qsgw(true); }
+void driver::task_qsgw() { run_qsgw(); }
