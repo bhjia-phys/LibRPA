@@ -780,7 +780,7 @@ double rectangular_gamma_volume_ratio()
 
 void verify_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h, const bool rank_deficient,
                                        const bool zero_response, const int dielectric_option,
-                                       const bool use_cholesky)
+                                       const bool use_cholesky, const int block_size = 1)
 {
     constexpr int n = 4;
     const int retained = rank_deficient ? n - 1 : n;
@@ -838,7 +838,7 @@ void verify_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h, const bo
     KPointBlacsParallelContext kctx(KPointBlacsProcessShape(1, blacs_h.nprocs), MPI_COMM_WORLD, 2);
     ArrayDesc desc_wfc(blacs_h), desc_aux(blacs_h);
     desc_wfc.init(2, 2, 1, 1, 0, 0);
-    desc_aux.init(n, n, 1, 1, 0, 0);
+    desc_aux.init(n, n, block_size, block_size, 0, 0);
     const SymmetryContext context;
     Chi0 chi0(mf, wfc_basis, aux_basis, pbc, context, grids, kctx, desc_wfc, false, false);
     atpair_k_cplx_mat_t bare_blocks, cut_blocks;
@@ -874,6 +874,7 @@ void verify_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h, const bo
     headwing.init(0.0, bare_blocks);
     headwing.cal_head();
     headwing.init_wing(0.0, bare_blocks);
+    headwing.set_0_wing();
     const auto actual =
         compute_Wc_freq_q_blacs(chi0, bare_blocks, cut_blocks, 0.0, true, dielectric_option,
                                 std::vector<std::complex<double>>{1.0}, &headwing, blacs_h,
@@ -905,7 +906,8 @@ void verify_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h, const bo
         if (blacs_h.myid == 0)
             std::cout << "Gamma Wc dense control: rank=" << retained
                       << " zero_response=" << zero_response << " option=" << dielectric_option
-                      << " cholesky=" << use_cholesky << " iq=" << iq << " max_error=" << max_error
+                      << " cholesky=" << use_cholesky << " block_size=" << block_size
+                      << " iq=" << iq << " max_error=" << max_error
                       << std::endl;
         assert(max_error < 1e-10);
     }
@@ -918,6 +920,8 @@ void test_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h)
             verify_gamma_wc_retained_identity(blacs_h, rank_deficient, zero_response, 3, false);
     verify_gamma_wc_retained_identity(blacs_h, true, false, 3, true);
     verify_gamma_wc_retained_identity(blacs_h, true, false, 1, false);
+    // The filtered eigenvector starts inside a block, rather than at its edge.
+    verify_gamma_wc_retained_identity(blacs_h, true, false, 3, false, 2);
 }
 
 #endif
