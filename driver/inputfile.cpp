@@ -210,7 +210,8 @@ static void parse_crpa_parameters(const InputParser &parser, driver::DriverParam
              {"crpa_correlated_species", &params.crpa_correlated_species},
              {"crpa_ligand_species", &params.crpa_ligand_species},
              {"crpa_parent_orbitals", &params.crpa_parent_orbitals},
-             {"crpa_output_orbitals", &params.crpa_output_orbitals}})
+             {"crpa_output_orbitals", &params.crpa_output_orbitals},
+             {"crpa_output_format", &params.crpa_output_format}})
         get_last_assigned_value(parser, item.first, *item.second);
     for (auto item : {
              std::pair<const char*, std::vector<double>*>{"crpa_response_windows_ha", &params.crpa_response_windows_ha},
@@ -330,6 +331,8 @@ static void validate_input_parameters()
                     std::numeric_limits<int>::max() - 1)
                 throw std::runtime_error("invalid crpa PDOS grid or Gaussian width");
         }
+        if (params.crpa_output_format != "npz" && params.crpa_output_format != "dat")
+            throw std::runtime_error("crpa_output_format must be npz or dat");
         for (const auto selection : {
                  std::make_pair(&params.crpa_response_windows_ha, &params.crpa_response_bands),
                  std::make_pair(&params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})

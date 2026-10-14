@@ -171,6 +171,25 @@ weights, AO conventions and shell layout are stored once in
 `output_dir/crpa_static.npz`; the state archive contains its relative path.
 Move that file together with the state directories when copying the model.
 
+Set `crpa_output_format = dat` to write the same model as readable text instead
+of NumPy archives. This option changes driver output only; the response and
+orbital-selection rules are unchanged. `crpa_model_info.dat` records dimensions,
+units, spin frames and state identity; `crpa_structure.dat` and
+`crpa_kpoints.dat` retain geometry and sampling. `crpa_bands.dat` contains
+energies, physical occupations and the actual binary A selector;
+`crpa_projectors.dat` contains parent/output P; `crpa_model_k.dat` contains
+H(k) and density. `parent=1` identifies the joint construction frame and
+`parent=0` the actual output frame. The orbital/site mapping is in
+`crpa_model_orbitals.dat`. Energies and interactions in DAT output use eV,
+lengths use Bohr, and all indices are zero based.
+
+The existing `crpa_tensors.dat` retains every imaginary-node tensor entry;
+`crpa_continued_tensors.dat` additionally retains every requested static/real
+entry with its numerical status and subset spread. The metadata and orbital
+analysis notes use `.dat` extensions in this mode. Optional raw export writes
+`crpa_coefficients.dat`, `crpa_overlap.dat` and `crpa_local_orbitals.dat`.
+QSGW uses the same files inside each `crpa/state_NNNN` directory.
+
 The state archive contains physical occupations, absolute-Hartree Bloch
 energies, the parent/output projectors P, projected H(k) and density matrices,
 weighted onsite H and density blocks, the actual A/B band selections, orbital

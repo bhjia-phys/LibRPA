@@ -47,7 +47,8 @@ void write_orbital_analysis(const LibrpaOrbitalResult* result,
     if (!std::isfinite(reference))
         throw std::runtime_error(
             "no finite PDOS energy reference; use fermi if no occupied state exists");
-    auto metadata = output_file(directory, "crpa_orbital_analysis.txt");
+    auto metadata = output_file(directory, params.crpa_output_format == "dat"
+                                               ? "crpa_orbital_analysis.dat" : "crpa_orbital_analysis.txt");
     metadata
         << "Existing scalar/spinor KS states; no Hamiltonian read or physical KS solve.\n"
         << "Mulliken=sum_s Re[c_mu,s* (S c_s)_mu]; "
@@ -150,7 +151,8 @@ void write_result(const LibrpaCrpaResult* result, const std::string& directory, 
     LibrpaCrpaTensor first;
     librpa_crpa_result_tensor(result, 0, &first);
     const bool has_full_w = first.fully_screened_ri != nullptr;
-    auto metadata = output_file(directory, "crpa_metadata.txt");
+    auto metadata = output_file(directory, driver::driver_params.crpa_output_format == "dat"
+                                               ? "crpa_metadata.dat" : "crpa_metadata.txt");
     if (state_index >= 0)
         metadata << "state_index = " << state_index << '\n'
                  << "gw_update = " << gw_update << '\n'

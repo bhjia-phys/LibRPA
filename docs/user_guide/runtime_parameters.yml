@@ -147,6 +147,7 @@ blocks:
       - driver.crpa_residual_tol
       - driver.crpa_output_analysis
       - driver.crpa_output_model
+      - driver.crpa_output_format
       - driver.crpa_output_raw
       - driver.crpa_output_static
       - driver.crpa_fit_tol_ev

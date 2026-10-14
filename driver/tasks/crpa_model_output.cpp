@@ -56,6 +56,168 @@ void write_sites(librpa_int::NpzWriter& writer, const LibrpaCrpaResult* result,
     writer.array(prefix + "_sites", "<i4", {static_cast<std::size_t>(count), 3}, sites.data(), 4);
     writer.text(prefix + "_labels_json", labels.str());
 }
+
+std::ofstream dat_file(const std::string& directory, const std::string& name,
+                       const std::string& header)
+{
+    std::ofstream file(std::filesystem::path(directory) / name);
+    file.exceptions(std::ios::badbit | std::ios::failbit);
+    file.precision(17);
+    file << "# " << header << '\n';
+    return file;
+}
+
+void write_dat_model(const LibrpaCrpaResult* result, const LibrpaCrpaModelInfo& info,
+                     const LibrpaCrpaContinuedResult* continued, const std::vector<double>& queries,
+                     const std::string& directory, int state_index, int gw_update, bool final_state)
+{
+    const double ev = librpa_int::HA2EV;
+    auto metadata = dat_file(directory, "crpa_model_info.dat", "Native model; zero-based indices");
+    metadata << "format_version = 1\nenergy_unit = eV\nlength_unit = Bohr\n"
+             << "ha_to_ev = " << ev << '\n'
+             << "frequency_axis = positive_imaginary\ndensity_order = ab,cd\n"
+             << "n_spins = " << info.n_spins << "\nn_spinor = " << info.n_spinor
+             << "\nn_kpoints = " << info.n_kpoints << "\nn_bands = " << info.n_bands
+             << "\nn_aos = " << info.n_aos << "\nn_atoms = " << info.n_atoms
+             << "\nn_parent = " << info.n_parent << "\nn_output = " << info.n_output
+             << "\nfermi_ev = " << info.fermi_ha * ev
+             << "\nresponse_mode = bands"
+             << "\nspecies_labels = " << driver_params.crpa_species_labels
+             << "\nparent_orbitals = " << driver_params.crpa_parent_orbitals
+             << "\noutput_orbitals = " << driver_params.crpa_output_orbitals
+             << "\nspin_frames = " << (info.n_spinor == 2 ? "joint_spinor" :
+                                           (info.n_spins == 2 ? "separate_collinear" : "spin_degenerate"))
+             << "\nstate_index = " << state_index << "\ngw_update = " << gw_update
+             << "\nfinal_state = " << final_state << "\nraw_saved = " << driver_params.crpa_output_raw
+             << "\nstatic_extrapolated = " << driver_params.crpa_output_static << '\n';
+    auto geometry = dat_file(directory, "crpa_structure.dat",
+                              "lattice row x y z; atom index type x y z n_AO; shell atom index l; convention five integers");
+    for (int i = 0; i < 3; ++i)
+        geometry << "lattice " << i << ' ' << info.lattice_bohr[3*i] << ' '
+                 << info.lattice_bohr[3*i+1] << ' ' << info.lattice_bohr[3*i+2] << '\n';
+    for (int a = 0; a < info.n_atoms; ++a)
+    {
+        geometry << "atom " << a << ' ' << info.atom_types[a] << ' ' << info.positions_bohr[3*a]
+                 << ' ' << info.positions_bohr[3*a+1] << ' ' << info.positions_bohr[3*a+2]
+                 << ' ' << info.ao_counts[a] << '\n';
+        for (int s = info.shell_offsets[a]; s < info.shell_offsets[a+1]; ++s)
+            geometry << "shell " << a << ' ' << s-info.shell_offsets[a] << ' ' << info.shell_l[s] << '\n';
+    }
+    geometry << "convention";
+    for (int i = 0; i < 5; ++i) geometry << ' ' << info.basis_convention[i];
+    geometry << '\n';
+    auto kpoints = dat_file(directory, "crpa_kpoints.dat", "k kx_fractional ky_fractional kz_fractional weight");
+    for (int k = 0; k < info.n_kpoints; ++k)
+        kpoints << k << ' ' << info.k_fractional[3*k] << ' ' << info.k_fractional[3*k+1]
+                << ' ' << info.k_fractional[3*k+2] << ' ' << info.k_weights[k] << '\n';
+    auto labels = dat_file(directory, "crpa_model_orbitals.dat", "parent site atom global_column local_column trial_label");
+    for (int parent : {1,0})
+        for (int site = 0; site < (parent ? info.n_parent_sites : info.n_output_sites); ++site)
+        {
+            int atom, start, n;
+            librpa_crpa_model_site(result, parent, site, &atom, &start, &n);
+            for (int a = 0; a < n; ++a)
+                labels << parent << ' ' << site << ' ' << atom << ' ' << start+a << ' ' << a
+                       << ' ' << librpa_crpa_model_label(result, parent, site, a) << '\n';
+        }
+    auto bands = dat_file(directory, "crpa_bands.dat", "spin k band E_eV occupation A_selected_0_or_1");
+    auto projectors = dat_file(directory, "crpa_projectors.dat", "parent spin k orbital band P_re P_im");
+    auto matrices = dat_file(directory, "crpa_model_k.dat", "parent spin k a b H_re_eV H_im_eV density_re density_im");
+    std::ofstream coefficients, overlap, phi;
+    if (driver_params.crpa_output_raw)
+    {
+        coefficients = dat_file(directory, "crpa_coefficients.dat", "spin k component_major_AO band C_re C_im");
+        overlap = dat_file(directory, "crpa_overlap.dat", "k spatial_AO_row spatial_AO_column S_re S_im");
+        phi = dat_file(directory, "crpa_local_orbitals.dat", "parent spin k component_major_AO orbital Phi_re Phi_im");
+    }
+    for (int spin = 0; spin < info.n_spins; ++spin)
+        for (int k = 0; k < info.n_kpoints; ++k)
+        {
+            LibrpaCrpaModelK view;
+            librpa_crpa_model_k(result, spin, k, &view);
+            int count = 0;
+            const int* selected = nullptr;
+            librpa_crpa_result_bands(result, 1, spin, k, &count, &selected);
+            std::vector<int> selection(info.n_bands, 0);
+            for (int i = 0; i < count; ++i) selection[selected[i]] = 1;
+            for (int n = 0; n < info.n_bands; ++n)
+                bands << spin << ' ' << k << ' ' << n << ' ' << view.energies_ha[n]*ev
+                      << ' ' << view.occupations[n] << ' ' << selection[n] << '\n';
+            for (int parent : {1,0})
+            {
+                const int n = parent ? info.n_parent : info.n_output;
+                const auto* p = parent ? view.parent_projector_ri : view.output_projector_ri;
+                const auto* h = parent ? view.parent_h_ha_ri : view.output_h_ha_ri;
+                const auto* rho = parent ? view.parent_density_ri : view.output_density_ri;
+                for (int a = 0; a < n; ++a)
+                {
+                    for (int b = 0; b < info.n_bands; ++b)
+                    {
+                        const int j = 2*(a*info.n_bands+b);
+                        projectors << parent << ' ' << spin << ' ' << k << ' ' << a << ' ' << b
+                                   << ' ' << p[j] << ' ' << p[j+1] << '\n';
+                    }
+                    for (int b = 0; b < n; ++b)
+                    {
+                        const int j = 2*(a*n+b);
+                        matrices << parent << ' ' << spin << ' ' << k << ' ' << a << ' ' << b
+                                 << ' ' << h[j]*ev << ' ' << h[j+1]*ev << ' ' << rho[j] << ' ' << rho[j+1] << '\n';
+                    }
+                }
+                if (driver_params.crpa_output_raw)
+                {
+                    const auto* value = parent ? view.parent_phi_ri : view.output_phi_ri;
+                    for (int a = 0; a < info.n_aos*info.n_spinor; ++a)
+                        for (int b = 0; b < n; ++b)
+                        {
+                            const int j = 2*(a*n+b);
+                            phi << parent << ' ' << spin << ' ' << k << ' ' << a << ' ' << b
+                                << ' ' << value[j] << ' ' << value[j+1] << '\n';
+                        }
+                }
+            }
+            if (driver_params.crpa_output_raw)
+            {
+                for (int a = 0; a < info.n_aos*info.n_spinor; ++a)
+                    for (int b = 0; b < info.n_bands; ++b)
+                    {
+                        const int j = 2*(a*info.n_bands+b);
+                        coefficients << spin << ' ' << k << ' ' << a << ' ' << b << ' '
+                                     << view.coefficients_ri[j] << ' ' << view.coefficients_ri[j+1] << '\n';
+                    }
+                if (spin == 0)
+                    for (int a = 0; a < info.n_aos; ++a)
+                        for (int b = 0; b < info.n_aos; ++b)
+                        {
+                            const int j = 2*(a*info.n_aos+b);
+                            overlap << k << ' ' << a << ' ' << b << ' ' << view.overlap_ri[j]
+                                    << ' ' << view.overlap_ri[j+1] << '\n';
+                        }
+            }
+        }
+    if (continued)
+    {
+        auto tensors = dat_file(directory, "crpa_continued_tensors.dat",
+                                 "atom spin_left spin_right query omega_eV eta_eV a b c d U_re_eV U_im_eV status subset_spread_eV");
+        for (int t = 0; t < librpa_crpa_continued_size(continued); ++t)
+            for (int q = 0; q < queries.size()/2; ++q)
+            {
+                LibrpaCrpaContinuedTensor value;
+                librpa_crpa_continued_tensor(continued, t, q, &value);
+                const int n = value.n_orbitals;
+                for (int a = 0; a < n; ++a) for (int b = 0; b < n; ++b)
+                for (int c = 0; c < n; ++c) for (int d = 0; d < n; ++d)
+                {
+                    const int j = ((a*n+b)*n+c)*n+d;
+                    tensors << value.atom_index << ' ' << value.spin_left << ' ' << value.spin_right
+                            << ' ' << q << ' ' << queries[2*q]*ev << ' ' << queries[2*q+1]*ev
+                            << ' ' << a << ' ' << b << ' ' << c << ' ' << d << ' '
+                            << value.values_ha_ri[2*j]*ev << ' ' << value.values_ha_ri[2*j+1]*ev
+                            << ' ' << value.status[j] << ' ' << value.subset_spread_ha[j]*ev << '\n';
+                }
+            }
+    }
+}
 }  // namespace
 
 void write_crpa_model(const LibrpaCrpaResult* result, const std::string& directory, int state_index,
@@ -148,6 +310,11 @@ void write_crpa_model(const LibrpaCrpaResult* result, const std::string& directo
         if (!summary) throw std::runtime_error("cannot write cRPA continuation summary");
     }
     if (!driver_params.crpa_output_model) return;
+    if (driver_params.crpa_output_format == "dat")
+    {
+        write_dat_model(result, info, continued.get(), queries, directory, state_index, gw_update, final_state);
+        return;
+    }
     const auto static_path =
         std::filesystem::absolute(std::filesystem::path(opts.output_dir) / "crpa_static.npz");
     static std::set<std::string> written_static;

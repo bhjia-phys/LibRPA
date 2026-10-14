@@ -581,6 +581,10 @@ struct DriverParams
     //! @par Default
     //! true
     bool crpa_output_model = true;
+    //! Native model output container: npz or human-readable dat files. Both retain the same model.
+    //! @par Default
+    //! npz
+    std::string crpa_output_format = "npz";
     //! Include C, S and AO coefficients Phi in the model archives for changing the local frame.
     //! @par Default
     //! false
