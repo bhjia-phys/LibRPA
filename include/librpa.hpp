@@ -32,6 +32,12 @@ namespace librpa
 
 using OrbitalResult = std::unique_ptr<LibrpaOrbitalResult, decltype(&librpa_delete_orbital_result)>;
 using CrpaResult = std::unique_ptr<LibrpaCrpaResult, decltype(&librpa_delete_crpa_result)>;
+using CrpaContinuedResult = std::unique_ptr<LibrpaCrpaContinuedResult,
+                                          decltype(&librpa_delete_crpa_continued_result)>;
+/** Noncollective native continuation. Energies are Hartree; default diagnostic tolerance is 0.01 eV. */
+CrpaContinuedResult continue_crpa(const LibrpaCrpaResult* result,
+                                 const std::vector<std::complex<double>>& queries,
+                                 int n_parameters = -1, double tolerance_ha = 0.0003674932217565499);
 
 /* Enums */
 /**

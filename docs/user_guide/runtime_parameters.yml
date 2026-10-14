@@ -146,6 +146,12 @@ blocks:
       - driver.crpa_orbital_bands
       - driver.crpa_residual_tol
       - driver.crpa_output_analysis
+      - driver.crpa_output_model
+      - driver.crpa_output_raw
+      - driver.crpa_output_static
+      - driver.crpa_fit_tol_ev
+      - driver.crpa_real_frequencies_ev
+      - driver.crpa_eta_ev
       - driver.crpa_analysis_only
       - driver.crpa_pdos_reference
       - driver.crpa_pdos_min_ev

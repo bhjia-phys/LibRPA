@@ -15,6 +15,15 @@
 namespace librpa
 {
 
+CrpaContinuedResult continue_crpa(const LibrpaCrpaResult* result,
+                                 const std::vector<std::complex<double>>& queries,
+                                 int n_parameters, double tolerance_ha)
+{
+    return CrpaContinuedResult(::librpa_continue_crpa(result, queries.size(),
+        reinterpret_cast<const double*>(queries.data()), n_parameters, tolerance_ha),
+        ::librpa_delete_crpa_continued_result);
+}
+
 OrbitalResult Handler::analyze_orbitals(int nk, int nao, const std::vector<double>& overlap,
                                         double tolerance) const
 {

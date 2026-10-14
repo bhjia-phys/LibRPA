@@ -108,6 +108,7 @@ if(LIBRPA_USE_LIBRI)
     config_test(${target} 1)
     add_test(NAME ${target}_mpi COMMAND mpirun -np 4 $<TARGET_FILE:${target}>)
   endforeach()
+  config_test(test_crpa_model 1)
 endif()
 
 # Existing numerical QSGW controls, including the state update used by cRPA.

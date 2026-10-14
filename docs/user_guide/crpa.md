@@ -158,8 +158,92 @@ Outputs under `output_dir` are:
 - `crpa_orbitals.dat`: atom, local column and atomic-trial label.
 - `crpa_metadata.txt`: orbital conventions, input selections and units.
 
-No direct zero-frequency value or analytic continuation is added by this task.
-The first minimax node must not be identified with U(0).
+The response calculation has no direct zero-frequency node. By default the
+driver additionally estimates U(0) using the internal continuation API described
+below. The first minimax node must not be identified with U(0).
+
+### Native model output and continuation
+
+`crpa_output_model = true` and `crpa_output_static = true` are defaults. Each
+calculated electronic state writes `crpa_model.npz`, a standard uncompressed
+NumPy/ZIP64 archive, alongside the existing text tensors. Geometry, k points,
+weights, AO conventions and shell layout are stored once in
+`output_dir/crpa_static.npz`; the state archive contains its relative path.
+Move that file together with the state directories when copying the model.
+
+The state archive contains physical occupations, absolute-Hartree Bloch
+energies, the parent/output projectors P, projected H(k) and density matrices,
+weighted onsite H and density blocks, the actual A/B band selections, orbital
+labels, site offsets, and the full ordered v/U tensors on original positive
+imaginary nodes. Standalone results also contain the full-RPA local W tensors.
+QSGW metadata identifies the entering or final electronic state. These are the
+static state's eigenvalues, distinct from diagonal QP roots in `qsgw_qp.csv`.
+
+The numerical library constructs P = Phi-dagger S C and H = P diag(E)
+P-dagger once using the actual frame that formed the U vertices. No additional
+KS eigenproblem is solved. `crpa_local_model.dat` reports onsite H in eV and
+physical density matrices, without subtracting a DMFT double-counting term.
+Use Bloch E and P for projection-based DMFT: replacing the Bloch Hamiltonian
+by a smaller projected H can discard its coupling to omitted bands.
+
+The compact default does not retain or write full C/S/Phi. Set
+`crpa_output_raw = true` to include them for rebuilding orbital projectors.
+The corresponding C API input is `retain_raw_model = LIBRPA_SWITCH_ON`;
+otherwise raw model-view pointers are null. This avoids duplicating every
+wavefunction and metric on each MPI rank just to write the compact model.
+Retaining C/S alone does not permit an arbitrary new U projection: that also
+requires the matching constrained kernel and RI data. A full auxiliary-space
+Wr/RI cache is not included in this archive.
+
+Static extraction uses native `AnalyContPade` on Delta U = U-v with source
+arguments z=i*nu, evaluates at z=0, then restores v. It uses all original nodes
+and no electronic Fermi/Hedin shift. This is an extrapolation, not a direct
+static response calculation. `crpa_continuation_summary.dat` and the archive
+retain per-entry status, subset spread and source/holdout residuals. The
+default absolute diagnostic tolerance is `crpa_fit_tol_ev = 0.01` eV.
+Nonfinite or unstable estimates are flagged; they do not replace the original
+U(i*nu). Numerical fit checks do not certify passivity, causality or material
+convergence. Set `crpa_output_static = false` to omit the static estimate.
+
+Real-axis continuation uses the same internal function and is requested by an
+explicit frequency list, for example:
+
+```text
+crpa_real_frequencies_ev = 0 1 3
+crpa_eta_ev = 0.05
+```
+
+The real frequencies are bosonic energies measured from zero. Evaluation is
+at omega+i*eta; no real-axis grid is produced when the list is empty. The
+archive's `continued_z` gives the actual complex queries in Hartree and
+`continued_U_*`, `continued_status_*`, `continued_spread_*` contain all entries.
+When static output is enabled the first query is exactly zero; subsequent
+queries correspond to the requested real frequencies.
+
+Library callers use `librpa_crpa_model_info`, `librpa_crpa_model_k`,
+`librpa_crpa_model_local` and `librpa_crpa_model_hopping` to retrieve the owned
+state and one-body model. `librpa_crpa_project_orbitals` and
+`librpa_crpa_project_one_body` also operate on explicit numerical arrays.
+`librpa_crpa_rotate_projector` and `librpa_crpa_rotate_tensor` apply matched
+isometries to a fixed local model. Changing the excluded response requires
+new screening. `librpa_crpa_tensor_to_fermion` converts density U_ab,cd to
+V_ijkl=U_ik,jl for a (1/2) c_i-dagger c_j-dagger c_l c_k Hamiltonian; it does
+not impose a Kanamori or Slater approximation. The continuation API
+`librpa_continue_crpa` returns an owned result for arbitrary upper-half-plane
+queries, including zero. These numerical operations are noncollective.
+
+`utilities/export_crpa_dmft.py` performs only unit/layout conversion into a
+TRIQS `HDFArchive` (requires TRIQS's Python `h5` module):
+
+```bash
+python3 utilities/export_crpa_dmft.py output/crpa/state_0000/crpa_model.npz nio.h5
+```
+
+It preserves all output sites as separate impurity shells and both AFM spin
+blocks, writes the band-basis Hamiltonian and complex projectors, and retains
+full native interaction tensors with their conventions. It does not choose
+a double-counting functional, impose AFM equivalence, or initialize an impurity
+solver. Mixed-angular-momentum `sp` sites require a custom DMFT shell definition.
 
 For SOC, set `use_spinor_wfc = true`. Each spatial trial is lifted to both
 spin components, projected into the original full-spinor B states, and jointly

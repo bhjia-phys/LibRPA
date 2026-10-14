@@ -257,6 +257,9 @@ CrpaWindowBuildResult build_crpa_window_input(
     trials.zero_out();
     for (int column = 0; column < n_parent; ++column) trials(trial_rows[column], column) = 1.0;
     result.orbitals_spin_k.resize(meanfield.get_n_spins());
+    result.parent_sites = parent_sites;
+    result.output_columns = output_columns;
+    result.parent_orbitals_spin_k.resize(meanfield.get_n_spins());
     for (int spin = 0; spin < meanfield.get_n_spins(); ++spin)
     {
         // No Fourier transform is needed until the API constructs the final output subspace.
@@ -290,6 +293,7 @@ CrpaWindowBuildResult build_crpa_window_input(
                 for (int column = 0; column < n_output; ++column)
                     output(row, column) = phi(row, output_columns[column]);
             result.orbitals_spin_k[spin].push_back(std::move(output));
+            result.parent_orbitals_spin_k[spin].push_back(phi);
         }
     }
     return result;

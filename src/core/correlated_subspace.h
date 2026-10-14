@@ -206,6 +206,8 @@ public:
 
     /*! Access site groups. */
     const std::vector<SiteOrbitalGroup>& get_sites() const { return sites_; }
+    //! Read the cached scalar/spinor metric; numerical model export must not duplicate every S(k).
+    const ComplexMatrix& get_S_k(int ik) const { return S_k_.at(ik); }
 
     /*! Access kfrac list. */
     const std::vector<Vector3_Order<double>>& get_kfrac_list() const { return kfrac_list_; }

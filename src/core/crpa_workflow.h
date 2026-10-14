@@ -14,6 +14,7 @@ struct CrpaPreparedModel
     CrpaWindowBuildResult windows;
     std::vector<std::unique_ptr<CorrelatedSubspace>> frames;
     Chi0::BandSelection selection;
+    bool retain_raw_model = true;
 };
 
 //! Local orbital-pair vertices in the active auxiliary space and retained bare v.

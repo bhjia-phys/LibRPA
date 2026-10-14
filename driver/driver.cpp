@@ -230,6 +230,14 @@ std::string DriverParams::format()
         ss << "crpa_interval = " << crpa_interval << '\n';
         ss << "crpa_model_file = " << crpa_model_file << '\n';
         ss << "crpa_output_analysis = " << std::boolalpha << crpa_output_analysis << '\n';
+        ss << "crpa_output_model = " << std::boolalpha << crpa_output_model << '\n';
+        ss << "crpa_output_raw = " << std::boolalpha << crpa_output_raw << '\n';
+        ss << "crpa_output_static = " << std::boolalpha << crpa_output_static << '\n';
+        ss << "crpa_fit_tol_ev = " << crpa_fit_tol_ev << '\n';
+        ss << "crpa_eta_ev = " << crpa_eta_ev << '\n';
+        ss << "crpa_real_frequencies_ev =";
+        for (double value : crpa_real_frequencies_ev) ss << ' ' << value;
+        ss << '\n';
         ss << "crpa_analysis_only = " << crpa_analysis_only << '\n';
         ss << "crpa_pdos_reference = " << crpa_pdos_reference << '\n';
         ss << "crpa_pdos_min_ev = " << crpa_pdos_min_ev << '\n';

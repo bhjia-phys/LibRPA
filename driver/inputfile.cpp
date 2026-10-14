@@ -193,6 +193,11 @@ static void parse_crpa_parameters(const InputParser &parser, driver::DriverParam
         if (assigned_bands && !assigned_windows) std::get<2>(selection)->clear();
     }
     parse_qsgw_bool(parser, "crpa_output_analysis", params.crpa_output_analysis);
+    parse_qsgw_bool(parser, "crpa_output_model", params.crpa_output_model);
+    parse_qsgw_bool(parser, "crpa_output_raw", params.crpa_output_raw);
+    parse_qsgw_bool(parser, "crpa_output_static", params.crpa_output_static);
+    parse_qsgw_double(parser, "crpa_fit_tol_ev", params.crpa_fit_tol_ev);
+    parse_qsgw_double(parser, "crpa_eta_ev", params.crpa_eta_ev);
     parse_qsgw_bool(parser, "crpa_analysis_only", params.crpa_analysis_only);
     get_last_assigned_value(parser, "crpa_pdos_reference", params.crpa_pdos_reference);
     parse_qsgw_double(parser, "crpa_pdos_min_ev", params.crpa_pdos_min_ev);
@@ -209,7 +214,8 @@ static void parse_crpa_parameters(const InputParser &parser, driver::DriverParam
         get_last_assigned_value(parser, item.first, *item.second);
     for (auto item : {
              std::pair<const char*, std::vector<double>*>{"crpa_response_windows_ha", &params.crpa_response_windows_ha},
-             {"crpa_orbital_windows_ha", &params.crpa_orbital_windows_ha}})
+             {"crpa_orbital_windows_ha", &params.crpa_orbital_windows_ha},
+             {"crpa_real_frequencies_ev", &params.crpa_real_frequencies_ev}})
     {
         std::string text;
         if (!get_last_assigned_value(parser, item.first, text)) continue;

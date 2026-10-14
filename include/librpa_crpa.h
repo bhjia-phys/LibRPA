@@ -50,9 +50,119 @@ extern "C"
         double s_cond_max;
         double residual_tol;
         double t_roundtrip_tol;
+        /** Off by default: retain C/S/Phi in the owned result for arbitrary AO reprojection.
+         * P/H/density and the state energies/occupations are always retained. */
+        LibrpaSwitch retain_raw_model;
     } LibrpaCrpaInput;
 
     typedef struct LibrpaCrpaResult LibrpaCrpaResult;
+
+    /** Owned snapshot dimensions and static geometry; views survive handler changes.
+     * All indices are zero based. Geometry uses Bohr and fractional k coordinates.
+     * n_parent/n_output include both trial components for SOC.
+     */
+    typedef struct
+    {
+        int n_spins, n_spinor, n_kpoints, n_bands, n_aos, n_atoms;
+        int n_parent, n_output, n_parent_sites, n_output_sites;
+        double fermi_ha;
+        const double* lattice_bohr;          /* [3][3], row lattice vectors */
+        const double* positions_bohr;        /* [atom][3] */
+        const int* atom_types;
+        const int* ao_counts;                /* spatial AO count per atom */
+        const double* k_fractional;          /* [k][3] */
+        const double* k_weights;             /* sum to one */
+        const int* output_columns;           /* indices in joint parent frame */
+        int n_shells;
+        const int* shell_offsets;             /* [atom+1], indexing shell_l */
+        const int* shell_l;                   /* radial shells in producer AO order */
+        const int* basis_convention;          /* phase, ratom, order, coeff_negative, coeff_positive */
+    } LibrpaCrpaModelInfo;
+
+    /** Row-major complex views packed as [real,imag]; energies use Hartree.
+     * C is [n_spinor*n_aos][n_bands], S is spatial [n_aos][n_aos].
+     * Phi is [n_spinor*n_aos][n_orbitals], P is [n_orbitals][n_bands].
+     * H is [n_orbitals][n_orbitals]; parent and output have separate dimensions.
+     * Occupations are physical per-state values, without the k-point weight.
+     * C/S/Phi pointers are null unless retain_raw_model was enabled.
+     */
+    typedef struct
+    {
+        const double* energies_ha;
+        const double* occupations;
+        const double* coefficients_ri;
+        const double* overlap_ri;
+        const double* parent_phi_ri;
+        const double* output_phi_ri;
+        const double* parent_projector_ri;
+        const double* output_projector_ri;
+        const double* parent_h_ha_ri;
+        const double* output_h_ha_ri;
+        const double* parent_density_ri;
+        const double* output_density_ri;
+    } LibrpaCrpaModelK;
+
+    void librpa_crpa_model_info(const LibrpaCrpaResult* result, LibrpaCrpaModelInfo* info);
+    void librpa_crpa_model_k(const LibrpaCrpaResult* result, int spin, int kpoint,
+                             LibrpaCrpaModelK* view);
+    void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site,
+                                int* atom, int* column_start, int* n_orbitals);
+    const char* librpa_crpa_model_label(const LibrpaCrpaResult* result, int parent,
+                                       int site, int orbital);
+    /** Weighted onsite H and density in one site's actual frame, supplied output buffers [M][M][2]. */
+    void librpa_crpa_model_local(const LibrpaCrpaResult* result, int parent, int spin, int site,
+                                 double* h_ha_ri, double* density_ri);
+    /** Full parent/output hopping at integer lattice R, [M][M][2], Hartree.
+     * Uses sum_k weight_k exp(-i 2*pi k.R) H(k). R need not be a stored BvK representative. */
+    void librpa_crpa_model_hopping(const LibrpaCrpaResult* result, int parent, int spin,
+                                   const int* lattice_R, double* h_ha_ri);
+    /** Noncollective numerical helpers; arrays are row-major complex pairs.
+     * P=[orbital][band], diagonal uses the caller's energy or occupation convention. */
+    void librpa_crpa_project_one_body(int n_orbitals, int n_bands, const double* projector_ri,
+                                      const double* diagonal, double* operator_ri);
+    /** Construct P from an explicit metric-orthonormal frame without a KS solve.
+     * C=[component-major AO][band], Phi=[component-major AO][orbital], S is spatial.
+     * Returns P=[orbital][band]. The orbital construction/window is chosen by the caller. */
+    void librpa_crpa_project_orbitals(int n_aos, int n_spinor, int n_bands, int n_orbitals,
+                                      const double* coefficients_ri, const double* overlap_ri,
+                                      const double* phi_ri, double* projector_ri);
+    /** P_new=R^dagger P_old for Phi_new=Phi_old R; use the same R on the corresponding U legs. */
+    void librpa_crpa_rotate_projector(int n_bands, int n_old, int n_new,
+                                      const double* projector_ri, const double* rotation_ri,
+                                      double* rotated_projector_ri);
+    /** Phi_new=Phi_old R, R=[old][new] is an isometry; rotate both density legs.
+     * No screening response is changed. Use the matching rotated projector/H. */
+    void librpa_crpa_rotate_tensor(int n_old, int n_new, const double* tensor_ri,
+                                   const double* left_rotation_ri, const double* right_rotation_ri,
+                                   double* rotated_ri);
+    /** Density U_ab,cd -> fermionic V_acbd: V_ijkl=U_ik,jl.
+     * V multiplies (1/2) c_i^dagger c_j^dagger c_l c_k, with the stored spin-frame pair.
+     * No antisymmetrization or Kanamori/Slater approximation is performed. */
+    void librpa_crpa_tensor_to_fermion(int n_orbitals, const double* density_ri, double* fermion_ri);
+
+    typedef struct LibrpaCrpaContinuedResult LibrpaCrpaContinuedResult;
+    typedef struct
+    {
+        int atom_index, spin_left, spin_right, n_orbitals;
+        const double* values_ha_ri;
+        const int* status;                  /* [M^4], zero means numerical diagnostics pass */
+        const double* subset_spread_ha;     /* [M^4] */
+        double max_source_residual_ha, max_holdout_residual_ha;
+    } LibrpaCrpaContinuedTensor;
+    /** Native Padé of U-v using original z=i*nu; restores v, no chemical-potential shift.
+     * Queries are [real,imag] in Hartree: z=0 for static extrapolation, or Im(z)>0.
+     * n_parameters=-1 uses all nodes. tolerance_ha controls numerical diagnostics.
+     * Noncollective; returns independently owned values, not an added response node.
+     * Status bits: 1 primary failure, 2 subset failure, 4 excessive subset spread,
+     * 8 excessive source/holdout residual, 16 fewer than four nodes, 32 nonfinite value.
+     * No passivity, causality, basis or mesh convergence certificate is implied. */
+    LibrpaCrpaContinuedResult* librpa_continue_crpa(const LibrpaCrpaResult* result, int n_queries,
+                                                   const double* queries_ha_ri,
+                                                   int n_parameters, double tolerance_ha);
+    void librpa_delete_crpa_continued_result(LibrpaCrpaContinuedResult* result);
+    int librpa_crpa_continued_size(const LibrpaCrpaContinuedResult* result);
+    void librpa_crpa_continued_tensor(const LibrpaCrpaContinuedResult* result, int tensor, int query,
+                                      LibrpaCrpaContinuedTensor* view);
 
     /** Read-only tensor view. Arrays remain valid until the result is deleted.
      * Arrays contain M^4 complex entries, each packed as real/imag doubles.

@@ -4,6 +4,7 @@
 
 #include "../core/crpa_window_input.h"
 #include "../core/orbital_weights.h"
+#include "../core/crpa_model.h"
 
 using namespace librpa_int;
 
@@ -107,6 +108,35 @@ void test_independent_windows_spin_frames_and_spectator()
             "response windows did not change selected states");
     require(distance(changed.orbitals_spin_k[1][1], dp.orbitals_spin_k[1][1]) < 1.0e-13,
             "response selection incorrectly changed output orbitals");
+
+    // Recover projected H independently in the AO metric, including complex spin-dependent frames.
+    PeriodicBoundaryData pbc;
+    pbc.kfrac_list = kpoints;
+    pbc.Rlist = {{0, 0, 0}, {1, 0, 0}};
+    auto prepared = prepare_crpa_model(basis, convention, {0, 1, 2}, {"Li", "Co", "O"},
+                                       overlaps, pbc, meanfield, options);
+    const auto snapshot = snapshot_crpa_model(prepared, meanfield);
+    for (int spin = 0; spin < 2; ++spin)
+        for (int k = 0; k < 2; ++k)
+        {
+            const auto& state = snapshot.spin_k[spin][k];
+            ComplexMatrix ao_h(9, 9);
+            for (int i = 0; i < 9; ++i)
+                for (int j = 0; j < 9; ++j)
+                    for (int band = 0; band < 9; ++band)
+                        ao_h(i, j) += state.coefficients(i, band) * state.energies[band] *
+                                      std::conj(state.coefficients(j, band));
+            const auto reference_h = transpose(state.output_phi, true) * overlap * ao_h *
+                                     overlap * state.output_phi;
+            require(distance(reference_h, state.output_h) < 1e-11,
+                    "snapshot one-body operator differs from independent AO projection");
+            require(distance(state.parent_phi, dp.parent_orbitals_spin_k[spin][k]) < 1e-12,
+                    "snapshot lost the joint parent frame");
+            const double saved_energy = state.energies[0];
+            meanfield.get_eigenvals()[spin](k, 0) += 0.5;
+            require(state.energies[0] == saved_energy, "snapshot follows a later electronic state");
+            meanfield.get_eigenvals()[spin](k, 0) -= 0.5;
+        }
 
     options.output_orbitals = "eg";
     const auto eg = build(options);

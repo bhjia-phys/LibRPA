@@ -38,6 +38,10 @@ struct CrpaWindowOptions
 struct CrpaWindowBuildResult
 {
     std::vector<SiteOrbitalGroup> sites;
+    //! Joint parent frame before output selection, including ligand sites.
+    std::vector<SiteOrbitalGroup> parent_sites;
+    std::vector<int> output_columns;
+    std::vector<std::vector<ComplexMatrix>> parent_orbitals_spin_k;
     //! Phi[channel][k], with component-major spinor AO rows for SOC.
     std::vector<std::vector<ComplexMatrix>> orbitals_spin_k;
     //! Original-KS state indices [spin][k][selected band], independently selected.

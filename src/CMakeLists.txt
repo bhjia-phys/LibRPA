@@ -109,6 +109,8 @@ list(APPEND lib_sources
         core/chi0.cpp
         core/correlated_subspace.cpp
         core/crpa.cpp
+        core/crpa_model.cpp
+        core/crpa_continuation.cpp
         core/crpa_workflow.cpp
         core/crpa_window_input.cpp
         core/orbital_weights.cpp
@@ -146,6 +148,7 @@ list(APPEND lib_sources
         io/global_io.cpp
         io/input_elsi.cpp
         io/output_gw.cpp
+        io/npz_writer.cpp
 
         interface/gx_minimax_wrp.f90
 

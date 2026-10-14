@@ -1,4 +1,5 @@
 #include "crpa.h"
+#include "crpa_model_output.h"
 
 #include <algorithm>
 #include <array>
@@ -318,6 +319,7 @@ LibrpaCrpaInput CrpaDriverInput::input()
     input.n_aos = n_basis_ao;
     input.overlap_k_ri = overlap_packed.data();
     input.residual_tol = driver_params.crpa_residual_tol;
+    input.retain_raw_model = driver_params.crpa_output_raw ? LIBRPA_SWITCH_ON : LIBRPA_SWITCH_OFF;
     return input;
 }
 
@@ -350,7 +352,11 @@ void write_crpa_state_outputs(const LibrpaCrpaResult* result, CrpaDriverInput& i
         if (comm.is_root())
         {
             if (analysis) write_orbital_analysis(analysis.get(), input.species, directory);
-            if (result) write_result(result, directory, state_index, gw_update, final_state);
+            if (result)
+            {
+                write_result(result, directory, state_index, gw_update, final_state);
+                write_crpa_model(result, directory, state_index, gw_update, final_state);
+            }
         }
     }
     catch (const std::exception& failure)

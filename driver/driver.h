@@ -577,6 +577,30 @@ struct DriverParams
     //! @par Default
     //! true
     bool crpa_output_analysis;
+    //! Save current E/f, complex parent/output projectors, H/density and U in compact NumPy archives.
+    //! @par Default
+    //! true
+    bool crpa_output_model = true;
+    //! Include C, S and AO coefficients Phi in the model archives for changing the local frame.
+    //! @par Default
+    //! false
+    bool crpa_output_raw = false;
+    //! Estimate U(0) with native Padé of U-v; retain entrywise numerical status and fit spread.
+    //! @par Default
+    //! true
+    bool crpa_output_static = true;
+    //! Absolute tolerance for static/real-axis subset and node residual diagnostics, in eV.
+    //! @par Default
+    //! 0.01
+    double crpa_fit_tol_ev = 0.01;
+    //! Real frequencies in eV relative to bosonic zero; an empty list skips real-axis output.
+    //! @par Default
+    //! Empty
+    std::vector<double> crpa_real_frequencies_ev;
+    //! Positive imaginary broadening for requested real-frequency interactions, in eV.
+    //! @par Default
+    //! 0.05
+    double crpa_eta_ev = 0.05;
     //! Analyze orbital character only; skip RI/Coulomb input and screening.
     //! A/B selections and correlated species are not required in this mode.
     //! @par Default
