@@ -63,6 +63,7 @@ foreach(target
     test_pbc
     test_profiler
     test_qpe_solver
+    test_qsgw_correlation_potential
     test_rsh
     test_rpa_headwing
     test_rpa_logdet
