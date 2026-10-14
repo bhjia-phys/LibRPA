@@ -1,5 +1,8 @@
+#include "crpa.h"
+
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <memory>
@@ -7,27 +10,119 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "../../src/api/instance_manager.h"
 #include "../../src/io/fs.h"
 #include "../../src/io/global_io.h"
 #include "../../src/mpi/global_mpi.h"
-#include "../../src/api/instance_manager.h"
 #include "../../src/utils/constants.h"
 #include "../driver.h"
-#include "../reader_nao_overlap.h"
 #include "../read_data.h"
+#include "../reader_nao_overlap.h"
 #include "../task.h"
 #include "librpa_crpa.h"
+#include "librpa_orbital.h"
 
 namespace
 {
 
-std::ofstream output_file(const std::string& name)
+std::ofstream output_file(const std::string& directory, const std::string& name)
 {
-    std::ofstream output(librpa_int::join_path(driver::opts.output_dir, name));
+    std::ofstream output(librpa_int::join_path(directory, name));
     if (!output) throw std::runtime_error("cannot create cRPA output " + name);
     output.exceptions(std::ios::badbit | std::ios::failbit);
     output << std::setprecision(16);
     return output;
+}
+
+void write_orbital_analysis(const LibrpaOrbitalResult* result,
+                            const std::vector<std::string>& species, const std::string& directory)
+{
+    using librpa_int::HA2EV;
+    const auto& params = driver::driver_params;
+    LibrpaOrbitalInfo info;
+    librpa_orbital_info(result, &info);
+    const double reference =
+        params.crpa_pdos_reference == "fermi" ? info.fermi_ha : info.highest_occupied_ha;
+    if (!std::isfinite(reference))
+        throw std::runtime_error(
+            "no finite PDOS energy reference; use fermi if no occupied state exists");
+    auto metadata = output_file(directory, "crpa_orbital_analysis.txt");
+    metadata
+        << "Existing scalar/spinor KS states; no Hamiltonian read or physical KS solve.\n"
+        << "Mulliken=sum_s Re[c_mu,s* (S c_s)_mu]; "
+           "Lowdin=sum_s |(S^(1/2)c_s)_mu|^2/(sum_s c_s-dagger S c_s).\n"
+        << (info.n_spinor == 2 ? "Spinor components are summed into one stored spin channel; "
+                                 "its index 0 is not a conserved spin projection.\n"
+                               : "Scalar inputs retain their separate stored spin channels.\n")
+        << "Groups include every radial shell; eg/t2g use global Cartesian axes.\n"
+        << "PDOS uses loaded k weights and separate stored spin channels; no occupation or extra "
+           "degeneracy factor.\n"
+        << "Orbital character does not change A/B selections or enter Pd as fractional weights.\n"
+        << "energy_reference = " << params.crpa_pdos_reference << '\n'
+        << "energy_reference_absolute_ev = " << reference * HA2EV << '\n'
+        << "sigma_ev = " << params.crpa_pdos_sigma_ev << '\n'
+        << "n_spins = " << info.n_spins << '\n'
+        << "n_spinor = " << info.n_spinor << '\n'
+        << "n_kpoints = " << info.n_kpoints << '\n'
+        << "n_bands = " << info.n_bands << '\n'
+        << "n_aos = " << info.n_aos << '\n'
+        << "min_overlap_eigenvalue = " << info.min_overlap_eigenvalue << '\n'
+        << "max_KS_norm_error = " << info.max_norm_error << '\n'
+        << "max_Lowdin_sum_error = " << info.max_sum_error << '\n'
+        << "max_overlap_sqrt_residual = " << info.max_sqrt_residual << '\n';
+
+    auto groups = output_file(directory, "crpa_orbital_groups.dat");
+    groups << "# group atom species l channel; indices zero based, all radial shells summed\n";
+    for (int g = 0; g < info.n_groups; ++g)
+    {
+        LibrpaOrbitalGroup group;
+        librpa_orbital_group(result, g, &group);
+        if (group.type_index < 0 || group.type_index >= static_cast<int>(species.size()))
+            throw std::runtime_error("orbital group species is outside crpa_species_labels");
+        groups << g << ' ' << group.atom_index << ' ' << species[group.type_index] << ' ' << group.l
+               << ' ' << group.channel << '\n';
+    }
+    auto weights = output_file(directory, "crpa_orbital_weights.dat");
+    weights << "# spin k band group energy_absolute_ev energy_relative_ev occupation kweight "
+               "S_norm Mulliken Lowdin\n";
+    for (int spin = 0; spin < info.n_spins; ++spin)
+        for (int k = 0; k < info.n_kpoints; ++k)
+            for (int band = 0; band < info.n_bands; ++band)
+            {
+                LibrpaOrbitalState state;
+                librpa_orbital_state(result, spin, k, band, &state);
+                for (int g = 0; g < info.n_groups; ++g)
+                    weights << spin << ' ' << k << ' ' << band << ' ' << g << ' '
+                            << state.energy_ha * HA2EV << ' '
+                            << (state.energy_ha - reference) * HA2EV << ' ' << state.occupation
+                            << ' ' << state.kweight << ' ' << state.norm << ' '
+                            << state.mulliken_group[g] << ' ' << state.lowdin_group[g] << '\n';
+            }
+    const int count =
+        static_cast<int>(std::floor((params.crpa_pdos_max_ev - params.crpa_pdos_min_ev) /
+                                        params.crpa_pdos_step_ev +
+                                    1e-10)) +
+        1;
+    std::vector<double> grid(count);
+    for (int e = 0; e < count; ++e)
+        grid[e] = reference + (params.crpa_pdos_min_ev + e * params.crpa_pdos_step_ev) / HA2EV;
+    const auto length = static_cast<std::size_t>(info.n_spins) * count * info.n_groups;
+    std::vector<double> mulliken(length), lowdin(length);
+    librpa_orbital_pdos(result, count, grid.data(), params.crpa_pdos_sigma_ev / HA2EV,
+                        mulliken.data(), lowdin.data());
+    auto pdos = output_file(directory, "crpa_pdos.dat");
+    pdos << "# spin energy_relative_ev group Mulliken Lowdin [states/(eV cell "
+            "stored-spin-channel)]\n";
+    for (int spin = 0; spin < info.n_spins; ++spin)
+        for (int e = 0; e < count; ++e)
+            for (int g = 0; g < info.n_groups; ++g)
+            {
+                const auto offset =
+                    (static_cast<std::size_t>(spin) * count + e) * info.n_groups + g;
+                pdos << spin << ' ' << params.crpa_pdos_min_ev + e * params.crpa_pdos_step_ev << ' '
+                     << g << ' ' << mulliken[offset] / HA2EV << ' ' << lowdin[offset] / HA2EV
+                     << '\n';
+            }
 }
 
 std::array<double, 3> orbital_averages(const double* packed, int n)
@@ -48,25 +143,45 @@ std::array<double, 3> orbital_averages(const double* packed, int n)
     return averages;
 }
 
-void write_result(const LibrpaCrpaResult* result)
+void write_result(const LibrpaCrpaResult* result, const std::string& directory, int state_index,
+                  int gw_update, bool final_state)
 {
-    auto metadata = output_file("crpa_metadata.txt");
-    metadata << "Original KS poles; P_d selects A on both occupied and empty branches.\n"
-             << (driver::n_spinor == 2
-                     ? "Output Phi uses independent B and one jointly normalized spinor frame.\n"
-                       "Spinor trial labels are not conserved spin quantum numbers.\n"
-                       "Full-spinor J includes all distinct columns; it is not a scalar-shell Hund mean.\n"
-                     : "Output Phi uses independent B window and separate physical spin frames.\n")
-             << "First radial shell; eg/t2g labels refer to global Cartesian axes.\n"
-             << "Native positive minimax nodes only; no direct U(0) was calculated.\n"
-             << (driver::opts.replace_w_head == LIBRPA_SWITCH_ON
-                     ? "Analytic full/constrained head and wings; normalized angular Gamma-cell weights.\n"
-                     : "No optical correction: finite-mesh periodic diagnostic.\n")
-             << "Interaction and frequency columns use eV; indices are zero based.\n"
-             << "U_intra=mean U_mm,mm; U_inter=mean_(m!=n) U_mm,nn; J=mean U_mn,nm.\n"
-             << driver::driver_params.format();
-    auto windows = output_file("crpa_windows.dat");
-    windows << "# window spin k count original_KS_band_indices_zero_based\n";
+    LibrpaCrpaTensor first;
+    librpa_crpa_result_tensor(result, 0, &first);
+    const bool has_full_w = first.fully_screened_ri != nullptr;
+    auto metadata = output_file(directory, "crpa_metadata.txt");
+    if (state_index >= 0)
+        metadata << "state_index = " << state_index << '\n'
+                 << "gw_update = " << gw_update << '\n'
+                 << "final_state = " << (final_state ? "true" : "false") << '\n'
+                 << "response_source = "
+                 << (final_state && driver::get_task(driver::driver_params.task) == driver::task_t::QSGW
+                         ? "final_state_response_only" : "shared_entering_state_GW_P0")
+                 << '\n';
+    metadata << "full_W_computed = " << (has_full_w ? "true" : "false") << '\n';
+    metadata
+        << "Current loaded eigenstate poles; P_d selects A on both occupied and empty branches.\n"
+        << (driver::n_spinor == 2
+                ? "Output Phi uses independent B and one jointly normalized spinor frame.\n"
+                  "Spinor trial labels are not conserved spin quantum numbers.\n"
+                  "Full-spinor J includes all distinct columns; it is not a scalar-shell Hund "
+                  "mean.\n"
+                : "Output Phi uses independent B window and separate physical spin frames.\n")
+        << "First radial shell; eg/t2g labels refer to global Cartesian axes.\n"
+        << "Native positive minimax nodes only; no direct U(0) was calculated.\n"
+        << "cRPA bare and dielectric/Wr screening use full Coulomb independently of GW flags.\n"
+        << (driver::opts.replace_w_head == LIBRPA_SWITCH_ON
+                ? (has_full_w ? "Analytic full/constrained head and wings; normalized angular "
+                                "Gamma-cell weights.\n"
+                              : "Analytic constrained head and wings for U; normalized angular "
+                                "Gamma-cell weights.\n")
+                : "No optical correction: finite-mesh periodic diagnostic.\n")
+        << "Interaction and frequency columns use eV; indices are zero based.\n"
+        << "U_intra=mean U_mm,mm; U_inter=mean_(m!=n) U_mm,nn; J=mean U_mn,nm.\n"
+        << driver::driver_params.format();
+    auto windows = output_file(directory, "crpa_windows.dat");
+    windows << (state_index >= 0 ? "# window spin k count current_QSGW_band_indices_zero_based\n"
+                                 : "# window spin k count original_KS_band_indices_zero_based\n");
     for (int response : {1, 0})
         for (int spin = 0; spin < driver::n_spins; ++spin)
             for (int k = 0; k < driver::n_kpoints; ++k)
@@ -78,14 +193,18 @@ void write_result(const LibrpaCrpaResult* result)
                 for (int i = 0; i < count; ++i) windows << ' ' << bands[i];
                 windows << '\n';
             }
-    auto tensors = output_file("crpa_tensors.dat");
-    auto orbitals = output_file("crpa_orbitals.dat");
+    auto tensors = output_file(directory, "crpa_tensors.dat");
+    auto orbitals = output_file(directory, "crpa_orbitals.dat");
     orbitals << "# atom local_column trial_label\n";
     std::set<int> written_atoms;
-    tensors << "# atom spin_left spin_right nu_eV a b c d V_re V_im U_re U_im W_re W_im\n";
-    auto summary = output_file("crpa_summary.dat");
+    tensors << "# atom spin_left spin_right nu_eV a b c d V_re V_im U_re U_im";
+    if (has_full_w) tensors << " W_re W_im";
+    tensors << '\n';
+    auto summary = output_file(directory, "crpa_summary.dat");
     summary << "# atom spin_left spin_right n_orbitals nu_eV V_intra V_inter J_bare "
-               "U_intra U_inter J_U W_intra W_inter J_W\n";
+               "U_intra U_inter J_U";
+    if (has_full_w) summary << " W_intra W_inter J_W";
+    summary << '\n';
     for (int record = 0; record < librpa_crpa_result_size(result); ++record)
     {
         LibrpaCrpaTensor tensor;
@@ -100,7 +219,8 @@ void write_result(const LibrpaCrpaResult* result)
                 << n << ' ' << frequency;
         for (const auto* values :
              {tensor.bare_ri, tensor.partially_screened_ri, tensor.fully_screened_ri})
-            for (const double average : orbital_averages(values, n)) summary << ' ' << average;
+            if (values)
+                for (const double average : orbital_averages(values, n)) summary << ' ' << average;
         summary << '\n';
         for (int a = 0; a < n; ++a)
             for (int b = 0; b < n; ++b)
@@ -113,8 +233,9 @@ void write_result(const LibrpaCrpaResult* result)
                                 << ' ' << c << ' ' << d;
                         for (const auto* values : {tensor.bare_ri, tensor.partially_screened_ri,
                                                    tensor.fully_screened_ri})
-                            tensors << ' ' << values[index] * librpa_int::HA2EV << ' '
-                                    << values[index + 1] * librpa_int::HA2EV;
+                            if (values)
+                                tensors << ' ' << values[index] * librpa_int::HA2EV << ' '
+                                        << values[index + 1] * librpa_int::HA2EV;
                         tensors << '\n';
                     }
     }
@@ -122,14 +243,14 @@ void write_result(const LibrpaCrpaResult* result)
 
 }  // namespace
 
-void driver::task_crpa_u()
+namespace driver
+{
+CrpaDriverInput read_crpa_driver_input()
 {
     using librpa_int::global::mpi_comm_global_h;
-    LibrpaCrpaInput input;
-    librpa_init_crpa_input(&input);
-    std::vector<std::string> species;
-    std::vector<const char*> labels;
-    std::vector<double> overlap_packed;
+    CrpaDriverInput result;
+    auto& species = result.species;
+    auto& overlap_packed = result.overlap_packed;
     std::string error;
     try
     {
@@ -138,7 +259,6 @@ void driver::task_crpa_u()
         std::istringstream stream(species_text);
         std::string label;
         while (stream >> label) species.push_back(label);
-        for (const auto& name : species) labels.push_back(name.c_str());
         const auto filename =
             librpa_int::is_absolute_path(driver_params.crpa_overlap_file)
                 ? driver_params.crpa_overlap_file
@@ -159,15 +279,6 @@ void driver::task_crpa_u()
                 overlap_packed.push_back(spatial.c[i].imag());
             }
         }
-        if (driver::opts.replace_w_head == LIBRPA_SWITCH_ON)
-        {
-            auto dataset = librpa_int::api::get_dataset_instance(h.get_c_handler());
-            const auto &velocity_name = driver_params.prefix_velocity;
-            const auto velocity_path = librpa_int::is_absolute_path(velocity_name)
-                                           ? velocity_name
-                                           : librpa_int::join_path(driver_params.input_dir, velocity_name);
-            read_velocity(velocity_path, dataset->mf, dataset->velocity_matrix);
-        }
     }
     catch (const std::exception& failure)
     {
@@ -180,6 +291,15 @@ void driver::task_crpa_u()
         throw std::runtime_error("cRPA native input: " +
                                  (error.empty() ? "another MPI rank failed" : error));
 
+    return result;
+}
+
+LibrpaCrpaInput CrpaDriverInput::input()
+{
+    LibrpaCrpaInput input;
+    librpa_init_crpa_input(&input);
+    labels.clear();
+    for (const auto& name : species) labels.push_back(name.c_str());
     input.n_species = static_cast<int>(labels.size());
     input.species_labels = labels.data();
     input.correlated_species = driver_params.crpa_correlated_species.c_str();
@@ -198,12 +318,66 @@ void driver::task_crpa_u()
     input.n_aos = n_basis_ao;
     input.overlap_k_ri = overlap_packed.data();
     input.residual_tol = driver_params.crpa_residual_tol;
-    std::unique_ptr<LibrpaCrpaResult, decltype(&librpa_delete_crpa_result)> result(
-        librpa_compute_crpa_window(h.get_c_handler(), &opts, &input), librpa_delete_crpa_result);
-    if (mpi_comm_global_h.is_root())
-    {
-        write_result(result.get());
-        librpa_int::global::lib_printf("cRPA v/U/W tensors and window audit written to %s\n",
-                                       opts.output_dir);
-    }
+    return input;
 }
+
+void write_crpa_state_outputs(const LibrpaCrpaResult* result, CrpaDriverInput& input,
+                              const std::string& directory, int state_index, int gw_update,
+                              bool final_state, bool write_analysis)
+{
+    const auto& comm = librpa_int::global::mpi_comm_global_h;
+    std::string error;
+    try
+    {
+        librpa_int::create_directories(directory.c_str(), comm.myid);
+    }
+    catch (const std::exception& failure)
+    {
+        error = failure.what();
+    }
+    int failed = !error.empty(), any_failed = 0;
+    comm.allreduce(&failed, &any_failed, 1, MPI_MAX);
+    if (any_failed) throw std::runtime_error("cRPA output directory: " + error);
+    comm.barrier();
+
+    librpa::OrbitalResult analysis(nullptr, librpa_delete_orbital_result);
+    if (write_analysis && driver_params.crpa_output_analysis)
+        analysis = h.analyze_orbitals(n_kpoints, n_basis_ao, input.overlap_packed,
+                                      driver_params.crpa_residual_tol);
+    error.clear();
+    try
+    {
+        if (comm.is_root())
+        {
+            if (analysis) write_orbital_analysis(analysis.get(), input.species, directory);
+            if (result) write_result(result, directory, state_index, gw_update, final_state);
+        }
+    }
+    catch (const std::exception& failure)
+    {
+        error = failure.what();
+    }
+    failed = !error.empty();
+    comm.allreduce(&failed, &any_failed, 1, MPI_MAX);
+    if (any_failed)
+        throw std::runtime_error("cRPA output: " +
+                                 (error.empty() ? "another MPI rank failed" : error));
+}
+
+void task_crpa()
+{
+    auto config = read_crpa_driver_input();
+    write_crpa_state_outputs(nullptr, config, opts.output_dir);
+    if (driver_params.crpa_analysis_only)
+    {
+        return;
+    }
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON) prepare_crpa_optical_velocity();
+    auto input = config.input();
+    librpa::CrpaResult result(librpa_compute_crpa_window(h.get_c_handler(), &opts, &input),
+                              librpa_delete_crpa_result);
+    write_crpa_state_outputs(result.get(), config, opts.output_dir, -1, -1, false, false);
+    librpa_int::global::lib_printf_root("cRPA tensors and orbital analysis written to %s\n",
+                                        opts.output_dir);
+}
+}  // namespace driver

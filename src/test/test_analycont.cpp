@@ -1,4 +1,9 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include "../core/analycont.h"
+#include "../core/qsgw/correlation_potential.h"
 #include "../utils/constants.h"
 #include "../io/stl_io_helper.h"
 
@@ -137,10 +142,65 @@ void test_analycont_pade_resample_imag_grid()
     assert(fequal(ref, resampled.get(test_x)));
 }
 
+void test_analycont_pade_terminated_data()
+{
+    const vector<cplxdb> xs = {{0.0, 1.0}, {0.0, 2.0}, {0.0, 4.0}, {0.0, 8.0}};
+    const cplxdb target{0.3, 0.2};
+    for (const cplxdb constant : {cplxdb{0.0, 0.0}, cplxdb{2.0, 0.5}})
+    {
+        const vector<cplxdb> data(xs.size(), constant);
+        const AnalyContPade pade(xs.size(), xs, data);
+        assert(pade.get(target) == constant);
+        assert(pade.get_derivative(target) == cplxdb(0.0, 0.0));
+        assert(pade.get_source_xs() == xs);
+        assert(pade.get_source_data() == data);
+    }
+    for (const double scale : {1.0, 1.0e-20})
+    {
+        vector<cplxdb> data;
+        for (const auto x : xs) data.push_back(scale / x);
+        const AnalyContPade pade(xs.size(), xs, data);
+        assert(std::abs(pade.get(target) / scale - 1.0 / target) < 1.0e-13);
+        assert(std::abs(pade.get_derivative(target) / scale + 1.0 / (target * target)) < 1.0e-13);
+    }
+}
+
+void test_qsgw_pade_zero_offdiagonal()
+{
+    MeanField meanfield(1, 1, 2, 2);
+    meanfield.get_eigenvals()[0](0, 0) = -0.4;
+    meanfield.get_eigenvals()[0](0, 1) = 0.6;
+    meanfield.get_efermi() = 0.1;
+    const vector<double> frequencies{1.0, 2.0, 4.0, 8.0};
+    std::map<double, Matz> sigma;
+    for (const double frequency : frequencies)
+    {
+        Matz matrix(2, 2, MAJOR::ROW);
+        matrix(0, 0) = 0.4 / (cplxdb{0.0, frequency} + 2.0);
+        matrix(1, 1) = 0.3 / (cplxdb{0.0, frequency} + 2.0);
+        matrix(0, 1) = matrix(1, 0) = 0.0;
+        sigma.emplace(frequency, matrix);
+    }
+    for (const auto mode : {qsgw::CorrelationPotentialMode::ModeA,
+                           qsgw::CorrelationPotentialMode::ModeB})
+    {
+        qsgw::CorrelationPotentialSettings settings;
+        settings.mode = mode;
+        const Matz potential = qsgw::build_qsgw_correlation_potential(
+            meanfield, frequencies, sigma, 0, 0, settings);
+        assert(std::abs(potential(0, 0) - 0.4 / 1.5) < 1.0e-13);
+        assert(std::abs(potential(1, 1) - 0.3 / 2.5) < 1.0e-13);
+        assert(potential(0, 1) == cplxdb(0.0, 0.0));
+        assert(potential(1, 0) == cplxdb(0.0, 0.0));
+    }
+}
+
 int main(int argc, char *argv[])
 {
     test_analycont_pade();
     test_get_spectfunc_acpade();
     test_analycont_pade_source_data();
     test_analycont_pade_resample_imag_grid();
+    test_analycont_pade_terminated_data();
+    test_qsgw_pade_zero_offdiagonal();
 }

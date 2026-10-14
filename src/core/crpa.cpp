@@ -1,349 +1,54 @@
 #include "crpa.h"
 
-#include <algorithm>
-#include <cmath>
-#include <memory>
-
 #include "../io/global_io.h"
 #include "../utils/error.h"
 #include "../utils/profiler.h"
-#include "epsilon.h"
-#include "pair_density_vertex.h"
+#include "crpa_workflow.h"
 
 namespace librpa_int
 {
-namespace
-{
-
-// Keep the timing hierarchy balanced even when collective validation throws.
-struct CrpaTimer
-{
-    const char *name;
-    explicit CrpaTimer(const char *name, const char *description) : name(name)
-    {
-        global::profiler.start(name, description);
-    }
-    ~CrpaTimer() { global::profiler.stop(name); }
-};
-
-void require_collectively(bool valid, const MpiCommHandler &comm, const char *message)
-{
-    const int failed = !valid;
-    int any_failed = 0;
-    comm.allreduce(&failed, &any_failed, 1, MPI_MAX);
-    if (any_failed) throw LIBRPA_INVALID_ARGUMENT(message);
-}
-
-bool finite(const ComplexMatrix &matrix)
-{
-    for (int i = 0; i != matrix.size; ++i)
-        if (!std::isfinite(matrix.c[i].real()) || !std::isfinite(matrix.c[i].imag())) return false;
-    return true;
-}
-
-ComplexMatrix flatten_vertex(const SitePairDensityVertex &vertex, const Vector3_Order<double> &q,
-                             const AtomicBasis &basis)
-{
-    ComplexMatrix result(vertex.n_orbitals * vertex.n_orbitals, basis.nb_total);
-    const auto &offsets = basis.get_part_range();
-    for (const auto &[atom, block] : vertex.q_blocks.at(q))
-        for (int pair = 0; pair != block.nr; ++pair)
-            for (int mu = 0; mu != block.nc; ++mu)
-                result(pair, offsets.at(atom) + mu) = block(pair, mu);
-    return result;
-}
-
-// Reconstruct only one q at a time. Original producer blocks stay untouched.
-ComplexMatrix retained_coulomb(const CrpaContext &context, const Vector3_Order<double> &q)
-{
-    const auto &basis = context.chi0.atbasis_abf;
-    const auto &comm = context.chi0.comm_h;
-    const auto &offsets = basis.get_part_range();
-    const int n = basis.nb_total;
-    ComplexMatrix local(n, n), total(n, n);
-    std::vector<int> owners(basis.n_atoms * basis.n_atoms, 0), all_owners(owners.size());
-    bool valid = true;
-    for (const auto &[i, js] : context.coulomb)
-        for (const auto &[j, qs] : js)
-        {
-            if (i < 0 || j < i || j >= basis.n_atoms)
-            {
-                valid = false;
-                continue;
-            }
-            const auto it = qs.find(q);
-            if (it == qs.end() || !it->second)
-            {
-                valid = false;
-                continue;
-            }
-            const auto &block = *it->second;
-            if (block.nr != basis.get_atom_nb(i) || block.nc != basis.get_atom_nb(j) ||
-                !finite(block))
-            {
-                valid = false;
-                continue;
-            }
-            owners[i * basis.n_atoms + j] = 1;
-            for (int a = 0; a != block.nr; ++a)
-                for (int b = 0; b != block.nc; ++b)
-                {
-                    local(offsets.at(i) + a, offsets.at(j) + b) = block(a, b);
-                    if (i != j)
-                        local(offsets.at(j) + b, offsets.at(i) + a) = std::conj(block(a, b));
-                }
-        }
-    require_collectively(valid, comm, "cRPA: invalid Coulomb block or missing q");
-    comm.allreduce(owners.data(), all_owners.data(), owners.size(), MPI_SUM);
-    for (int i = 0; i != basis.n_atoms; ++i)
-        for (int j = i; j != basis.n_atoms; ++j)
-            if (basis.get_atom_nb(i) && basis.get_atom_nb(j))
-                valid = valid && all_owners[i * basis.n_atoms + j] == 1;
-    require_collectively(valid, comm, "cRPA: Coulomb blocks need exactly one MPI owner");
-    comm.reduce(local.c, total.c, total.size, 0, MPI_SUM);
-    std::string error;
-    if (comm.is_root())
-    {
-        try
-        {
-            // Same lambda >= threshold convention as native sqrt(v).
-            // Power one retains the bare interaction in precisely that subspace.
-            total = power_hemat(total, 1.0, false, true, context.sqrt_coulomb_threshold);
-            if (!finite(total)) error = "non-finite retained Coulomb";
-        }
-        catch (const std::exception &e)
-        {
-            error = e.what();
-        }
-    }
-    require_collectively(error.empty(), comm, "cRPA: retained Coulomb construction failed");
-    comm.bcast(total.c, total.size, 0);
-    return total;
-}
-
-atpair_k_cplx_mat_t copy_coulomb(const atpair_k_cplx_mat_t &input)
-{
-    atpair_k_cplx_mat_t result;
-    for (const auto &[i, js] : input)
-        for (const auto &[j, qs] : js)
-            for (const auto &[q, block] : qs)
-                result[i][j][q] = std::make_shared<ComplexMatrix>(*block);
-    return result;
-}
-
-}  // namespace
-
-ComplexMatrix contract_crpa_blacs(const ComplexMatrix &left_vertex,
-                                  const ComplexMatrix &right_vertex, const Matz &kernel,
-                                  const ArrayDesc &descriptor, int n_left, int n_right,
-                                  const MpiCommHandler &comm)
-{
-    require_collectively(
-        descriptor.initialized() && n_left > 0 && n_right > 0 &&
-            left_vertex.nr == n_left * n_left && right_vertex.nr == n_right * n_right &&
-            left_vertex.nc == descriptor.m() && right_vertex.nc == descriptor.n() &&
-            kernel.nr() == descriptor.m_loc() && kernel.nc() == descriptor.n_loc(),
-        comm, "cRPA: inconsistent distributed contraction dimensions");
-    ComplexMatrix local(n_left * n_left, n_right * n_right);
-    bool valid = finite(left_vertex) && finite(right_vertex);
-    for (int row = 0; row != kernel.nr(); ++row)
-        for (int col = 0; col != kernel.nc(); ++col)
-            valid = valid && std::isfinite(kernel(row, col).real()) &&
-                    std::isfinite(kernel(row, col).imag());
-    require_collectively(valid, comm, "cRPA: non-finite distributed contraction input");
-    if (kernel.nr() && kernel.nc())
-    {
-        ComplexMatrix left(left_vertex.nr, kernel.nr());
-        ComplexMatrix right(right_vertex.nr, kernel.nc());
-        ComplexMatrix block(kernel.nr(), kernel.nc());
-        for (int row = 0; row != kernel.nr(); ++row)
-        {
-            for (int pair = 0; pair != left.nr; ++pair)
-                left(pair, row) = left_vertex(pair, descriptor.indx_l2g_r(row));
-            for (int col = 0; col != kernel.nc(); ++col) block(row, col) = kernel(row, col);
-        }
-        for (int col = 0; col != kernel.nc(); ++col)
-            for (int pair = 0; pair != right.nr; ++pair)
-                right(pair, col) = right_vertex(pair, descriptor.indx_l2g_c(col));
-        local = contract_rectangular_ordered_pair_vertex(left, block, right, n_left, n_right);
-    }
-    ComplexMatrix result(local.nr, local.nc);
-    comm.allreduce(local.c, result.c, result.size, MPI_SUM);
-    return result;
-}
 
 CrpaResult compute_crpa_onsite(CrpaContext &context, const Chi0::BandSelection &selection,
                                const std::vector<CorrelatedSubspace *> &frames)
 {
-    CrpaTimer total_timer("crpa_onsite", "Onsite constrained and full-RPA interactions");
-    auto &chi = context.chi0;
-    const auto &comm = chi.comm_h;
-    const auto &basis = chi.atbasis_abf;
-    const auto &desc = context.active_auxiliary_descriptor;
-    require_collectively(
-        !frames.empty() && frames.size() == chi.mf.get_n_spins() && desc.initialized() &&
-            desc.m() == basis.nb_total && desc.n() == basis.nb_total &&
-            chi.mf.get_n_kpoints() == chi.pbc.get_n_cells_bvk() &&
-            (!chi.use_symmetry_context || chi.qstar_only_symmetry) &&
-            ((context.full_headwing == nullptr) == (context.constrained_headwing == nullptr)) &&
-            std::isfinite(context.sqrt_coulomb_threshold) && context.sqrt_coulomb_threshold >= 0.0,
-        comm, "cRPA requires matching spin frames, full q grid and active descriptor");
-    for (const auto *frame : frames)
-        require_collectively(frame != nullptr, comm, "cRPA: null output spin frame");
-    // Validate the requested mask before doing an expensive full-response build.
-    chi.set_band_selection(selection);
-    require_collectively(!selection.empty(), comm,
-                         "cRPA requires an explicit band-selection table");
-    chi.clear_band_selection();
-
-    CrpaResult result;
-    result.sites = frames.front()->get_sites();
-    result.frequencies = chi.tfg.get_freq_nodes();
-    require_collectively(!result.sites.empty() && !result.frequencies.empty() &&
-                             std::all_of(result.frequencies.begin(), result.frequencies.end(),
-                                         [](double f) { return std::isfinite(f) && f > 0.0; }),
-                         comm, "cRPA requires output sites and original positive frequency nodes");
-    const auto &qs = chi.pbc.klist;
-    const double q_weight = 1.0 / chi.pbc.get_n_cells_bvk();
-    require_collectively(qs.size() == chi.pbc.get_n_cells_bvk(), comm,
-                         "cRPA requires complete original q points for orbital contraction");
-    global::lib_printf_root("cRPA: screening %zu representative q points; contracting %zu full q points\n",
-                            chi.active_qpoints().size(), qs.size());
-
-    // Build and transform each physical spin's output frame once.
-    std::vector<std::vector<std::map<Vector3_Order<double>, ComplexMatrix>>> vertices;
+    global::profiler.start("crpa_onsite", "Onsite constrained and full-RPA interactions");
+    try
     {
-        CrpaTimer vertex_timer("crpa_vertices",
-                               "Build and transform physical-spin pair-density vertices");
-        for (auto *frame : frames)
+        const int unpaired_optical =
+            (context.full_headwing == nullptr) != (context.constrained_headwing == nullptr);
+        int any_unpaired_optical = 0;
+        context.chi0.comm_h.allreduce(&unpaired_optical, &any_unpaired_optical, 1, MPI_MAX);
+        if (any_unpaired_optical)
+            throw LIBRPA_INVALID_ARGUMENT(
+                "standalone cRPA requires matching full and constrained optical models");
+        auto projection = prepare_crpa_local_projection(context, selection, frames);
+        auto full_response = build_crpa_total_response(context);
+        auto excluded = build_crpa_excluded_response(context, selection);
+        auto constrained =
+            form_crpa_constrained_response(context, full_response, std::move(excluded));
+        global::lib_printf_root("cRPA: screening Pr=P0-Pd for U\n");
         {
-            require_collectively(frame->get_sites().size() == result.sites.size(), comm,
-                                 "cRPA: spin frames have different site counts");
-            for (int site = 0; site != result.sites.size(); ++site)
-                require_collectively(
-                    frame->get_sites()[site].n_orbitals == result.sites[site].n_orbitals &&
-                        frame->get_sites()[site].atom_index == result.sites[site].atom_index,
-                    comm, "cRPA: spin frames refer to different sites or orbital counts");
-            PairDensityVertex parent(*frame, context.coefficients, chi.atbasis_wfc,
-                                     context.parent_auxiliary_basis, chi.pbc, qs, comm);
-            vertices.emplace_back();
-            for (const auto &site : parent.sites())
-            {
-                const auto active = context.transform_auxiliary_basis
-                                        ? transform_site_pair_density_vertex_auxiliary_basis(
-                                              site, context.parent_auxiliary_basis, basis,
-                                              context.auxiliary_transform)
-                                        : site;
-                vertices.back().emplace_back();
-                for (const auto &q : qs)
-                    vertices.back().back().emplace(q, flatten_vertex(active, q, basis));
-            }
+            auto wc =
+                screen_crpa_response(context, std::move(constrained), context.constrained_headwing);
+            auto values = contract_crpa_interaction(context, projection, wc);
+            for (std::size_t tensor = 0; tensor < projection.bare_result.tensors.size(); ++tensor)
+                projection.bare_result.tensors[tensor].u = std::move(values[tensor]);
         }
+        // Release constrained Wc before constructing the full-RPA kernels.
+        global::lib_printf_root("cRPA: screening P0 for full-RPA W\n");
+        auto wc = screen_crpa_response(context, std::move(full_response), context.full_headwing);
+        auto values = contract_crpa_interaction(context, projection, wc);
+        auto result = std::move(projection.bare_result);
+        for (std::size_t tensor = 0; tensor < result.tensors.size(); ++tensor)
+            result.tensors[tensor].w = std::move(values[tensor]);
+        global::profiler.stop("crpa_onsite");
+        return result;
     }
-    for (int site = 0; site != result.sites.size(); ++site)
-        for (int left = 0; left != frames.size(); ++left)
-            for (int right = 0; right != frames.size(); ++right)
-            {
-                const int pairs = result.sites[site].n_orbitals * result.sites[site].n_orbitals;
-                result.tensors.push_back({site, left, right, ComplexMatrix(pairs, pairs), {}, {}});
-            }
-    for (const auto &q : qs)
+    catch (...)
     {
-        const auto bare = retained_coulomb(context, q);
-        for (auto &tensor : result.tensors)
-        {
-            const int n = result.sites[tensor.site_index].n_orbitals;
-            ComplexMatrix block(n * n, n * n);
-            if (comm.is_root())
-                block = contract_rectangular_ordered_pair_vertex(
-                    vertices[tensor.spin_left][tensor.site_index].at(q), bare,
-                    vertices[tensor.spin_right][tensor.site_index].at(q), n, n);
-            comm.bcast(block.c, block.size, 0);
-            tensor.bare += q_weight * block;
-        }
+        global::profiler.stop("crpa_onsite");
+        throw;
     }
-
-    const auto build_response = [&]
-    {
-        chi.build(LIBRPA_ROUTING_LIBRI, context.coefficients, context.local_atom_pairs,
-                  context.parent_auxiliary_basis, context.auxiliary_transform, context.blacs);
-    };
-    global::lib_printf_root("cRPA: building P0 on original KS poles\n");
-    chi.clear_band_selection();
-    build_response();
-    auto full_response = chi.take_chi0_q();
-    global::lib_printf_root("cRPA: building Pd with selected occupied and empty branches\n");
-    chi.set_band_selection(selection);
-    build_response();
-    chi.replace_chi0_q_by_difference(full_response);
-    chi.clear_band_selection();
-
-    const auto screen = [&](bool constrained)
-    {
-        CrpaTimer screen_timer(constrained ? "crpa_screen_u" : "crpa_screen_w",
-                               "Native screening and distributed orbital contraction");
-        // The native Wc implementation owns the inverse dielectric calculation.
-        // Raw v is supplied only once to its spectral filter. Our bare term above
-        // uses the identical threshold; it never restores discarded directions.
-        auto coulomb_wc = copy_coulomb(context.coulomb);
-        auto *optical = constrained ? context.constrained_headwing : context.full_headwing;
-        std::vector<std::complex<double>> epsmac;
-        if (optical)
-            for (double value : optical->get_head_vec()) epsmac.emplace_back(value);
-        auto wc = compute_Wc_freq_q_blacs(chi, context.coulomb, coulomb_wc,
-                                          context.sqrt_coulomb_threshold, optical != nullptr,
-                                          optical ? 3 : 0, epsmac, optical,
-                                          context.blacs, desc, false);
-        if (chi.qpoint_view().restore_mode == SymmetryQPointRestoreMode::FULL_CRYSTAL)
-            for (auto &[frequency, kernels] : wc)
-            {
-                const auto restored = restore_symmetry_dense_wq_map(
-                    kernels, chi.pbc, chi.qpoint_view(), chi.symmetry_context, basis, desc);
-                // Preserve the input's exact q keys after fractional-coordinate restoration.
-                std::map<Vector3_Order<double>, Matz> full;
-                for (const auto &q : qs)
-                {
-                    auto match = restored.end();
-                    for (auto it = restored.begin(); it != restored.end(); ++it)
-                        if (same_fractional_kpoint(Vector3_Order<double>{chi.pbc.latvec * it->first},
-                                                   Vector3_Order<double>{chi.pbc.latvec * q}, 1e-8))
-                        {
-                            require_collectively(match == restored.end(), comm,
-                                                 "cRPA q-star restore has duplicate members");
-                            match = it;
-                        }
-                    require_collectively(match != restored.end(), comm,
-                                         "cRPA q-star restore misses a full-grid member");
-                    full.emplace(q, match->second);
-                }
-                kernels.swap(full);
-            }
-        for (auto &tensor : result.tensors)
-        {
-            auto &values = constrained ? tensor.u : tensor.w;
-            const int n = result.sites[tensor.site_index].n_orbitals;
-            for (double frequency : result.frequencies)
-            {
-                ComplexMatrix value(tensor.bare);
-                for (const auto &q : qs)
-                    value +=
-                        q_weight *
-                        contract_crpa_blacs(vertices[tensor.spin_left][tensor.site_index].at(q),
-                                            vertices[tensor.spin_right][tensor.site_index].at(q),
-                                            wc.at(frequency).at(q), desc, n, n, comm);
-                require_collectively(finite(value), comm, "cRPA: non-finite screened interaction");
-                values.push_back(std::move(value));
-            }
-        }
-    };
-    global::lib_printf_root("cRPA: screening Pr=P0-Pd for U\n");
-    screen(true);
-    chi.swap_chi0_q(full_response);
-    // Release Pr before allocating the second set of screened kernels.
-    full_response.clear();
-    global::lib_printf_root("cRPA: screening P0 for full-RPA W\n");
-    screen(false);
-    return result;
 }
 
 }  // namespace librpa_int

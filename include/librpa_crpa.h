@@ -68,6 +68,7 @@ extern "C"
         double frequency_ha;
         const double* bare_ri;
         const double* partially_screened_ri;
+        /** Null for U-only results; no fully screened interaction was computed. */
         const double* fully_screened_ri;
     } LibrpaCrpaTensor;
 
@@ -87,6 +88,29 @@ extern "C"
     LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h,
                                                  const LibrpaOptions* options,
                                                  const LibrpaCrpaInput* input);
+
+    /** Build the ordinary GW self-energy and cRPA U for the same entering state.
+     * P0 is built once by GW and borrowed by cRPA; only Pd and constrained
+     * screening are added. GW P0, optical data, W and self-energy conventions
+     * remain unchanged. Requires full-grid LIBRI without symmetry or a SigC
+     * file-read shortcut. Input has the same contract as the standalone call.
+     * The owned result contains bare/U; fully_screened_ri is null.
+     * cRPA screens and projects with full Coulomb independently of the GW
+     * eps/Wc/EXX Coulomb flags, which keep their original GW meaning.
+     */
+    LibrpaCrpaResult* librpa_build_g0w0_sigma_crpa(LibrpaHandler* h, const LibrpaOptions* options,
+                                                   const LibrpaCrpaInput* input);
+
+    /** Response-only bare/U calculation for the handler's current E/C/f.
+     * Builds P0 and Pd and screens Pr, without full-W screening or self-energy.
+     * Suitable for the final updated QSGW state. Uses current velocity data
+     * when optical correction is enabled. Returns an independently owned
+     * result whose fully_screened_ri is null. The cRPA solve uses full Coulomb
+     * regardless of the independent GW Coulomb flags.
+     */
+    LibrpaCrpaResult* librpa_compute_crpa_u_window(const LibrpaHandler* h,
+                                                   const LibrpaOptions* options,
+                                                   const LibrpaCrpaInput* input);
 
     void librpa_delete_crpa_result(LibrpaCrpaResult* result);
     int librpa_crpa_result_size(const LibrpaCrpaResult* result);

@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 #include "../core/crpa_window_input.h"
+#include "../core/orbital_weights.h"
 
 using namespace librpa_int;
 
@@ -255,6 +256,116 @@ void test_common_sp_frame_with_cross_shell_overlap()
     }
 }
 
+void test_existing_state_character_and_pdos()
+{
+    // Two s radial shells share one group, plus a p shell on a second atom.
+    // An analytic complex 2x2 metric block gives S^(1/2)C=Q without a KS solve.
+    AtomicBasis basis(std::vector<std::size_t>{2, 3});
+    basis.set_l_shells({{0, 0}, {1}});
+    BasisConvention convention;
+    convention.bloch_phase = -1;
+    convention.bloch_ratom = 0;
+    convention.order = LIBRPA_ANGULAR_ORDER_ABS_PM;
+    convention.coeff_m_negative = LIBRPA_RSH_COEFF_M_1;
+    convention.coeff_m_positive = LIBRPA_RSH_COEFF_1_M;
+    const double coupling = 0.31;
+    ComplexMatrix overlap(5, 5), root(5, 5), inverse(5, 5);
+    overlap.set_as_identity_matrix();
+    root.set_as_identity_matrix();
+    inverse.set_as_identity_matrix();
+    overlap(0, 3) = {0, coupling};
+    overlap(3, 0) = {0, -coupling};
+    for (int sign : {-1, 1})
+    {
+        const double value = 1 + sign * coupling;
+        const double a = std::sqrt(value) / 2, b = 1 / (2 * std::sqrt(value));
+        root(0, 0) += a - 0.5;
+        root(3, 3) += a - 0.5;
+        root(0, 3) += std::complex<double>(0, sign * a);
+        root(3, 0) -= std::complex<double>(0, sign * a);
+        inverse(0, 0) += b - 0.5;
+        inverse(3, 3) += b - 0.5;
+        inverse(0, 3) += std::complex<double>(0, sign * b);
+        inverse(3, 0) -= std::complex<double>(0, sign * b);
+    }
+    MeanField mf(2, 2, 5, 5);
+    std::vector<ComplexMatrix> q_values, c_values;
+    for (int spin = 0; spin < 2; ++spin)
+        for (int k = 0; k < 2; ++k)
+        {
+            ComplexMatrix q(5, 5);
+            q.set_as_identity_matrix();
+            const double theta = 0.19 + 0.13 * spin + 0.07 * k;
+            q(0, 0) = q(3, 3) = std::cos(theta);
+            q(0, 3) = q(3, 0) = std::complex<double>(0, std::sin(theta));
+            auto c = inverse * q;
+            // Independent band phases must not affect either population.
+            for (int b = 0; b < 5; ++b)
+                for (int ao = 0; ao < 5; ++ao)
+                    c(ao, b) *= std::polar(1.0, 0.17 * (1 + spin + k + b));
+            mf.get_eigenvectors()[spin][0][k] = transpose(c, false);
+            for (int b = 0; b < 5; ++b)
+            {
+                mf.get_eigenvals()[spin](k, b) = -0.7 + 0.42 * b + 0.05 * spin + 0.03 * k;
+                mf.get_weight()[spin](k, b) = b < 2 ? 0.5 : 0;
+            }
+            q_values.push_back(q);
+            c_values.push_back(c);
+        }
+    const std::vector<double> kw{0.27, 0.73};
+    const auto result =
+        analyze_orbital_weights(basis, convention, {0, 1}, mf, {overlap, overlap}, kw, 1e-11);
+    require(result.groups.size() == 2, "radial shells must be summed into the same atom/l group");
+    for (int spin = 0; spin < 2; ++spin)
+        for (int k = 0; k < 2; ++k)
+        {
+            const auto index = spin * 2 + k;
+            const auto sc = root * q_values[index];
+            for (int b = 0; b < 5; ++b)
+            {
+                const auto& state = result.states[index * 5 + b];
+                double grouped[2] = {0, 0};
+                for (int ao = 0; ao < 5; ++ao)
+                {
+                    const double lo = std::norm(q_values[index](ao, b));
+                    require(std::abs(state.lowdin_ao[ao] - lo) < 2e-12,
+                            "Lowdin weights differ from analytic orthogonal coefficients");
+                    const auto c_no_phase = inverse * q_values[index];
+                    const double mu = std::real(std::conj(c_no_phase(ao, b)) * sc(ao, b));
+                    require(std::abs(state.mulliken_ao[ao] - mu) < 2e-12,
+                            "Mulliken weights differ from analytic complex metric contraction");
+                    grouped[ao < 2 ? 0 : 1] += lo;
+                }
+                for (int g = 0; g < 2; ++g)
+                    require(std::abs(state.lowdin[g] - grouped[g]) < 2e-12,
+                            "orbital grouping lost a radial shell");
+            }
+            require(
+                distance(mf.get_eigenvectors()[spin][0][k], transpose(c_values[index], false)) == 0,
+                "orbital analysis changed the original KS coefficients");
+        }
+    const std::vector<double> grid{-0.45, 0.0, 0.71};
+    const double sigma = 0.23;
+    std::vector<double> mulliken, lowdin;
+    gaussian_orbital_pdos(result, grid, sigma, mulliken, lowdin);
+    for (int spin = 0; spin < 2; ++spin)
+        for (int e = 0; e < 3; ++e)
+        {
+            double expected = 0;
+            for (int k = 0; k < 2; ++k)
+                for (int b = 0; b < 5; ++b)
+                {
+                    const double delta = (grid[e] - mf.get_eigenvals()[spin](k, b)) / sigma;
+                    expected += kw[k] * std::exp(-0.5 * delta * delta) /
+                                (sigma * std::sqrt(2 * std::acos(-1.0)));
+                }
+            const int offset = (spin * 3 + e) * 2;
+            require(std::abs(lowdin[offset] + lowdin[offset + 1] - expected) < 2e-12 &&
+                        std::abs(mulliken[offset] + mulliken[offset + 1] - expected) < 2e-12,
+                    "PDOS does not preserve nonuniform k weights and separate spin spectra");
+        }
+}
+
 }  // namespace
 
 int main()
@@ -264,6 +375,7 @@ int main()
         test_independent_windows_spin_frames_and_spectator();
         test_explicit_bands_across_overlapping_energy_ranges();
         test_common_sp_frame_with_cross_shell_overlap();
+        test_existing_state_character_and_pdos();
         std::cout << "cRPA window orbital numerical test passed\n";
     }
     catch (const std::exception& error)

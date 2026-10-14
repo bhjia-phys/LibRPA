@@ -1,6 +1,6 @@
 #pragma once
-#include "../core/meanfield.h"
-#include "../math/matrix_m.h"
+#include "../../math/matrix_m.h"
+#include "../meanfield.h"
 
 namespace librpa_int
 {
@@ -12,6 +12,8 @@ enum class VxcBasis
     State,
 };
 
+// The covariant AO matrix includes every spinor block. Its row/column order
+// is ao * n_spinor + spinor, matching the complete reference coefficients.
 Matz project_vxc_nao_to_fixed_basis(const Matz& vxc_nao,
                                     const MeanField& reference,
                                     int spin,

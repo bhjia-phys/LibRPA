@@ -316,6 +316,29 @@ static void build_dmat_libri_kserial(
     const auto wfc_layouts = atbasis_wfc.has_l_shells()
         ? atbasis_wfc.build_species_basis_layouts(symmetry_context.atom_to_type)
         : std::vector<SpeciesBasisLayout>{};
+    // Spinor mean field: restore all four spin blocks through the unified
+    // (g, U_s, eta) kernel, then extract the requested (bra, ket) channel.
+    // The per-channel scalar restore would miss the SU(2) block mixing and
+    // the antiunitary Theta remap.
+    const bool use_spinor_restore = mf.get_n_spinor() == 2;
+    const auto restore_dmat_channel =
+        [&](const Vector3_Order<int> &R_sel,
+            const symmetry_kstar_member_kfrac_targets_t *member_targets,
+            const symmetry_kstar_representative_indices_t *representative_indices) {
+            if (use_spinor_restore)
+            {
+                const auto blocks = get_symmetry_restored_dmat_cplx_R_spinor(
+                    symmetry_context, wfc_layouts, mf, ispin, kfrac_list, R_sel, atom_nw,
+                    member_targets, representative_indices);
+                if (ispinor_bra == 0 && ispinor_ket == 0) return blocks.b00;
+                if (ispinor_bra == 0 && ispinor_ket == 1) return blocks.b01;
+                if (ispinor_bra == 1 && ispinor_ket == 0) return blocks.b10;
+                return blocks.b11;
+            }
+            return get_symmetry_restored_dmat_cplx_R(
+                symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list,
+                R_sel, atom_nw, member_targets, representative_indices);
+        };
     const bool can_try_symmetry_kstar_restore =
         use_symmetry_context && !wfc_layouts.empty();
     const auto full_grid_kstar_representatives =
@@ -341,9 +364,8 @@ static void build_dmat_libri_kserial(
     {
         constexpr double restore_check_tol = 1e-6;
         const auto& R_check = map_R_IJs.begin()->first;
-        const auto restored_check = get_symmetry_restored_dmat_cplx_R(
-            symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list, R_check,
-            atom_nw, &member_kfrac_targets, &full_grid_kstar_representatives);
+        const auto restored_check = restore_dmat_channel(
+            R_check, &member_kfrac_targets, &full_grid_kstar_representatives);
         const auto direct_check =
             mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R_check);
         const auto diff = restored_check - direct_check;
@@ -359,9 +381,8 @@ static void build_dmat_libri_kserial(
         const auto &IJs = R_IJs.second;
         std::array<int,3> Ra{R.x,R.y,R.z};
         const auto dmat_cplx = (restore_symmetry_kstars || restore_symmetry_kstars_from_full_grid)
-            ? get_symmetry_restored_dmat_cplx_R(
-                  symmetry_context, wfc_layouts, mf, ispin, ispinor_bra, ispinor_ket, kfrac_list, R, atom_nw,
-                  &member_kfrac_targets,
+            ? restore_dmat_channel(
+                  R, &member_kfrac_targets,
                   restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr)
             : mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R);
         // global::ofs_myid << R << std::endl;
@@ -496,13 +517,38 @@ static void build_dmat_libri_kblacs_para(
             symmetry_context, wfc_layouts, mf, kfrac_list, atom_nw);
     global::ofs_myid << "EXX kBLACS Dmat symmetry restore: "
                      << (restore_symmetry_kstars ? "on" : "off") << std::endl;
-    auto dmat_Rs_cplx = restore_symmetry_kstars
-        ? get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
-              ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs, kblacs_ctxt,
-              desc_wfc, desc_dm, symmetry_context, pbc, atbasis_wfc)
-        : get_dmat_cplx_Rs_kblacs_para(
-              ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs, kblacs_ctxt,
-              desc_wfc, desc_dm);
+    std::map<Vector3_Order<int>, Matz> dmat_Rs_cplx;
+    if (restore_symmetry_kstars && mf.get_n_spinor() == 2)
+    {
+        // Spinor mean field: restore all four spin blocks jointly through the
+        // unified (g, U_s, eta) kernel, then keep the requested (bra, ket)
+        // channel; the per-channel scalar restore would miss the SU(2) block
+        // mixing and the antiunitary Theta remap.
+        auto dmat_Rs_spinor = get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
+            ispin, mf, kfrac_list, Rs, kblacs_ctxt, desc_wfc, desc_dm,
+            symmetry_context, pbc, atbasis_wfc);
+        for (auto &[R, blocks] : dmat_Rs_spinor)
+        {
+            Matz *channel =
+                (ispinor_bra == 0 && ispinor_ket == 0) ? &blocks.b00
+                : (ispinor_bra == 0 && ispinor_ket == 1) ? &blocks.b01
+                : (ispinor_bra == 1 && ispinor_ket == 0) ? &blocks.b10
+                : &blocks.b11;
+            dmat_Rs_cplx.emplace(R, std::move(*channel));
+        }
+    }
+    else if (restore_symmetry_kstars)
+    {
+        dmat_Rs_cplx = get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
+            ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs, kblacs_ctxt,
+            desc_wfc, desc_dm, symmetry_context, pbc, atbasis_wfc);
+    }
+    else
+    {
+        dmat_Rs_cplx = get_dmat_cplx_Rs_kblacs_para(
+            ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs, kblacs_ctxt,
+            desc_wfc, desc_dm);
+    }
     // global::ofs_myid << kfrac_list << std::endl;
     for (auto &R_dmat_cplx: dmat_Rs_cplx)
     {
@@ -610,6 +656,13 @@ void Exx::build(const LibrpaParallelRouting routing,
                   symmetry_ctx.irreducible_sector, this->pbc.period_array)
             : std::map<std::pair<int, int>, std::set<std::array<int, 3>>>{};
     const auto& symmetry_sector_stars = symmetry_ctx.rspace_sector_stars;
+    // Phase 7: under a general (g, U_s, eta) operation the four (bra, ket)
+    // spin channels of the static EXX operator mix, exactly like the Phase 6
+    // GW self-energy. When active, the per-channel LibRI Hs are stashed
+    // unrestored and restored jointly with the shared four-block kernel.
+    const bool defer_spinor_exx_restore =
+        use_symmetry_exx && use_complex_exx_r && n_spinor == 2
+        && !symmetry_ctx.spin_operations.empty();
     if (use_symmetry_exx)
     {
         global::lib_printf(
@@ -714,6 +767,10 @@ void Exx::build(const LibrpaParallelRouting routing,
                     const ComplexMatrix v_ir(*R_V.second);
                     for (const auto& restore_member : star_iter->second)
                     {
+                        // Charge-channel Coulomb blocks: the spin trace cancels
+                        // U_s, and the antiunitary conjugation is a no-op on
+                        // this real storage (V(R) is real), so only the orbital
+                        // rotation is needed even for eta = 1 members.
                         const ComplexMatrix v_full =
                             librpa_int::rotate_symmetry_rspace_block(
                                 symmetry_ctx, abf_layouts, restore_member.isym,
@@ -884,6 +941,11 @@ void Exx::build(const LibrpaParallelRouting routing,
 
     for (auto isp = 0; isp != n_spins; isp++)
     {
+        // Irreducible-sector LibRI Hs stashed per (bra, ket) channel; only
+        // populated when defer_spinor_exx_restore is true.
+        std::array<
+            std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<cplxdb>>>, 4>
+            exx_hs_ir_channels;
         for (auto ispn_bra = 0; ispn_bra != n_spinor; ispn_bra++)
         {
             for (auto ispn_ket = 0; ispn_ket != n_spinor; ispn_ket++)
@@ -1035,10 +1097,76 @@ void Exx::build(const LibrpaParallelRouting routing,
 
                 global::profiler.start("build_real_space_exx_5");
                 if (use_complex_exx_r)
-                    copy_exx_blocks(exx_libri_cplx.Hs);
+                {
+                    if (defer_spinor_exx_restore)
+                    {
+                        // Stash the irreducible-sector Hs; the joint
+                        // four-channel restore runs after the (bra, ket) loops.
+                        exx_hs_ir_channels[static_cast<std::size_t>(ispn_bra * 2 + ispn_ket)] =
+                            std::move(exx_libri_cplx.Hs);
+                    }
+                    else
+                    {
+                        copy_exx_blocks(exx_libri_cplx.Hs);
+                    }
+                }
                 else
                     copy_exx_blocks(exx_libri.Hs);
                 global::profiler.stop("build_real_space_exx_5");
+            }
+        }
+        if (defer_spinor_exx_restore)
+        {
+            global::lib_printf(
+                "Restoring the four spinor EXX channels jointly from the irreducible sector\n");
+            std::array<symmetry_rspace_block_map_t, 4> blocks_ir;
+            for (std::size_t channel = 0; channel != 4; ++channel)
+            {
+                for (const auto& I_JR : exx_hs_ir_channels[channel])
+                {
+                    const auto n_I = as_int(ab_wfc.get_atom_nb(I_JR.first));
+                    for (const auto& JR : I_JR.second)
+                    {
+                        const auto n_J = as_int(ab_wfc.get_atom_nb(JR.first.first));
+                        blocks_ir[channel][I_JR.first][JR.first] =
+                            convert_libri_tensor_to_complex_matrix(JR.second, n_I, n_J);
+                    }
+                }
+            }
+            std::vector<int> atom_nb(as_size(n_atoms));
+            for (int atom = 0; atom != n_atoms; ++atom)
+            {
+                atom_nb[atom] = as_int(ab_wfc.get_atom_nb(atom));
+            }
+            const auto blocks_full = restore_symmetry_spinor_rspace_blocks(
+                blocks_ir, symmetry_ctx, symmetry_sector_stars, wfc_layouts, atom_nb);
+            exx_hs_ir_channels = {};
+            for (int bra = 0; bra != n_spinor; ++bra)
+            {
+                for (int ket = 0; ket != n_spinor; ++ket)
+                {
+                    const auto channel = static_cast<std::size_t>(bra * 2 + ket);
+                    for (const auto& I_entry : blocks_full[channel])
+                    {
+                        const auto full_I = static_cast<atom_t>(I_entry.first);
+                        const auto n_full_I = ab_wfc.get_atom_nb(full_I);
+                        for (const auto& JR : I_entry.second)
+                        {
+                            const auto full_J = static_cast<atom_t>(JR.first.first);
+                            const auto n_full_J = ab_wfc.get_atom_nb(full_J);
+                            const auto& block = JR.second;
+                            if (block.nr != as_int(n_full_I) || block.nc != as_int(n_full_J))
+                            {
+                                throw std::runtime_error(
+                                    "EXX spinor symmetry restore produced an AO block with an inconsistent dimension");
+                            }
+                            const Vector3_Order<int> full_R{
+                                JR.first.second[0], JR.first.second[1], JR.first.second[2]};
+                            this->exx_IJR_cplx[isp][bra][ket][full_I][full_J][full_R] =
+                                Matz(n_full_I, n_full_J, block.c, MAJOR::ROW);
+                        }
+                    }
+                }
             }
         }
     }

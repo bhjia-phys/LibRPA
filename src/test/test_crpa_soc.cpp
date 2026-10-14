@@ -11,8 +11,10 @@
 #include "../api/dataset_helper.h"
 #include "../api/instance_manager.h"
 #include "../core/crpa.h"
+#include "../core/crpa_workflow.h"
 #include "../core/crpa_window_input.h"
 #include "../core/dielecmodel.h"
+#include "../core/orbital_weights.h"
 #include "../core/symmetry_spin_kernel.h"
 #include "../io/global_io.h"
 #include "../math/utils_matrix_m_mpi.h"
@@ -34,6 +36,431 @@ void close(Z actual, Z expected, double tolerance = 2e-8)
         std::cerr << "SOC actual=" << actual << " expected=" << expected << '\n';
         throw std::runtime_error("spinor cRPA numerical comparison failed");
     }
+}
+
+BasisConvention orbital_convention()
+{
+    BasisConvention convention;
+    convention.bloch_phase = -1;
+    convention.bloch_ratom = 0;
+    convention.order = LIBRPA_ANGULAR_ORDER_ABS_PM;
+    convention.coeff_m_negative = LIBRPA_RSH_COEFF_M_1;
+    convention.coeff_m_positive = LIBRPA_RSH_COEFF_1_M;
+    return convention;
+}
+
+void compare_meanfields(const MeanField& actual, const MeanField& reference)
+{
+    for (int spin = 0; spin < reference.get_n_spins(); ++spin)
+        for (int k = 0; k < reference.get_n_kpoints(); ++k)
+        {
+            for (int band = 0; band < reference.get_n_bands(); ++band)
+            {
+                close(actual.get_eigenvals()[spin](k, band),
+                      reference.get_eigenvals()[spin](k, band), 0);
+                close(actual.get_weight()[spin](k, band), reference.get_weight()[spin](k, band), 0);
+            }
+            for (int component = 0; component < reference.get_n_spinor(); ++component)
+            {
+                const auto& a = *actual.find_wfc(spin, component, k);
+                const auto& r = *reference.find_wfc(spin, component, k);
+                for (int i = 0; i < r.size; ++i) close(a.c[i], r.c[i], 0);
+            }
+        }
+}
+
+double compare_tensors(const CrpaResult& actual, const CrpaResult& reference)
+{
+    double maximum = 0;
+    for (std::size_t site = 0; site < reference.tensors.size(); ++site)
+    {
+        const auto& a = actual.tensors[site];
+        const auto& r = reference.tensors[site];
+        for (int i = 0; i < r.bare.size; ++i)
+        {
+            maximum = std::max(maximum, std::abs(a.bare.c[i] - r.bare.c[i]));
+            close(a.bare.c[i], r.bare.c[i], 1e-12);
+        }
+        for (std::size_t iw = 0; iw < reference.frequencies.size(); ++iw)
+            for (const auto& matrices :
+                 {std::pair{&a.u[iw], &r.u[iw]}, std::pair{&a.w[iw], &r.w[iw]}})
+                for (int i = 0; i < matrices.first->size; ++i)
+                {
+                    maximum =
+                        std::max(maximum, std::abs(matrices.first->c[i] - matrices.second->c[i]));
+                    close(matrices.first->c[i], matrices.second->c[i], 1e-11);
+                }
+    }
+    return maximum;
+}
+
+void compare_responses(const Chi0QMap& actual, const Chi0QMap& reference)
+{
+    if (actual.size() != reference.size())
+        throw std::runtime_error("borrowed cRPA response frequency map changed");
+    for (const auto& [frequency, qs] : reference)
+    {
+        const auto& aq = actual.at(frequency);
+        if (aq.size() != qs.size())
+            throw std::runtime_error("borrowed cRPA response q map changed");
+        for (const auto& [q, atoms] : qs)
+        {
+            const auto& aa = aq.at(q);
+            if (aa.size() != atoms.size())
+                throw std::runtime_error("borrowed cRPA response atom map changed");
+            for (const auto& [left, rights] : atoms)
+            {
+                const auto& ar = aa.at(left);
+                if (ar.size() != rights.size())
+                    throw std::runtime_error("borrowed cRPA response atom-pair map changed");
+                for (const auto& [right, block] : rights)
+                {
+                    const auto& ab = ar.at(right);
+                    if (ab.nr != block.nr || ab.nc != block.nc)
+                        throw std::runtime_error("borrowed cRPA response block changed shape");
+                    for (int i = 0; i < block.size; ++i) close(ab.c[i], block.c[i], 0);
+                }
+            }
+        }
+    }
+}
+
+double compare_u_only(const CrpaResult& actual, const CrpaResult& reference)
+{
+    if (actual.frequencies != reference.frequencies ||
+        actual.tensors.size() != reference.tensors.size())
+        throw std::runtime_error("shared-response cRPA returned incomplete tensors");
+    double maximum = 0;
+    for (std::size_t site = 0; site < reference.tensors.size(); ++site)
+    {
+        const auto& a = actual.tensors[site];
+        const auto& r = reference.tensors[site];
+        if (!a.w.empty() || a.u.size() != r.u.size() || a.bare.nr != r.bare.nr ||
+            a.bare.nc != r.bare.nc || a.site_index != r.site_index || a.spin_left != r.spin_left ||
+            a.spin_right != r.spin_right)
+            throw std::runtime_error("U-only route returned W or changed the local frames");
+        for (int i = 0; i < r.bare.size; ++i)
+        {
+            close(a.bare.c[i], r.bare.c[i], 1e-12);
+            maximum = std::max(maximum, std::abs(a.bare.c[i] - r.bare.c[i]));
+        }
+        for (std::size_t iw = 0; iw < r.u.size(); ++iw)
+            for (int i = 0; i < r.u[iw].size; ++i)
+            {
+                close(a.u[iw].c[i], r.u[iw].c[i], 1e-11);
+                maximum = std::max(maximum, std::abs(a.u[iw].c[i] - r.u[iw].c[i]));
+            }
+    }
+    return maximum;
+}
+
+// Known 2x2 spectral projectors specify S and its square root independently
+// of the production eigensolver. The imaginary off-diagonal distinguishes
+// ordinary transpose from conjugate transpose in the stored C^T coefficients.
+struct OrbitalMetric
+{
+    ComplexMatrix overlap{5, 5}, root{5, 5}, inverse{5, 5};
+
+    OrbitalMetric()
+    {
+        overlap.set_as_identity_matrix();
+        root.set_as_identity_matrix();
+        inverse.set_as_identity_matrix();
+        const double coupling = 0.31;
+        overlap(0, 3) = Z(0, coupling);
+        overlap(3, 0) = Z(0, -coupling);
+        for (int sign : {-1, 1})
+        {
+            const double value = 1 + sign * coupling;
+            const double a = std::sqrt(value) / 2, b = 1 / (2 * std::sqrt(value));
+            root(0, 0) += a - 0.5;
+            root(3, 3) += a - 0.5;
+            root(0, 3) += Z(0, sign * a);
+            root(3, 0) -= Z(0, sign * a);
+            inverse(0, 0) += b - 0.5;
+            inverse(3, 3) += b - 0.5;
+            inverse(0, 3) += Z(0, sign * b);
+            inverse(3, 0) -= Z(0, sign * b);
+        }
+    }
+};
+
+void rotate_rows(ComplexMatrix& q, int first, int second, double angle, double phase)
+{
+    const double c = std::cos(angle);
+    const Z s = std::polar(std::sin(angle), phase);
+    for (int band = 0; band < q.nc; ++band)
+    {
+        const Z a = q(first, band), b = q(second, band);
+        q(first, band) = c * a + s * b;
+        q(second, band) = -std::conj(s) * a + c * b;
+    }
+}
+
+void test_spinor_character_nonorthogonal_metric_and_pdos()
+{
+    AtomicBasis basis(std::vector<std::size_t>{2, 3});
+    basis.set_l_shells({{0, 0}, {1}});
+    const auto convention = orbital_convention();
+    OrbitalMetric metric;
+    MeanField mf(1, 2, 10, 5, 2);
+    std::vector<std::array<ComplexMatrix, 2>> orthogonal, coefficients;
+    double coherence = 0, noncollinearity = 0;
+    for (int k = 0; k < 2; ++k)
+    {
+        ComplexMatrix q(10, 10);
+        q.set_as_identity_matrix();
+        // Spatial and spin rotations with independent phases make the local
+        // spin directions noncollinear, while Q remains exactly unitary.
+        rotate_rows(q, 0, 3, 0.23 + 0.09 * k, 0.71);
+        rotate_rows(q, 5, 8, 0.41 + 0.05 * k, -0.37);
+        rotate_rows(q, 0, 5, 0.32, 0.61);
+        rotate_rows(q, 1, 7, 0.48, -0.82);
+        rotate_rows(q, 3, 6, 0.27, 0.42);
+        rotate_rows(q, 4, 9, 0.38, -0.21);
+        std::array<ComplexMatrix, 2> parts{ComplexMatrix(5, 10), ComplexMatrix(5, 10)};
+        for (int component = 0; component < 2; ++component)
+            for (int ao = 0; ao < 5; ++ao)
+                for (int band = 0; band < 10; ++band)
+                    parts[component](ao, band) =
+                        q(5 * component + ao, band) * std::polar(1.0, 0.17 * (1 + k + band));
+        orthogonal.push_back(parts);
+        const auto polarization = [&](int ao)
+        {
+            const Z up = parts[0](ao, 0), down = parts[1](ao, 0);
+            const double density = std::norm(up) + std::norm(down);
+            return std::array<double, 3>{2 * std::real(std::conj(up) * down) / density,
+                                         2 * std::imag(std::conj(up) * down) / density,
+                                         (std::norm(up) - std::norm(down)) / density};
+        };
+        const auto first = polarization(0), second = polarization(3);
+        double cross_squared = 0;
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            const double cross = first[(axis + 1) % 3] * second[(axis + 2) % 3] -
+                                 first[(axis + 2) % 3] * second[(axis + 1) % 3];
+            cross_squared += cross * cross;
+        }
+        noncollinearity = std::max(noncollinearity, std::sqrt(cross_squared));
+        std::array<ComplexMatrix, 2> c{metric.inverse * parts[0], metric.inverse * parts[1]};
+        coefficients.push_back(c);
+        for (int component = 0; component < 2; ++component)
+            mf.get_eigenvectors()[0][component][k] = transpose(c[component], false);
+        for (int band = 0; band < 10; ++band)
+        {
+            mf.get_eigenvals()[0](k, band) = -0.7 + 0.19 * band + 0.03 * k;
+            mf.get_weight()[0](k, band) = band < 4 ? 0.5 : 0;
+            for (int ao = 0; ao < 5; ++ao)
+                coherence = std::max(coherence, std::abs(std::imag(std::conj(parts[0](ao, band)) *
+                                                                   parts[1](ao, band))));
+        }
+    }
+    if (coherence < 0.1 || noncollinearity < 0.2)
+        throw std::runtime_error("spinor orbital fixture lacks complex noncollinear coherence");
+    const auto original = mf;
+    const auto original_overlap = metric.overlap;
+    const std::vector<double> kw{0.27, 0.73};
+    const auto result = analyze_orbital_weights(basis, convention, {0, 1}, mf,
+                                                {metric.overlap, metric.overlap}, kw, 1e-11);
+    if (result.n_spins != 1 || result.n_spinor != 2 || result.states.size() != 20 ||
+        result.groups.size() != 2)
+        throw std::runtime_error("spinor orbitals became independent spin channels");
+    double maximum_mulliken = 0, maximum_lowdin = 0;
+    for (int k = 0; k < 2; ++k)
+    {
+        const std::array<ComplexMatrix, 2> sc{metric.root * orthogonal[k][0],
+                                              metric.root * orthogonal[k][1]};
+        for (int band = 0; band < 10; ++band)
+        {
+            const auto& state = result.states[10 * k + band];
+            std::array<double, 2> group_m{}, group_l{};
+            for (int ao = 0; ao < 5; ++ao)
+            {
+                double expected_m = 0, expected_l = 0;
+                for (int component = 0; component < 2; ++component)
+                {
+                    expected_m += std::real(std::conj(coefficients[k][component](ao, band)) *
+                                            sc[component](ao, band));
+                    expected_l += std::norm(orthogonal[k][component](ao, band));
+                }
+                close(state.mulliken_ao[ao], expected_m, 2e-12);
+                close(state.lowdin_ao[ao], expected_l, 2e-12);
+                maximum_mulliken =
+                    std::max(maximum_mulliken, std::abs(state.mulliken_ao[ao] - expected_m));
+                maximum_lowdin =
+                    std::max(maximum_lowdin, std::abs(state.lowdin_ao[ao] - expected_l));
+                group_m[ao < 2 ? 0 : 1] += expected_m;
+                group_l[ao < 2 ? 0 : 1] += expected_l;
+            }
+            close(state.norm, 1, 2e-12);
+            for (int group = 0; group < 2; ++group)
+            {
+                close(state.mulliken[group], group_m[group], 2e-12);
+                close(state.lowdin[group], group_l[group], 2e-12);
+            }
+        }
+    }
+    compare_meanfields(mf, original);
+    for (int i = 0; i < metric.overlap.size; ++i)
+        close(metric.overlap.c[i], original_overlap.c[i], 0);
+
+    // A general complex SU(2) change of spin representation must preserve
+    // total charge weights, including the cancellation of component coherences.
+    MeanField rotated = mf;
+    const Z alpha = std::polar(std::cos(0.43), 0.29);
+    const Z beta = std::polar(std::sin(0.43), -0.57);
+    for (int k = 0; k < 2; ++k)
+        for (int ao = 0; ao < 5; ++ao)
+            for (int band = 0; band < 10; ++band)
+            {
+                const Z up = coefficients[k][0](ao, band), down = coefficients[k][1](ao, band);
+                rotated.get_eigenvectors()[0][0][k](band, ao) = alpha * up + beta * down;
+                rotated.get_eigenvectors()[0][1][k](band, ao) =
+                    -std::conj(beta) * up + std::conj(alpha) * down;
+            }
+    const auto rotated_result = analyze_orbital_weights(
+        basis, convention, {0, 1}, rotated, {metric.overlap, metric.overlap}, kw, 1e-11);
+    double maximum_rotation = 0;
+    for (std::size_t i = 0; i < result.states.size(); ++i)
+    {
+        const auto& first = result.states[i];
+        const auto& second = rotated_result.states[i];
+        for (int ao = 0; ao < 5; ++ao)
+        {
+            close(first.mulliken_ao[ao], second.mulliken_ao[ao], 2e-12);
+            close(first.lowdin_ao[ao], second.lowdin_ao[ao], 2e-12);
+            maximum_rotation =
+                std::max(maximum_rotation, std::abs(first.lowdin_ao[ao] - second.lowdin_ao[ao]));
+        }
+        for (int group = 0; group < 2; ++group)
+        {
+            close(first.mulliken[group], second.mulliken[group], 2e-12);
+            close(first.lowdin[group], second.lowdin[group], 2e-12);
+        }
+    }
+    const double step = 0.005, sigma = 0.23;
+    std::vector<double> grid;
+    for (int i = 0; i <= 1600; ++i) grid.push_back(-4 + i * step);
+    std::vector<double> mulliken, lowdin;
+    gaussian_orbital_pdos(result, grid, sigma, mulliken, lowdin);
+    std::vector<double> rotated_m, rotated_l;
+    gaussian_orbital_pdos(rotated_result, grid, sigma, rotated_m, rotated_l);
+    for (std::size_t i = 0; i < lowdin.size(); ++i)
+    {
+        close(mulliken[i], rotated_m[i], 2e-12);
+        close(lowdin[i], rotated_l[i], 2e-12);
+    }
+    std::vector<std::array<ComplexMatrix, 2>> sc_values;
+    for (const auto& q : orthogonal) sc_values.push_back({metric.root * q[0], metric.root * q[1]});
+    double integral_m = 0, integral_l = 0;
+    for (std::size_t e = 0; e < grid.size(); ++e)
+    {
+        std::array<double, 2> expected_m{}, expected_l{};
+        for (int k = 0; k < 2; ++k)
+            for (int band = 0; band < 10; ++band)
+            {
+                const double delta = (grid[e] - mf.get_eigenvals()[0](k, band)) / sigma;
+                const double kernel = kw[k] * std::exp(-0.5 * delta * delta) /
+                                      (sigma * std::sqrt(2 * std::acos(-1.0)));
+                for (int ao = 0; ao < 5; ++ao)
+                    for (int component = 0; component < 2; ++component)
+                    {
+                        expected_l[ao < 2 ? 0 : 1] +=
+                            kernel * std::norm(orthogonal[k][component](ao, band));
+                        expected_m[ao < 2 ? 0 : 1] +=
+                            kernel * std::real(std::conj(coefficients[k][component](ao, band)) *
+                                               sc_values[k][component](ao, band));
+                    }
+            }
+        for (int group = 0; group < 2; ++group)
+        {
+            close(mulliken[2 * e + group], expected_m[group], 2e-12);
+            close(lowdin[2 * e + group], expected_l[group], 2e-12);
+        }
+        const double quadrature = (e == 0 || e + 1 == grid.size()) ? 0.5 * step : step;
+        integral_m += quadrature * (mulliken[2 * e] + mulliken[2 * e + 1]);
+        integral_l += quadrature * (lowdin[2 * e] + lowdin[2 * e + 1]);
+    }
+    close(integral_m, 10, 2e-11);
+    close(integral_l, 10, 2e-11);
+    if (global::myid_global == 0)
+        std::cout << "Spinor orbital analytic complex metric: Mulliken max=" << maximum_mulliken
+                  << "; Lowdin max=" << maximum_lowdin << "; SU(2) max=" << maximum_rotation
+                  << "; Gaussian integrated states=" << integral_l << '\n';
+}
+
+void test_spinor_character_scalar_packing_limit()
+{
+    AtomicBasis basis(std::vector<std::size_t>{2, 3});
+    basis.set_l_shells({{0, 0}, {1}});
+    const auto convention = orbital_convention();
+    OrbitalMetric metric;
+    MeanField scalar(2, 2, 5, 5), spinor(1, 2, 10, 5, 2);
+    for (int spin = 0; spin < 2; ++spin)
+        for (int k = 0; k < 2; ++k)
+        {
+            ComplexMatrix q(5, 5);
+            q.set_as_identity_matrix();
+            rotate_rows(q, 0, 3, 0.19 + 0.13 * spin + 0.07 * k, 0.42);
+            const auto c = metric.inverse * q;
+            scalar.get_eigenvectors()[spin][0][k] = transpose(c, false);
+            ComplexMatrix packed(10, 5);
+            for (int band = 0; band < 5; ++band)
+            {
+                const double energy = -0.7 + 0.42 * band + 0.05 * spin + 0.03 * k;
+                const double occupation = band < 2 ? 0.5 : 0;
+                scalar.get_eigenvals()[spin](k, band) = energy;
+                scalar.get_weight()[spin](k, band) = occupation;
+                spinor.get_eigenvals()[0](k, 2 * band + spin) = energy;
+                spinor.get_weight()[0](k, 2 * band + spin) = occupation;
+                for (int ao = 0; ao < 5; ++ao) packed(2 * band + spin, ao) = c(ao, band);
+            }
+            spinor.get_eigenvectors()[0][spin][k] = packed;
+        }
+    const auto original_scalar = scalar, original_spinor = spinor;
+    const std::vector<double> kw{0.27, 0.73};
+    const auto a = analyze_orbital_weights(basis, convention, {0, 1}, scalar,
+                                           {metric.overlap, metric.overlap}, kw, 1e-11);
+    const auto b = analyze_orbital_weights(basis, convention, {0, 1}, spinor,
+                                           {metric.overlap, metric.overlap}, kw, 1e-11);
+    if (a.n_spins != 2 || a.n_spinor != 1 || b.n_spins != 1 || b.n_spinor != 2)
+        throw std::runtime_error("scalar to spinor packing lost physical spin dimensions");
+    for (int spin = 0; spin < 2; ++spin)
+        for (int k = 0; k < 2; ++k)
+            for (int band = 0; band < 5; ++band)
+            {
+                const auto& sa = a.states[(spin * 2 + k) * 5 + band];
+                const auto& sb = b.states[10 * k + 2 * band + spin];
+                close(sa.energy, sb.energy, 0);
+                close(sa.occupation, sb.occupation, 0);
+                close(sa.norm, sb.norm, 2e-12);
+                for (int ao = 0; ao < 5; ++ao)
+                {
+                    close(sa.mulliken_ao[ao], sb.mulliken_ao[ao], 2e-12);
+                    close(sa.lowdin_ao[ao], sb.lowdin_ao[ao], 2e-12);
+                }
+                for (int group = 0; group < 2; ++group)
+                {
+                    close(sa.mulliken[group], sb.mulliken[group], 2e-12);
+                    close(sa.lowdin[group], sb.lowdin[group], 2e-12);
+                }
+            }
+    const std::vector<double> grid{-0.45, 0.0, 0.71};
+    std::vector<double> scalar_m, scalar_l, spinor_m, spinor_l;
+    gaussian_orbital_pdos(a, grid, 0.23, scalar_m, scalar_l);
+    gaussian_orbital_pdos(b, grid, 0.23, spinor_m, spinor_l);
+    for (std::size_t energy = 0; energy < grid.size(); ++energy)
+        for (int group = 0; group < 2; ++group)
+        {
+            const auto offset = 2 * energy + group;
+            close(spinor_m[offset], scalar_m[offset] + scalar_m[6 + offset], 2e-12);
+            close(spinor_l[offset], scalar_l[offset] + scalar_l[6 + offset], 2e-12);
+        }
+    compare_meanfields(scalar, original_scalar);
+    compare_meanfields(spinor, original_spinor);
+    if (global::myid_global == 0)
+        std::cout << "Spinor orbital zero-SOC packing: charge weights and PDOS equal summed "
+                     "collinear channels\n";
 }
 
 struct Fixture
@@ -252,6 +679,70 @@ struct Fixture
         return compute_crpa_onsite(context, selection(), {frame.get()});
     }
 
+    CrpaResult run_staged()
+    {
+        CrpaContext context{*chi,      ds.cs_data, ds.basis_aux, pairs,
+                            no_shrink, ds.vq,      ds.blacs_h,   ds.desc_abf};
+        // Keep a nonempty Pd resident, and a different incoming selector. This
+        // exposes response replacement or selector leakage between the stages.
+        compare_response(true);
+        const auto resident = chi->get_chi0_q();
+        auto incoming = selection();
+        for (auto& row : incoming[0]) row[0] = 0;
+        chi->set_band_selection(incoming);
+        const auto original = ds.mf;
+        const auto projection = prepare_crpa_local_projection(context, selection(), {frame.get()});
+        const auto full = build_crpa_total_response(context);
+        const auto original_full = full;
+        auto excluded = build_crpa_excluded_response(context, selection());
+        auto constrained = form_crpa_constrained_response(context, full, std::move(excluded));
+        const auto uc = screen_crpa_response(context, std::move(constrained));
+        const auto wc = screen_crpa_response(context, full);
+        const auto u = contract_crpa_interaction(context, projection, uc);
+        const auto w = contract_crpa_interaction(context, projection, wc);
+        auto result = projection.bare_result;
+        for (std::size_t i = 0; i < result.tensors.size(); ++i)
+        {
+            result.tensors[i].u = u[i];
+            result.tensors[i].w = w[i];
+        }
+        compare_responses(full, original_full);
+        compare_responses(chi->get_chi0_q(), resident);
+        if (chi->get_band_selection() != incoming)
+            throw std::runtime_error("staged cRPA leaked its response selector");
+        compare_meanfields(ds.mf, original);
+        return result;
+    }
+
+    CrpaResult run_shared(bool resident_alias)
+    {
+        CrpaContext context{*chi,      ds.cs_data, ds.basis_aux, pairs,
+                            no_shrink, ds.vq,      ds.blacs_h,   ds.desc_abf};
+        const auto original = ds.mf;
+        auto full = build_crpa_total_response(context);
+        const auto original_full = full;
+        if (resident_alias)
+            chi->swap_chi0_q(full);
+        else
+            compare_response(true);
+        const auto resident = chi->get_chi0_q();
+        auto incoming = selection();
+        for (auto& row : incoming[0]) row[0] = 0;
+        chi->set_band_selection(incoming);
+        if (ds.comm_h.is_root())
+            std::cout << "Shared-P0 U-only begin: " << (components == 2 ? "SOC" : "scalar")
+                      << (resident_alias ? " resident alias" : " detached response") << std::endl;
+        const auto result = evaluate_crpa_onsite_from_response(
+            context, selection(), {frame.get()}, resident_alias ? chi->get_chi0_q() : full);
+        if (ds.comm_h.is_root()) std::cout << "Shared-P0 U-only end\n";
+        if (!resident_alias) compare_responses(full, original_full);
+        compare_responses(chi->get_chi0_q(), resident);
+        if (chi->get_band_selection() != incoming)
+            throw std::runtime_error("shared-response cRPA leaked its response selector");
+        compare_meanfields(ds.mf, original);
+        return result;
+    }
+
     void compare_tensors(const CrpaResult& result) const
     {
         for (std::size_t iw = 0; iw < result.frequencies.size(); ++iw)
@@ -265,13 +756,13 @@ struct Fixture
                 kernels[2] += 0.25 * screen(p0);
             }
             const auto& tensor = result.tensors.at(0);
-            const std::array<const ComplexMatrix*, 3> actual{&tensor.bare, &tensor.u[iw],
-                                                             &tensor.w[iw]};
+            const std::array<const ComplexMatrix*, 3> actual{
+                &tensor.bare, &tensor.u[iw], tensor.w.empty() ? nullptr : &tensor.w[iw]};
             for (int a = 0; a < bands; ++a)
                 for (int b = 0; b < bands; ++b)
                     for (int c = 0; c < bands; ++c)
                         for (int d = 0; d < bands; ++d)
-                            for (int family = 0; family < 3; ++family)
+                            for (int family = 0; family < (tensor.w.empty() ? 2 : 3); ++family)
                             {
                                 Z expected{};
                                 for (int mu = 0; mu < 2; ++mu)
@@ -294,6 +785,18 @@ void test_zero_soc_limit()
     const auto reference = scalar.run(), packed = spinor.run();
     scalar.compare_tensors(reference);
     spinor.compare_tensors(packed);
+    const auto staged = scalar.run_staged();
+    scalar.compare_tensors(staged);
+    const auto scalar_shared = scalar.run_shared(false), packed_shared = spinor.run_shared(true);
+    scalar.compare_tensors(scalar_shared);
+    spinor.compare_tensors(packed_shared);
+    const double shared_maximum =
+        std::max(compare_u_only(scalar_shared, reference), compare_u_only(packed_shared, packed));
+    const double staged_maximum = compare_tensors(staged, reference);
+    if (scalar.ds.comm_h.is_root())
+        std::cout << "Scalar/zero-SOC cRPA composition: staged v/U/W max=" << staged_maximum
+                  << "; shared-P0 v/U max=" << shared_maximum
+                  << "; caller response, resident response, selector, E/C/f unchanged\n";
     for (int a = 0; a < 6; ++a)
         for (int b = 0; b < 6; ++b)
             for (int c = 0; c < 6; ++c)
@@ -595,7 +1098,7 @@ void test_noncollinear_magnetic_crpa()
     std::map<Vector3_Order<double>, ComplexMatrix> transform;
     Chi0::BandSelection selection(1,
                                   std::vector<std::vector<unsigned char>>(9, {1, 1, 1, 1, 0, 0}));
-    const auto calculate = [&](bool symmetry)
+    const auto calculate = [&](bool symmetry, bool check_shared = false)
     {
         Chi0 chi(ds.mf, ds.basis_wfc, ds.basis_aux, ds.pbc, ds.symmetry_context, ds.tfg,
                  ds.scfk_blacs_ctxt, ds.desc_wfc_kb_full, false, symmetry);
@@ -603,10 +1106,60 @@ void test_noncollinear_magnetic_crpa()
         chi.gf_threshold = chi.libri_threshold_C = chi.libri_threshold_G = 0;
         CrpaContext context{chi,       ds.cs_data, ds.basis_aux, pairs,
                             transform, ds.vq,      ds.blacs_h,   ds.desc_abf};
-        return std::pair{compute_crpa_onsite(context, selection, {&frame}),
-                         chi.active_qpoints().size()};
+        const auto result = compute_crpa_onsite(context, selection, {&frame});
+        if (check_shared)
+        {
+            const auto original_mf = ds.mf;
+            auto full_response = build_crpa_total_response(context);
+            chi.swap_chi0_q(full_response);
+            const auto resident = chi.get_chi0_q();
+            auto incoming = selection;
+            for (auto& row : incoming[0]) row[0] = 0;
+            chi.set_band_selection(incoming);
+            if (ds.comm_h.is_root())
+                std::cout << "Shared-P0 U-only begin: noncollinear magnetic "
+                          << (symmetry ? "q-star" : "full q") << " resident alias" << std::endl;
+            const auto shared =
+                evaluate_crpa_onsite_from_response(context, selection, {&frame}, chi.get_chi0_q());
+            if (ds.comm_h.is_root()) std::cout << "Shared-P0 U-only end\n";
+            const double maximum = compare_u_only(shared, result);
+            compare_responses(chi.get_chi0_q(), resident);
+            if (chi.get_band_selection() != incoming)
+                throw std::runtime_error("magnetic shared-response cRPA leaked its selector");
+            compare_meanfields(ds.mf, original_mf);
+            if (ds.comm_h.is_root())
+                std::cout << "Noncollinear magnetic shared-P0 " << (symmetry ? "q-star" : "full q")
+                          << ": all v/U max=" << maximum
+                          << "; resident P0, selector, E/C/f unchanged\n";
+        }
+        return std::pair{result, chi.active_qpoints().size()};
     };
-    const auto full = calculate(false);
+    const auto full = calculate(false, true);
+    const auto original_mf = ds.mf;
+    ComplexMatrix spatial_overlap(3, 3);
+    spatial_overlap.set_as_identity_matrix();
+    const auto orbital = analyze_orbital_weights(
+        ds.basis_wfc, orbital_convention(), {0, 0, 0}, ds.mf,
+        std::vector<ComplexMatrix>(9, spatial_overlap), std::vector<double>(9, 1.0 / 9), 1e-11);
+    for (int k = 0; k < 9; ++k)
+        for (int band = 0; band < 6; ++band)
+            for (int atom = 0; atom < 3; ++atom)
+            {
+                const double charge = std::norm(model.eigenvectors(atom, band)) +
+                                      std::norm(model.eigenvectors(atom + 3, band));
+                const auto& state = orbital.states[6 * k + band];
+                close(state.mulliken_ao[atom], charge, 2e-12);
+                close(state.lowdin_ao[atom], charge, 2e-12);
+                close(state.mulliken[atom], charge, 2e-12);
+                close(state.lowdin[atom], charge, 2e-12);
+            }
+    compare_meanfields(ds.mf, original_mf);
+    const auto analyzed = calculate(false);
+    const double analysis_tensor_maximum = compare_tensors(analyzed.first, full.first);
+    if (ds.comm_h.is_root())
+        std::cout << "Noncollinear magnetic orbital analysis: 3 atom weights; eigenpairs "
+                     "unchanged; all v/U/W max="
+                  << analysis_tensor_maximum << '\n';
     ds.basis_convention.bloch_phase = -1;
     ds.basis_convention.bloch_ratom = 0;
     ds.basis_convention.order = LIBRPA_ANGULAR_ORDER_ABS_PM;
@@ -626,7 +1179,7 @@ void test_noncollinear_magnetic_crpa()
     ds.spg_spin_ops_explicit = true;
     ds.spg_grey_group = false;
     initialize_symmetry_context(ds, true);
-    const auto reduced = calculate(true);
+    const auto reduced = calculate(true, true);
     if (ds.symmetry_context.spin_operations.size() != 6 || reduced.second >= full.second)
         throw std::runtime_error("explicit magnetic table was widened or did not reduce q points");
     double maximum = 0;
@@ -656,6 +1209,18 @@ void test_soc_and_spin_representation()
     const auto first = original.run(), second = rotated.run();
     original.compare_tensors(first);
     rotated.compare_tensors(second);
+    const auto staged = original.run_staged();
+    const auto shared = original.run_shared(false), aliased = original.run_shared(true);
+    original.compare_tensors(staged);
+    original.compare_tensors(shared);
+    original.compare_tensors(aliased);
+    const double staged_maximum = compare_tensors(staged, first);
+    const double shared_maximum =
+        std::max(compare_u_only(shared, first), compare_u_only(aliased, first));
+    if (original.ds.comm_h.is_root())
+        std::cout << "Complex SOC cRPA composition: staged v/U/W max=" << staged_maximum
+                  << "; shared-P0 v/U max=" << shared_maximum
+                  << "; borrowed and resident response, selector, E/C/f unchanged\n";
     for (std::size_t iw = 0; iw < first.frequencies.size(); ++iw)
         for (int i = 0; i < first.tensors[0].bare.size; ++i)
         {
@@ -672,6 +1237,26 @@ void test_soc_and_spin_representation()
     convention.coeff_m_positive = LIBRPA_RSH_COEFF_1_M;
     ComplexMatrix spatial(3, 3);
     spatial.set_as_identity_matrix();
+    const auto original_mf = original.ds.mf;
+    const auto orbital = analyze_orbital_weights(
+        original.ds.basis_wfc, convention, {0}, original.ds.mf,
+        std::vector<ComplexMatrix>(4, spatial), std::vector<double>(4, 0.25), 1e-11);
+    for (int k = 0; k < 4; ++k)
+        for (int band = 0; band < 6; ++band)
+            for (int ao = 0; ao < 3; ++ao)
+            {
+                const double charge = std::norm(original.coefficients(ao, band)) +
+                                      std::norm(original.coefficients(ao + 3, band));
+                const auto& state = orbital.states[6 * k + band];
+                close(state.mulliken_ao[ao], charge, 2e-12);
+                close(state.lowdin_ao[ao], charge, 2e-12);
+            }
+    compare_meanfields(original.ds.mf, original_mf);
+    const auto analyzed = original.run();
+    const double analysis_tensor_maximum = compare_tensors(analyzed, first);
+    if (original.ds.comm_h.is_root())
+        std::cout << "SOC cRPA orbital analysis: eigenpairs unchanged; all v/U/W max="
+                  << analysis_tensor_maximum << '\n';
     CrpaWindowOptions options;
     options.correlated_species = "X";
     options.parent_orbitals = options.output_orbitals = "s";
@@ -764,7 +1349,6 @@ void test_soc_and_spin_representation()
             close(transformed.b11(0, 0), expected(1, 1), 1e-12);
         }
     }
-
 }
 
 void test_soc_bloch_phases()
@@ -875,6 +1459,8 @@ int main(int argc, char** argv)
     global::init_global_io();
     try
     {
+        test_spinor_character_nonorthogonal_metric_and_pdos();
+        test_spinor_character_scalar_packing_limit();
         test_zero_soc_limit();
         test_soc_and_spin_representation();
         test_soc_bloch_phases();

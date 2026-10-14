@@ -72,9 +72,11 @@ enum class BilinearConvention
  * step-1 result unchanged, preserving the old scalar-kernel cost.
  */
 template <class Matrix, class OrbitalRotate>
-SpinorBlocks4<Matrix> transform_spinor_bilinear(const SymmetrySpinOperation &op,
-                                                const SpinorBlocks4<Matrix> &in,
-                                                OrbitalRotate &&orbit, BilinearConvention conv)
+SpinorBlocks4<Matrix> transform_spinor_bilinear(
+    const SymmetrySpinOperation &op,
+    const SpinorBlocks4<Matrix> &in,
+    OrbitalRotate &&orbit,
+    BilinearConvention conv)
 {
     assert(conv == BilinearConvention::SourceToTarget_DXDdag);
     (void)conv;
@@ -90,10 +92,11 @@ SpinorBlocks4<Matrix> transform_spinor_bilinear(const SymmetrySpinOperation &op,
     }
 
     // step 2: SU(2) mixing, Y^{ab} = sum_cd U[a][c] conj(U[b][d]) G^{cd}
-    const auto &U = op.spin_u;  // row-major [u00 u01; u10 u11]
-    const auto u = [&U](int r, int c) -> const std::complex<double> & { return U[2 * r + c]; };
-    const auto mix = [&u](int a, int b, const SpinorBlocks4<Matrix> &blocks) -> Matrix
-    {
+    const auto &U = op.spin_u; // row-major [u00 u01; u10 u11]
+    const auto u = [&U](int r, int c) -> const std::complex<double> & {
+        return U[2 * r + c];
+    };
+    const auto mix = [&u](int a, int b, const SpinorBlocks4<Matrix> &blocks) -> Matrix {
         Matrix out = u(a, 0) * std::conj(u(b, 0)) * blocks.b00;
         out += u(a, 0) * std::conj(u(b, 1)) * blocks.b01;
         out += u(a, 1) * std::conj(u(b, 0)) * blocks.b10;
@@ -111,7 +114,8 @@ SpinorBlocks4<Matrix> transform_spinor_bilinear(const SymmetrySpinOperation &op,
     // last, the order does not commute). X' = J_AO Y* J_AO^dagger gives
     // X'00 = Y11*, X'01 = -Y10*, X'10 = -Y01*, X'11 = Y00*.
     const std::complex<double> minus_one(-1.0, 0.0);
-    return {conj(y.b11), minus_one * conj(y.b10), minus_one * conj(y.b01), conj(y.b00)};
+    return {conj(y.b11), minus_one * conj(y.b10),
+            minus_one * conj(y.b01), conj(y.b00)};
 }
 
 //! How a spin action acts on a collinear two-channel storage.
@@ -136,8 +140,10 @@ enum class CollinearChannelAction
  * transform_spinor_bilinear, while the channel classification itself depends
  * on U alone.
  */
-CollinearChannelAction classify_collinear_action(const std::array<std::complex<double>, 4> &U,
-                                                 bool antiunitary, double tol);
+CollinearChannelAction classify_collinear_action(
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol);
 
 /*!
  * @brief Effective channel action on collinear two-channel storage.
@@ -149,6 +155,8 @@ CollinearChannelAction classify_collinear_action(const std::array<std::complex<d
  * off-diagonal U_s keeps them. Incompatible stays Incompatible.
  */
 CollinearChannelAction classify_collinear_action_effective(
-    const std::array<std::complex<double>, 4> &U, bool antiunitary, double tol);
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol);
 
-}  // namespace librpa_int
+} // namespace librpa_int

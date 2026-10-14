@@ -363,6 +363,9 @@ public:
     const matrix_m<std::complex<double>> &get_wing_mu(int frequency) const
     { return wing_mu.at(frequency); }
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+    const std::vector<double> &get_frequency_nodes() const { return omega; }
+    const std::vector<Matz> &get_head_tensors() const { return head; }
+    const std::vector<Matz> &get_wing_auxiliary() const { return wing_mu; }
 
     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
                   const atpair_k_cplx_mat_t &Vq);  // atpair_k_cplx_mat_t &Vq, Cs_LRI &Cs_data

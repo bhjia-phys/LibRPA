@@ -22,12 +22,13 @@ list(APPEND exe_sources
   tasks/print_minimax.cpp
   tasks/qsgw.cpp
   qsgw/vxc_io.cpp
+  qsgw/ao_operator_io.cpp
   qsgw/band_output.cpp
   qsgw/iteration_trace.cpp
+  qsgw/checkpoint.cpp
   # tasks/test.cpp
   # task_qsgw.cpp
   # task_qsgwA.cpp
-  # task_qsgw_band.cpp
   # task_hf_band.cpp
   # task_scRPA.cpp
   # task_scRPA_band.cpp

@@ -2312,7 +2312,7 @@ std::vector<std::complex<double>> build_symmetry_kstar_member_target_gauge_phase
     return phases;
 }
 
-SymmetrySpinOperation resolve_symmetry_kstar_member_spin_operation(
+const SymmetrySpinOperation& resolve_symmetry_kstar_member_spin_operation(
     const SymmetryContext& ctx,
     const SymmetryKStarMember& member)
 {
@@ -2334,15 +2334,7 @@ SymmetrySpinOperation resolve_symmetry_kstar_member_spin_operation(
         throw LIBRPA_RUNTIME_ERROR(
             "spinor k-star restore found an inconsistent member action link");
     }
-    // K-star members, like real-space sector members, store the operation
-    // taking the full member back to the representative. The AO transform
-    // restores in the opposite direction. Match it with U_s^dagger before
-    // the kernel's antiunitary Theta remap.
-    SymmetrySpinOperation restore_op = op;
-    const auto u = op.spin_u;
-    restore_op.spin_u = {
-        std::conj(u[0]), std::conj(u[2]), std::conj(u[1]), std::conj(u[3])};
-    return restore_op;
+    return op;
 }
 
 ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,
@@ -2540,10 +2532,8 @@ void build_symmetry_rspace_sector_stars(const SymmetryContext& ctx,
             bool saw_duplicate_member = false;
             // Iterate the full (g, U_s, eta) operation table when available so
             // that antiunitary-only reachability (e.g. Theta{E|t} in an AFM
-            // magnetic group) is retained. The spatial inverse g^-1 below maps
-            // the irreducible source to the full target, while operation_id
-            // records g as reverse-route metadata; the spin resolver therefore
-            // uses U_s^dagger. The `covered` dedup keeps the first table entry
+            // magnetic group) generates restore members that record their
+            // operation; the `covered` dedup keeps the first table entry
             // reaching each full sector, which is the unitary copy for the
             // grey-group expansion (unitary copies come first there).
             const std::size_t n_iteration = ctx.spin_operations.empty()
@@ -2677,33 +2667,30 @@ bool symmetry_rspace_restore_member_is_antiunitary(
     return ctx.spin_operations[member.operation_id].antiunitary;
 }
 
-SymmetrySpinOperation resolve_symmetry_rspace_restore_member_spin_operation(
+const SymmetrySpinOperation& resolve_symmetry_rspace_restore_member_spin_operation(
     const SymmetryContext& ctx,
     const SymmetryRSpaceRestoreMember& member)
 {
     if (member.operation_id == SymmetryRSpaceRestoreMember::kOperationIdNone)
     {
-        // The caller supplies the orbital rotation per member, so the default
-        // spatial_id is never consumed on the legacy identity fast path.
-        return {};
+        // Shared identity operation for members built without spin metadata;
+        // the caller supplies the orbital rotation per member, so the default
+        // spatial_id is never consumed on the fast path.
+        static const SymmetrySpinOperation identity_operation{};
+        return identity_operation;
     }
     if (member.operation_id >= ctx.spin_operations.size())
     {
         throw LIBRPA_RUNTIME_ERROR(
             "spinor real-space restore found a member operation_id without a spin operation");
     }
-    SymmetrySpinOperation restore_op = ctx.spin_operations[member.operation_id];
-    if (static_cast<int>(restore_op.spatial_id) != member.isym)
+    const auto& op = ctx.spin_operations[member.operation_id];
+    if (static_cast<int>(op.spatial_id) != member.isym)
     {
         throw LIBRPA_RUNTIME_ERROR(
             "spinor real-space restore found an inconsistent member operation link");
     }
-    const auto u = restore_op.spin_u;
-    // Sector stars apply the inverse spatial route ir -> full. Use the same
-    // inverse spin action, U_s^dagger, before any antiunitary Theta remap.
-    restore_op.spin_u = {
-        std::conj(u[0]), std::conj(u[2]), std::conj(u[1]), std::conj(u[3])};
-    return restore_op;
+    return op;
 }
 
 std::array<symmetry_rspace_block_map_t, 4> restore_symmetry_spinor_rspace_blocks(

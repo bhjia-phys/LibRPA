@@ -10,7 +10,7 @@ namespace driver
 
 static std::map<std::string, task_t> map_lowstr_task{
     {"rpa",           task_t::RPA},
-    {"crpa_u",        task_t::cRPA_U},
+    {"crpa",          task_t::cRPA},
     {"g0w0",          task_t::G0W0},
     {"g0w0_band",     task_t::G0W0_band},
     {"exx",           task_t::EXX},
@@ -19,7 +19,6 @@ static std::map<std::string, task_t> map_lowstr_task{
     {"print_minimax", task_t::print_minimax},
     {"qsgw", task_t::QSGW},
     {"qsgwa", task_t::QSGWA},
-    {"qsgw_band", task_t::QSGW_band},
     {"hf_band", task_t::HF_band},
     {"scrpa", task_t::scRPA},
     {"scrpa_band", task_t::scRPA_band},
@@ -28,7 +27,7 @@ static std::map<std::string, task_t> map_lowstr_task{
 
 static std::map<task_t, std::string> map_task_lowstr{
     {task_t::RPA,           "RPA correlation energy"},
-    {task_t::cRPA_U,        "Constrained RPA local interactions on imaginary frequencies"},
+    {task_t::cRPA,          "Constrained RPA orbital analysis and local interactions"},
     {task_t::G0W0,          "One-shot GW for quasi-paricle energies"},
     {task_t::G0W0_band,     "One-shot GW for quasi-paricle energies"},
     {task_t::EXX,           "Non-self-consistent exact-exchange (EXX) calculation"},
@@ -37,7 +36,6 @@ static std::map<task_t, std::string> map_task_lowstr{
     {task_t::print_minimax, "Printing minimax time-frequency grids"},
     {task_t::QSGW,          "QSGW"},
     {task_t::QSGWA,         "QSGW, mode A"},
-    {task_t::QSGW_band,     "QSGW band structure"},
     {task_t::HF_band,       "HF band structure"},
     {task_t::scRPA,         "SCRPA"},
     {task_t::scRPA_band,    "SCRPA band structure"},
@@ -71,11 +69,10 @@ static std::map<task_t, std::function<void(void)>> map_task_func_impl{
     {task_t::G0W0, task_g0w0},
     {task_t::G0W0_band, task_g0w0_band},
     {task_t::RPA, task_rpa},
-    {task_t::cRPA_U, task_crpa_u},
+    {task_t::cRPA, task_crpa},
     {task_t::EXX, task_exx},
     {task_t::EXX_band, task_exx_band},
     {task_t::QSGW, task_qsgw},
-    {task_t::QSGW_band, task_qsgw_band},
 };
 
 void run_task(const task_t &task)

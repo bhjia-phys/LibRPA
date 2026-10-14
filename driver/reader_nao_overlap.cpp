@@ -219,12 +219,14 @@ bool parse_header(LineCursor& cursor, int& dimension, int& number_of_r)
             fail(step_cursor, "unexpected end after STEP header");
         first_line = trim(cursor.lines[compact_header]);
     }
-    if (first_line.find("Matrix Dimension of S(R)") != std::string::npos)
+    if (first_line.find("Matrix Dimension") != std::string::npos)
     {
         cursor.index = compact_header + 1;
-        dimension = parse_labeled_integer(first_line, "Matrix Dimension of S(R)", cursor);
+        // Native ABACUS uses its generic H-container CSR header for H and S.
+        // The S(k) metric/spin checks below still validate the overlap itself.
+        dimension = parse_labeled_integer(first_line, "Matrix Dimension", cursor);
         const std::string count_line = next_payload(cursor);
-        number_of_r = parse_labeled_integer(count_line, "Matrix number of S(R)", cursor);
+        number_of_r = parse_labeled_integer(count_line, "Matrix number", cursor);
         return true;
     }
 

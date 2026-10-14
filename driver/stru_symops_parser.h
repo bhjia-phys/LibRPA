@@ -30,7 +30,7 @@ struct StruSymopsTail
     int grey_group = 0;
     int spin_source = 0;
     std::vector<int> antiunitary;
-    std::vector<double> spin_u;  //!< 8 doubles per op, only when spin_source == 1
+    std::vector<double> spin_u;   //!< 8 doubles per op, only when spin_source == 1
 };
 
 //! Parse the symmetry tail from whitespace-separated tokens (everything after the
@@ -38,7 +38,9 @@ struct StruSymopsTail
 //! the legacy k-point section (pass 0 when unknown). Returns false when the tail is
 //! empty or contains only the legacy k-point section (no symmetry operations).
 //! Throws std::runtime_error on malformed input.
-bool parse_stru_symops_tail(const std::vector<std::string> &tokens, const std::string &file_path,
-                            int n_kpoints, StruSymopsTail &tail);
+bool parse_stru_symops_tail(const std::vector<std::string> &tokens,
+                            const std::string &file_path,
+                            int n_kpoints,
+                            StruSymopsTail &tail);
 
-}  // namespace driver
+} // namespace driver

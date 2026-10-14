@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -14,6 +15,7 @@
 #include "../core/dielecmodel.h"
 #include "../core/epsilon.h"
 #include "../core/qpoint_view.h"
+#include "../core/qsgw/headwing_velocity.h"
 #include "../gpu/la_connector.h"
 #include "../core/meanfield_mpi.h"
 #include "../io/global_io.h"
@@ -59,6 +61,144 @@ void test_rspace_symmetry_requires_complete_band_space()
     MeanField complete(1, 1, 3, 3);
     assert(librpa_int::rspace_symmetry_has_complete_band_space(complete, -1));
     assert(!librpa_int::rspace_symmetry_has_complete_band_space(complete, 2));
+}
+
+void test_qsgw_native_baseline_preserves_aliased_tail()
+{
+    using namespace librpa_int::qsgw;
+    const Matrix3 lattice(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    const std::vector<Vector3_Order<double>> kpoints{
+        {0.0, 0.0, 0.0}, {0.25, 0.0, 0.0}, {0.5, 0.0, 0.0}, {0.75, 0.0, 0.0}};
+    const Vector3_Order<double> probe(0.13, 0.0, 0.0);
+    const auto sampled = [](const LocalizedMatrix &model, const Vector3_Order<double> &k)
+    {
+        Matz result(2, 2, MAJOR::ROW);
+        result.zero_out();
+        for (const auto &[r, block] : model)
+        {
+            const auto weight =
+                std::polar(1.0, librpa_int::TWO_PI * (k.x * r.x + k.y * r.y + k.z * r.z));
+            for (int i = 0; i < 2; ++i)
+                for (int j = 0; j < 2; ++j) result(i, j) += weight * block(i, j);
+        }
+        return result;
+    };
+    // Test both distinct collinear channels and complete AO-major spinors.
+    for (const int spinors : {1, 2})
+    {
+        const int spins = spinors == 1 ? 2 : 1;
+        MeanField reference(spins, 4, 2, 2 / spinors, spinors);
+        HeadwingAoOperators operators;
+        operators.dimension = 2;
+        operators.overlap.emplace(
+            Vector3_Order<int>(0, 0, 0),
+            Matz({{{1.2, 0.0}, {0.07, 0.02}}, {{0.07, -0.02}, {0.9, 0.0}}}, MAJOR::ROW));
+        if (spinors == 2)
+        {
+            auto &overlap = operators.overlap.at(Vector3_Order<int>(0, 0, 0));
+            overlap(0, 1) = overlap(1, 0) = 0.0;
+            overlap(1, 1) = overlap(0, 0);
+        }
+        std::vector<LocalizedMatrix> native(spins), current(spins);
+        SpinKMatrixMap target;
+        for (int spin = 0; spin < spins; ++spin)
+        {
+            native[spin].emplace(Vector3_Order<int>(0, 0, 0),
+                                 Matz({{{-0.7 + 0.1 * spin, 0.0}, {0.0, 0.0}},
+                                       {{0.0, 0.0}, {0.9 + 0.1 * spin, 0.0}}},
+                                      MAJOR::ROW));
+            // R=3 aliases to R=-1 on the four-point mesh. Whole-H IFT loses
+            // its actual range, while native-baseline reconstruction keeps it.
+            Matz tail({{{0.04, 0.015}, {0.018, 0.024}}, {{-0.01, 0.03}, {-0.03, 0.01}}},
+                      MAJOR::COL);
+            for (std::size_t i = 0; i < tail.size(); ++i) tail.ptr()[i] *= 1.0 + 0.2 * spin;
+            native[spin].emplace(Vector3_Order<int>(3, 0, 0), tail);
+            native[spin].emplace(Vector3_Order<int>(-3, 0, 0), transpose(tail, true));
+            for (const auto &[r, block] : native[spin]) current[spin].emplace(r, block.copy());
+            const Matz onsite({{{0.05, 0.0}, {0.012, 0.008}}, {{0.012, -0.008}, {-0.02, 0.0}}},
+                              MAJOR::ROW);
+            current[spin].at(Vector3_Order<int>(0, 0, 0)) += onsite;
+            Matz correction({{{0.01, 0.0}, {0.0, 0.005}}, {{0.0, 0.0}, {-0.006, 0.0}}}, MAJOR::ROW);
+            current[spin].emplace(Vector3_Order<int>(1, 0, 0), correction);
+            current[spin].emplace(Vector3_Order<int>(-1, 0, 0), transpose(correction, true));
+            for (int ik = 0; ik < 4; ++ik)
+            {
+                const auto solution =
+                    solve_localized_velocity(native[spin], operators, kpoints[ik], lattice);
+                const auto &coefficients = solution.ket_coefficients;
+                for (int band = 0; band < 2; ++band)
+                    reference.get_eigenvals()[spin](ik, band) = solution.eigenvalues_ha[band];
+                for (int component = 0; component < spinors; ++component)
+                {
+                    auto &wfc = reference.get_eigenvectors()[spin][component][ik];
+                    wfc.create(2, 2 / spinors);
+                    for (int band = 0; band < 2; ++band)
+                        for (int ao = 0; ao < 2 / spinors; ++ao)
+                            wfc(band, ao) = coefficients(ao * spinors + component, band);
+                }
+                target[spin][ik] = transpose(coefficients, true) *
+                                   sampled(current[spin], kpoints[ik]) * coefficients;
+            }
+        }
+        const auto whole = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
+                                                        Vector3_Order<int>(4, 1, 1), lattice);
+        operators.native_dft_hamiltonian = native;
+        auto preserved = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
+                                                      Vector3_Order<int>(4, 1, 1), lattice);
+        double off_grid_error = 0.0, whole_error = 0.0, derivative_error = 0.0;
+        for (int spin = 0; spin < spins; ++spin)
+        {
+            const auto expected =
+                solve_localized_velocity(current[spin], operators, probe, lattice);
+            const auto actual =
+                solve_localized_velocity(preserved.hamiltonian[spin], operators, probe, lattice);
+            const auto aliased =
+                solve_localized_velocity(whole.hamiltonian[spin], operators, probe, lattice);
+            for (int band = 0; band < 2; ++band)
+            {
+                off_grid_error = std::max(off_grid_error, std::abs(actual.eigenvalues_ha[band] -
+                                                                   expected.eigenvalues_ha[band]));
+                whole_error = std::max(whole_error, std::abs(aliased.eigenvalues_ha[band] -
+                                                             expected.eigenvalues_ha[band]));
+            }
+            // Evaluate derivatives in the same complete frame to avoid phase
+            // ambiguity in off-diagonal velocity comparisons.
+            const auto projected = compute_localized_velocity_in_frame(
+                preserved.hamiltonian[spin], operators, probe, lattice, expected.eigenvalues_ha,
+                expected.ket_coefficients);
+            for (int a = 0; a < 3; ++a)
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
+                        derivative_error = std::max(derivative_error,
+                                                    std::abs(projected.velocity_ha_bohr[a](i, j) -
+                                                             expected.velocity_ha_bohr[a](i, j)));
+            for (int ik = 0; ik < 4; ++ik)
+            {
+                const Matz grid_difference = sampled(preserved.hamiltonian[spin], kpoints[ik]) -
+                                             sampled(current[spin], kpoints[ik]);
+                for (std::size_t entry = 0; entry < grid_difference.size(); ++entry)
+                    if (std::abs(grid_difference.ptr()[entry]) >= 1e-12) std::abort();
+            }
+            // The output must not share mutable storage with the baseline.
+            const auto original_tail = native[spin].at(Vector3_Order<int>(3, 0, 0))(0, 0);
+            preserved.hamiltonian[spin].at(Vector3_Order<int>(3, 0, 0))(0, 0) += 0.125;
+            if (operators.native_dft_hamiltonian[spin].at(Vector3_Order<int>(3, 0, 0))(0, 0) !=
+                original_tail)
+                std::abort();
+            for (const auto &[r, block] : native[spin])
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
+                        if (operators.native_dft_hamiltonian[spin].at(r)(i, j) != block(i, j))
+                            std::abort();
+        }
+        if (!std::isfinite(off_grid_error) || !std::isfinite(derivative_error) ||
+            off_grid_error >= 1e-12 || derivative_error >= 1e-12 || whole_error <= 1e-3)
+            std::abort();
+        if (librpa_int::global::mpi_comm_global_h.is_root())
+            std::cout << "QSGW native-baseline spinors=" << spinors
+                      << " path_E_Ha=" << off_grid_error << " velocity_HaBohr=" << derivative_error
+                      << " whole_H_alias_E_Ha=" << whole_error << std::endl;
+    }
 }
 
 void assert_complex_close(const std::complex<double> &actual, const std::complex<double> &expected,
@@ -1453,6 +1593,115 @@ void test_transform_Cs2mnk_can_keep_spin_channels_separate(const BlacsCtxtHandle
     assert(spin_channels_differ == 1);
 }
 
+void test_soc_charge_vertex_is_spin_trace_and_rotation_invariant(const BlacsCtxtHandler &blacs_h)
+{
+    const int nprocs = librpa_int::get_mpi_size(MPI_COMM_WORLD);
+    KPointBlacsProcessShape shape(1, nprocs, true);
+    KPointBlacsParallelContext kctx(shape, MPI_COMM_WORLD, 1);
+    const auto desc_wfc = kctx.create_array_desc(2, 4, 2, 4);
+
+    // A complete complex spinor frame in AO-major/spinor-minor order.
+    Matz coefficients(4, 4, MAJOR::ROW);
+    for (int row = 0; row != 4; ++row)
+        for (int band = 0; band != 4; ++band)
+            coefficients(row, band) =
+                std::polar(0.5, librpa_int::TWO_PI * row * band / 4.0 + 0.31 * row + 0.21 * band);
+    Matz rotated(4, 4, MAJOR::ROW);
+    const double c = std::cos(0.63);
+    const auto s = std::polar(std::sin(0.63), 0.41);
+    for (int ao = 0; ao != 2; ++ao)
+        for (int band = 0; band != 4; ++band)
+        {
+            rotated(2 * ao, band) =
+                c * coefficients(2 * ao, band) + s * coefficients(2 * ao + 1, band);
+            rotated(2 * ao + 1, band) =
+                -std::conj(s) * coefficients(2 * ao, band) + c * coefficients(2 * ao + 1, band);
+        }
+    MeanField mf(1, 1, 4, 2, 2);
+    MeanField mf_rotated(1, 1, 4, 2, 2);
+    for (int spinor = 0; spinor != 2; ++spinor)
+    {
+        auto &wfc = mf.get_eigenvectors()[0][spinor][0];
+        auto &wfc_rotated = mf_rotated.get_eigenvectors()[0][spinor][0];
+        wfc.create(4, 2);
+        wfc_rotated.create(4, 2);
+        for (int band = 0; band != 4; ++band)
+            for (int ao = 0; ao != 2; ++ao)
+            {
+                wfc(band, ao) = coefficients(2 * ao + spinor, band);
+                wfc_rotated(band, ao) = rotated(2 * ao + spinor, band);
+            }
+    }
+
+    librpa_int::velocity_matrix_t velocity;
+    librpa_int::initialize_velocity_matrix(velocity, 1, 1, 4);
+    AtomicBasis basis_wfc({2});
+    AtomicBasis basis_abf({1});
+    PeriodicBoundaryData pbc;
+    const std::vector<Vector3_Order<double>> kfrac{{0.0, 0.0, 0.0}};
+    const std::vector<double> omega{0.5};
+    diele_func df(mf, velocity, kfrac, basis_wfc, basis_abf, omega, 2, 4, 1, 1, pbc,
+                  librpa_int::global::mpi_comm_global_h, blacs_h, true, &kctx, &desc_wfc);
+    diele_func df_rotated(mf_rotated, velocity, kfrac, basis_wfc, basis_abf, omega, 2, 4, 1, 1, pbc,
+                          librpa_int::global::mpi_comm_global_h, blacs_h, true, &kctx, &desc_wfc);
+
+    auto tensor_data = std::make_shared<std::valarray<double>>(4);
+    (*tensor_data)[0] = 0.9;
+    (*tensor_data)[1] = 0.31;
+    (*tensor_data)[2] = -0.27;
+    (*tensor_data)[3] = 0.63;
+    std::map<int, std::map<librpa_int::libri_types<int, int>::TAC, RI::Tensor<double>>> Cs_IJ;
+    Cs_IJ[0][{0, {0, 0, 0}}] = RI::Tensor<double>({1UL, 2UL, 2UL}, tensor_data);
+    librpa_int::Cs_LRI Cs_data;
+    Cs_data.use_libri = true;
+    Cs_data.data_libri = Cs_IJ;
+    const auto Cs_IJ_k = librpa_int::fourier_headwing_cs_to_ijk(
+        Cs_data, basis_wfc, basis_abf, librpa_int::build_headwing_full_bz_fourier_targets(kfrac));
+
+    // Independent dense charge operator: (A + A^dagger) tensor I_spin.
+    // Both local RI centres coincide in this one-atom control.
+    Matz charge(4, 4, MAJOR::ROW);
+    std::fill(charge.ptr(), charge.ptr() + charge.size(), std::complex<double>{});
+    for (int row = 0; row != 4; ++row)
+        for (int col = 0; col != 4; ++col)
+            if (row % 2 == col % 2)
+                charge(row, col) = (*tensor_data)[2 * (row / 2) + col / 2] +
+                                   (*tensor_data)[2 * (col / 2) + row / 2];
+    const Matz expected = transpose(coefficients, true) * charge * coefficients;
+    const auto world = df.transform_Cs2mnk(0, 0, Cs_IJ);
+    const auto world_rotated = df_rotated.transform_Cs2mnk(0, 0, Cs_IJ);
+    const auto kblacs = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    const auto kblacs_rotated = df_rotated.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    double local_error = 0.0;
+    const std::array<const char *, 4> route_names{"world", "world_SU2", "kBLACS", "kBLACS_SU2"};
+    int route = 0;
+    for (const auto *actual : {&world, &world_rotated, &kblacs, &kblacs_rotated})
+    {
+        double local_route_error = 0.0;
+        for (int row = 0; row != actual->first.m_loc(); ++row)
+            for (int col = 0; col != actual->first.n_loc(); ++col)
+            {
+                const double difference =
+                    std::abs(actual->second(row, col) - expected(actual->first.indx_l2g_r(row),
+                                                                 actual->first.indx_l2g_c(col)));
+                if (!std::isfinite(difference)) MPI_Abort(MPI_COMM_WORLD, 1);
+                local_route_error = std::max(local_route_error, difference);
+            }
+        double route_error = 0.0;
+        MPI_Allreduce(&local_route_error, &route_error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        if (librpa_int::global::mpi_comm_global_h.is_root())
+            std::cout << "SOC charge " << route_names[route] << " error: " << route_error
+                      << std::endl;
+        ++route;
+        local_error = std::max(local_error, local_route_error);
+    }
+    double error = 0.0;
+    MPI_Allreduce(&local_error, &error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    if (librpa_int::global::mpi_comm_global_h.is_root())
+        std::cout << "SOC charge spin trace / SU(2) maximum error: " << error << std::endl;
+    if (!std::isfinite(error) || error >= 1e-12) MPI_Abort(MPI_COMM_WORLD, 1);
+}
+
 void test_head_initialization_does_not_require_coulomb_diagonalization(
     const BlacsCtxtHandler &blacs_h)
 {
@@ -1946,6 +2195,7 @@ int main(int argc, char *argv[])
         test_gamma_head_rank_one_matches_coulomb_basis_overwrite(blacs_h);
         test_gamma_head_rank_one_handles_empty_local_blocks(blacs_h);
         test_rspace_symmetry_requires_complete_band_space();
+        test_qsgw_native_baseline_preserves_aliased_tail();
         test_kpoint_coordinate_mapping_selects_active_klist_from_full_source();
         test_kstar_velocity_mapping_preserves_member_order_and_periodic_gauge();
         test_replace_rpa_response_head_only_keeps_numeric_wings(blacs_h);
@@ -1971,6 +2221,7 @@ int main(int argc, char *argv[])
         test_kblacs_transform_matches_original_transform(blacs_h);
         test_kblacs_transform_uses_rectangular_opt_128_blocks();
         test_transform_Cs2mnk_can_keep_spin_channels_separate(blacs_h);
+        test_soc_charge_vertex_is_spin_trace_and_rotation_invariant(blacs_h);
         test_head_initialization_does_not_require_coulomb_diagonalization(blacs_h);
         test_abf_space_wing_rewrite_matches_coulomb_basis(blacs_h);
     }

@@ -35,6 +35,13 @@ DriverParams::DriverParams():
     fn_dielfunc("dielecfunc_out"),
     fn_vxc_scf("vxc_out"),
     prefix_velocity("mommat_ks_kpt_"),
+    g0w0_headwing_velocity("file"),
+    g0w0_fn_hr(""),
+    g0w0_fn_hr_spin1(""),
+    g0w0_fn_sr(""),
+    g0w0_fn_rr(""),
+    g0w0_hr_unit("Ry"),
+    g0w0_rr_unit("Bohr"),
     fn_band_kpath_info("band_kpath_info"),
     version_coul_reader(-1),
     version_lri_reader(-1),
@@ -57,11 +64,24 @@ DriverParams::DriverParams():
     qsgw_mixing_beta(0.2),
     qsgw_min_iter(1),
     qsgw_max_iter(10),
-    qsgw_band0_unoccupied_keep(10),
-    qsgw_band0_cut_mode(0),
-    qsgw_band0_cut_shift_ha(20.0),
+    qsgw_unoccupied_keep(10),
+    qsgw_cut_mode(0),
+    qsgw_cut_shift_ha(2.0 / 27.211386245988),
     qsgw_write_iteration_matrices(false),
-    qsgw_convergence_tolerance_ev(1.0e-4)
+    qsgw_export_hamiltonian_for_pyatb(true),
+    qsgw_headwing_velocity("reference"),
+    qsgw_fn_sr("srs1_nao.csr"),
+    qsgw_fn_rr("rr.csr"),
+    qsgw_restart_file("none"),
+    qsgw_checkpoint_file("qsgw_checkpoint.bin"),
+    qsgw_convergence_tolerance_ev(1.0e-4),
+    crpa_output_analysis(true),
+    crpa_analysis_only(false),
+    crpa_pdos_reference("vbm"),
+    crpa_pdos_min_ev(-10),
+    crpa_pdos_max_ev(14),
+    crpa_pdos_step_ev(0.02),
+    crpa_pdos_sigma_ev(0.15)
 {
 }
 
@@ -146,7 +166,25 @@ std::string DriverParams::format()
     std::string normalized_task = task;
     std::transform(normalized_task.begin(), normalized_task.end(),
                    normalized_task.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (normalized_task == "qsgw" || normalized_task == "qsgw_band")
+    if (requested_option_dielect_func == 5)
+    {
+        ss << "option_dielect_func_requested = 5" << std::endl;
+        ss << "option_dielect_func_effective = 3" << std::endl;
+    }
+    if (normalized_task == "g0w0" || normalized_task == "g0w0_band")
+    {
+        ss << "g0w0_headwing_velocity = " << g0w0_headwing_velocity << std::endl;
+        if (g0w0_headwing_velocity == "native")
+        {
+            ss << "g0w0_fn_hr = " << g0w0_fn_hr << std::endl;
+            ss << "g0w0_fn_hr_spin1 = " << g0w0_fn_hr_spin1 << std::endl;
+            ss << "g0w0_fn_sr = " << g0w0_fn_sr << std::endl;
+            ss << "g0w0_fn_rr = " << g0w0_fn_rr << std::endl;
+            ss << "g0w0_hr_unit = " << g0w0_hr_unit << std::endl;
+            ss << "g0w0_rr_unit = " << g0w0_rr_unit << std::endl;
+        }
+    }
+    if (normalized_task == "qsgw")
     {
         const bool aims_input = constants_choice == "aims";
         ss << "prefix_vxc_scf = " << (prefix_vxc_scf.empty()
@@ -154,20 +192,28 @@ std::string DriverParams::format()
         ss << "prefix_vxc_band = " << (prefix_vxc_band.empty()
             ? (aims_input ? "band_vxc_mat" : "band_vxc") : prefix_vxc_band) << std::endl;
         ss << "qsgw_vxc_basis = " << qsgw_vxc_basis << std::endl;
+        ss << "crpa_enabled = " << std::boolalpha << crpa_enabled << std::endl;
+        ss << "qsgw_headwing_velocity = " << qsgw_headwing_velocity << std::endl;
+        ss << "qsgw_fn_sr = " << qsgw_fn_sr << std::endl;
+        ss << "qsgw_fn_rr = " << qsgw_fn_rr << std::endl;
         ss << "qsgw_mixer = " << qsgw_mixer << std::endl;
         ss << "qsgw_mixing_beta = " << qsgw_mixing_beta << std::endl;
         ss << "qsgw_min_iter = " << qsgw_min_iter << std::endl;
         ss << "qsgw_max_iter = " << qsgw_max_iter << std::endl;
-        ss << "qsgw_band0_unoccupied_keep = "
-           << qsgw_band0_unoccupied_keep << std::endl;
-        ss << "qsgw_band0_cut_mode = " << qsgw_band0_cut_mode
+        ss << "qsgw_unoccupied_keep = "
+           << qsgw_unoccupied_keep << std::endl;
+        ss << "qsgw_cut_mode = " << qsgw_cut_mode
            << std::endl;
-        ss << "qsgw_band0_cut_shift_ha = "
-           << qsgw_band0_cut_shift_ha << std::endl;
+        ss << "qsgw_cut_shift_ha = "
+           << qsgw_cut_shift_ha << std::endl;
         ss << "qsgw_convergence_tolerance_ev = "
            << qsgw_convergence_tolerance_ev << std::endl;
         ss << "qsgw_write_iteration_matrices = " << std::boolalpha
            << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_export_hamiltonian_for_pyatb = " << std::boolalpha
+           << qsgw_export_hamiltonian_for_pyatb << std::endl;
+        ss << "qsgw_restart_file = " << qsgw_restart_file << std::endl;
+        ss << "qsgw_checkpoint_file = " << qsgw_checkpoint_file << std::endl;
     }
     if (output_gw_spec_func)
     {
@@ -177,8 +223,17 @@ std::string DriverParams::format()
         ss << "sf_state_start = " << sf_state_start << std::endl;
         ss << "sf_state_end   = " << sf_state_end << std::endl;
     }
-    if (normalized_task == "crpa_u")
+    if (normalized_task == "crpa" || crpa_enabled)
     {
+        ss << "crpa_interval = " << crpa_interval << '\n';
+        ss << "crpa_model_file = " << crpa_model_file << '\n';
+        ss << "crpa_output_analysis = " << std::boolalpha << crpa_output_analysis << '\n';
+        ss << "crpa_analysis_only = " << crpa_analysis_only << '\n';
+        ss << "crpa_pdos_reference = " << crpa_pdos_reference << '\n';
+        ss << "crpa_pdos_min_ev = " << crpa_pdos_min_ev << '\n';
+        ss << "crpa_pdos_max_ev = " << crpa_pdos_max_ev << '\n';
+        ss << "crpa_pdos_step_ev = " << crpa_pdos_step_ev << '\n';
+        ss << "crpa_pdos_sigma_ev = " << crpa_pdos_sigma_ev << '\n';
         ss << "crpa_overlap_file = " << crpa_overlap_file << '\n';
         ss << "crpa_species_labels = " << crpa_species_labels << '\n';
         ss << "crpa_correlated_species = " << crpa_correlated_species << '\n';
@@ -234,6 +289,7 @@ std::string basis_convention_label("unknown");
 librpa::Handler h;
 
 librpa::Options opts;
+int requested_option_dielect_func = 0;
 
 #define normal_pair(name) {#name, opts.name}
 #define bool_pair(name) {#name, get_bool(opts.name)}

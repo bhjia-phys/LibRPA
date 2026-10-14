@@ -84,6 +84,7 @@ LibRPA is :doc:`licensed <develop/licensing>` under LGPL-3.0.
    develop/documentation
    develop/design
    develop/develop_tips
+   develop/qsgw_staticization
    develop/dataset_format
    develop/known_issues
    develop/licensing

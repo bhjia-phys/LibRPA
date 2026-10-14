@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <memory>
+#include <optional>
 #include <ostream>
 #include <set>
 #include <string>
@@ -13,6 +15,7 @@
 
 // Headers for API
 #include "compute_helper.h"
+#include "crpa_helper.h"
 #include "dataset_helper.h"
 #include "instance_manager.h"
 
@@ -666,13 +669,28 @@ void dump_analycont_source_data(std::ostream &os, const librpa_int::AnalyCont &a
 
 } // namespace
 
-void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
+namespace
+{
+using CrpaResultOwner = std::unique_ptr<LibrpaCrpaResult, decltype(&librpa_delete_crpa_result)>;
+
+CrpaResultOwner build_g0w0_sigma_impl(LibrpaHandler *h, const LibrpaOptions *p_opts,
+                                      const LibrpaCrpaInput *crpa_input)
 {
     using namespace librpa_int;
     using librpa_int::global::lib_printf;
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    if (!p_opts) throw LIBRPA_INVALID_ARGUMENT("missing GW options");
     const auto &opts = *p_opts;
+    CrpaResultOwner crpa_result(nullptr, librpa_delete_crpa_result);
+    std::optional<CrpaPreparedModel> crpa_model;
+    if (crpa_input)
+        crpa_model.emplace(
+            api::prepare_crpa_api_model(*pds, opts, crpa_input, api::CrpaApiMode::SharedGw));
+    if (opts.option_dielect_func == 5)
+        throw LIBRPA_RUNTIME_ERROR(
+            "option_dielect_func = 5 is a driver preset; "
+            "API callers must supply velocity and use option_dielect_func = 3");
     const bool debug = global::should_output(LIBRPA_VERBOSE_DEBUG);
     pds->is_band_calc_done = false;
     initialize_ds_global_ddla(*pds, opts);
@@ -700,6 +718,8 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
         const int n_atoms = pds->atoms.size();
         routing = decide_auto_routing(n_atoms, opts.nfreq * pds->pbc.get_n_cells_bvk());
     }
+    if (crpa_model && routing != LIBRPA_ROUTING_LIBRI)
+        throw LIBRPA_INVALID_ARGUMENT("shared GW/cRPA requires LIBRI response routing");
 
     if (opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
     {
@@ -752,7 +772,7 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
         const char *restart_from_dir = opts.restart_from_dir[0] ? opts.restart_from_dir : opts.output_dir;
         pds->p_g0w0->read_sigc(restart_from_dir);
         profiler.stop("api_build_g0w0_sigma");
-        return;
+        return crpa_result;
     }
 
     profiler.start("chi0_build", "Build response function chi0");
@@ -769,6 +789,10 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
                pds->blacs_h);
     profiler.stop("chi0_build");
     pds->comm_h.barrier();
+
+    if (crpa_model)
+        crpa_result.reset(
+            api::evaluate_crpa_api_from_response(*pds, opts, *crpa_model, chi0.get_chi0_q()));
 
     if (debug)
     { // debug, check chi0
@@ -803,6 +827,19 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
         {
             if (pds->epsmacs_imagfreq.size() != chi0.tfg.get_freq_nodes().size())
                 throw LIBRPA_RUNTIME_ERROR("analytic head/wing dielectric data must match chi0 frequency grid");
+            if (pds->p_headwing)
+            {
+                const auto &nodes = pds->p_headwing->get_frequency_nodes();
+                const auto &body_nodes = chi0.tfg.get_freq_nodes();
+                if (nodes.size() != body_nodes.size())
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "analytic head/wing and body frequency nodes differ");
+                for (std::size_t i = 0; i < nodes.size(); ++i)
+                    if (std::abs(nodes[i] - body_nodes[i]) >
+                        1e-12 * std::max(1.0, std::abs(body_nodes[i])))
+                        throw LIBRPA_RUNTIME_ERROR(
+                            "analytic head/wing and body frequency nodes differ");
+            }
             epsmac_LF_imagfreq_re = pds->epsmacs_imagfreq;
         }
         else
@@ -892,6 +929,20 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
     release_free_mem();
 
     profiler.stop("api_build_g0w0_sigma");
+    return crpa_result;
+}
+}  // namespace
+
+void librpa_build_g0w0_sigma(LibrpaHandler *h, const LibrpaOptions *options)
+{
+    build_g0w0_sigma_impl(h, options, nullptr);
+}
+
+LibrpaCrpaResult *librpa_build_g0w0_sigma_crpa(LibrpaHandler *h, const LibrpaOptions *options,
+                                               const LibrpaCrpaInput *input)
+{
+    if (!input) throw LIBRPA_INVALID_ARGUMENT("missing cRPA input for GW build");
+    return build_g0w0_sigma_impl(h, options, input).release();
 }
 
 void librpa_get_g0w0_qpe_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, const int n_spins,

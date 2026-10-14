@@ -136,7 +136,61 @@ struct DriverParams
     //! `mommat_ks_kpt_`
     std::string prefix_velocity;
 
+    //! G0W0 analytic head/wing velocity source: file (existing reader) or native.
+    //! Native uses the original DFT H(R)/S(R)/r(R) and the loaded SCF E/C frame.
+    //! @par Default
+    //! file
+    //! @par Status
+    //! Experimental
+    std::string g0w0_headwing_velocity;
+
+    //! Original DFT H(R) CSR for spin 0, relative to input_dir or absolute.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_hr;
+
+    //! Original DFT H(R) CSR for spin 1 in a collinear two-spin calculation.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_hr_spin1;
+
+    //! Dimensionless S(R) CSR with its original full real-space support.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_sr;
+
+    //! Three-component r(R) CSR with its original full real-space support.
+    //! @par Default
+    //! empty
+    //! @par Status
+    //! Experimental
+    std::string g0w0_fn_rr;
+
+    //! H(R) input energy unit: Ha, Ry, or eV, converted once into Hartree.
+    //! @par Default
+    //! Ry
+    //! @par Status
+    //! Experimental
+    std::string g0w0_hr_unit;
+
+    //! r(R) input length unit: Bohr or Angstrom, converted once into Bohr.
+    //! @par Default
+    //! Bohr
+    //! @par Status
+    //! Experimental
+    std::string g0w0_rr_unit;
+
     //! Band-path k-point metadata filename.
+    //! For QSGW, presence under input_dir enables the existing band channel
+    //! and requires matching band E/C and full Vxc; absence runs only the
+    //! SCF grid. This input-driven behavior uses task=qsgw.
+    //! Keep band-channel presence and inputs unchanged across a restart.
     //! @par Default
     //! `band_kpath_info`
     std::string fn_band_kpath_info;
@@ -286,53 +340,61 @@ struct DriverParams
     std::string qsgw_vxc_basis;
 
     //! Fixed-basis Hamiltonian mixing (`none` or `linear`).
+    //! After reading SCF input, `linear` is allowed only for one loaded k point
+    //! on a one-point full BvK mesh. Multi-k meshes automatically use `none`.
+    //! Band-path points do not affect this selection. A Gamma-only solid also
+    //! enters the single-k branch; select `none` for a direct update there.
     //! @par Default
     //! `none`
     //! @par Status
     //! Experimental
     std::string qsgw_mixer;
 
-    //! Linear Hamiltonian mixing fraction.
+    //! Linear Hamiltonian mixing fraction for the single-k SCF branch.
     //! @par Default
     //! 0.2
     //! @par Status
     //! Experimental
     double qsgw_mixing_beta;
 
-    //! Minimum number of QSGW updates before convergence may terminate the run.
+    //! Earliest global QSGW iteration at which convergence may terminate the run.
     //! @par Default
     //! 1
     //! @par Status
     //! Experimental
     int qsgw_min_iter;
 
-    //! Maximum number of QSGW updates.
+    //! Maximum global QSGW iteration, including restored updates.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
     int qsgw_max_iter;
 
-    //! Number of unoccupied states retained by qsgw_band H_QSGW cut.
+    //! Number of unoccupied states retained by the QSGW H_QSGW cut.
+    //! Applies to the SCF grid and optional band path when cut mode 1 is selected.
     //! @par Default
     //! 10
     //! @par Status
     //! Experimental
-    int qsgw_band0_unoccupied_keep;
+    int qsgw_unoccupied_keep;
 
-    //! qsgw_band H_QSGW cut: 0 uncut, 1 KS diagonal, 2 shifted KS diagonal.
+    //! QSGW H_QSGW cut: 0 uncut, 1 shifted KS diagonal (formerly mode 2).
+    //! Applies to the SCF grid and optional band path; HR exports the actual cut H.
     //! @par Default
     //! 0
     //! @par Status
     //! Experimental
-    int qsgw_band0_cut_mode;
+    int qsgw_cut_mode;
 
-    //! Hamiltonian energy shift applied to cut states in mode 2, in Hartree.
+    //! Hamiltonian energy shift applied to cut states in mode 1, in Hartree.
+    //! The omitted default is 2 eV converted using the selected constants.
+    //! Applies to the SCF grid and optional band path.
     //! @par Default
-    //! 20.0
+    //! 2.0 / 27.211386245988 (2 eV in Hartree with internal constants)
     //! @par Status
     //! Experimental
-    double qsgw_band0_cut_shift_ha;
+    double qsgw_cut_shift_ha;
 
     //! Write per-iteration matrices used by numerical regression tests.
     //! @par Default
@@ -341,6 +403,65 @@ struct DriverParams
     //! Experimental
     bool qsgw_write_iteration_matrices;
 
+    //! Export the complete SCF-grid Hamiltonian before each QSGW diagonalization.
+    //! Writes full complex Ry CSR as hrsS_nao_qsgw_iter_NNNN.csr, with H padded
+    //! to the actual H/S/r support union. Preserves native DFT hrs1_nao.csr
+    //! (also hrs2_nao.csr for two physical collinear channels) and transforms
+    //! only the complete current correction. Native DFT H input is in Ry;
+    //! S/r use qsgw_fn_sr and qsgw_fn_rr defaults. Requires a complete unshifted
+    //! mesh, independently of head/wing and band inputs. SOC retains the full
+    //! complex spinor matrix. current_hr differentiates this same native-baseline
+    //! reconstruction; its checkpoints bind the native DFT H as well as S/r.
+    //! @par Default
+    //! true
+    //! @par Status
+    //! Experimental
+    bool qsgw_export_hamiltonian_for_pyatb;
+
+    //! Analytic head/wing velocity convention: reference (legacy head-only),
+    //! rotate_reference (fixed initial operator in current eigenstates), or
+    //! current_hr (velocity of the complete current native-baseline Hamiltonian,
+    //! matching formal HR export; requires native hrs1/hrs2_nao.csr in Ry).
+    //! Standalone option_dielect_func=5 selects current_hr if omitted and
+    //! rejects an explicit reference or rotate_reference. It resolves to
+    //! numerical option 3, with the same current-HR calculation and scope.
+    //! @par Default
+    //! reference
+    //! @par Status
+    //! Experimental
+    std::string qsgw_headwing_velocity;
+
+    //! S(R) input for current_hr or HR export: native ABACUS CSR, dimensionless, with its
+    //! full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! srs1_nao.csr
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_sr;
+
+    //! Three-component r(R) input for current_hr or HR export: native ABACUS CSR in Bohr,
+    //! with its full real-space support; path relative to input_dir or absolute.
+    //! @par Default
+    //! rr.csr
+    //! @par Status
+    //! Experimental
+    std::string qsgw_fn_rr;
+
+    //! Checkpoint to restore at a completed QSGW iteration; relative to cwd.
+    //! @par Default
+    //! `none`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_restart_file;
+
+    //! Checkpoint written after every complete update; relative to output_dir.
+    //! Use `none` to disable checkpoint output.
+    //! @par Default
+    //! `qsgw_checkpoint.bin`
+    //! @par Status
+    //! Experimental
+    std::string qsgw_checkpoint_file;
+
     //! Maximum eigenvalue change used for convergence, in eV.
     //! @par Default
     //! 1.0e-4
@@ -348,7 +469,26 @@ struct DriverParams
     //! Experimental
     double qsgw_convergence_tolerance_ev;
 
-    //! Native scalar S(R) CSR input for task=crpa_u, relative to input_dir.
+    //! Compute cRPA U at selected entering QSGW states and at the final state.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    bool crpa_enabled = false;
+    //! Electronic-state interval for cRPA during QSGW; the final state is always evaluated.
+    //! @par Default
+    //! 1
+    //! @par Status
+    //! Experimental
+    int crpa_interval = 1;
+    //! Import only cRPA model/analysis parameters from an existing native input file.
+    //! Main-input cRPA assignments override imported settings; shared GW options stay in the main input.
+    //! @par Default
+    //! none
+    //! @par Status
+    //! Experimental
+    std::string crpa_model_file = "none";
+    //! Native spatial or interleaved SOC S(R) CSR input, relative to the main input_dir.
     //! @par Default
     //! SR.csr
     //! @par Status
@@ -356,13 +496,13 @@ struct DriverParams
     std::string crpa_overlap_file = "SR.csr";
     //! Explicit species labels in numeric structure-type order, separated by spaces.
     //! @par Default
-    //! Empty (required for task=crpa_u).
+    //! Empty (required for task=crpa).
     //! @par Status
     //! Experimental
     std::string crpa_species_labels;
-    //! Species whose first radial d shell supplies the correlated atomic trials.
+    //! Species supplying first-radial correlated atomic trials for the declared parent frame.
     //! @par Default
-    //! Empty (required for task=crpa_u).
+    //! Empty (required for interaction calculations with task=crpa).
     //! @par Status
     //! Experimental
     std::string crpa_correlated_species;
@@ -421,6 +561,38 @@ struct DriverParams
     //! Experimental
     double crpa_residual_tol = 1.0e-10;
 
+    //! Output Mulliken/Lowdin weights and Gaussian PDOS before cRPA screening.
+    //! Uses existing scalar/spinor KS states and spatial S; includes every radial shell.
+    //! Spinor weights sum both components in one stored spin channel.
+    //! @par Default
+    //! true
+    bool crpa_output_analysis;
+    //! Analyze orbital character only; skip RI/Coulomb input and screening.
+    //! A/B selections and correlated species are not required in this mode.
+    //! @par Default
+    //! false
+    bool crpa_analysis_only;
+    //! PDOS energy zero: vbm (highest occupied KS pole) or fermi.
+    //! @par Default
+    //! vbm
+    std::string crpa_pdos_reference;
+    //! Lower PDOS grid edge in eV relative to crpa_pdos_reference.
+    //! @par Default
+    //! -10
+    double crpa_pdos_min_ev;
+    //! Upper PDOS grid edge in eV relative to crpa_pdos_reference.
+    //! @par Default
+    //! 14
+    double crpa_pdos_max_ev;
+    //! PDOS grid spacing in eV.
+    //! @par Default
+    //! 0.02
+    double crpa_pdos_step_ev;
+    //! Gaussian standard deviation in eV (not FWHM).
+    //! @par Default
+    //! 0.15
+    double crpa_pdos_sigma_ev;
+
     std::string format();
 
     //! Apply producer-specific defaults to input filename and prefix parameters.
@@ -467,6 +639,10 @@ extern librpa::Handler h;
 
 // Working runtime options
 extern librpa::Options opts;
+
+// Original dielectric-method request for driver diagnostics, before preset
+// resolution. This is not an input keyword or a numerical API option.
+extern int requested_option_dielect_func;
 
 // TODO: consider move to public API
 std::string format_runtime_options(const librpa::Options &opts) noexcept;

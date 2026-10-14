@@ -4,7 +4,8 @@
 #include <string>
 
 #include "../core/crpa.h"
-#include "../core/crpa_window_input.h"
+#include "../core/crpa_workflow.h"
+#include "crpa_helper.h"
 #include "dataset_helper.h"
 #include "instance_manager.h"
 #include "librpa_crpa.h"
@@ -55,31 +56,37 @@ void librpa_get_crpa_kgrid(const LibrpaHandler* h, int n_kpoints, double* fracti
     }
 }
 
-LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const LibrpaOptions* options,
-                                             const LibrpaCrpaInput* input)
+librpa_int::CrpaPreparedModel librpa_int::api::prepare_crpa_api_model(
+    Dataset& dataset, const LibrpaOptions& numerical_options, const LibrpaCrpaInput* input,
+    CrpaApiMode mode)
 {
     using namespace librpa_int;
-    auto ds = api::get_dataset_instance(h);
+    auto* ds = &dataset;
+    const auto* options = &numerical_options;
     CrpaWindowOptions window;
     std::vector<std::string> species;
     std::vector<ComplexMatrix> overlap;
     std::string error;
     try
     {
-        if (!options || !input) throw LIBRPA_INVALID_ARGUMENT("missing cRPA input or options");
+        if (!input) throw LIBRPA_INVALID_ARGUMENT("missing cRPA input or options");
         if (options->use_symmetry_gw == LIBRPA_SWITCH_ON ||
             options->use_kpara_scf_eigvec == LIBRPA_SWITCH_ON ||
             (options->parallel_routing != LIBRPA_ROUTING_LIBRI &&
              options->parallel_routing != LIBRPA_ROUTING_AUTO))
             throw LIBRPA_INVALID_ARGUMENT(
                 "cRPA requires full-grid LIBRI and replicated eigenvectors");
+        if (mode == CrpaApiMode::SharedGw && (options->use_symmetry_rpa == LIBRPA_SWITCH_ON ||
+                                              options->read_sigc_mat_rf == LIBRPA_SWITCH_ON))
+            throw LIBRPA_INVALID_ARGUMENT(
+                "shared GW/cRPA requires full-grid response and no SigC file-read shortcut");
         const bool optical = options->replace_w_head == LIBRPA_SWITCH_ON;
         if ((optical && (options->option_dielect_func != 3 ||
                          options->use_2d_dielectric == LIBRPA_SWITCH_ON)) ||
             (!optical && options->option_dielect_func != 0) ||
             options->tfgrids_type != LIBRPA_TFGRID_MINIMAX || options->n_bands_chi0 >= 0 ||
-            options->use_fullcoul_eps != LIBRPA_SWITCH_ON ||
-            options->use_fullcoul_wc != LIBRPA_SWITCH_ON)
+            (mode == CrpaApiMode::Standalone && (options->use_fullcoul_eps != LIBRPA_SWITCH_ON ||
+                                                 options->use_fullcoul_wc != LIBRPA_SWITCH_ON)))
             throw LIBRPA_INVALID_ARGUMENT(
                 "cRPA requires native minimax, all loaded bands, full/full Coulomb and either "
                 "no head correction or 3D analytic option 3");
@@ -142,37 +149,15 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     }
     collective_error(ds->comm_h, error);
 
-    CrpaWindowBuildResult built;
-    std::vector<std::unique_ptr<CorrelatedSubspace>> frames;
-    Chi0::BandSelection selection;
+    CrpaPreparedModel model;
     error.clear();
     try
     {
         std::vector<int> atom_types(ds->basis_wfc.n_atoms);
         for (std::size_t atom = 0; atom < atom_types.size(); ++atom)
             atom_types[atom] = ds->atoms.types.at(atom);
-        built = build_crpa_window_input(ds->basis_wfc, ds->basis_convention, atom_types, species,
-                                        overlap, ds->pbc.kfrac_list, ds->mf, window);
-        selection.resize(ds->mf.get_n_spins());
-        for (int spin = 0; spin < ds->mf.get_n_spins(); ++spin)
-        {
-            auto frame = std::make_unique<CorrelatedSubspace>(
-                built.sites, ds->pbc.kfrac_list, ds->pbc.Rlist,
-                ds->mf.get_n_aos() * ds->mf.get_n_spinor(),
-                ds->mf.get_n_bands(), 1, window.gram_abs, window.gram_rel, window.gram_cond_max,
-                window.s_abs, window.s_rel, window.s_cond_max, window.residual_tol,
-                window.t_roundtrip_tol);
-            selection[spin].resize(ds->mf.get_n_kpoints());
-            for (int k = 0; k < ds->mf.get_n_kpoints(); ++k)
-            {
-                frame->set_S_k(k, crpa_spinor_overlap(overlap[k], ds->mf.get_n_spinor()));
-                frame->set_W_k(k, built.orbitals_spin_k[spin][k]);
-                selection[spin][k].assign(ds->mf.get_n_bands(), 0);
-                for (const int band : built.response_bands[spin][k]) selection[spin][k][band] = 1;
-            }
-            frame->compute_T_R();
-            frames.push_back(std::move(frame));
-        }
+        model = prepare_crpa_model(ds->basis_wfc, ds->basis_convention, atom_types, species,
+                                   overlap, ds->pbc, ds->mf, window);
     }
     catch (const std::exception& failure)
     {
@@ -180,18 +165,88 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
     }
     collective_error(ds->comm_h, error);
 
-    const auto& opts = *options;
-    initialize_ds_global_ddla(*ds, opts);
-    initialize_ds_tfgrids(*ds, opts);
-    initialize_ds_atpairs_local(*ds, LIBRPA_ROUTING_LIBRI);
-    ds->redistribute_coulomb_blacs2ap();
-    initialize_ds_chi0(*ds, opts, true);
+    return model;
+}
+
+namespace
+{
+librpa_int::CrpaContext crpa_context(librpa_int::Dataset& ds, const LibrpaOptions& opts)
+{
     const bool shrink = opts.use_shrink_abfs == LIBRPA_SWITCH_ON;
-    CrpaContext context{*ds->p_chi0,   ds->cs_data,
-                        ds->basis_aux, ds->atpairs_local,
-                        ds->sinvS,     ds->vq,
-                        ds->blacs_h,   shrink ? ds->desc_abf_shrink : ds->desc_abf,
-                        shrink,        opts.sqrt_coulomb_threshold};
+    // cRPA always screens and projects with full v. The independent GW
+    // eps/Wc/EXX Coulomb flags do not enter this numerical context.
+    return {*ds.p_chi0,   ds.cs_data,
+            ds.basis_aux, ds.atpairs_local,
+            ds.sinvS,     ds.vq,
+            ds.blacs_h,   shrink ? ds.desc_abf_shrink : ds.desc_abf,
+            shrink,       opts.sqrt_coulomb_threshold};
+}
+
+void initialize_crpa_response(librpa_int::Dataset& ds, const LibrpaOptions& opts)
+{
+    using namespace librpa_int;
+    initialize_ds_global_ddla(ds, opts);
+    initialize_ds_tfgrids(ds, opts);
+    initialize_ds_atpairs_local(ds, LIBRPA_ROUTING_LIBRI);
+    ds.redistribute_coulomb_blacs2ap();
+    initialize_ds_chi0(ds, opts, true);
+}
+
+LibrpaCrpaResult* own_crpa_result(librpa_int::CrpaResult values,
+                                  librpa_int::CrpaPreparedModel& model)
+{
+    auto result = std::make_unique<LibrpaCrpaResult>();
+    result->values = std::move(values);
+    result->response_bands = std::move(model.windows.response_bands);
+    result->orbital_bands = std::move(model.windows.orbital_bands);
+    return result.release();
+}
+}  // namespace
+
+LibrpaCrpaResult* librpa_int::api::evaluate_crpa_api_from_response(Dataset& ds,
+                                                                   const LibrpaOptions& opts,
+                                                                   CrpaPreparedModel& model,
+                                                                   const Chi0QMap& full_response)
+{
+    auto context = crpa_context(ds, opts);
+    std::unique_ptr<diele_func> constrained_headwing;
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON)
+    {
+        auto optical_options = opts;
+        optical_options.use_symmetry_rpa = optical_options.use_symmetry_gw = LIBRPA_SWITCH_OFF;
+        constrained_headwing = make_ds_headwing(ds, optical_options, true, &model.selection);
+        constrained_headwing->normalize_gamma_cell_weights = true;
+        context.constrained_headwing = constrained_headwing.get();
+    }
+    std::vector<CorrelatedSubspace*> frames;
+    for (const auto& frame : model.frames) frames.push_back(frame.get());
+    return own_crpa_result(
+        evaluate_crpa_onsite_from_response(context, model.selection, frames, full_response), model);
+}
+
+LibrpaCrpaResult* librpa_compute_crpa_u_window(const LibrpaHandler* h, const LibrpaOptions* options,
+                                               const LibrpaCrpaInput* input)
+{
+    using namespace librpa_int;
+    if (!options) throw LIBRPA_INVALID_ARGUMENT("missing cRPA options");
+    auto ds = api::get_dataset_instance(h);
+    auto model = api::prepare_crpa_api_model(*ds, *options, input, api::CrpaApiMode::ResponseOnly);
+    initialize_crpa_response(*ds, *options);
+    auto context = crpa_context(*ds, *options);
+    auto full_response = build_crpa_total_response(context);
+    return api::evaluate_crpa_api_from_response(*ds, *options, model, full_response);
+}
+
+LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const LibrpaOptions* options,
+                                             const LibrpaCrpaInput* input)
+{
+    using namespace librpa_int;
+    if (!options) throw LIBRPA_INVALID_ARGUMENT("missing cRPA options");
+    auto ds = api::get_dataset_instance(h);
+    auto model = api::prepare_crpa_api_model(*ds, *options, input);
+    const auto& opts = *options;
+    initialize_crpa_response(*ds, opts);
+    auto context = crpa_context(*ds, opts);
     std::unique_ptr<diele_func> full_headwing, constrained_headwing;
     if (opts.replace_w_head == LIBRPA_SWITCH_ON)
     {
@@ -200,19 +255,15 @@ LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h, const Librp
         auto optical_options = opts;
         optical_options.use_symmetry_rpa = optical_options.use_symmetry_gw = LIBRPA_SWITCH_OFF;
         full_headwing = make_ds_headwing(*ds, optical_options, true);
-        constrained_headwing = make_ds_headwing(*ds, optical_options, true, &selection);
+        constrained_headwing = make_ds_headwing(*ds, optical_options, true, &model.selection);
         full_headwing->normalize_gamma_cell_weights = true;
         constrained_headwing->normalize_gamma_cell_weights = true;
         context.full_headwing = full_headwing.get();
         context.constrained_headwing = constrained_headwing.get();
     }
     std::vector<CorrelatedSubspace*> frame_views;
-    for (const auto& frame : frames) frame_views.push_back(frame.get());
-    auto result = std::make_unique<LibrpaCrpaResult>();
-    result->values = compute_crpa_onsite(context, selection, frame_views);
-    result->response_bands = std::move(built.response_bands);
-    result->orbital_bands = std::move(built.orbital_bands);
-    return result.release();
+    for (const auto& frame : model.frames) frame_views.push_back(frame.get());
+    return own_crpa_result(compute_crpa_onsite(context, model.selection, frame_views), model);
 }
 
 void librpa_delete_crpa_result(LibrpaCrpaResult* result) { delete result; }
@@ -240,7 +291,8 @@ void librpa_crpa_result_tensor(const LibrpaCrpaResult* result, int index, Librpa
     tensor->frequency_ha = result->values.frequencies[index % nf];
     tensor->bare_ri = reinterpret_cast<const double*>(record.bare.c);
     tensor->partially_screened_ri = reinterpret_cast<const double*>(record.u.at(index % nf).c);
-    tensor->fully_screened_ri = reinterpret_cast<const double*>(record.w.at(index % nf).c);
+    tensor->fully_screened_ri =
+        record.w.empty() ? nullptr : reinterpret_cast<const double*>(record.w.at(index % nf).c);
 }
 
 void librpa_crpa_result_bands(const LibrpaCrpaResult* result, int response_window, int spin,

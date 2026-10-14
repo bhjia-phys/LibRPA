@@ -12,3 +12,10 @@ add_test(NAME test_driver_params COMMAND $<TARGET_FILE:test_driver_params>)
 add_executable(test_velocity_reader test_velocity_reader.cpp)
 target_link_libraries(test_velocity_reader PRIVATE rpa_lib)
 add_test(NAME test_velocity_reader COMMAND $<TARGET_FILE:test_velocity_reader>)
+
+add_executable(
+  test_stru_symops_parser
+  test_stru_symops_parser.cpp
+  ../stru_symops_parser.cpp
+)
+add_test(NAME test_stru_symops_parser COMMAND $<TARGET_FILE:test_stru_symops_parser>)

@@ -53,7 +53,11 @@ void initialize_symmetry_context(Dataset &ds, const bool build_shell_rotations)
     if (ds.spg_spin_ops_explicit)
     {
         ctx.set_symmetry_spin_operations(ds.spg_spin_ops, ds.spg_grey_group);
-        validate_spin_operations_for_storage(ctx, ds.mf.get_n_spins(), ds.mf.get_n_spinor());
+        // Phase 8: collinear/scalar storage can only hold operations whose
+        // effective spin action maps each channel onto itself; anything else
+        // is rejected here instead of silently mis-restored downstream.
+        validate_spin_operations_for_storage(
+            ctx, ds.mf.get_n_spins(), ds.mf.get_n_spinor());
     }
     ctx.build_periodic_mappings(ds.pbc, ds.pbc.Rlist);
 
@@ -111,7 +115,8 @@ void reject_spinor_symmetry_speedup(const Dataset &ds, const char *calculation)
     }
     throw LIBRPA_RUNTIME_ERROR(
         std::string("Cannot use ") + calculation
-        + " symmetry speed-up with spinor wave functions; disable symmetry for spinor runs");
+        + " symmetry speed-up with spinor wave functions; disable symmetry for spinor runs"
+        + " (magnetic/spin-space group symmetry support is under development, Phase 2+)");
 }
 
 void initialize_ds_tfgrids(Dataset &ds, const LibrpaOptions &opts)
@@ -231,10 +236,6 @@ void initialize_ds_exx(Dataset &ds, const LibrpaOptions &opts)
     const bool use_symmetry = opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
     if (use_symmetry)
     {
-        reject_spinor_symmetry_speedup(ds, "EXX");
-    }
-    if (use_symmetry)
-    {
         initialize_symmetry_context(ds, true);
         require_symmetry_shell_layouts(ds, "EXX");
     }
@@ -256,10 +257,6 @@ void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts, bool qstar_only)
 {
     global::profiler.start("initialize_ds_chi0");
     const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON;
-    if (use_symmetry && !qstar_only)
-    {
-        reject_spinor_symmetry_speedup(ds, "RPA/chi0");
-    }
     if (qstar_only && (ds.mf.get_n_kpoints() != ds.pbc.get_n_cells_bvk() ||
                       opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON))
         throw LIBRPA_INVALID_ARGUMENT("q-star-only response requires replicated full-grid KS states");
@@ -300,10 +297,6 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts)
 {
     global::profiler.start("initialize_ds_g0w0");
     const bool use_symmetry = opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
-    if (use_symmetry)
-    {
-        reject_spinor_symmetry_speedup(ds, "GW");
-    }
     if (use_symmetry)
     {
         initialize_symmetry_context(ds, true);

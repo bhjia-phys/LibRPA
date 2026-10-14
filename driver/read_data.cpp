@@ -964,18 +964,21 @@ void read_velocity(const string &file_path, const MeanField &mf, velocity_matrix
         {
             for (int ia = 0; ia != 3; ia++)
             {
-                infile >> alpha >> kk >> ss;
+                if (!(infile >> alpha >> kk >> ss))
+                    throw std::logic_error("Incomplete velocity_matrix block header in " + file_path);
                 int k_index = stoi(kk) - 1;
                 int a_index = stoi(alpha) - 1;
                 int s_index = stoi(ss) - 1;
-                assert(k_index == ik);
-                assert(a_index == ia);
-                assert(s_index == is);
+                if (k_index != ik || a_index != ia || s_index != is)
+                    throw std::logic_error(
+                        "velocity_matrix blocks must follow spin, k-point, direction order in " +
+                        file_path);
                 for (int i = 0; i != n_bands; i++)
                 {
                     for (int j = 0; j != n_bands; j++)
                     {
-                        infile >> single_re >> single_im;
+                        if (!(infile >> single_re >> single_im))
+                            throw std::logic_error("Incomplete velocity_matrix payload in " + file_path);
                         velocity.at(is).at(ik).at(ia)(i, j) =
                             ANG2BOHR * std::complex<double>(stod(single_re), stod(single_im)) /
                             HA2EV;

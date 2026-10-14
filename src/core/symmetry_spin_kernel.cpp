@@ -7,8 +7,10 @@
 namespace librpa_int
 {
 
-CollinearChannelAction classify_collinear_action(const std::array<std::complex<double>, 4> &U,
-                                                 bool antiunitary, double tol)
+CollinearChannelAction classify_collinear_action(
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol)
 {
     // The conjugation of an antiunitary operation is handled by the Theta
     // remap in transform_spinor_bilinear; classification uses U only.
@@ -37,7 +39,9 @@ CollinearChannelAction classify_collinear_action(const std::array<std::complex<d
 }
 
 CollinearChannelAction classify_collinear_action_effective(
-    const std::array<std::complex<double>, 4> &U, bool antiunitary, double tol)
+    const std::array<std::complex<double>, 4> &U,
+    bool antiunitary,
+    double tol)
 {
     const auto action = classify_collinear_action(U, antiunitary, tol);
     if (!antiunitary || action == CollinearChannelAction::Incompatible)
@@ -49,4 +53,4 @@ CollinearChannelAction classify_collinear_action_effective(
                                                   : CollinearChannelAction::Keep;
 }
 
-}  // namespace librpa_int
+} // namespace librpa_int

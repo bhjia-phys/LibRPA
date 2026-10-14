@@ -63,6 +63,7 @@ foreach(target
     test_qpe_solver
     test_rsh
     test_symmetry
+    test_symmetry_spin_kernel
     test_timefreq
     test_vector3
     test_wigner_rotation
@@ -108,5 +109,18 @@ if(LIBRPA_USE_LIBRI)
     add_test(NAME ${target}_mpi COMMAND mpirun -np 4 $<TARGET_FILE:${target}>)
   endforeach()
 endif()
+
+# Existing numerical QSGW controls, including the state update used by cRPA.
+foreach(target
+    test_qsgw_fixed_basis
+    test_qsgw_correlation_potential
+    test_qsgw_effective_hamiltonian
+    test_qsgw_occupation
+    test_qsgw_convergence
+    test_qsgw_hamiltonian_cut)
+  config_test(${target} 1)
+endforeach()
+config_test(test_qsgw_fixed_basis_mpi 4)
+config_test(test_qsgw_distributed_matrix 4)
 
 # TODO(minye): make use of GTest

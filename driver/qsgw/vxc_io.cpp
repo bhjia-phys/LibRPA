@@ -1,11 +1,7 @@
 #include "vxc_io.h"
 
-#include "../../src/io/fs.h"
-#include "../../src/io/input_elsi.h"
-
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <map>
@@ -13,14 +9,15 @@
 #include <stdexcept>
 #include <vector>
 
+#include "../../src/io/fs.h"
+#include "../../src/io/input_elsi.h"
+
 namespace librpa_int
 {
 namespace qsgw
 {
 namespace
 {
-
-constexpr double hermitian_tolerance = 1.0e-10;
 
 std::string trim(std::string value)
 {
@@ -44,38 +41,6 @@ std::string lowercase(std::string value)
                        return static_cast<char>(std::tolower(ch));
                    });
     return value;
-}
-
-bool finite_complex(const cplxdb value)
-{
-    return std::isfinite(value.real()) && std::isfinite(value.imag());
-}
-
-void validate_hermitian_matrix(const Matz& matrix,
-                               const int expected_dimension,
-                               const std::string& label)
-{
-    if (matrix.nr() != expected_dimension ||
-        matrix.nc() != expected_dimension)
-    {
-        throw std::invalid_argument(label + " has an invalid shape");
-    }
-    for (int row = 0; row < matrix.nr(); ++row)
-    {
-        for (int column = 0; column < matrix.nc(); ++column)
-        {
-            if (!finite_complex(matrix(row, column)))
-            {
-                throw std::invalid_argument(label + " contains non-finite data");
-            }
-            if (std::abs(matrix(row, column) -
-                         std::conj(matrix(column, row))) >
-                hermitian_tolerance)
-            {
-                throw std::invalid_argument(label + " is not Hermitian");
-            }
-        }
-    }
 }
 
 std::vector<cplxdb> parse_complex_values(const std::string& line,
@@ -289,7 +254,6 @@ Matz read_abacus_vxc_ha(std::istream& input,
             }
         }
     }
-    validate_hermitian_matrix(result, rows, "ABACUS Vxc matrix");
     return result;
 }
 
@@ -302,8 +266,10 @@ SpinKMatrixMap read_qsgw_vxc(const std::string& input_directory,
                             const bool band_path,
                             const VxcBasis basis)
 {
-    if (!aims_input && reference.get_n_spinor() != 1)
-        throw std::invalid_argument("ABACUS QSGW Vxc currently requires n_spinor=1");
+    if (!aims_input && reference.get_n_spinor() != 1 &&
+        (reference.get_n_spinor() != 2 || reference.get_n_spins() != 1))
+        throw std::invalid_argument(
+            "ABACUS QSGW Vxc requires scalar channels or one two-component spinor channel");
     if (aims_input && basis != VxcBasis::State)
         throw std::invalid_argument("FHI-aims QSGW Vxc requires the KS-state basis");
     const std::string default_prefix = aims_input
@@ -329,7 +295,10 @@ SpinKMatrixMap read_qsgw_vxc(const std::string& input_directory,
             else
             {
                 filename << "k" << kpoint + 1;
-                if (reference.get_n_spins() == 2) filename << "s" << spin + 1;
+                if (reference.get_n_spinor() == 2)
+                    filename << "s4";
+                else if (reference.get_n_spins() == 2)
+                    filename << "s" << spin + 1;
                 filename << "_nao.txt";
             }
             std::string path = filename.str();
@@ -338,7 +307,10 @@ SpinKMatrixMap read_qsgw_vxc(const std::string& input_directory,
                 !file_exists(path))
             {
                 path = path_prefix;
-                if (reference.get_n_spins() == 2) path += "s" + std::to_string(spin + 1);
+                if (reference.get_n_spinor() == 2)
+                    path += "s4";
+                else if (reference.get_n_spins() == 2)
+                    path += "s" + std::to_string(spin + 1);
                 path += "_nao.txt";
             }
             require_readable_file(path);

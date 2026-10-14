@@ -1,10 +1,10 @@
 #include "stru_symops_parser.h"
 
+#include "../src/utils/error.h"
+
 #include <algorithm>
 #include <cctype>
 #include <exception>
-
-#include "../src/utils/error.h"
 
 namespace
 {
@@ -56,8 +56,10 @@ double parse_stru_double_token(const std::string &token, const std::string &cont
     throw LIBRPA_RUNTIME_ERROR("Invalid floating-point value in " + context + ": " + token);
 }
 
-void require_stru_tail_tokens(const std::vector<std::string> &tokens, const std::size_t pos,
-                              const std::size_t count, const std::string &context)
+void require_stru_tail_tokens(const std::vector<std::string> &tokens,
+                              const std::size_t pos,
+                              const std::size_t count,
+                              const std::string &context)
 {
     if (pos > tokens.size() || tokens.size() - pos < count)
     {
@@ -75,8 +77,10 @@ bool is_stru_tail_boundary_at(const std::vector<std::string> &tokens, const std:
     return pos == tokens.size() || (pos < tokens.size() && is_stru_symop_header_at(tokens, pos));
 }
 
-std::size_t skip_legacy_stru_kpoint_section(const std::vector<std::string> &tokens, std::size_t pos,
-                                            int n_kpoints, const std::string &file_path)
+std::size_t skip_legacy_stru_kpoint_section(const std::vector<std::string> &tokens,
+                                            std::size_t pos,
+                                            int n_kpoints,
+                                            const std::string &file_path)
 {
     require_stru_tail_tokens(tokens, pos, 3, "legacy k-point grid");
     const int nk0 = parse_stru_int_token(tokens[pos], file_path);
@@ -116,8 +120,10 @@ std::size_t skip_legacy_stru_kpoint_section(const std::vector<std::string> &toke
     return pos + static_cast<std::size_t>(nk_full);
 }
 
-std::size_t read_stru_symops_from_tokens(const std::vector<std::string> &tokens, std::size_t pos,
-                                         const std::string &file_path, driver::StruSymopsTail &tail)
+std::size_t read_stru_symops_from_tokens(const std::vector<std::string> &tokens,
+                                         std::size_t pos,
+                                         const std::string &file_path,
+                                         driver::StruSymopsTail &tail)
 {
     require_stru_tail_tokens(tokens, pos, 2, "symmetry operation header");
     tail.n_symops = parse_stru_int_token(tokens[pos], file_path);
@@ -128,8 +134,8 @@ std::size_t read_stru_symops_from_tokens(const std::vector<std::string> &tokens,
     const auto convention = lowercase_token(tokens[pos + 1]);
     if (!is_stru_symop_convention(convention))
     {
-        throw LIBRPA_RUNTIME_ERROR("Invalid symmetry operation convention in " + file_path + ": " +
-                                   tokens[pos + 1]);
+        throw LIBRPA_RUNTIME_ERROR("Invalid symmetry operation convention in " + file_path
+                                  + ": " + tokens[pos + 1]);
     }
     tail.row_conv = convention == "row" ? 1 : 0;
     pos += 2;
@@ -143,14 +149,14 @@ std::size_t read_stru_symops_from_tokens(const std::vector<std::string> &tokens,
         require_stru_tail_tokens(tokens, pos, 12, "symmetry operation");
         for (int i = 0; i != 9; ++i)
         {
-            tail.rotmats.push_back(
-                parse_stru_int_token(tokens[pos + static_cast<std::size_t>(i)], file_path));
+            tail.rotmats.push_back(parse_stru_int_token(tokens[pos + static_cast<std::size_t>(i)],
+                                                        file_path));
         }
         pos += 9;
         for (int i = 0; i != 3; ++i)
         {
-            tail.trans.push_back(
-                parse_stru_double_token(tokens[pos + static_cast<std::size_t>(i)], file_path));
+            tail.trans.push_back(parse_stru_double_token(tokens[pos + static_cast<std::size_t>(i)],
+                                                         file_path));
         }
         pos += 3;
     }
@@ -158,21 +164,22 @@ std::size_t read_stru_symops_from_tokens(const std::vector<std::string> &tokens,
 }
 
 std::size_t read_stru_spin_block_from_tokens(const std::vector<std::string> &tokens,
-                                             std::size_t pos, const std::string &file_path,
+                                             std::size_t pos,
+                                             const std::string &file_path,
                                              driver::StruSymopsTail &tail)
 {
     require_stru_tail_tokens(tokens, pos, 3, "spin symmetry header");
     if (lowercase_token(tokens[pos]) != "spin_symmetry")
     {
-        throw LIBRPA_RUNTIME_ERROR("Unexpected data after symmetry operations in " + file_path +
-                                   ": " + tokens[pos]);
+        throw LIBRPA_RUNTIME_ERROR("Unexpected data after symmetry operations in " + file_path
+                                  + ": " + tokens[pos]);
     }
     tail.grey_group = parse_stru_int_token(tokens[pos + 1], file_path);
     tail.spin_source = parse_stru_int_token(tokens[pos + 2], file_path);
     if (tail.spin_source < 0 || tail.spin_source > 2)
     {
-        throw LIBRPA_RUNTIME_ERROR("Invalid spin action source in " + file_path + ": " +
-                                   tokens[pos + 2]);
+        throw LIBRPA_RUNTIME_ERROR("Invalid spin action source in " + file_path
+                                  + ": " + tokens[pos + 2]);
     }
     pos += 3;
 
@@ -189,8 +196,8 @@ std::size_t read_stru_spin_block_from_tokens(const std::vector<std::string> &tok
         pos += 1;
         for (int i = 0; i != n_spin_u; ++i)
         {
-            tail.spin_u.push_back(
-                parse_stru_double_token(tokens[pos + static_cast<std::size_t>(i)], file_path));
+            tail.spin_u.push_back(parse_stru_double_token(tokens[pos + static_cast<std::size_t>(i)],
+                                                          file_path));
         }
         pos += static_cast<std::size_t>(n_spin_u);
     }
@@ -198,13 +205,15 @@ std::size_t read_stru_spin_block_from_tokens(const std::vector<std::string> &tok
     return pos;
 }
 
-}  // namespace
+} // namespace
 
 namespace driver
 {
 
-bool parse_stru_symops_tail(const std::vector<std::string> &tokens, const std::string &file_path,
-                            int n_kpoints, StruSymopsTail &tail)
+bool parse_stru_symops_tail(const std::vector<std::string> &tokens,
+                            const std::string &file_path,
+                            int n_kpoints,
+                            StruSymopsTail &tail)
 {
     tail = StruSymopsTail{};
     if (tokens.empty())
@@ -238,4 +247,4 @@ bool parse_stru_symops_tail(const std::vector<std::string> &tokens, const std::s
     return true;
 }
 
-}  // namespace driver
+} // namespace driver

@@ -602,6 +602,8 @@ void librpa_set_symmetry_operations(LibrpaHandler* h, const int n_symops, const 
         bool use_row_convention = row_conv > 0 ? true : false;
         ops.push_back({array_rotmt, array_trans, use_row_convention});
     }
+    // The legacy entry point always means an ordinary space group: drop any
+    // previously installed explicit spin-operation table.
     pds->spg_spin_ops.clear();
     pds->spg_spin_ops_explicit = false;
     pds->spg_grey_group = true;
