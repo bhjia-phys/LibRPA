@@ -14,14 +14,16 @@ matrices and mean-field objects.
 
 ## Quasiparticle roots during iteration
 
-To also solve the diagonal G0W0 quasiparticle equation on each entering state:
+The driver solves the diagonal G0W0 quasiparticle equation on each entering
+state by default:
 
 ```ini
 task = qsgw
 qsgw_output_qp = true
 ```
 
-The default is `false`. Results are written to `output_dir/qsgw_qp.csv` for the
+Set `qsgw_output_qp = false` to disable this output. Results are written to
+`output_dir/qsgw_qp.csv` for the
 SCF grid and, when present, the band path. State 0 is the original DFT reference;
 GW update 1 evaluates its ordinary G0W0 roots. Update `t+1` evaluates roots for
 entering state `t`, using that state's energies, Fermi level and eigenvectors.
@@ -136,7 +138,8 @@ or establish interpolation accuracy at points outside the mesh.
 
 ## Analytic head and wing feedback
 
-The standalone `qsgw` driver accepts `option_dielect_func = 5`
+The standalone `qsgw` driver defaults to `replace_w_head = true` and
+`option_dielect_func = 5`
 to recompute velocity internally from the complete current Hamiltonian and
 then apply the existing analytic head/wing prescription at every iteration.
 This preset selects `qsgw_headwing_velocity = current_hr` and resolves to
@@ -145,6 +148,15 @@ explicit `reference` and `rotate_reference` are rejected for option 5. It
 requires `replace_w_head = true`, `use_scalapack_gw_wc = true`, and
 `use_pyatb = false`. The log records requested option 5 and effective option 3.
 The native mode remains experimental.
+
+Set `replace_w_head = false` to disable the default correction; with no explicit
+dielectric option this selects option 0. Explicit option 0, 1 or 2 also leaves
+head correction disabled when the head switch is omitted. Explicit option 3
+or 4 retains its supported velocity selection and enables head correction when
+the switch is omitted. Conflicting explicit assignments are still rejected.
+These defaults apply only to the QSGW driver. G0W0, standalone cRPA and direct
+library callers retain their existing defaults. EXX/GW/RPA symmetry switches
+remain off by default, including SOC option 5 and the shared-P0 cRPA route.
 
 Existing option 3 provides both analytic head and wing, and option 4 provides
 head only, with `replace_w_head = true`. These options retain their explicit
@@ -470,6 +482,10 @@ a fresh working/output directory, and set:
 qsgw_restart_file = /path/to/initial/librpa.d/qsgw_checkpoint.bin
 qsgw_max_iter = 3
 ```
+
+For a checkpoint produced without head correction, explicitly retain
+`replace_w_head = false`; the new option-5 task default must not change the saved
+map. Likewise retain an older run's explicit option-3/4 velocity convention.
 
 The restart path is relative to the working directory unless absolute.
 Restoration is explicit: a checkpoint already present in `output_dir` does

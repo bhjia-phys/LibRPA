@@ -679,6 +679,21 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_double(opts, libri_g0w0_threshold_Wc);
     _parse_switch(opts, replace_w_head);
     _parse_int(opts, option_dielect_func);
+    if (task_normalized == "qsgw")
+    {
+        // Task defaults belong to the driver; keep library/G0W0 defaults intact.
+        // An explicit head-off switch or non-optical dielectric option also
+        // disables the implicit native preset, preserving existing controls.
+        std::string assigned;
+        const bool head_assigned = get_last_assigned_value(parser, "replace_w_head", assigned);
+        const bool option_assigned = get_last_assigned_value(parser, "option_dielect_func", assigned);
+        if (!head_assigned)
+            opts.replace_w_head = !option_assigned || opts.option_dielect_func == 3 ||
+                                  opts.option_dielect_func == 4 || opts.option_dielect_func == 5
+                                      ? LIBRPA_SWITCH_ON : LIBRPA_SWITCH_OFF;
+        if (!option_assigned)
+            opts.option_dielect_func = opts.replace_w_head == LIBRPA_SWITCH_ON ? 5 : 0;
+    }
     _parse_switch(opts, use_2d_dielectric);
     _parse_switch(opts, output_gw_sigc_ks_kf);
     if (flag != 0)  // backward-compatible

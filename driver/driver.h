@@ -408,7 +408,7 @@ struct DriverParams
     //! G0W0 analytic-continuation/QPE options. Writes qsgw_qp.csv for the SCF grid
     //! and optional band path; the results do not enter the QSGW update.
     //! @par Default
-    //! false
+    //! true
     //! @par Status
     //! Experimental
     bool qsgw_output_qp;
@@ -436,7 +436,7 @@ struct DriverParams
     //! rejects an explicit reference or rotate_reference. It resolves to
     //! numerical option 3, with the same current-HR calculation and scope.
     //! @par Default
-    //! reference
+    //! current_hr with the default QSGW option-5 preset; reference for explicit option 4
     //! @par Status
     //! Experimental
     std::string qsgw_headwing_velocity;

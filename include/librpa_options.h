@@ -428,6 +428,8 @@ typedef struct
     LibrpaSwitch use_elpa_sqrt_coulomb;
 
     //! Flag of replacing head of screened interaction by macroscopic dielectric function.
+    //! The QSGW driver enables native head/wing by default; an explicit false
+    //! disables it. Library callers and other tasks retain the default below.
     //! @par Default
     //! false
     LibrpaSwitch replace_w_head;
@@ -451,6 +453,8 @@ typedef struct
      * according to the task, and rejects use_pyatb=true.
      * Direct library/API callers must select 3 and supply velocity through
      * the public setter; do not pass 5 to LibrpaOptions.
+     * The QSGW driver defaults to preset 5 when head correction is enabled
+     * and this option is omitted. Other tasks retain the API default below.
      *
      * @par Default
      * 0

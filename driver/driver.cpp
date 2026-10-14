@@ -68,7 +68,7 @@ DriverParams::DriverParams():
     qsgw_cut_mode(0),
     qsgw_cut_shift_ha(2.0 / 27.211386245988),
     qsgw_write_iteration_matrices(false),
-    qsgw_output_qp(false),
+    qsgw_output_qp(true),
     qsgw_export_hamiltonian_for_pyatb(true),
     qsgw_headwing_velocity("reference"),
     qsgw_fn_sr("srs1_nao.csr"),

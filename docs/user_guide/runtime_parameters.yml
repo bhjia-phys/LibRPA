@@ -240,7 +240,12 @@ blocks:
       figures are not generated automatically. Keep band-channel presence and
       original path inputs unchanged when restarting a checkpoint.
       These experimental parameters apply to `task = qsgw`.
-      `option_dielect_func = 5` selects
+      QSGW defaults to `qsgw_output_qp = true`, `replace_w_head = true` and
+      the driver preset `option_dielect_func = 5`. Set `qsgw_output_qp = false`
+      to disable quasiparticle output, or `replace_w_head = false` to disable
+      the default correction (omitted dielectric option then becomes 0).
+      Symmetry switches retain their false defaults. These task defaults do
+      not change library or G0W0 defaults. `option_dielect_func = 5` selects
       `qsgw_headwing_velocity = current_hr` and resolves to existing numerical
       option 3: rebuild velocity from the current native-baseline Hamiltonian
       in the entering E/C frame, then rebuild analytic head/wing using the live
