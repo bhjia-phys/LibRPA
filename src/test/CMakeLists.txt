@@ -61,6 +61,7 @@ foreach(target
     test_pbc
     test_profiler
     test_qpe_solver
+    test_qsgw_correlation_potential
     test_rsh
     test_symmetry
     test_symmetry_spin_kernel
