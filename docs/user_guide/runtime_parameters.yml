@@ -297,6 +297,7 @@ blocks:
       - driver.qsgw_cut_mode
       - driver.qsgw_cut_shift_ha
       - driver.qsgw_write_iteration_matrices
+      - driver.qsgw_output_qp
       - driver.qsgw_export_hamiltonian_for_pyatb
       - driver.qsgw_headwing_velocity
       - driver.qsgw_fn_sr

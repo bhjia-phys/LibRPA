@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -360,6 +361,88 @@ SpinKMatrixMap build_correlation_map(
     return result;
 }
 
+// The matrices are already available for QSGW. Rotate to the entering
+// eigenframe and reuse G0W0 continuation/roots without a second GW build.
+void write_qsgw_qp_state(
+    std::ostream& output, int state_index, int update, const std::string& channel,
+    const MeanField& live, const std::vector<Vector3_Order<double>>& kpoints,
+    const SpinKMatrixMap& rotation, const SpinKMatrixMap& entering_hamiltonian,
+    const SpinKMatrixMap& reference_hamiltonian, const SpinKMatrixMap& dft_vxc,
+    const SpinKMatrixMap& exchange, const SigmaMatrixMap& sigma,
+    const librpa_int::TFGrids& tfg)
+{
+    const auto& options = driver::opts;
+    const int low = std::max(0, driver::driver_params.i_state_low);
+    const int high = std::min(live.get_n_states(), driver::driver_params.i_state_high);
+    const int n = high - low, nk = live.get_n_kpoints(), ns = live.get_n_spins();
+    if (n <= 0) return;
+    const auto frequencies = tfg.get_freq_nodes();
+    std::vector<int> iks(nk);
+    std::iota(iks.begin(), iks.end(), 0);
+    std::vector<double> potential(ns * nk * n), exx(potential.size());
+    std::vector<cplxdb> diagonal;
+    diagonal.reserve(potential.size() * frequencies.size());
+    for (int spin = 0; spin < ns; ++spin)
+        for (int kpoint = 0; kpoint < nk; ++kpoint)
+        {
+            const auto& u = rotation.at(spin).at(kpoint);
+            const auto adjoint = transpose(u, true);
+            const auto rotate = [&](const Matz& matrix) {
+                // BLACS Sigma/EXX are column-major; the fixed-frame rotation
+                // can be row-major. Normalize storage before the BLAS product.
+                const Matz aligned(matrix.nr(), matrix.nc(), matrix.ptr(),
+                                   matrix.major(), u.major());
+                return adjoint * aligned * u;
+            };
+            // H_t = H_DFT - Vxc_DFT + Vstatic_t, including mixing/cuts/restart.
+            Matz static_reference(u.nr(), u.nc(), u.major());
+            for (int row = 0; row < u.nr(); ++row)
+                for (int column = 0; column < u.nc(); ++column)
+                    static_reference(row, column) =
+                        entering_hamiltonian.at(spin).at(kpoint)(row, column) -
+                        reference_hamiltonian.at(spin).at(kpoint)(row, column) +
+                        dft_vxc.at(spin).at(kpoint)(row, column);
+            const auto vstatic = rotate(static_reference);
+            const auto sigx = rotate(exchange.at(spin).at(kpoint));
+            for (int band = low; band < high; ++band)
+            {
+                const int i = (spin * nk + kpoint) * n + band - low;
+                potential[i] = vstatic(band, band).real();
+                exx[i] = sigx(band, band).real();
+            }
+            for (double frequency : frequencies)
+            {
+                const auto sigc = rotate(sigma.at(spin).at(kpoint).at(frequency));
+                for (int band = low; band < high; ++band)
+                    diagonal.push_back(sigc(band, band));
+            }
+        }
+    std::vector<double> real(potential.size()), imag(potential.size()), eqp(potential.size());
+    std::vector<int> info(potential.size());
+    librpa_int::api::solve_g0w0_qpe_diagonal(
+        live, tfg, options, diagonal, iks, nk, iks.data(), low, n,
+        potential.data(), exx.data(), real.data(), imag.data(), eqp.data(),
+        "QSGW entering-state G0W0", info.data());
+    for (int spin = 0; spin < ns; ++spin)
+        for (int kpoint = 0; kpoint < nk; ++kpoint)
+            for (int band = low; band < high; ++band)
+            {
+                const int i = (spin * nk + kpoint) * n + band - low;
+                const auto& k = kpoints.at(kpoint);
+                output << state_index << ',' << update << ',' << channel << ','
+                       << spin + 1 << ',' << kpoint + 1 << ',' << k.x << ',' << k.y << ','
+                       << k.z << ',' << band + 1 << ',' << live.get_weight().at(spin)(kpoint, band) * nk
+                       << ',' << live.get_eigenvals().at(spin)(kpoint, band) * librpa_int::HA2EV
+                       << ',' << potential[i] * librpa_int::HA2EV
+                       << ',' << exx[i] * librpa_int::HA2EV
+                       << ',' << real[i] * librpa_int::HA2EV
+                       << ',' << imag[i] * librpa_int::HA2EV
+                       << ',' << eqp[i] * librpa_int::HA2EV << ',' << info[i] << '\n';
+            }
+    output.flush();
+    if (!output) throw LIBRPA_RUNTIME_ERROR("Cannot write QSGW quasiparticle output");
+}
+
 void run_qsgw()
 {
     using namespace driver;
@@ -631,10 +714,27 @@ void run_qsgw()
         }
     }
 
+    std::ofstream qp_output;
+    SpinKMatrixMap qp_rotation, qp_band_rotation;
+    if (driver_params.qsgw_output_qp)
+        collective_root_stage(dataset->comm_h, "QSGW QP frame recovery", [&] {
+            qp_rotation = reference_basis_rotation(dataset->mf, reference);
+            if (compute_band)
+                qp_band_rotation = reference_basis_rotation(dataset->mf_band, *band_reference);
+        });
+
     std::ofstream trace;
     std::ofstream eigenvalue_trace;
     std::ofstream matrix_trace;
     collective_root_stage(dataset->comm_h, "QSGW trace setup", [&] {
+        if (driver_params.qsgw_output_qp)
+        {
+            qp_output.open(join_path(opts.output_dir, "qsgw_qp.csv"));
+            if (!qp_output) throw LIBRPA_RUNTIME_ERROR("Cannot open QSGW quasiparticle output");
+            qp_output << "state_index,gw_update,channel,spin,kpoint,kx,ky,kz,band,occupation,"
+                         "e0_eV,vstatic_eV,sigma_x_eV,re_sigma_c_effective_eV,im_sigma_c_eV,"
+                         "eqp_eV,solver_info\n" << std::scientific << std::setprecision(17);
+        }
         trace.open(join_path(opts.output_dir, "qsgw_iterations.dat"));
         eigenvalue_trace.open(
             join_path(opts.output_dir, "qsgw_eigenvalues.dat"));
@@ -945,6 +1045,22 @@ void run_qsgw()
                 });
         }
 
+        if (driver_params.qsgw_output_qp)
+            collective_root_stage(dataset->comm_h, "QSGW entering-state QP equation", [&] {
+                write_qsgw_qp_state(
+                    qp_output, entering_state, iteration, "grid", dataset->mf,
+                    dataset->pbc.kfrac_list, qp_rotation,
+                    entering_state == 0 ? reference_hamiltonian : current_hamiltonian,
+                    reference_hamiltonian, dft_vxc, exchange, sigma, dataset->tfg);
+                if (compute_band)
+                    write_qsgw_qp_state(
+                        qp_output, entering_state, iteration, "band", dataset->mf_band,
+                        dataset->kfrac_band_list, qp_band_rotation,
+                        entering_state == 0 ? band_reference_hamiltonian : current_band_hamiltonian,
+                        band_reference_hamiltonian, dft_vxc_band, exchange_band, sigma_band,
+                        dataset->tfg);
+            });
+
         SpinKMatrixMap mixed_hamiltonian;
         SpinKMatrixMap mixed_band_hamiltonian;
         SpinKMatrixMap band_exchange_output;
@@ -1062,6 +1178,11 @@ void run_qsgw()
         }
         const OccupationResult occupations = update_qsgw_occupations(
             dataset->mf, reference, dataset->pbc.weight_k, electron_count);
+        if (driver_params.qsgw_output_qp && dataset->comm_h.is_root())
+        {
+            qp_rotation = diagonalization.unitary;
+            if (compute_band) qp_band_rotation = band_diagonalization->unitary;
+        }
         if (compute_band)
             dataset->mf_band.get_efermi() = occupations.chemical_potential;
         const double maximum_change_ev =

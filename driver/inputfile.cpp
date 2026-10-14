@@ -534,6 +534,7 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
+        parse_qsgw_bool(parser, "qsgw_output_qp", driver_params.qsgw_output_qp);
         parse_qsgw_bool(parser, "qsgw_export_hamiltonian_for_pyatb",
                         driver_params.qsgw_export_hamiltonian_for_pyatb);
         parse_qsgw_string(parser, "qsgw_headwing_velocity", driver_params.qsgw_headwing_velocity);

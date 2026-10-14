@@ -12,6 +12,41 @@ QSGW reuses the G0W0 input readers and EXX/Sigma kernels. Task-specific input
 and output live in `driver/qsgw`; numerical operations in `src/core/qsgw` accept
 matrices and mean-field objects.
 
+## Quasiparticle roots during iteration
+
+To also solve the diagonal G0W0 quasiparticle equation on each entering state:
+
+```ini
+task = qsgw
+qsgw_output_qp = true
+```
+
+The default is `false`. Results are written to `output_dir/qsgw_qp.csv` for the
+SCF grid and, when present, the band path. State 0 is the original DFT reference;
+GW update 1 evaluates its ordinary G0W0 roots. Update `t+1` evaluates roots for
+entering state `t`, using that state's energies, Fermi level and eigenvectors.
+The newly produced final state has no QP rows until it enters another GW build;
+the driver does not perform an extra final self-energy calculation for this output.
+
+The collected exchange and frequency-dependent Sigma matrices are rotated from
+the initial KS basis to the current eigenbasis. The subtracted static potential is
+`Vstatic_t = H_t - H_DFT + Vxc_DFT`, including the actual mixing/cut correction.
+The diagonal equation is therefore
+`E = epsilon_t - Vstatic_t + Sigma_x,t + Re Sigma_c,t(E - mu_t)`.
+The initial state uses the original uncut DFT operator. This output reuses the
+G0W0 continuation, resampling, Hedin-shift and `option_qpe_solver` settings; it
+does not rebuild W or alter QSGW staticization, mixing, cuts or occupations.
+The full QSGW Vxc input is sufficient; no separate diagonal `vxc_out` is needed.
+
+The CSV records the reference and QP energies, static potential, exchange,
+correlation and `solver_info` (`0` means solver success), all energies in eV.
+Failed roots remain NaN unless `override_qpe_solver_nan = true` requests the
+last unconverged value; their nonzero status is still retained. For perturbative
+solver 2 the real correlation column is the same effective value used by the
+G0W0 API to reconstruct the renormalized QP energy. `i_state_low`/`i_state_high`
+select the zero-based, upper-exclusive band range. Restart output starts at the
+restored entering state and recovers its saved eigenvector gauge.
+
 ## Optional band-path channel
 
 The driver selects the band channel from the input files. If

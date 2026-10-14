@@ -68,6 +68,7 @@ DriverParams::DriverParams():
     qsgw_cut_mode(0),
     qsgw_cut_shift_ha(2.0 / 27.211386245988),
     qsgw_write_iteration_matrices(false),
+    qsgw_output_qp(false),
     qsgw_export_hamiltonian_for_pyatb(true),
     qsgw_headwing_velocity("reference"),
     qsgw_fn_sr("srs1_nao.csr"),
@@ -210,6 +211,7 @@ std::string DriverParams::format()
            << qsgw_convergence_tolerance_ev << std::endl;
         ss << "qsgw_write_iteration_matrices = " << std::boolalpha
            << qsgw_write_iteration_matrices << std::endl;
+        ss << "qsgw_output_qp = " << std::boolalpha << qsgw_output_qp << std::endl;
         ss << "qsgw_export_hamiltonian_for_pyatb = " << std::boolalpha
            << qsgw_export_hamiltonian_for_pyatb << std::endl;
         ss << "qsgw_restart_file = " << qsgw_restart_file << std::endl;

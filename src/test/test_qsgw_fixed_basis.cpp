@@ -277,6 +277,23 @@ void test_fixed_reference_updates_live_wfc_from_mf0_each_iteration()
     assert_close(live.get_eigenvals()[0](0, 0), diagonal(0, 0).real());
     assert_close(live.get_eigenvals()[0](0, 1), diagonal(1, 1).real());
 
+    // A restart may carry independent complex phases. Recover its actual
+    // saved gauge rather than choosing new eigenvectors of the Hamiltonian.
+    MeanField phased_live = live;
+    const cplxdb phases[2] = {std::polar(1.0, 0.37), std::polar(1.0, -0.61)};
+    auto& phased_wfc = phased_live.get_eigenvectors()[0][0][0];
+    for (int row = 0; row < 2; ++row)
+        for (int column = 0; column < 2; ++column)
+            phased_wfc(row, column) *= phases[row];
+    const auto recovered = librpa_int::qsgw::reference_basis_rotation(phased_live, reference);
+    for (int row = 0; row < 2; ++row)
+        for (int column = 0; column < 2; ++column)
+            assert_close(recovered.at(0).at(0)(row, column), unitary(row, column) * phases[column]);
+    const Matz recovered_diagonal = transpose(recovered.at(0).at(0), true) *
+        hamiltonian.at(0).at(0) * recovered.at(0).at(0);
+    assert_close(recovered_diagonal(0, 0), diagonal(0, 0));
+    assert_close(recovered_diagonal(1, 1), diagonal(1, 1));
+
     // A second iteration must rotate directly from the immutable reference,
     // not compound the first iteration's live wavefunction.
     hamiltonian[0][0](0, 0) = 2.0;

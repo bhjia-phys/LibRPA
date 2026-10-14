@@ -403,6 +403,16 @@ struct DriverParams
     //! Experimental
     bool qsgw_write_iteration_matrices;
 
+    //! Solve the diagonal G0W0 quasiparticle equation on every entering QSGW state.
+    //! Reuses the existing EXX/Sigma matrices in the current eigenbasis and the
+    //! G0W0 analytic-continuation/QPE options. Writes qsgw_qp.csv for the SCF grid
+    //! and optional band path; the results do not enter the QSGW update.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    bool qsgw_output_qp;
+
     //! Export the complete SCF-grid Hamiltonian before each QSGW diagonalization.
     //! Writes full complex Ry CSR as hrsS_nao_qsgw_iter_NNNN.csr, with H padded
     //! to the actual H/S/r support union. Preserves native DFT hrs1_nao.csr
