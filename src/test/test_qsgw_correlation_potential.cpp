@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/correlation_potential.h"
+#include "../core/qsgw/correlation_potential.h"
 
 #include "../core/analycont.h"
 
@@ -260,6 +260,150 @@ void test_two_stage_parameter_counts_follow_upstream_order()
     assert(std::abs(correct(0, 0) - swapped(0, 0)) > 1.0e-12);
 }
 
+Matz analytic_sigma(const int dimension, const int spin, const int kpoint, const cplxdb energy)
+{
+    Matz result(dimension, dimension);
+    for (int row = 0; row < dimension; ++row)
+    {
+        for (int column = 0; column < dimension; ++column)
+        {
+            const cplxdb residue(0.3 + 0.17 * row + 0.09 * column + 0.05 * spin + 0.03 * kpoint,
+                                 0.12 + 0.04 * row - 0.08 * column + 0.03 * spin - 0.02 * kpoint);
+            const cplxdb pole(-2.1 - 0.19 * row + 0.14 * column + 0.07 * spin - 0.04 * kpoint,
+                              -0.5 - 0.08 * row - 0.11 * column);
+            result(row, column) = residue / (energy - pole);
+        }
+    }
+    return result;
+}
+
+Matz analytic_hermitian_sigma(const int dimension, const int spin, const int kpoint,
+                              const double energy)
+{
+    const Matz sigma = analytic_sigma(dimension, spin, kpoint, energy);
+    return 0.5 * (sigma + transpose(sigma, true));
+}
+
+Matz analytic_static_potential(const MeanField& meanfield, const int spin, const int kpoint,
+                               const CorrelationPotentialMode mode)
+{
+    const int dimension = meanfield.get_n_bands();
+    const Matz sigma_fermi = analytic_hermitian_sigma(dimension, spin, kpoint, 0.0);
+    Matz expected(dimension, dimension);
+    if (mode == CorrelationPotentialMode::ModeB)
+    {
+        expected = sigma_fermi.copy();
+    }
+
+    // Spectral-projector form of the staticization formula, evaluated from the
+    // known rational function rather than another analytic-continuation fit.
+    // A: sum_i (P_i H(e_i) + H(e_i) P_i) / 2;
+    // B: H(0) + sum_i P_i (H(e_i) - H(0)) P_i, where e_i = epsilon_i - E_F.
+    for (int band = 0; band < dimension; ++band)
+    {
+        Matz projector(dimension, dimension);
+        projector(band, band) = 1.0;
+        const double energy =
+            meanfield.get_eigenvals()[spin](kpoint, band) - meanfield.get_efermi();
+        const Matz sigma_state = analytic_hermitian_sigma(dimension, spin, kpoint, energy);
+        if (mode == CorrelationPotentialMode::ModeA)
+        {
+            expected = expected + 0.5 * (projector * sigma_state + sigma_state * projector);
+        }
+        else
+        {
+            expected = expected + projector * (sigma_state - sigma_fermi) * projector;
+        }
+    }
+    return expected;
+}
+
+void run_complex_rational_staticization_test(MeanField& meanfield)
+{
+    meanfield.get_efermi() = 0.37;
+    for (int spin = 0; spin < meanfield.get_n_spins(); ++spin)
+    {
+        for (int kpoint = 0; kpoint < meanfield.get_n_kpoints(); ++kpoint)
+        {
+            for (int band = 0; band < meanfield.get_n_bands(); ++band)
+            {
+                meanfield.get_eigenvals()[spin](kpoint, band) =
+                    -0.8 + 0.63 * band + 0.17 * spin + 0.11 * kpoint;
+            }
+        }
+    }
+    const std::vector<double> source_frequencies{0.15, 0.4, 0.9, 1.7, 3.2};
+    const std::vector<std::vector<cplxdb>> resample_grids{
+        {}, {cplxdb(0.0, 0.25), cplxdb(0.0, 0.65), cplxdb(0.0, 1.2), cplxdb(0.0, 2.4)}};
+    const int dimension = meanfield.get_n_bands();
+
+    for (int spin = 0; spin < meanfield.get_n_spins(); ++spin)
+    {
+        for (int kpoint = 0; kpoint < meanfield.get_n_kpoints(); ++kpoint)
+        {
+            std::map<double, Matz> sigma;
+            for (const double frequency : source_frequencies)
+            {
+                sigma.emplace(frequency,
+                              analytic_sigma(dimension, spin, kpoint, cplxdb(0.0, frequency)));
+            }
+            const Matz sigma_zero = analytic_sigma(dimension, spin, kpoint, 0.0);
+            assert(std::abs(sigma_zero(0, 1) - std::conj(sigma_zero(1, 0))) > 1.0e-2);
+            assert(std::abs(sigma.begin()->second(0, 1) - std::conj(sigma.begin()->second(1, 0))) >
+                   1.0e-2);
+
+            for (const auto mode :
+                 {CorrelationPotentialMode::ModeA, CorrelationPotentialMode::ModeB})
+            {
+                const Matz expected = analytic_static_potential(meanfield, spin, kpoint, mode);
+                assert(std::abs(expected(0, 1).imag()) > 1.0e-3);
+                for (const auto& resample_frequencies : resample_grids)
+                {
+                    for (const int final_count : {-1, 2})
+                    {
+                        for (const int source_count : {-1, 2})
+                        {
+                            if (resample_frequencies.empty() && source_count != -1)
+                            {
+                                continue;
+                            }
+                            CorrelationPotentialSettings settings;
+                            settings.mode = mode;
+                            settings.n_params_anacon = final_count;
+                            settings.n_params_anacon_resample = source_count;
+                            settings.resample_imagfreqs = resample_frequencies;
+                            const Matz actual = build_qsgw_correlation_potential(
+                                meanfield, source_frequencies, sigma, spin, kpoint, settings);
+                            for (int row = 0; row < dimension; ++row)
+                            {
+                                for (int column = 0; column < dimension; ++column)
+                                {
+                                    assert_close(actual(row, column), expected(row, column),
+                                                 2.0e-12);
+                                    assert_close(actual(row, column),
+                                                 std::conj(actual(column, row)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void test_complex_spinor_staticization_against_analytic_rational_reference()
+{
+    MeanField meanfield(1, 2, 4, 2, 2);
+    run_complex_rational_staticization_test(meanfield);
+}
+
+void test_spin_and_kpoint_selection_against_analytic_rational_reference()
+{
+    MeanField meanfield(2, 3, 3, 3, 1);
+    run_complex_rational_staticization_test(meanfield);
+}
+
 void test_nonfinite_matrix_data_is_rejected_instead_of_zeroed()
 {
     MeanField meanfield(1, 1, 2, 2, 1);
@@ -347,6 +491,8 @@ int main()
     test_mode_a_and_b_match_upstream_pade_without_qsgw_rounding();
     test_optional_resampling_matches_the_upstream_two_stage_pade();
     test_two_stage_parameter_counts_follow_upstream_order();
+    test_complex_spinor_staticization_against_analytic_rational_reference();
+    test_spin_and_kpoint_selection_against_analytic_rational_reference();
     test_nonfinite_matrix_data_is_rejected_instead_of_zeroed();
     test_invalid_settings_and_frequency_contracts_are_rejected();
     return 0;
