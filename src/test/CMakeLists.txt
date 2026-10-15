@@ -107,6 +107,8 @@ target_compile_options(test_meanfield PRIVATE -UNDEBUG)
 target_compile_options(test_meanfield_mpi PRIVATE -UNDEBUG)
 set_tests_properties(test_symmetry_context test_si_density_symmetry
   test_meanfield test_meanfield_mpi PROPERTIES LABELS "symmetry")
+# Keep the rebased screening numerical control active in Release.
+target_compile_options(test_epsilon PRIVATE -UNDEBUG)
 
 if(LIBRPA_USE_LIBRI)
   config_test(test_strict_2d_gw_wc 4)

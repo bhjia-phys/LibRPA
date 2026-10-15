@@ -362,101 +362,6 @@ static void apply_spinor_member_gauge_phases(
     scale_block(blocks.b11);
 }
 
-//! Zero-fill variant of build_gf_cplx_imagtime_with_prefactor: spinor source
-//! blocks whose wfc channel is missing contribute a zero block (report R11).
-static ComplexMatrix build_gf_cplx_imagtime_with_prefactor_zero_fill(
-    const MeanField& mf,
-    const int ispin,
-    const int ispinor_bra,
-    const int ispinor_ket,
-    const int ikpt,
-    const double tau,
-    const std::vector<double>& prefactors,
-    const int nbands_G)
-{
-    if (mf.find_wfc(ispin, ispinor_bra, ikpt) == nullptr
-        || mf.find_wfc(ispin, ispinor_ket, ikpt) == nullptr)
-    {
-        ComplexMatrix zero(mf.get_n_aos(), mf.get_n_aos());
-        zero.zero_out();
-        return zero;
-    }
-    return build_gf_cplx_imagtime_with_prefactor(
-        mf, ispin, ispinor_bra, ispinor_ket, ikpt, tau, prefactors, nbands_G);
-}
-
-void validate_kstar_band_cutoff_closure(
-    const SymmetryContext& ctx,
-    const MeanField& mf,
-    const int nbands_G,
-    const double degen_tol)
-{
-    (void)ctx;
-    if (nbands_G < 1 || nbands_G >= mf.get_n_bands())
-    {
-        return;
-    }
-    for (int ispin = 0; ispin != mf.get_n_spins(); ++ispin)
-    {
-        for (int ik = 0; ik != mf.get_n_kpoints(); ++ik)
-        {
-            const double gap = mf.get_eigenvals()[ispin](ik, nbands_G)
-                             - mf.get_eigenvals()[ispin](ik, nbands_G - 1);
-            if (std::abs(gap) < degen_tol)
-            {
-                throw LIBRPA_RUNTIME_ERROR(
-                    "Green's-function band cutoff slices through a degenerate band "
-                    "multiplet: ispin " + std::to_string(ispin)
-                    + ", k-point " + std::to_string(ik)
-                    + ", bands " + std::to_string(nbands_G - 1) + "/"
-                    + std::to_string(nbands_G)
-                    + " separated by " + std::to_string(gap)
-                    + " Ha (< " + std::to_string(degen_tol)
-                    + "). Symmetry restore is disabled for this truncation; "
-                    "adjust the cutoff or use the full band grid");
-            }
-        }
-    }
-}
-
-//! Multiply the four blocks by the plain unitary re-gauging phases
-//! block(I, J) *= phase[I] * conj(phase[J]) (applied after the kernel, so
-//! antiunitary members keep the scalar restore convention).
-static void apply_spinor_member_gauge_phases(
-    SpinorBlocks4<ComplexMatrix>& blocks,
-    const std::map<atom_t, size_t>& atom_nw,
-    const std::vector<std::complex<double>>& phases)
-{
-    std::vector<int> offsets;
-    offsets.reserve(atom_nw.size() + 1);
-    offsets.push_back(0);
-    for (const auto& atom_entry : atom_nw)
-    {
-        offsets.push_back(offsets.back() + static_cast<int>(atom_entry.second));
-    }
-    const auto scale_block = [&offsets, &phases](ComplexMatrix& block) {
-        for (std::size_t ai = 0; ai + 1 != offsets.size(); ++ai)
-        {
-            const std::complex<double> phase_i = phases[ai];
-            for (int i = offsets[ai]; i != offsets[ai + 1]; ++i)
-            {
-                for (std::size_t aj = 0; aj + 1 != offsets.size(); ++aj)
-                {
-                    const auto factor = phase_i * std::conj(phases[aj]);
-                    for (int j = offsets[aj]; j != offsets[aj + 1]; ++j)
-                    {
-                        block(i, j) *= factor;
-                    }
-                }
-            }
-        }
-    };
-    scale_block(blocks.b00);
-    scale_block(blocks.b01);
-    scale_block(blocks.b10);
-    scale_block(blocks.b11);
-}
-
 bool can_restore_symmetry_kstar_meanfield(
     const SymmetryContext& ctx,
     const std::vector<SpeciesBasisLayout>& wfc_layouts,
@@ -653,7 +558,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets,
     const symmetry_kstar_representative_indices_t* representative_k_indices)
 {
-    validate_kstar_band_cutoff_closure(ctx, mf, nbands_G);
+    validate_kstar_band_cutoff_closure(ctx, mf, band_mask);
     const auto restore_entries = build_symmetry_kstar_restore_entries(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
