@@ -51,10 +51,11 @@ double librpa_get_rpa_correlation_energy(LibrpaHandler *h, const LibrpaOptions *
     const auto &opts = *p_opts;
     if (opts.replace_w_head == LIBRPA_SWITCH_ON && opts.option_dielect_func == 53)
         throw LIBRPA_RUNTIME_ERROR("option_dielect_func=53 is not supported for RPA energy");
-    if (opts.option_dielect_func == 5)
+    if (opts.option_dielect_func == 5 || opts.option_dielect_func == 6)
         throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func = 5 is a standalone G0W0/QSGW driver preset; "
-            "API callers must supply velocity and use option_dielect_func = 3");
+            "Native-velocity option_dielect_func = 6 is a standalone G0W0/QSGW driver preset; "
+            "API callers must supply velocity and use option_dielect_func = 3. "
+            "The former preset value 5 is unsupported");
     initialize_ds_global_ddla(*pds, opts);
 
     const auto ks_local = pds->mf.get_iks_local();

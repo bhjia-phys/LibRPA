@@ -205,9 +205,9 @@ std::string DriverParams::format()
     std::string normalized_task = task;
     std::transform(normalized_task.begin(), normalized_task.end(),
                    normalized_task.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (requested_option_dielect_func == 5)
+    if (requested_option_dielect_func == 6)
     {
-        ss << "option_dielect_func_requested = 5" << std::endl;
+        ss << "option_dielect_func_requested = 6" << std::endl;
         ss << "option_dielect_func_effective = 3" << std::endl;
     }
     if (normalized_task == "g0w0" || normalized_task == "g0w0_band")

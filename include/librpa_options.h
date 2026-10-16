@@ -472,7 +472,7 @@ typedef struct
      *   Requires auxiliary l-shell metadata and the ScaLAPACK Wc path.
      *   Supported for three-dimensional G0W0 and G0W0 band calculations only.
      *
-     * Standalone g0w0/g0w0_band and qsgw drivers also accept 5:
+     * Standalone g0w0/g0w0_band and qsgw drivers also accept 6:
      * compute native velocity, then resolve to numerical API option 3 for
      * analytic head and wing. G0W0 uses original H(R), S(R), and r(R) in
      * the loaded SCF frame. QSGW uses fixed S/r and the entire current
@@ -481,7 +481,7 @@ typedef struct
      * selects g0w0_headwing_velocity=native or qsgw_headwing_velocity=current_hr
      * according to the task, and rejects use_pyatb=true.
      * Direct library/API callers must select 3 and supply velocity through
-     * the public setter; do not pass 5 to LibrpaOptions.
+     * the public setter; do not pass 6 to LibrpaOptions.
      *
      * @par Default
      * 0
