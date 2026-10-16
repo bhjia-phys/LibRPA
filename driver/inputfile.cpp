@@ -630,21 +630,25 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_double(opts, sf_gf_omega_shift);
     _parse_double(opts, sf_sigc_omega_shift);
 
-    // Option 5 selects native G0W0 velocity or the per-update QSGW current-HR
+    // Option 6 selects native G0W0 velocity or the per-update QSGW current-HR
     // velocity path. Both use the existing numerical option-3 head/wing method.
     requested_option_dielect_func = opts.option_dielect_func;
     if (opts.option_dielect_func == 5)
+        throw std::runtime_error(
+            "option_dielect_func = 5 is unsupported; the native-velocity head/wing "
+            "driver preset has moved to option_dielect_func = 6");
+    if (opts.option_dielect_func == 6)
     {
         const bool is_g0w0 = task_normalized == "g0w0" || task_normalized == "g0w0_band";
         const bool is_qsgw = task_normalized == "qsgw";
         if (!is_g0w0 && !is_qsgw)
             throw std::runtime_error(
-                "option_dielect_func = 5 is only supported for g0w0, g0w0_band, or qsgw");
+                "option_dielect_func = 6 is only supported for g0w0, g0w0_band, or qsgw");
         if (opts.replace_w_head != LIBRPA_SWITCH_ON)
-            throw std::runtime_error("option_dielect_func = 5 requires replace_w_head = true");
+            throw std::runtime_error("option_dielect_func = 6 requires replace_w_head = true");
         if (opts.use_scalapack_gw_wc != LIBRPA_SWITCH_ON)
             throw std::runtime_error(
-                "option_dielect_func = 5 requires use_scalapack_gw_wc = true to consume analytic "
+                "option_dielect_func = 6 requires use_scalapack_gw_wc = true to consume analytic "
                 "wings");
         const std::string velocity_key =
             is_qsgw ? "qsgw_headwing_velocity" : "g0w0_headwing_velocity";
@@ -654,7 +658,7 @@ void parse_inputfile_to_params(const std::string &fn)
         std::string assigned_velocity;
         if (get_last_assigned_value(parser, velocity_key, assigned_velocity) &&
             velocity_mode != native_mode)
-            throw std::runtime_error("option_dielect_func = 5 selects " + velocity_key + " = " +
+            throw std::runtime_error("option_dielect_func = 6 selects " + velocity_key + " = " +
                                      native_mode + " and conflicts with " + velocity_key + " = " +
                                      velocity_mode);
         velocity_mode = native_mode;

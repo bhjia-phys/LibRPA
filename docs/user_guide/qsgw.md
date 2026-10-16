@@ -25,7 +25,7 @@ does not infer a path from molecular or periodic geometry.
 
 `qsgw` is the only QSGW task name. Older inputs containing
 `task = qsgw_band` must change that value to `task = qsgw`; the former task has
-been removed. Band-path selection still follows the input metadata. Option 5
+been removed. Band-path selection still follows the input metadata. Option 6
 uses the unchanged current-HR prescription described below.
 
 `qsgw_unoccupied_keep`, `qsgw_cut_mode`, and `qsgw_cut_shift_ha` select the cut.
@@ -101,14 +101,18 @@ or establish interpolation accuracy at points outside the mesh.
 
 ## Analytic head and wing feedback
 
-The standalone `qsgw` driver accepts `option_dielect_func = 5`
+The native-velocity preset moved from 5 to **6**. Use 6 with this version;
+the driver rejects the former value 5 rather than silently aliasing it.
+This changes the input selector, not the head/wing equations or feedback.
+
+The standalone `qsgw` driver accepts `option_dielect_func = 6`
 to recompute velocity internally from the complete current Hamiltonian and
 then apply the existing analytic head/wing prescription at every iteration.
 This preset selects `qsgw_headwing_velocity = current_hr` and resolves to
 numerical option 3. An omitted selector or explicit `current_hr` is accepted;
-explicit `reference` and `rotate_reference` are rejected for option 5. It
+explicit `reference` and `rotate_reference` are rejected for option 6. It
 requires `replace_w_head = true`, `use_scalapack_gw_wc = true`, and
-`use_pyatb = false`. The log records requested option 5 and effective option 3.
+`use_pyatb = false`. The log records requested option 6 and effective option 3.
 The native mode remains experimental.
 
 Existing option 3 provides both analytic head and wing, and option 4 provides
@@ -127,7 +131,7 @@ each body/self-energy calculation. The analytic and body nodes are checked indiv
 when automatic minimax endpoints change. `rotate_reference` needs the original
 same-grid velocity input. It does not differentiate the updated Hamiltonian.
 
-For option 5, supply dimensionless native ABACUS `S(R)` and Bohr `r(R)` CSR
+For option 6, supply dimensionless native ABACUS `S(R)` and Bohr `r(R)` CSR
 files, with their complete independent real-space supports, in addition to the
 ordinary QSGW inputs:
 
@@ -135,7 +139,7 @@ ordinary QSGW inputs:
 task = qsgw
 input_preset = abacus
 replace_w_head = true
-option_dielect_func = 5
+option_dielect_func = 6
 use_scalapack_gw_wc = true
 use_pyatb = false
 use_kpara_scf_eigvec = false

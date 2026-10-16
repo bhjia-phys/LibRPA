@@ -206,15 +206,15 @@ blocks:
     text: |
       The standalone `g0w0` driver and its `g0w0_band` alias can construct analytic
       head/wing velocity from the original DFT H(R), S(R), and r(R). The driver
-      preset `option_dielect_func = 5` selects native velocity and then resolves
+      preset `option_dielect_func = 6` selects native velocity and then resolves
       to the existing numerical option 3. It requires `replace_w_head = true`,
       `use_scalapack_gw_wc = true`, and `use_pyatb = false`. An omitted velocity
       selector becomes `native`; explicit `native` is accepted and explicit
-      `file` is rejected. The log records requested option 5 and effective
-      option 3. QSGW also supports option 5 with its `current_hr` velocity
-      convention, described below. Other tasks reject option 5. Direct
+      `file` is rejected. The log records requested option 6 and effective
+      option 3. QSGW also supports option 6 with its `current_hr` velocity
+      convention, described below. Other tasks reject option 6. Direct
       library/API callers use option 3 with the public velocity setter, not
-      option 5.
+      option 6.
       Existing options 3 and 4 still accept `g0w0_headwing_velocity = native`;
       their default `file` uses the existing velocity reader.
       The native path retains the loaded SCF energies,
@@ -252,7 +252,7 @@ blocks:
       figures are not generated automatically. Keep band-channel presence and
       original path inputs unchanged when restarting a checkpoint.
       These experimental parameters apply to `task = qsgw`.
-      `option_dielect_func = 5` selects
+      `option_dielect_func = 6` selects
       `qsgw_headwing_velocity = current_hr` and resolves to existing numerical
       option 3: rebuild velocity from the current native-baseline Hamiltonian
       in the entering E/C frame, then rebuild analytic head/wing using the live
@@ -265,7 +265,7 @@ blocks:
       The preset requires `replace_w_head = true`, `use_scalapack_gw_wc = true`,
       and `use_pyatb = false`. An omitted selector or explicit `current_hr` is
       accepted; explicit `reference` or `rotate_reference` is rejected.
-      The log records requested option 5 and effective option 3.
+      The log records requested option 6 and effective option 3.
       Existing option 3 with `current_hr` remains equivalent; option 3/4 with
       other supported velocity conventions keeps its existing behavior.
       This is an experimental full, unshifted mesh path with complete square

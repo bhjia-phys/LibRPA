@@ -673,10 +673,11 @@ void librpa_build_g0w0_sigma(LibrpaHandler* h, const LibrpaOptions *p_opts)
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
-    if (opts.option_dielect_func == 5)
+    if (opts.option_dielect_func == 5 || opts.option_dielect_func == 6)
         throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func = 5 is a standalone G0W0/QSGW driver preset; "
-            "API callers must supply velocity and use option_dielect_func = 3");
+            "Native-velocity option_dielect_func = 6 is a standalone G0W0/QSGW driver preset; "
+            "API callers must supply velocity and use option_dielect_func = 3. "
+            "The former preset value 5 is unsupported");
     const bool debug = global::should_output(LIBRPA_VERBOSE_DEBUG);
     pds->is_band_calc_done = false;
     initialize_ds_global_ddla(*pds, opts);

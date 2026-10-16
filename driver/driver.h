@@ -517,7 +517,7 @@ struct DriverParams
     //! rotate_reference (fixed initial operator in current eigenstates), or
     //! current_hr (velocity of the complete current native-baseline Hamiltonian,
     //! matching formal HR export; requires native hrs1/hrs2_nao.csr in Ry).
-    //! Standalone option_dielect_func=5 selects current_hr if omitted and
+    //! Standalone option_dielect_func=6 selects current_hr if omitted and
     //! rejects an explicit reference or rotate_reference. It resolves to
     //! numerical option 3, with the same current-HR calculation and scope.
     //! @par Default
