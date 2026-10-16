@@ -109,32 +109,44 @@ its explicit `nao` projection includes all four spinor blocks.
 
 ## Hamiltonian cut
 
-`qsgw_cut_mode` accepts `0` (uncut, the default) and `1` (shifted DFT
+`qsgw_cut_mode` accepts `0` (uncut) and `1` (the default: shifted DFT
 reference diagonal, formerly mode 2). The former unshifted cut is removed;
 the old numeric value `2` is rejected. For mode 1, the fixed-reference matrix retains the leading block whose size
 is the current occupied-state count plus `qsgw_unoccupied_keep`
 (default 10), bounded by the complete state dimension. Every other diagonal
 is restored to its initial DFT energy plus `qsgw_cut_shift_ha`
-(default 2 eV, converted to about 0.07349864435131 Ha); all other off-diagonal entries are zero. The matrix and
+(default 0.00367493 Ha, approximately 0.1 eV); all other off-diagonal entries are zero. The matrix and
 reference basis remain complete.
 
 The selected cut applies when assembling the SCF-grid update and again after
 mixing; an optional band-path update uses the same rule. The HR exporter
 serializes this actual post-cut operator immediately before diagonalization.
-To select the shifted-cut HR requested for topology, use:
+The defaults match the historical NiO cut:
 
 ```ini
 qsgw_cut_mode = 1
+qsgw_unoccupied_keep = 10
+qsgw_cut_shift_ha = 0.00367493
 ```
 
-HR export is enabled by default. The omitted keep and shift defaults are
-10 empty states and exactly 2 eV under the selected constants. Explicit
-`qsgw_cut_shift_ha` values remain in Hartree; its suffix states the input unit.
+Set `qsgw_cut_mode = 0` to request an uncut update. The cut limits Hamiltonian
+updates; it does not reduce the bands supplied to the response or self-energy
+calculation. HR export is enabled by default. The default shift is the exact
+historical input value `0.00367493` Ha (approximately 0.1 eV), independent of
+the selected producer constants. Explicit `qsgw_cut_shift_ha` values remain
+in Hartree and override this default.
 A fresh iteration `0000` remains the actual entering PBE
 operator; update files `0001`, `0002`, etc. contain the
 mode-1 shifted operator. The complete DFT/IFT preserves that operator on the original
 SCF mesh, including the shifted high states. This identity does not prescribe
 or establish interpolation accuracy at points outside the mesh.
+
+When resuming an older checkpoint, explicitly retain its original cut mode,
+keep count and Hartree shift. Older inputs could omit the mode for an uncut
+update; they now need `qsgw_cut_mode = 0`. Older shifted-cut checkpoints could
+use an omitted 2 eV shift; retain their original Hartree shift explicitly.
+The checkpoint reader rejects changed cut settings rather than reinterpreting
+the saved state.
 
 ## Analytic head and wing feedback
 
@@ -157,6 +169,10 @@ the switch is omitted. Conflicting explicit assignments are still rejected.
 These defaults apply only to the QSGW driver. G0W0, standalone cRPA and direct
 library callers retain their existing defaults. EXX/GW/RPA symmetry switches
 remain off by default, including SOC option 5 and the shared-P0 cRPA route.
+The coupled GW/cRPA route rejects GW and RPA symmetry reduction even without
+SOC. SOC option 5 additionally rejects EXX symmetry reduction. Standalone
+cRPA's response q-star route is described in [the cRPA guide](crpa.md);
+its availability does not enable symmetry reduction in a coupled calculation.
 
 Existing option 3 provides both analytic head and wing, and option 4 provides
 head only, with `replace_w_head = true`. These options retain their explicit

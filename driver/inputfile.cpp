@@ -537,8 +537,6 @@ void parse_inputfile_to_params(const std::string &fn)
                        driver_params.qsgw_unoccupied_keep);
         parse_qsgw_int(parser, "qsgw_cut_mode",
                        driver_params.qsgw_cut_mode);
-        // An omitted shift is exactly 2 eV under the selected producer constants.
-        driver_params.qsgw_cut_shift_ha = 2.0 / librpa_int::HA2EV;
         parse_qsgw_double(parser, "qsgw_cut_shift_ha",
                           driver_params.qsgw_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",

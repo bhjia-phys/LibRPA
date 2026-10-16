@@ -26,6 +26,7 @@ qsgw_mixer = linear
 qsgw_mixing_beta = 0.2
 qsgw_min_iter = 1
 qsgw_max_iter = 1
+qsgw_cut_mode = 0
 qsgw_convergence_tolerance_ev = 1e-4
 qsgw_write_iteration_matrices = false
 version_coul_reader = 1

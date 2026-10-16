@@ -382,16 +382,16 @@ struct DriverParams
     //! QSGW H_QSGW cut: 0 uncut, 1 shifted KS diagonal (formerly mode 2).
     //! Applies to the SCF grid and optional band path; HR exports the actual cut H.
     //! @par Default
-    //! 0
+    //! 1
     //! @par Status
     //! Experimental
     int qsgw_cut_mode;
 
     //! Hamiltonian energy shift applied to cut states in mode 1, in Hartree.
-    //! The omitted default is 2 eV converted using the selected constants.
+    //! The default matches the historical NiO cut (approximately 0.1 eV).
     //! Applies to the SCF grid and optional band path.
     //! @par Default
-    //! 2.0 / 27.211386245988 (2 eV in Hartree with internal constants)
+    //! 0.00367493 (Hartree)
     //! @par Status
     //! Experimental
     double qsgw_cut_shift_ha;
