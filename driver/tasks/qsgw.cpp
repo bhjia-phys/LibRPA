@@ -788,6 +788,14 @@ void run_qsgw()
             {
                 initialize_ds_headwing(*dataset, opts, update_wing);
             }
+            // The analytic object is replaced every update. Reapply the fixed producer
+            // normalization while retaining its live eigenpairs, velocity and frequencies.
+            collective_all_stage(dataset->comm_h, "QSGW head/wing Coulomb normalization",
+                                 [&]
+                                 {
+                                     configure_headwing_coulomb_head(driver_params.input_dir,
+                                                                     *dataset->p_headwing);
+                                 });
             if (update_wing && (!dataset->p_headwing || !dataset->p_headwing->has_wing()))
                 throw LIBRPA_RUNTIME_ERROR("QSGW analytic wing was not rebuilt for the live state");
             collective_root_stage(

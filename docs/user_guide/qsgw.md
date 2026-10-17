@@ -238,6 +238,30 @@ update N (after N-1 completed updates), in **eV**; use the matching raw S/r.
 On a fresh band/cut calculation, update 1 still screens the original PBE state;
 the cut reference used for residuals does not replace those entering eigenpairs.
 
+### Strict two-dimensional screening
+
+Option 6 can use the strict-2D complete Gamma-cell Wc route. In addition to
+the native H/S/r inputs above, supply the matching producer-generated
+[`librpa_2d_coulomb_head.txt`](../develop/dataset_format.md#librpa_2d_coulomb_headtxt)
+and select:
+
+```ini
+use_2d_dielectric = true
+use_fullcoul_eps = true
+use_fullcoul_wc = true
+use_shrink_abfs = false
+sqrt_coulomb_threshold = 0
+```
+
+Keep `replace_w_head = true` and `use_scalapack_gw_wc = true`. The metadata
+must describe the same full auxiliary basis and Coulomb data as the ordinary
+standalone dataset. The driver applies the producer normalization to every
+new analytic head/wing object, including after checkpoint continuation.
+The cell area and auxiliary monopole normalization remain fixed; the live
+energies, wavefunctions, velocity, frequency grid, head, wing and screening
+are rebuilt for each update. Native G0W0 applies the same normalization.
+The public library API still has no metadata-injection field.
+
 ## Iteration and output
 
 After reading and validating the SCF data, the driver selects the mixing route

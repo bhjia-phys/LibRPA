@@ -218,6 +218,8 @@ static void prepare_g0w0_native_velocity()
     std::vector<double> frequency_weights;
     driver::h.get_imaginary_frequency_grids(driver::opts, ds->omegas_imagfreq, frequency_weights);
     initialize_ds_headwing(*ds, driver::opts, driver::opts.option_dielect_func == 3);
+    g0w0_headwing_stage(comm, "G0W0 head/wing Coulomb normalization", [&]
+                        { configure_headwing_coulomb_head(params.input_dir, *ds->p_headwing); });
 }
 
 static void write_g0w0_headwing_diagnostics()
