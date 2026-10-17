@@ -184,6 +184,35 @@ energies in Ha and Cartesian derivatives/position in Bohr. It checks the
 reference and live S metrics, current eigenpair frame and Fourier round trip.
 The AO basis and S/r operators remain fixed throughout QSGW.
 
+The AO embedding uses the dual reference frame
+`D = S C (C-dagger S C)^-1`, giving `H_AO = D h D-dagger`.
+This preserves `C-dagger H_AO C = h` at finite export precision. The former
+`S C h C-dagger S` expression instead projected back as `M h M`, with
+`M = C-dagger S C`, amplifying small metric errors in high-energy bands.
+The existing metric, native-reference and current-frame tolerances remain
+unchanged; an inconsistent native DFT H(R) still fails its reference check.
+
+For a modern scalar ABACUS export with matching dense SCF H(k)/S(k), small
+CSR sparsification losses can be restored explicitly before staging inputs:
+
+```sh
+python3 utilities/restore_abacus_csr_precision.py \
+  --hr OUT.material/hrs1_nao.csr --sr OUT.material/srs1_nao.csr \
+  --dense-dir OUT.material --bz dataset/bz_sampling_out \
+  --output-dir restored-csr
+```
+
+Use the resulting H/S files together, with the unchanged original SCF
+eigenpairs, position operator and other dataset files. This utility adds
+only the inverse-transformed dense-minus-CSR residual to the original
+real-space model, retains native tails and splits even BvK boundary images
+equally. It rejects discrepancies above `1e-8` in the native units (H in Ry),
+checks Hermiticity and full-mesh closure, and writes new files without an
+entry cutoff. The dense matrices must cover the identical complete unshifted
+mesh. This repairs mesh precision; the unique off-mesh range of discarded
+terms cannot be recovered from mesh samples. It does not establish off-mesh
+accuracy or replace material convergence tests.
+
 The reusable internal C++ interface in `src/core/qsgw/headwing_velocity.h`
 accepts localized matrices rather than filenames.
 `solve_localized_velocity(H, operators, k_fractional, lattice_bohr)` performs
