@@ -73,7 +73,8 @@ struct HamiltonianReconstructionResult
     double native_dft_hermiticity_residual_ha = 0.0;
 };
 
-// Embed the complete fixed-reference operator as S U0 h U0^dagger S, then
+// Embed the complete fixed-reference operator as D h D^dagger, where
+// D = S U0 (U0^dagger S U0)^-1 is the dual reference frame, then
 // reconstruct its complex H(R). With native DFT baselines, the result is
 // H_DFT(R) + IFT[H_current(k) - FT(H_DFT)(k)]; otherwise reconstruct whole H.
 // The finite-BvK part uses equally weighted even-direction boundary images.

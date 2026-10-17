@@ -365,8 +365,27 @@ HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
             const Matz u = ket_coefficients(reference, spin, ik);
             result.reference_metric_residual =
                 std::max(result.reference_metric_residual, metric_error(u, overlap[ik]));
+            if (result.reference_metric_residual > 1e-6)
+                throw std::runtime_error(
+                    "QSGW Hamiltonian reconstruction reference metric exceeds tolerance");
             const Matz su = overlap[ik] * u;
-            h.push_back(su * current_hamiltonian.at(spin).at(ik) * transpose(su, true));
+            // The exported C need only satisfy the metric gate, not C^dagger S C = I
+            // exactly. S C h C^dagger S would project back as M h M, amplifying
+            // small export errors by high eigenvalues. Use the dual frame so
+            // C^dagger H_AO C = h even at finite input precision. Invert the
+            // near-identity metric instead of the potentially ill-conditioned C.
+            const Matz metric = transpose(u, true) * su;
+            Matz metric_inverse = metric.copy();
+            metric_inverse.swap_to_row_major();
+            std::vector<int> pivots(n);
+            std::vector<cplxdb> work(n);
+            int info = 0;
+            LapackConnector::getrf(n, n, metric_inverse.ptr(), n, pivots.data(), info);
+            if (info != 0) throw std::runtime_error("QSGW reference metric factorization failed");
+            LapackConnector::getri(n, metric_inverse.ptr(), n, pivots.data(), work.data(), n, info);
+            if (info != 0) throw std::runtime_error("QSGW reference metric inversion failed");
+            const Matz dual = su * metric_inverse;
+            h.push_back(dual * current_hamiltonian.at(spin).at(ik) * transpose(dual, true));
             if (preserve_native)
             {
                 const Matz native =

@@ -69,6 +69,48 @@ void test_rspace_symmetry_requires_complete_band_space()
     assert(!librpa_int::rspace_symmetry_has_complete_band_space(complete, 2));
 }
 
+void test_qsgw_reconstruction_with_finite_reference_metric()
+{
+    using namespace librpa_int::qsgw;
+    const Matrix3 lattice(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    const Vector3_Order<int> origin(0, 0, 0);
+    const std::vector<Vector3_Order<double>> kpoints{{0.0, 0.0, 0.0}};
+    MeanField reference(1, 1, 2, 2);
+    auto &wfc = reference.get_eigenvectors()[0][0][0];
+    wfc.create(2, 2);
+    wfc.zero_out();
+    wfc(0, 0) = 1.0 + 1e-7;
+    wfc(1, 1) = (1.0 - 1e-7) / std::sqrt(1e-3);
+    Matz coefficients(2, 2, MAJOR::ROW);
+    coefficients.zero_out();
+    coefficients(0, 0) = wfc(0, 0);
+    coefficients(1, 1) = wfc(1, 1);
+    HeadwingAoOperators operators;
+    operators.dimension = 2;
+    operators.overlap.emplace(
+        origin, Matz({{{1.0, 0.0}, {0.0, 0.0}}, {{0.0, 0.0}, {1e-3, 0.0}}}, MAJOR::ROW));
+    const Matz h({{{-0.5, 0.0}, {0.012, 0.008}}, {{0.012, -0.008}, {20.0, 0.0}}}, MAJOR::ROW);
+    SpinKMatrixMap target;
+    target[0][0] = h.copy();
+    const auto result = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
+                                                     Vector3_Order<int>(1, 1, 1), lattice);
+    assert(result.reference_metric_residual > 1e-7);
+    assert(result.reference_metric_residual < 1e-6);
+    const Matz projected =
+        transpose(coefficients, true) * result.hamiltonian[0].at(origin) * coefficients;
+    double error = 0.0;
+    for (int i = 0; i < 2; ++i)
+        for (int j = 0; j < 2; ++j) error = std::max(error, std::abs(projected(i, j) - h(i, j)));
+    assert(error < 1e-12);
+    // The former S C embedding amplifies this accepted metric defect beyond
+    // the unchanged 1e-4 eV frame gate, especially in the high-energy band.
+    const Matz su = operators.overlap.at(origin) * coefficients;
+    const Matz old_projected =
+        transpose(coefficients, true) * su * h * transpose(su, true) * coefficients;
+    assert(std::abs(old_projected(1, 1) - h(1, 1)) > 1e-4 / librpa_int::HA2EV);
+    assert(target[0][0](1, 1) == h(1, 1));
+}
+
 void test_qsgw_native_baseline_preserves_aliased_tail()
 {
     using namespace librpa_int::qsgw;
@@ -3979,6 +4021,7 @@ int main(int argc, char *argv[])
         test_gamma_head_rank_one_matches_coulomb_basis_overwrite(blacs_h);
         test_gamma_head_rank_one_handles_empty_local_blocks(blacs_h);
         test_rspace_symmetry_requires_complete_band_space();
+        test_qsgw_reconstruction_with_finite_reference_metric();
         test_qsgw_native_baseline_preserves_aliased_tail();
         test_kpoint_coordinate_mapping_selects_active_klist_from_full_source();
         test_kstar_velocity_mapping_preserves_member_order_and_periodic_gauge();
