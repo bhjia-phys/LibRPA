@@ -633,10 +633,6 @@ void parse_inputfile_to_params(const std::string &fn)
     // Option 6 selects native G0W0 velocity or the per-update QSGW current-HR
     // velocity path. Both use the existing numerical option-3 head/wing method.
     requested_option_dielect_func = opts.option_dielect_func;
-    if (opts.option_dielect_func == 5)
-        throw std::runtime_error(
-            "option_dielect_func = 5 is unsupported; the native-velocity head/wing "
-            "driver preset has moved to option_dielect_func = 6");
     if (opts.option_dielect_func == 6)
     {
         const bool is_g0w0 = task_normalized == "g0w0" || task_normalized == "g0w0_band";

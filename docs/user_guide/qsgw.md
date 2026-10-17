@@ -101,9 +101,10 @@ or establish interpolation accuracy at points outside the mesh.
 
 ## Analytic head and wing feedback
 
-The native-velocity preset moved from 5 to **6**. Use 6 with this version;
-the driver rejects the former value 5 rather than silently aliasing it.
-This changes the input selector, not the head/wing equations or feedback.
+The native-velocity preset moved from 5 to **6**. Use 6 for native QSGW
+feedback. Value 5 follows upstream's input-dielectric s-subspace head
+correction for G0W0; it is not an alias for native-velocity feedback.
+The preset renumbering does not change the head/wing equations or feedback.
 
 The standalone `qsgw` driver accepts `option_dielect_func = 6`
 to recompute velocity internally from the complete current Hamiltonian and

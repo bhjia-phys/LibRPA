@@ -130,8 +130,12 @@ head/wing feedback, output and restart requirements.
 ### Native G0W0 head/wing velocity
 
 The native-velocity preset is numbered **6**, replacing the former fork
-value 5. Old value-5 inputs must be updated for this version; 5 is not a
-compatibility alias. Numerical options 0--4 retain their existing meanings.
+value 5. Inputs that used the old native-velocity preset must select 6.
+Value 5 follows upstream: use the input dielectric data on the current
+frequency grid and replace only the head along the Gamma s-subspace
+direction, preserving the wings. It requires auxiliary l-shell metadata
+and does not select native velocity. Numerical options 0--4 retain their
+existing meanings.
 
 For analytic head/wing correction, the standalone `g0w0` driver and its
 `g0w0_band` alias accept `option_dielect_func = 6`. This experimental preset adds
