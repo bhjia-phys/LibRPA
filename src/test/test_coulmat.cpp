@@ -230,7 +230,7 @@ void test_vq_to_full_vr_inversion_matches_full_bz()
                               &symmetry_result_replicated);
 
     assert(!full_result_replicated);
-    assert(symmetry_result_replicated == (global::mpi_comm_global_h.nprocs > 1));
+    assert(symmetry_result_replicated);
     assert_full_vr_matches_full(actual, expected);
 }
 
