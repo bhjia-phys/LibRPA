@@ -403,7 +403,7 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
     {
         global::lib_printf_root(
             "EXX symmetry accumulates full-sector `V(R)` directly from IBZ q-stars\n");
-        if (result_is_replicated) *result_is_replicated = comm_h.nprocs > 1;
+        if (result_is_replicated) *result_is_replicated = true;
         return accumulate_symmetry_abf_full_sector_vr(
             comm_h, symmetry_context, basis_abf, coulmat_k, pbc,
             return_ordered_atom_pair);
