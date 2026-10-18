@@ -200,8 +200,37 @@ are assembled as AO-major/spinor-minor ket rows, preserving cross-spinor H and
 all band velocity entries. The original SCF energies, coefficients and occupations
 remain the entering state.
 
-Complete square AO-spinor/band frames and a uniform full-BZ mesh are required.
-Symmetry reduction and k-point-parallel SCF eigenvectors remain unsupported.
+Complete square AO-spinor/band frames are required. The scalar route uses a
+uniform full-BZ mesh. SOC also accepts an IBZ mesh when the supplied magnetic
+operations generate complete, nonoverlapping k-stars and its k weights equal
+the star multiplicities divided by the full mesh size. Enable
+`use_symmetry_rpa = true` and/or `use_symmetry_gw = true` and provide the usual
+AO/ABF shell metadata and magnetic operation table. Native H/S/r are evaluated
+only at the loaded representatives; head and wing reconstruct each member's
+complete complex velocity matrix and both spinor coefficients in one transported
+KS gauge. No independently diagonalized full-BZ frame is required.
+
+The main IBZ SCF input retains LibRPA's geometric occupation convention:
+its stored mean-field weights are `w_star * f`, where
+`w_star = star_size / N_full`. Thus raw `band_out`/API occupations are
+`N_IBZ * w_star * f`, because the ordinary input setter divides by `N_IBZ`.
+The native/API and ordinary velocity-file routes convert only the owned
+head/wing mean-field copy to `f / N_IBZ`; the main response state is unchanged.
+The separate PyATB head/wing `band_out` instead contains plain occupations
+`f` and already supplies this normalization, so it is not converted again.
+
+The file route likewise accepts paired IBZ wavefunctions and velocity matrices.
+An IBZ `pyatb_librpa_df/k_path_info` must list exactly the active representatives;
+the existing complete full-BZ PyATB input route remains available. Supply all
+band-pair matrix elements in the same source gauge as the paired wavefunctions.
+Time-reversed members use the odd polar-vector action on velocity and the joint
+spinor time-reversal action on coefficients. Degenerate states may use any common
+source gauge; rotating the velocities independently of the coefficients is invalid.
+
+IBZ-only reconstruction currently requires `use_kpara_scf_eigvec = false`;
+ordinary multi-rank execution is supported. The existing paired full-BZ file
+route retains its k-BLACS support. This extension does not relax the full-mesh
+requirement of QSGW `current_hr` Hamiltonian reconstruction.
 It checks the metric residual against 1e-6, Hamiltonian frame and
 Hermiticity residuals against 1e-4 eV, and the imaginary velocity diagonal against
 1e-8 Ha Bohr. These input checks establish frame consistency within their tolerances;
