@@ -6,7 +6,6 @@
 #include <cassert>
 #include <cmath>
 #include <complex>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -804,25 +803,6 @@ void check_dispersive_model(const bool rotated, const int source, const int mesh
     double sigma_norm = 0.0;
     for (const auto value : full.sigma_operator) sigma_norm = std::max(sigma_norm, std::abs(value));
     assert(sigma_norm > 1e-8 && std::isfinite(full.ec) && std::abs(full.ec) > 1e-8);
-    if (global::mpi_comm_global_h.is_root())
-    {
-        std::cout << std::setprecision(16);
-        const auto print_values = [mesh, mesh_z, rotated](const char *name, const auto &values)
-        {
-            for (std::size_t index = 0; index != values.size(); ++index)
-                std::cout << "DISPERSIVE_REFERENCE " << global::mpi_comm_global_h.nprocs << ' '
-                          << mesh << ' ' << mesh_z << ' ' << rotated << ' ' << name << ' ' << index
-                          << ' ' << std::real(values[index]) << ' ' << std::imag(values[index])
-                          << '\n';
-        };
-        print_values("Ec", std::vector<double>{full.ec});
-        print_values("EXX", full.exx);
-        print_values("EXX_R", full.exx_rspace);
-        print_values("Chi0", full.response.chi0);
-        print_values("Wc", full.response.wc);
-        print_values("Sigma", full.sigma_operator);
-        print_values("QP", full.qp);
-    }
     const auto magnetic = calculate(dispersive, true, false, true, -1, mesh, mesh_z, source);
     std::vector<Observables> comparisons{magnetic};
     if (mesh == 3)
@@ -861,8 +841,8 @@ void check_dispersive_model(const bool rotated, const int source, const int mesh
                       << std::endl;
         assert(ec < 1e-11 && exx < 1e-11 && exx_r < 1e-12 && sigma < 1e-11 && qp < 1e-10);
     }
-    // Isolate each magnetic stage on the nonzero-R model, in addition to
-    // retaining all eight original flat-model switch combinations.
+    // Isolate the six mixed stage settings on this nonzero-R model; the
+    // full and magnetic calculations above cover the two endpoint settings.
     if (!rotated && mesh == 3 && mesh_z == 3)
         for (int pattern = 1; pattern != 7; ++pattern)
         {
@@ -898,86 +878,9 @@ int main(int argc, char **argv)
         }
         else
         {
-            const Model model;
-            const auto full = calculate(model, false);
-            const auto magnetic = calculate(model, true);
-            double local_sigma_norm = 0.0;
-            for (const auto value : full.sigma_operator)
-                local_sigma_norm = std::max(local_sigma_norm, std::abs(value));
-            double sigma_norm = 0.0;
-            MPI_Allreduce(&local_sigma_norm, &sigma_norm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-            assert(sigma_norm > 1e-8);
-            const double exx_error = difference(full.exx, magnetic.exx);
-            const double sigma_error = difference(full.sigma_operator, magnetic.sigma_operator);
-            const double qp_error = difference(full.qp, magnetic.qp);
-            if (global::mpi_comm_global_h.is_root())
-            {
-                std::cout << std::setprecision(16);
-                std::cout << "NC SOC model residuals (Ha): Full_Ec=" << full.ec
-                          << " Ec=" << std::abs(full.ec - magnetic.ec) << " EXX=" << exx_error
-                          << " Sigma_operator=" << sigma_error << " Sigma_norm=" << sigma_norm
-                          << " QP=" << qp_error << std::endl;
-                std::cout << "MODEL_REFERENCE " << global::mpi_comm_global_h.nprocs << " Ec 0 "
-                          << full.ec << " 0\n";
-                const auto print_values = [](const char *name, const auto &values)
-                {
-                    for (std::size_t index = 0; index != values.size(); ++index)
-                        std::cout << "MODEL_REFERENCE " << global::mpi_comm_global_h.nprocs << ' '
-                                  << name << ' ' << index << ' ' << std::real(values[index]) << ' '
-                                  << std::imag(values[index]) << '\n';
-                };
-                print_values("EXX", full.exx);
-                print_values("Sigma", full.sigma_operator);
-                print_values("QP", full.qp);
-            }
-            assert(std::isfinite(full.ec) && std::abs(full.ec) > 1e-8);
-            assert(std::abs(full.ec - magnetic.ec) < 1e-11);
-            assert(exx_error < 1e-11);
-            assert(sigma_error < 1e-11);
-            assert(qp_error < 1e-10);
-            const auto full_band = calculate(model, false, false, true);
-            const auto ibz_band = calculate(model, true, true, true);
-            const double ibz_exx_error = difference(full_band.exx, ibz_band.exx);
-            const double ibz_sigma_error =
-                difference(full_band.sigma_operator, ibz_band.sigma_operator);
-            const double ibz_qp_error = difference(full_band.qp, ibz_band.qp);
-            if (global::mpi_comm_global_h.is_root())
-                std::cout << "NC SOC full/IBZ residuals (Ha): Ec="
-                          << std::abs(full_band.ec - ibz_band.ec) << " EXX=" << ibz_exx_error
-                          << " Sigma_operator=" << ibz_sigma_error << " QP=" << ibz_qp_error
-                          << std::endl;
-            assert(std::abs(full_band.ec - ibz_band.ec) < 1e-11);
-            assert(ibz_exx_error < 1e-11 && ibz_sigma_error < 1e-11 && ibz_qp_error < 1e-10);
-            for (int pattern = 1; pattern != 7; ++pattern)
-            {
-                const auto split = calculate(model, true, false, false, pattern);
-                const double split_exx = difference(full.exx, split.exx);
-                const double split_sigma = difference(full.sigma_operator, split.sigma_operator);
-                const double split_qp = difference(full.qp, split.qp);
-                if (global::mpi_comm_global_h.is_root())
-                    std::cout << "NC SOC switch pattern " << pattern
-                              << " residuals (Ha): Ec=" << std::abs(full.ec - split.ec)
-                              << " EXX=" << split_exx << " Sigma_operator=" << split_sigma
-                              << " QP=" << split_qp << std::endl;
-                assert(std::abs(full.ec - split.ec) < 1e-11);
-                assert(split_exx < 1e-11 && split_sigma < 1e-11 && split_qp < 1e-10);
-            }
-            for (const int mesh : {4, 6})
-            {
-                const auto mesh_full = calculate(model, false, false, false, -1, mesh);
-                const auto mesh_magnetic = calculate(model, true, false, false, -1, mesh);
-                const double ec_error = std::abs(mesh_full.ec - mesh_magnetic.ec);
-                const double mesh_exx = difference(mesh_full.exx, mesh_magnetic.exx);
-                const double mesh_sigma =
-                    difference(mesh_full.sigma_operator, mesh_magnetic.sigma_operator);
-                const double mesh_qp = difference(mesh_full.qp, mesh_magnetic.qp);
-                if (global::mpi_comm_global_h.is_root())
-                    std::cout << "NC SOC mesh " << mesh << " residuals (Ha): Ec=" << ec_error
-                              << " EXX=" << mesh_exx << " Sigma_operator=" << mesh_sigma
-                              << " QP=" << mesh_qp << std::endl;
-                assert(ec_error < 1e-11 && mesh_exx < 1e-11 && mesh_sigma < 1e-11 &&
-                       mesh_qp < 1e-10);
-            }
+            // The odd grid exercises all stage combinations and IBZ input;
+            // the even grid adds self-inverse cells, and the rotated frame
+            // distinguishes supplied SOC actions from spatially derived ones.
             check_dispersive_model(false, 2, 3, 3);
             check_dispersive_model(false, 2, 4, 4);
             check_dispersive_model(true, 2, 3, 3);

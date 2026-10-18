@@ -160,12 +160,15 @@ void assert_full_vr_matches_full(const atpair_R_mat_t& actual,
                                  const double tolerance = 1e-12)
 {
     assert(!actual.empty());
+    assert(actual.size() == expected.size());
     for (const auto& [atom_i, row] : actual)
     {
         assert(expected.count(atom_i) != 0);
+        assert(row.size() == expected.at(atom_i).size());
         for (const auto& [atom_j, R_blocks] : row)
         {
             assert(expected.at(atom_i).count(atom_j) != 0);
+            assert(R_blocks.size() == expected.at(atom_i).at(atom_j).size());
             for (const auto& [R, block] : R_blocks)
             {
                 assert(expected.at(atom_i).at(atom_j).count(R) != 0);
