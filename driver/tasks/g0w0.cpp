@@ -85,14 +85,39 @@ static void prepare_g0w0_native_velocity()
                 throw LIBRPA_RUNTIME_ERROR(
                     "G0W0 native velocity requires one/two collinear spins or one two-component "
                     "spinor channel and complete AO-spinor/band frames");
-            if (nk <= 0 || nk != nk_full || static_cast<int>(ds->pbc.kfrac_list.size()) != nk ||
+            if (nk <= 0 || static_cast<int>(ds->pbc.kfrac_list.size()) != nk ||
                 static_cast<int>(ds->pbc.weight_k.size()) != nk)
                 throw LIBRPA_RUNTIME_ERROR(
-                    "G0W0 native velocity requires the complete full-BZ SCF mesh");
-            for (const auto weight : ds->pbc.weight_k)
-                if (!std::isfinite(weight) || std::abs(weight - 1.0 / nk) > 1e-8)
+                    "G0W0 native velocity requires matching SCF k points and weights");
+            const bool reduced_grid = nk != nk_full;
+            if (reduced_grid)
+            {
+                const bool use_symmetry = driver::get_bool(driver::opts.use_symmetry_rpa) ||
+                                          driver::get_bool(driver::opts.use_symmetry_gw);
+                if (!spinor || !use_symmetry || driver::get_bool(driver::opts.use_kpara_scf_eigvec))
                     throw LIBRPA_RUNTIME_ERROR(
-                        "G0W0 native velocity requires uniform full-BZ k weights");
+                        "IBZ native velocity requires SOC magnetic symmetry and undistributed "
+                        "AO/band WFC blocks");
+                initialize_symmetry_context(*ds, true);
+                require_symmetry_shell_layouts(*ds, "native SOC head/wing");
+                const auto &ctx = ds->symmetry_context;
+                if (ctx.kstars.size() != static_cast<std::size_t>(nk) ||
+                    ctx.count_kstar_members() != static_cast<std::size_t>(nk_full) ||
+                    ctx.spin_operations.empty())
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "IBZ native SOC velocity requires magnetic k-stars covering the full mesh");
+            }
+            for (int ik = 0; ik != nk; ++ik)
+            {
+                const auto weight = ds->pbc.weight_k[ik];
+                const double expected = reduced_grid
+                    ? static_cast<double>(find_symmetry_kstar_for_ibz_kpoint(
+                          ds->symmetry_context, ds->pbc.kfrac_list[ik]).members.size()) / nk_full
+                    : 1.0 / nk;
+                if (!std::isfinite(weight) || std::abs(weight - expected) > 1e-8)
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "G0W0 native velocity k weights disagree with the full-mesh star counts");
+            }
             if (ns == 2 && params.g0w0_fn_hr_spin1.empty())
                 throw LIBRPA_RUNTIME_ERROR(
                     "Two-spin G0W0 native velocity requires g0w0_fn_hr_spin1");
