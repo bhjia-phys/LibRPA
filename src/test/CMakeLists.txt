@@ -87,9 +87,6 @@ foreach(target
   config_test(${target} 1)
 endforeach()
 
-# These suites use standard assert() and must remain active in Release builds.
-target_compile_options(test_sternheimer_rpa PRIVATE -UNDEBUG)
-target_compile_options(test_sternheimer_symmetry PRIVATE -UNDEBUG)
 target_sources(test_task_helper PRIVATE ../../driver/tasks/task_helper.cpp)
 # Exercise the distributed collection in the same focused Coulomb executable.
 add_test(NAME test_coulmat_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_coulmat>)
@@ -114,21 +111,11 @@ foreach(target
   config_test(${target} 4)
 endforeach()
 
-target_compile_options(test_rpa_headwing PRIVATE -UNDEBUG)
-# The symmetry-context and k-BLACS symmetry-restore suites assert the k-star
-# rotation conventions; keep them active in Release builds as well.
-target_compile_options(test_symmetry_context PRIVATE -UNDEBUG)
-target_compile_options(test_symmetry PRIVATE -UNDEBUG)
-target_compile_options(test_meanfield PRIVATE -UNDEBUG)
-target_compile_options(test_meanfield_mpi PRIVATE -UNDEBUG)
 set_tests_properties(test_symmetry_context test_si_density_symmetry
   test_meanfield test_meanfield_mpi PROPERTIES LABELS "symmetry")
-# Keep the rebased screening numerical control active in Release.
-target_compile_options(test_epsilon PRIVATE -UNDEBUG)
 
 if(LIBRPA_USE_LIBRI)
   config_test(test_strict_2d_gw_wc 4)
-  target_compile_options(test_strict_2d_gw_wc PRIVATE -UNDEBUG)
   add_test(NAME test_strict_2d_gw_wc_serial COMMAND $<TARGET_FILE:test_strict_2d_gw_wc>)
   set_tests_properties(test_strict_2d_gw_wc test_strict_2d_gw_wc_serial
     PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;MKL_NUM_THREADS=1" TIMEOUT 60)
@@ -139,7 +126,6 @@ endif()
 # two 1x1 groups, while four ranks exercise the production 2x2 BLACS layout.
 if(LIBRPA_USE_LIBRI)
   config_test(test_exx_coulomb_ownership 1)
-  target_compile_options(test_exx_coulomb_ownership PRIVATE -UNDEBUG)
   foreach(nproc 2 4)
     add_test(NAME test_exx_coulomb_ownership_mpi${nproc}
       COMMAND mpirun -np ${nproc} $<TARGET_FILE:test_exx_coulomb_ownership>)

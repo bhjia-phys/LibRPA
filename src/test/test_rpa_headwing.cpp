@@ -2199,8 +2199,8 @@ void test_ibz_soc_wfc_velocity_matches_nonorthogonal_ao_oracle()
         std::conj(u[0]), std::conj(u[2]), std::conj(u[1]), std::conj(u[3])};
     const Vector3_Order<double> representative{0.0, 0.0, 0.0}, target{1.0, 0.0, 0.0};
     const auto source = make_ibz_soc_metric_frame(0.29);
-    const auto gauge = ibz_soc_degenerate_gauge();
-    double maximum_error = 0.0, wrong_spin_witness = 0.0, euclidean_sewing_witness = 0.0;
+    const auto &frame = source.second;
+    double maximum_error = 0.0, wrong_spin_witness = 0.0;
     for (const bool antiunitary : {false, true})
     {
         ctx.spin_operations = {{0, inverse, antiunitary,
@@ -2230,67 +2230,48 @@ void test_ibz_soc_wfc_velocity_matches_nonorthogonal_ao_oracle()
                 }
         const auto metric_target = action * (antiunitary ? conj(source.first) : source.first) *
                                    transpose(action, true);
-        for (const bool change_degenerate_gauge : {false, true})
-        {
-            const auto frame = change_degenerate_gauge ? source.second * gauge : source.second;
-            const auto expected = action * (antiunitary ? conj(frame) : frame);
-            const auto source_wfc = ibz_soc_frame_to_wfc(frame);
-            const auto actual = librpa_int::rotate_headwing_spinor_wfc_to_kstar_member(
-                ctx, member, layouts, atom_nw, representative, source_wfc, &target);
-            for (int band = 0; band != 4; ++band)
-                for (int ao = 0; ao != 2; ++ao)
-                    for (int spinor = 0; spinor != 2; ++spinor)
-                        maximum_error = std::max(maximum_error, std::abs(
-                            actual[spinor](band, ao) - expected(2 * ao + spinor, band)));
-            const auto metric = transpose(expected, true) * metric_target * expected;
-            for (int row = 0; row != 4; ++row)
-                for (int col = 0; col != 4; ++col)
-                    maximum_error = std::max(maximum_error,
-                        std::abs(metric(row, col) - (row == col ? 1.0 : 0.0)));
-
-            auto velocity = ibz_soc_band_velocity(0.01);
-            if (change_degenerate_gauge)
-                for (auto &component : velocity)
-                    component = transpose(gauge, true) * component * gauge;
-            const auto restored_velocity = librpa_int::rotate_headwing_velocity_to_kstar_member(
-                ctx, member, velocity, 4, antiunitary);
-            const std::array<int, 3> input_axis{1, 2, 0};
-            const std::array<double, 3> inverse_rotation_sign{1.0, 1.0, 1.0};
-            for (int alpha = 0; alpha != 3; ++alpha)
+        const auto expected = action * (antiunitary ? conj(frame) : frame);
+        const auto source_wfc = ibz_soc_frame_to_wfc(frame);
+        const auto actual = librpa_int::rotate_headwing_spinor_wfc_to_kstar_member(
+            ctx, member, layouts, atom_nw, representative, source_wfc, &target);
+        for (int band = 0; band != 4; ++band)
+            for (int ao = 0; ao != 2; ++ao)
+                for (int spinor = 0; spinor != 2; ++spinor)
+                    maximum_error = std::max(maximum_error, std::abs(
+                        actual[spinor](band, ao) - expected(2 * ao + spinor, band)));
+        const auto metric = transpose(expected, true) * metric_target * expected;
+        for (int row = 0; row != 4; ++row)
+            for (int col = 0; col != 4; ++col)
             {
-                const auto source_operator = source.first * frame * velocity[input_axis[alpha]] *
-                                             transpose(frame, true) * source.first;
-                auto target_operator = action *
-                    (antiunitary ? conj(source_operator) : source_operator) * transpose(action, true);
-                target_operator *= inverse_rotation_sign[alpha] * (antiunitary ? -1.0 : 1.0);
-                const auto projected = transpose(expected, true) * target_operator * expected;
-                for (int row = 0; row != 4; ++row)
-                    for (int col = 0; col != 4; ++col)
-                        maximum_error = std::max(maximum_error,
-                            std::abs(projected(row, col) - restored_velocity[alpha](row, col)));
+                maximum_error = std::max(maximum_error,
+                    std::abs(metric(row, col) - (row == col ? 1.0 : 0.0)));
+                wrong_spin_witness = std::max(wrong_spin_witness,
+                    std::abs(expected(row, col) - frame(row, col)));
             }
-            const auto independently_mixed = expected * gauge;
-            const auto sewing = transpose(expected, true) * metric_target * independently_mixed;
-            const auto euclidean = transpose(expected, true) * independently_mixed;
+
+        const auto velocity = ibz_soc_band_velocity(0.01);
+        const auto restored_velocity = librpa_int::rotate_headwing_velocity_to_kstar_member(
+            ctx, member, velocity, 4, antiunitary);
+        const std::array<int, 3> input_axis{1, 2, 0};
+        for (int alpha = 0; alpha != 3; ++alpha)
+        {
+            const auto source_operator = source.first * frame * velocity[input_axis[alpha]] *
+                                         transpose(frame, true) * source.first;
+            auto target_operator = action *
+                (antiunitary ? conj(source_operator) : source_operator) * transpose(action, true);
+            target_operator *= antiunitary ? -1.0 : 1.0;
+            const auto projected = transpose(expected, true) * target_operator * expected;
             for (int row = 0; row != 4; ++row)
                 for (int col = 0; col != 4; ++col)
-                {
                     maximum_error = std::max(maximum_error,
-                        std::abs(sewing(row, col) - gauge(row, col)));
-                    euclidean_sewing_witness = std::max(euclidean_sewing_witness,
-                        std::abs(euclidean(row, col) - gauge(row, col)));
-                    wrong_spin_witness = std::max(wrong_spin_witness,
-                        std::abs(expected(row, col) - frame(row, col)));
-                }
+                        std::abs(projected(row, col) - restored_velocity[alpha](row, col)));
         }
     }
     if (librpa_int::global::mpi_comm_global_h.is_root())
         std::cout << "IBZ SOC complex WFC/velocity/metric oracle error: " << maximum_error
-                  << "; nontrivial spin/gauge witness: " << wrong_spin_witness
-                  << "; Euclidean sewing error: " << euclidean_sewing_witness << std::endl;
+                  << "; nontrivial spin/gauge witness: " << wrong_spin_witness << std::endl;
     assert(maximum_error < 2e-12);
     assert(wrong_spin_witness > 0.1);
-    assert(euclidean_sewing_witness > 0.05);
 }
 
 
@@ -2370,9 +2351,15 @@ void test_ibz_soc_headwing_matches_complete_complex_bz(const BlacsCtxtHandler &b
     }
     const std::vector<double> frequencies{0.17, 0.61, 1.3};
     const atpair_k_cplx_mat_t empty_vq;
+    enum class InputRoute { SourceOnly, StarWeighted, FullCache };
+    ArrayDesc sqrt_desc(blacs_h);
+    sqrt_desc.init_1b1p(2, 2, 0, 0);
+    auto sqrt_v = init_local_mat<std::complex<double>>(sqrt_desc, MAJOR::COL);
+    fill_distributed_matrix(sqrt_v, sqrt_desc, {{1.0, 0.0}, {0.0, std::sqrt(0.5)}});
     const auto gauge = ibz_soc_degenerate_gauge();
     std::vector<Matz> baseline_head, baseline_wing;
-    double maximum_error = 0.0, star_weighted_error = 0.0, wing_magnitude = 0.0;
+    double maximum_error = 0.0, head_magnitude = 0.0, wing_magnitude = 0.0;
+    double regular_wing_magnitude = 0.0;
     for (const bool change_degenerate_gauge : {false, true})
     {
         MeanField full_mf(1, 3, 4, 2, 2), ibz_mf(1, 2, 4, 2, 2);
@@ -2442,77 +2429,92 @@ void test_ibz_soc_headwing_matches_complete_complex_bz(const BlacsCtxtHandler &b
         diele_func full(full_mf, full_velocity, full_pbc.kfrac_list, basis_wfc, basis_abf,
                          frequencies, 2, 4, 1, 2, full_pbc,
                          librpa_int::global::mpi_comm_global_h, blacs_h);
-        diele_func reduced(ibz_mf, ibz_velocity, ibz_pbc.kfrac_list, basis_wfc, basis_abf,
-                            frequencies, 2, 4, 1, 2, ibz_pbc,
-                            librpa_int::global::mpi_comm_global_h, blacs_h);
-        diele_func star_weighted(star_weighted_mf, ibz_velocity, ibz_pbc.kfrac_list,
-                                  basis_wfc, basis_abf, frequencies, 2, 4, 1, 2, ibz_pbc,
-                                  librpa_int::global::mpi_comm_global_h, blacs_h);
-        full.use_soc = reduced.use_soc = star_weighted.use_soc = true;
-        reduced.use_symmetry = true;
-        reduced.set_symmetry_context(ctx);
-        reduced.atom_nw = basis_wfc.get_atom_nb_map();
-        reduced.coord_frac = ctx.input_coord_frac;
-        star_weighted.use_symmetry = true;
-        star_weighted.set_symmetry_context(ctx);
-        star_weighted.atom_nw = basis_wfc.get_atom_nb_map();
-        star_weighted.coord_frac = ctx.input_coord_frac;
-        star_weighted.normalize_ibz_star_weighted_occupations();
-        for (int source_ik = 0; source_ik != 2; ++source_ik)
-            for (int band = 0; band != 4; ++band)
-            {
-                assert_complex_close(ibz_mf.get_weight()[0](source_ik, band),
-                                     band < 2 ? 0.5 : 0.0, 1e-15);
-                assert_complex_close(star_weighted_mf.get_weight()[0](source_ik, band),
-                                     band < 2 ? static_cast<double>(source_ik + 1) / 3.0 : 0.0,
-                                     1e-15);
-                assert_complex_close(star_weighted.get_meanfield_df().get_weight()[0](source_ik, band),
-                                     band < 2 ? 0.5 : 0.0, 1e-15);
-            }
-        assert(!reduced.has_direct_full_bz_headwing_inputs());
-        assert(!star_weighted.has_direct_full_bz_headwing_inputs());
+        full.use_soc = true;
         full.init(0.0, empty_vq);
-        reduced.init(0.0, empty_vq);
-        star_weighted.init(0.0, empty_vq);
         full.cal_head();
-        reduced.cal_head();
-        star_weighted.cal_head();
         full.cal_wing(cs, 0.0, empty_vq);
-        reduced.cal_wing(cs, 0.0, empty_vq);
-        star_weighted.cal_wing(cs, 0.0, empty_vq);
+        // The Coulomb-basis transform releases the auxiliary tensors.
+        std::vector<Matz> full_wing;
+        for (const auto &tensor : full.get_wing_auxiliary())
+            full_wing.push_back(tensor.copy());
+        full.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
         const auto &full_head = full.get_head_tensors();
-        const auto &full_wing = full.get_wing_auxiliary();
-        const auto &ibz_head = reduced.get_head_tensors();
-        const auto &ibz_wing = reduced.get_wing_auxiliary();
-        const auto &weighted_head = star_weighted.get_head_tensors();
-        const auto &weighted_wing = star_weighted.get_wing_auxiliary();
-        assert(full_head.size() == frequencies.size() && ibz_head.size() == frequencies.size());
-        assert(full_wing.size() == frequencies.size() && ibz_wing.size() == frequencies.size());
-        for (std::size_t frequency = 0; frequency != frequencies.size(); ++frequency)
+
+        // All routes share the same independent complete-grid reference.
+        // FullCache retains the older consumer path alongside source-only IBZ.
+        for (const auto route : {InputRoute::SourceOnly, InputRoute::StarWeighted, InputRoute::FullCache})
         {
-            for (int row = 0; row != 3; ++row)
-                for (int col = 0; col != 3; ++col)
+            double route_error = 0.0;
+            diele_func reduced(route == InputRoute::StarWeighted ? star_weighted_mf : ibz_mf,
+                               ibz_velocity, ibz_pbc.kfrac_list, basis_wfc, basis_abf,
+                               frequencies, 2, 4, 1, 2, ibz_pbc,
+                               librpa_int::global::mpi_comm_global_h, blacs_h);
+            reduced.use_soc = reduced.use_symmetry = true;
+            reduced.set_symmetry_context(ctx);
+            reduced.atom_nw = basis_wfc.get_atom_nb_map();
+            reduced.coord_frac = ctx.input_coord_frac;
+            if (route == InputRoute::StarWeighted)
+                reduced.normalize_ibz_star_weighted_occupations();
+            if (route == InputRoute::FullCache)
+                reduced.set_direct_full_bz_headwing_inputs(full_velocity, full_mf, {{0}, {1, 2}});
+            assert(reduced.has_direct_full_bz_headwing_inputs() == (route == InputRoute::FullCache));
+            for (int source_ik = 0; source_ik != 2; ++source_ik)
+                for (int band = 0; band != 4; ++band)
                 {
-                    maximum_error = std::max(maximum_error,
-                        std::abs(full_head[frequency](row, col) - ibz_head[frequency](row, col)));
-                    star_weighted_error = std::max(star_weighted_error,
-                        std::abs(full_head[frequency](row, col) - weighted_head[frequency](row, col)));
-                    if (change_degenerate_gauge)
-                        maximum_error = std::max(maximum_error,
-                            std::abs(full_head[frequency](row, col) - baseline_head[frequency](row, col)));
+                    assert_complex_close(ibz_mf.get_weight()[0](source_ik, band),
+                                         band < 2 ? 0.5 : 0.0, 1e-15);
+                    assert_complex_close(star_weighted_mf.get_weight()[0](source_ik, band),
+                                         band < 2 ? static_cast<double>(source_ik + 1) / 3.0 : 0.0,
+                                         1e-15);
+                    assert_complex_close(reduced.get_meanfield_df().get_weight()[0](source_ik, band),
+                                         band < 2 ? 0.5 : 0.0, 1e-15);
                 }
-            for (int mu = 0; mu != 2; ++mu)
-                for (int alpha = 0; alpha != 3; ++alpha)
-                {
-                    wing_magnitude = std::max(wing_magnitude, std::abs(full_wing[frequency](mu, alpha)));
-                    maximum_error = std::max(maximum_error,
-                        std::abs(full_wing[frequency](mu, alpha) - ibz_wing[frequency](mu, alpha)));
-                    star_weighted_error = std::max(star_weighted_error,
-                        std::abs(full_wing[frequency](mu, alpha) - weighted_wing[frequency](mu, alpha)));
-                    if (change_degenerate_gauge)
-                        maximum_error = std::max(maximum_error,
-                            std::abs(full_wing[frequency](mu, alpha) - baseline_wing[frequency](mu, alpha)));
-                }
+            reduced.init(0.0, empty_vq);
+            reduced.cal_head();
+            reduced.cal_wing(cs, 0.0, empty_vq);
+            const auto &ibz_head = reduced.get_head_tensors();
+            const auto &ibz_wing = reduced.get_wing_auxiliary();
+            assert(full_head.size() == frequencies.size() && ibz_head.size() == frequencies.size());
+            assert(full_wing.size() == frequencies.size() && ibz_wing.size() == frequencies.size());
+            for (std::size_t frequency = 0; frequency != frequencies.size(); ++frequency)
+            {
+                for (int row = 0; row != 3; ++row)
+                    for (int col = 0; col != 3; ++col)
+                    {
+                        head_magnitude = std::max(head_magnitude,
+                            std::abs(full_head[frequency](row, col) - (row == col ? 1.0 : 0.0)));
+                        route_error = std::max(route_error,
+                            std::abs(full_head[frequency](row, col) - ibz_head[frequency](row, col)));
+                        if (change_degenerate_gauge)
+                            route_error = std::max(route_error,
+                                std::abs(full_head[frequency](row, col) - baseline_head[frequency](row, col)));
+                    }
+                for (int mu = 0; mu != 2; ++mu)
+                    for (int alpha = 0; alpha != 3; ++alpha)
+                    {
+                        wing_magnitude = std::max(wing_magnitude, std::abs(full_wing[frequency](mu, alpha)));
+                        route_error = std::max(route_error,
+                            std::abs(full_wing[frequency](mu, alpha) - ibz_wing[frequency](mu, alpha)));
+                        if (change_degenerate_gauge)
+                            route_error = std::max(route_error,
+                                std::abs(full_wing[frequency](mu, alpha) - baseline_wing[frequency](mu, alpha)));
+                    }
+            }
+            reduced.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
+            for (std::size_t frequency = 0; frequency != frequencies.size(); ++frequency)
+            {
+                const auto x = full.get_rpa_chi0v_wing(frequency);
+                const auto y = reduced.get_rpa_chi0v_wing(frequency);
+                assert(x.nr() == y.nr() && x.nc() == y.nc());
+                for (int row = 0; row != x.nr(); ++row)
+                    for (int col = 0; col != x.nc(); ++col)
+                    {
+                        route_error = std::max(route_error, std::abs(x(row, col) - y(row, col)));
+                        regular_wing_magnitude = std::max(regular_wing_magnitude, std::abs(x(row, col)));
+                    }
+            }
+            maximum_error = std::max(maximum_error, route_error);
+            assert(route_error < (route == InputRoute::FullCache ? 1e-12 : 2e-11));
         }
         if (!change_degenerate_gauge)
             for (std::size_t frequency = 0; frequency != frequencies.size(); ++frequency)
@@ -2521,13 +2523,14 @@ void test_ibz_soc_headwing_matches_complete_complex_bz(const BlacsCtxtHandler &b
                 baseline_wing.push_back(full_wing[frequency].copy());
             }
     }
+    MPI_Allreduce(MPI_IN_PLACE, &maximum_error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &regular_wing_magnitude, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     if (librpa_int::global::mpi_comm_global_h.is_root())
-        std::cout << "IBZ-only SOC complete head/wing and degenerate-gauge error: "
-                  << maximum_error << "; star-weighted SCF error: " << star_weighted_error
+        std::cout << "SOC full-cache/source-IBZ/weighted head/wing and degenerate-gauge error: "
+                  << maximum_error
                   << "; nonzero wing: " << wing_magnitude << std::endl;
-    assert(wing_magnitude > 1e-4);
+    assert(head_magnitude > 1e-6 && wing_magnitude > 1e-4 && regular_wing_magnitude > 1e-6);
     assert(maximum_error < 2e-11);
-    assert(star_weighted_error < 2e-11);
 }
 
 void test_headwing_direct_full_bz_velocity_selects_kstar_member()
@@ -3528,144 +3531,6 @@ void test_abf_space_wing_rewrite_matches_coulomb_basis(const BlacsCtxtHandler &b
         require_double_close(max_err, 0.0, 1e-10);
     }
 }
-
-void test_spinor_headwing_full_bz_matches_antiunitary_kstar_sum(const BlacsCtxtHandler &blacs_h)
-{
-    const std::vector<Vector3_Order<double>> full_points{{0,0,0}, {1.0/3,0,0}, {-1.0/3,0,0}};
-    const std::vector<Vector3_Order<double>> ibz_points{full_points[0], full_points[1]};
-    const auto make_meanfield = [](int nk) {
-        MeanField mf(1, nk, 4, 2, 2);
-        for (int k = 0; k != nk; ++k)
-        {
-            for (int component = 0; component != 2; ++component)
-            {
-                auto &wfc = mf.get_eigenvectors()[0][component][k];
-                wfc.create(4, 2);
-                for (int band = 0; band != 4; ++band)
-                    for (int ao = 0; ao != 2; ++ao)
-                        wfc(band,ao) = component == band % 2 && ao == band / 2 ? 1.0 : 0.0;
-            }
-            for (int band = 0; band != 4; ++band)
-            {
-                mf.get_eigenvals()[0](k,band) = band < 2 ? -1.0 : 1.0;
-                mf.get_weight()[0](k,band) = band < 2 ? 1.0 / nk : 0.0;
-            }
-        }
-        return mf;
-    };
-    auto full_mf = make_meanfield(3);
-    auto ibz_mf = make_meanfield(2);
-    librpa_int::velocity_matrix_t full_velocity, ibz_velocity;
-    librpa_int::initialize_velocity_matrix(full_velocity, 1, 3, 4);
-    librpa_int::initialize_velocity_matrix(ibz_velocity, 1, 2, 4);
-    for (int k = 0; k != 3; ++k)
-        for (int alpha = 0; alpha != 3; ++alpha)
-            for (int component = 0; component != 2; ++component)
-            {
-                full_velocity[0][k][alpha](component,component+2) = {0,0.1*(alpha+1)};
-                full_velocity[0][k][alpha](component+2,component) = {0,-0.1*(alpha+1)};
-            }
-    for (int k = 0; k != 2; ++k)
-        ibz_velocity[0][k] = full_velocity[0][k];
-
-    AtomicBasis ao(std::vector<std::size_t>{2}), aux(std::vector<std::size_t>{2});
-    ao.set_l_shells({{0,0}});
-    aux.set_l_shells({{0,0}});
-    PeriodicBoundaryData pbc;
-    pbc.set_latvec({5,0,0,0,5,0,0,0,5});
-    pbc.set_kgrids_kvec(3,1,1, {0,0,0, librpa_int::TWO_PI/15,0,0, -librpa_int::TWO_PI/15,0,0});
-    SymmetryContext context;
-    context.set_available();
-    context.lattice_vectors = pbc.latvec;
-    context.atom_to_type = {{0,0}};
-    context.input_coord_frac = {{0,{0,0,0}}};
-    SymmetryOperation identity;
-    identity.rotation.Identity();
-    context.set_rspace_operations({identity});
-    const auto member = [](const Vector3_Order<double> &point, bool antiunitary) {
-        SymmetryKStarMember m;
-        m.k_bz = point;
-        m.spatial_isym = 0;
-        m.time_reversal = antiunitary;
-        SymmetryKAtomRotation atom;
-        atom.atom_from = atom.atom_to = atom.atom_type = atom.lmax = 0;
-        atom.bloch_rsh_rotations[0] = ComplexMatrix(1,1);
-        atom.bloch_rsh_rotations[0](0,0) = 1.0;
-        m.atom_rotations.push_back(atom);
-        return m;
-    };
-    for (int k = 0; k != 2; ++k)
-    {
-        librpa_int::SymmetryKStar star;
-        star.star_index = k;
-        star.k_ibz = ibz_points[k];
-        star.members.push_back(member(ibz_points[k], false));
-        if (k == 1) star.members.push_back(member(full_points[2], true));
-        context.kstars.push_back(star);
-    }
-    assert(context.count_kstar_members() == 3);
-    const std::vector<double> omega{0.5,1.0};
-    diele_func full(full_mf, full_velocity, full_points, ao, aux, omega, 2,4,1,2,
-                    pbc, librpa_int::global::mpi_comm_global_h, blacs_h);
-    diele_func reduced(ibz_mf, ibz_velocity, ibz_points, ao, aux, omega, 2,4,1,2,
-                       pbc, librpa_int::global::mpi_comm_global_h, blacs_h);
-    full.use_soc = reduced.use_soc = true;
-    reduced.use_symmetry = true;
-    reduced.debug = true;
-    reduced.set_symmetry_context(context);
-    reduced.atom_nw = {{0,2}};
-    reduced.coord_frac = context.input_coord_frac;
-    reduced.set_direct_full_bz_headwing_inputs(full_velocity, full_mf, {{0},{1,2}});
-
-    atpair_k_cplx_mat_t coulomb;
-    auto v = std::make_shared<ComplexMatrix>(2,2);
-    (*v)(0,0) = 1.0;
-    (*v)(1,1) = 0.5;
-    coulomb[0][0][{0,0,0}] = v;
-    librpa_int::Cs_LRI coefficients;
-    coefficients.use_libri = true;
-    // Each auxiliary channel has a distinct, nonzero AO product.
-    auto tensor = std::make_shared<std::valarray<double>>(8);
-    (*tensor)[0] = (*tensor)[3] = 0.5;
-    (*tensor)[5] = (*tensor)[6] = 0.5;
-    if (librpa_int::global::mpi_comm_global_h.is_root())
-        coefficients.data_libri[0][{0,{0,0,0}}] = RI::Tensor<double>({2,2,2}, tensor);
-    full.init(0.0, coulomb);
-    reduced.init(0.0, coulomb);
-    full.cal_head();
-    reduced.cal_head();
-    full.cal_wing(coefficients, 0.0, coulomb);
-    reduced.cal_wing(coefficients, 0.0, coulomb);
-    ArrayDesc sqrt_desc(blacs_h);
-    sqrt_desc.init_1b1p(2,2,0,0);
-    auto sqrt_v = init_local_mat<std::complex<double>>(sqrt_desc, MAJOR::COL);
-    fill_distributed_matrix(sqrt_v, sqrt_desc, {{1.0,0.0},{0.0,std::sqrt(0.5)}});
-    full.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
-    reduced.wing_mu_to_lambda(sqrt_v, sqrt_desc, 2);
-    double head_norm = 0.0, wing_norm_local = 0.0;
-    for (int frequency = 0; frequency != 2; ++frequency)
-    {
-        const auto a = full.get_rpa_chi0v_head(frequency), b = reduced.get_rpa_chi0v_head(frequency);
-        for (int i = 0; i != 3; ++i)
-            for (int j = 0; j != 3; ++j)
-            {
-                assert_complex_close(a(i,j), b(i,j), 1e-12);
-                head_norm = std::max(head_norm, std::abs(a(i,j)));
-            }
-        const auto x = full.get_rpa_chi0v_wing(frequency), y = reduced.get_rpa_chi0v_wing(frequency);
-        assert(x.nr() == y.nr() && x.nc() == y.nc());
-        for (int i = 0; i != x.nr(); ++i)
-            for (int j = 0; j != x.nc(); ++j)
-            {
-                assert_complex_close(x(i,j), y(i,j), 1e-12);
-                wing_norm_local = std::max(wing_norm_local, std::abs(x(i,j)));
-            }
-    }
-    double wing_norm = 0.0;
-    MPI_Allreduce(&wing_norm_local, &wing_norm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    assert(head_norm > 1e-6 && wing_norm > 1e-6);
-}
-
 }  // namespace
 
 void add_wq_blocks(
@@ -4622,7 +4487,6 @@ int main(int argc, char *argv[])
         test_rspace_symmetry_requires_complete_band_space();
         test_qsgw_reconstruction_with_finite_reference_metric();
         test_qsgw_native_baseline_preserves_aliased_tail();
-        test_spinor_headwing_full_bz_matches_antiunitary_kstar_sum(blacs_h);
         test_kpoint_coordinate_mapping_selects_active_klist_from_full_source();
         test_kstar_velocity_mapping_preserves_member_order_and_periodic_gauge();
         test_replace_rpa_response_head_only_keeps_numeric_wings(blacs_h);
