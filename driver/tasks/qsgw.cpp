@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -17,6 +18,7 @@
 #include "../../src/api/dataset_helper.h"
 #include "../../src/api/instance_manager.h"
 #include "../../src/core/qsgw/convergence.h"
+#include "../../src/core/meanfield_mpi.h"
 #include "../../src/core/qsgw/correlation_potential.h"
 #include "../../src/core/qsgw/distributed_matrix.h"
 #include "../../src/core/qsgw/effective_hamiltonian.h"
@@ -39,6 +41,7 @@
 #include "../qsgw/vxc_io.h"
 #include "../read_data.h"
 #include "../task.h"
+#include "crpa.h"
 
 namespace
 {
@@ -358,6 +361,88 @@ SpinKMatrixMap build_correlation_map(
     return result;
 }
 
+// The matrices are already available for QSGW. Rotate to the entering
+// eigenframe and reuse G0W0 continuation/roots without a second GW build.
+void write_qsgw_qp_state(
+    std::ostream& output, int state_index, int update, const std::string& channel,
+    const MeanField& live, const std::vector<Vector3_Order<double>>& kpoints,
+    const SpinKMatrixMap& rotation, const SpinKMatrixMap& entering_hamiltonian,
+    const SpinKMatrixMap& reference_hamiltonian, const SpinKMatrixMap& dft_vxc,
+    const SpinKMatrixMap& exchange, const SigmaMatrixMap& sigma,
+    const librpa_int::TFGrids& tfg)
+{
+    const auto& options = driver::opts;
+    const int low = std::max(0, driver::driver_params.i_state_low);
+    const int high = std::min(live.get_n_states(), driver::driver_params.i_state_high);
+    const int n = high - low, nk = live.get_n_kpoints(), ns = live.get_n_spins();
+    if (n <= 0) return;
+    const auto frequencies = tfg.get_freq_nodes();
+    std::vector<int> iks(nk);
+    std::iota(iks.begin(), iks.end(), 0);
+    std::vector<double> potential(ns * nk * n), exx(potential.size());
+    std::vector<cplxdb> diagonal;
+    diagonal.reserve(potential.size() * frequencies.size());
+    for (int spin = 0; spin < ns; ++spin)
+        for (int kpoint = 0; kpoint < nk; ++kpoint)
+        {
+            const auto& u = rotation.at(spin).at(kpoint);
+            const auto adjoint = transpose(u, true);
+            const auto rotate = [&](const Matz& matrix) {
+                // BLACS Sigma/EXX are column-major; the fixed-frame rotation
+                // can be row-major. Normalize storage before the BLAS product.
+                const Matz aligned(matrix.nr(), matrix.nc(), matrix.ptr(),
+                                   matrix.major(), u.major());
+                return adjoint * aligned * u;
+            };
+            // H_t = H_DFT - Vxc_DFT + Vstatic_t, including mixing/cuts/restart.
+            Matz static_reference(u.nr(), u.nc(), u.major());
+            for (int row = 0; row < u.nr(); ++row)
+                for (int column = 0; column < u.nc(); ++column)
+                    static_reference(row, column) =
+                        entering_hamiltonian.at(spin).at(kpoint)(row, column) -
+                        reference_hamiltonian.at(spin).at(kpoint)(row, column) +
+                        dft_vxc.at(spin).at(kpoint)(row, column);
+            const auto vstatic = rotate(static_reference);
+            const auto sigx = rotate(exchange.at(spin).at(kpoint));
+            for (int band = low; band < high; ++band)
+            {
+                const int i = (spin * nk + kpoint) * n + band - low;
+                potential[i] = vstatic(band, band).real();
+                exx[i] = sigx(band, band).real();
+            }
+            for (double frequency : frequencies)
+            {
+                const auto sigc = rotate(sigma.at(spin).at(kpoint).at(frequency));
+                for (int band = low; band < high; ++band)
+                    diagonal.push_back(sigc(band, band));
+            }
+        }
+    std::vector<double> real(potential.size()), imag(potential.size()), eqp(potential.size());
+    std::vector<int> info(potential.size());
+    librpa_int::api::solve_g0w0_qpe_diagonal(
+        live, tfg, options, diagonal, iks, nk, iks.data(), low, n,
+        potential.data(), exx.data(), real.data(), imag.data(), eqp.data(),
+        "QSGW entering-state G0W0", info.data());
+    for (int spin = 0; spin < ns; ++spin)
+        for (int kpoint = 0; kpoint < nk; ++kpoint)
+            for (int band = low; band < high; ++band)
+            {
+                const int i = (spin * nk + kpoint) * n + band - low;
+                const auto& k = kpoints.at(kpoint);
+                output << state_index << ',' << update << ',' << channel << ','
+                       << spin + 1 << ',' << kpoint + 1 << ',' << k.x << ',' << k.y << ','
+                       << k.z << ',' << band + 1 << ',' << live.get_weight().at(spin)(kpoint, band) * nk
+                       << ',' << live.get_eigenvals().at(spin)(kpoint, band) * librpa_int::HA2EV
+                       << ',' << potential[i] * librpa_int::HA2EV
+                       << ',' << exx[i] * librpa_int::HA2EV
+                       << ',' << real[i] * librpa_int::HA2EV
+                       << ',' << imag[i] * librpa_int::HA2EV
+                       << ',' << eqp[i] * librpa_int::HA2EV << ',' << info[i] << '\n';
+            }
+    output.flush();
+    if (!output) throw LIBRPA_RUNTIME_ERROR("Cannot write QSGW quasiparticle output");
+}
+
 void run_qsgw()
 {
     using namespace driver;
@@ -385,6 +470,44 @@ void run_qsgw()
 
     profiler.start("qsgw", "QSGW fixed-basis self-consistent calculation");
     const auto dataset = api::get_dataset_instance(h);
+    std::optional<MeanField> ibz_reference;
+    std::optional<SymmetryExpandedMeanField> expanded_reference;
+    if (dataset->pbc.kfrac_list.size() < dataset->pbc.kfrac_list_full.size() &&
+        (driver_params.crpa_enabled || driver_params.qsgw_export_hamiltonian_for_pyatb ||
+         (update_head && driver_params.qsgw_headwing_velocity == "current_hr")))
+    {
+        collective_all_stage(dataset->comm_h, "QSGW IBZ source expansion", [&]
+        {
+            if (!get_bool(opts.use_symmetry_exx) || !get_bool(opts.use_symmetry_gw) ||
+                !get_bool(opts.use_symmetry_rpa))
+                throw LIBRPA_RUNTIME_ERROR("QSGW IBZ expansion requires EXX/GW/RPA symmetry");
+            reject_spinor_symmetry_speedup(*dataset, "QSGW IBZ expansion");
+            initialize_symmetry_context(*dataset, true);
+            expanded_reference = expand_symmetry_meanfield(
+                dataset->mf, dataset->basis_wfc, dataset->pbc, dataset->symmetry_context);
+            ibz_reference = dataset->mf;
+        });
+        const auto &full = expanded_reference->meanfield;
+        dataset->invalidate_compute_objects();
+        dataset->mf = MeanField{};
+        h.set_scf_dimension(full.get_n_spins(), full.get_n_kpoints(), full.get_n_bands(),
+                            full.get_n_aos(), full.get_n_spinor());
+        dataset->mf = full;
+        driver::n_kpoints = full.get_n_kpoints();
+        // Keep the producer's representative Coulomb grid and star weights.
+        // Only the live KS grid becomes full; P0 and W may still use q stars.
+        auto &pbc = dataset->pbc;
+        pbc.klist = pbc.klist_full;
+        pbc.kfrac_list = pbc.kfrac_list_full;
+        pbc.weight_k.assign(full.get_n_kpoints(), 1.0 / full.get_n_kpoints());
+        pbc.k_to_kfull.resize(full.get_n_kpoints());
+        std::iota(pbc.k_to_kfull.begin(), pbc.k_to_kfull.end(), 0);
+        pbc.kfull_to_k = pbc.k_to_kfull;
+        pbc.kfull_to_k_relation.assign(full.get_n_kpoints(), KFullToKRelation::DIRECT);
+        lib_printf_root("QSGW: expanded %d paired IBZ source states to %d full-grid states; "
+                        "no eigenproblem was solved\n", ibz_reference->get_n_kpoints(),
+                        full.get_n_kpoints());
+    }
     if (update_head && driver_params.qsgw_headwing_velocity == "current_hr")
     {
         const auto& mf = dataset->mf;
@@ -399,12 +522,7 @@ void run_qsgw()
             throw LIBRPA_RUNTIME_ERROR(
                 "QSGW current-HR velocity requires the complete full-BZ SCF mesh; "
                 "IBZ velocity sewing is unsupported");
-        if (mf.get_n_spinor() == 2 &&
-            (driver::get_bool(opts.use_symmetry_exx) || driver::get_bool(opts.use_symmetry_gw) ||
-             driver::get_bool(opts.use_symmetry_rpa)))
-            throw LIBRPA_RUNTIME_ERROR(
-                "QSGW SOC current-HR velocity requires EXX/GW/RPA symmetry switches off; "
-                "magnetic-symmetry velocity sewing is unsupported");
+
     }
     if (opts.parallel_routing != LIBRPA_ROUTING_LIBRI &&
         opts.parallel_routing != LIBRPA_ROUTING_AUTO)
@@ -555,7 +673,21 @@ void run_qsgw()
             ? VxcBasis::Nao : VxcBasis::State;
         dft_vxc = read_qsgw_vxc(
             driver_params.input_dir, driver_params.prefix_vxc_scf,
-            reference, aims_input, false, basis);
+            ibz_reference ? *ibz_reference : reference, aims_input, false, basis);
+        if (expanded_reference)
+        {
+            const auto source_vxc = dft_vxc;
+            dft_vxc.clear();
+            for (int spin = 0; spin < reference.get_n_spins(); ++spin)
+                for (int k = 0; k < reference.get_n_kpoints(); ++k)
+                {
+                    auto block = source_vxc.at(spin).at(expanded_reference->source_k[k]).copy();
+                    if (expanded_reference->antiunitary[k])
+                        for (std::size_t i = 0; i < block.size(); ++i)
+                            block.ptr()[i] = std::conj(block.ptr()[i]);
+                    dft_vxc[spin][k] = std::move(block);
+                }
+        }
         if (compute_band)
             dft_vxc_band = read_qsgw_vxc(
                 driver_params.input_dir, driver_params.prefix_vxc_band,
@@ -629,10 +761,27 @@ void run_qsgw()
         }
     }
 
+    std::ofstream qp_output;
+    SpinKMatrixMap qp_rotation, qp_band_rotation;
+    if (driver_params.qsgw_output_qp)
+        collective_root_stage(dataset->comm_h, "QSGW QP frame recovery", [&] {
+            qp_rotation = reference_basis_rotation(dataset->mf, reference);
+            if (compute_band)
+                qp_band_rotation = reference_basis_rotation(dataset->mf_band, *band_reference);
+        });
+
     std::ofstream trace;
     std::ofstream eigenvalue_trace;
     std::ofstream matrix_trace;
     collective_root_stage(dataset->comm_h, "QSGW trace setup", [&] {
+        if (driver_params.qsgw_output_qp)
+        {
+            qp_output.open(join_path(opts.output_dir, "qsgw_qp.csv"));
+            if (!qp_output) throw LIBRPA_RUNTIME_ERROR("Cannot open QSGW quasiparticle output");
+            qp_output << "state_index,gw_update,channel,spin,kpoint,kx,ky,kz,band,occupation,"
+                         "e0_eV,vstatic_eV,sigma_x_eV,re_sigma_c_effective_eV,im_sigma_c_eV,"
+                         "eqp_eV,solver_info\n" << std::scientific << std::setprecision(17);
+        }
         trace.open(join_path(opts.output_dir, "qsgw_iterations.dat"));
         eigenvalue_trace.open(
             join_path(opts.output_dir, "qsgw_eigenvalues.dat"));
@@ -733,12 +882,72 @@ void run_qsgw()
     // entering state. Fresh iteration 0 is PBE; a restart keeps its saved index.
     export_hamiltonian(starting_iteration,
                        starting_iteration == 0 ? reference_hamiltonian : current_hamiltonian);
-    for (int iteration = starting_iteration + 1;
-         iteration <= driver_params.qsgw_max_iter; ++iteration)
+    std::optional<CrpaDriverInput> crpa_input;
+    const auto crpa_checkpoint_energies = [&]
     {
-        completed_iterations = iteration;
-        const EigenvalueSnapshot previous = eigenvalue_snapshot(dataset->mf);
-        dataset->invalidate_compute_objects();
+        std::vector<double> energies;
+        const auto& mf = dataset->mf;
+        for (int spin = 0; spin < mf.get_n_spins(); ++spin)
+            for (int k = 0; k < mf.get_n_kpoints(); ++k)
+                for (int band = 0; band < mf.get_n_bands(); ++band)
+                    energies.push_back(mf.get_eigenvals()[spin](k, band));
+        return energies;
+    };
+    if (driver_params.crpa_enabled)
+    {
+        if (opts.read_sigc_mat_rf == LIBRPA_SWITCH_ON)
+            throw LIBRPA_RUNTIME_ERROR(
+                "QSGW cRPA requires the live response; read_sigc_mat_rf skips that build");
+        crpa_input.emplace(read_crpa_driver_input());
+        if (driver_params.crpa_track_orbitals && starting_iteration > 0)
+            collective_all_stage(dataset->comm_h, "cRPA parent tracking restart", [&]
+            {
+                crpa_input->read_tracking_checkpoint(driver_params.qsgw_restart_file + ".crpa",
+                                                     starting_iteration,
+                                                     crpa_checkpoint_energies());
+            });
+    }
+    const auto crpa_directory = [&](int state_index)
+    {
+        std::ostringstream name;
+        name << "state_" << std::setfill('0') << std::setw(4) << state_index;
+        return join_path(join_path(opts.output_dir, "crpa"), name.str());
+    };
+    // The final response-only state also needs its velocity in the existing
+    // numerical trace, so a frozen-state standalone calculation can reproduce U.
+    const auto write_live_velocity_trace = [&](int update_index)
+    {
+        if (!driver_params.qsgw_write_iteration_matrices ||
+            driver_params.qsgw_headwing_velocity == "reference")
+            return;
+        for (int a = 0; a < 3; ++a)
+        {
+            SpinKMatrixMap velocities;
+            for (int spin = 0; spin < dataset->mf.get_n_spins(); ++spin)
+                for (int ik = 0; ik < dataset->mf.get_n_kpoints(); ++ik)
+                {
+                    const auto& v = dataset->velocity_matrix[spin][ik][a];
+                    Matz matrix(v.nr, v.nc, MAJOR::ROW);
+                    for (int i = 0; i < v.nr; ++i)
+                        for (int j = 0; j < v.nc; ++j) matrix(i, j) = v(i, j);
+                    velocities[spin][ik] = std::move(matrix);
+                }
+            write_matrix_component_trace(matrix_trace, update_index, IterationChannel::Grid,
+                                         "head_velocity_" + std::to_string(a), velocities);
+        }
+    };
+    const auto prepare_optical_state =
+        [&](int iteration, bool write_numerical_trace, bool rebuild_full_optical = true)
+    {
+        if (get_bool(opts.use_symmetry_exx) || get_bool(opts.use_symmetry_gw) ||
+            get_bool(opts.use_symmetry_rpa))
+            collective_all_stage(dataset->comm_h, "QSGW live magnetic covariance", [&]
+            {
+                reject_spinor_symmetry_speedup(*dataset, "QSGW live state");
+                initialize_symmetry_context(*dataset, true);
+                validate_symmetry_band_weights(dataset->mf, dataset->basis_wfc, dataset->pbc,
+                                                dataset->symmetry_context);
+            });
         if (update_head)
         {
             std::optional<LiveVelocityResult> live_velocity;
@@ -776,6 +985,12 @@ void run_qsgw()
                     }
                 });
             dataset->p_headwing.reset();
+            if (!rebuild_full_optical)
+            {
+                collective_root_stage(dataset->comm_h, "QSGW final cRPA velocity trace",
+                                      [&] { write_live_velocity_trace(iteration); });
+                return;
+            }
             initialize_ds_tfgrids(*dataset, opts);
             // Legacy option-4 head reused the first k-point occupation row.
             // Preserve it only for the unchanged reference-entries map.
@@ -802,7 +1017,7 @@ void run_qsgw()
                 dataset->comm_h, "QSGW head/wing numerical trace",
                 [&]
                 {
-                    if (!driver_params.qsgw_write_iteration_matrices ||
+                    if (!write_numerical_trace || !driver_params.qsgw_write_iteration_matrices ||
                         driver_params.qsgw_headwing_velocity == "reference")
                         return;
                     if (live_velocity)
@@ -812,22 +1027,7 @@ void run_qsgw()
                                                                std::to_string(iteration) + "_spin" +
                                                                std::to_string(spin) + ".eV.csr"),
                                 live_velocity->hamiltonian.at(spin));
-                    for (int a = 0; a < 3; ++a)
-                    {
-                        SpinKMatrixMap velocities;
-                        for (int spin = 0; spin < dataset->mf.get_n_spins(); ++spin)
-                            for (int ik = 0; ik < dataset->mf.get_n_kpoints(); ++ik)
-                            {
-                                const auto& v = dataset->velocity_matrix[spin][ik][a];
-                                Matz matrix(v.nr, v.nc, MAJOR::ROW);
-                                for (int i = 0; i < v.nr; ++i)
-                                    for (int j = 0; j < v.nc; ++j) matrix(i, j) = v(i, j);
-                                velocities[spin][ik] = std::move(matrix);
-                            }
-                        write_matrix_component_trace(
-                            matrix_trace, iteration, IterationChannel::Grid,
-                            "head_velocity_" + std::to_string(a), velocities);
-                    }
+                    write_live_velocity_trace(iteration);
                     const auto& frequencies = dataset->p_headwing->get_frequency_nodes();
                     for (const auto& [name, tensors] :
                          std::vector<std::pair<std::string, const std::vector<Matz>*>>{
@@ -842,10 +1042,28 @@ void run_qsgw()
                     }
                 });
         }
-        h.build_g0w0_sigma(opts);
+    };
+    for (int iteration = starting_iteration + 1; iteration <= driver_params.qsgw_max_iter;
+         ++iteration)
+    {
+        completed_iterations = iteration;
+        const EigenvalueSnapshot previous = eigenvalue_snapshot(dataset->mf);
+        dataset->invalidate_compute_objects();
+        prepare_optical_state(iteration, true);
+        const int entering_state = iteration - 1;
+        if (crpa_input && entering_state % driver_params.crpa_interval == 0)
+        {
+            auto input = crpa_input->input();
+            auto result = h.build_g0w0_sigma_crpa(opts, input);
+            write_crpa_state_outputs(result.get(), *crpa_input, crpa_directory(entering_state),
+                                     entering_state, iteration, false);
+        }
+        else
+        {
+            h.build_g0w0_sigma(opts);
+        }
         if (!dataset->p_exx || !dataset->p_g0w0)
-            throw LIBRPA_RUNTIME_ERROR(
-                "QSGW failed to build live EXX/Sigma real-space objects");
+            throw LIBRPA_RUNTIME_ERROR("QSGW failed to build live EXX/Sigma real-space objects");
         if (update_head && !dataset->p_headwing)
             throw LIBRPA_RUNTIME_ERROR(
                 "QSGW head-only object was not rebuilt on the live frequency grid");
@@ -856,11 +1074,9 @@ void run_qsgw()
             // scope so QSGW does not change the user-facing output setting.
             ScopedSigmaMatrixRetention retain_sigma_matrices(
                 dataset->p_g0w0->output_sigc_ks_mat_kf);
-            ScopedReferenceEigenvectors fixed_basis_projection(
-                dataset->mf, reference);
+            ScopedReferenceEigenvectors fixed_basis_projection(dataset->mf, reference);
             dataset->p_exx->build_KS_kgrid_blacs(
-                dataset->blacs_h,
-                opts.use_gpu_replace_scalapack == LIBRPA_SWITCH_ON);
+                dataset->blacs_h, opts.use_gpu_replace_scalapack == LIBRPA_SWITCH_ON);
             dataset->p_g0w0->build_sigc_matrix_KS_kgrid_blacs(
                 dataset->blacs_h,
                 opts.use_gpu_replace_scalapack == LIBRPA_SWITCH_ON);
@@ -909,6 +1125,22 @@ void run_qsgw()
                         *dataset->p_exx, *band_reference);
                 });
         }
+
+        if (driver_params.qsgw_output_qp)
+            collective_root_stage(dataset->comm_h, "QSGW entering-state QP equation", [&] {
+                write_qsgw_qp_state(
+                    qp_output, entering_state, iteration, "grid", dataset->mf,
+                    dataset->pbc.kfrac_list, qp_rotation,
+                    entering_state == 0 ? reference_hamiltonian : current_hamiltonian,
+                    reference_hamiltonian, dft_vxc, exchange, sigma, dataset->tfg);
+                if (compute_band)
+                    write_qsgw_qp_state(
+                        qp_output, entering_state, iteration, "band", dataset->mf_band,
+                        dataset->kfrac_band_list, qp_band_rotation,
+                        entering_state == 0 ? band_reference_hamiltonian : current_band_hamiltonian,
+                        band_reference_hamiltonian, dft_vxc_band, exchange_band, sigma_band,
+                        dataset->tfg);
+            });
 
         SpinKMatrixMap mixed_hamiltonian;
         SpinKMatrixMap mixed_band_hamiltonian;
@@ -1027,8 +1259,16 @@ void run_qsgw()
         }
         const OccupationResult occupations = update_qsgw_occupations(
             dataset->mf, reference, dataset->pbc.weight_k, electron_count);
+        if (driver_params.qsgw_output_qp && dataset->comm_h.is_root())
+        {
+            qp_rotation = diagonalization.unitary;
+            if (compute_band) qp_band_rotation = band_diagonalization->unitary;
+        }
         if (compute_band)
             dataset->mf_band.get_efermi() = occupations.chemical_potential;
+        // Tracking is cheap and independent of the requested U-output interval.
+        // The saved parent belongs to this updated state, also on restart.
+        if (crpa_input) crpa_input->update_tracking();
         const double maximum_change_ev =
             max_eigenvalue_change(dataset->mf, previous) * HA2EV;
 
@@ -1052,11 +1292,18 @@ void run_qsgw()
             summary.converged = converged_flag != 0;
             summary.beta = mixing_beta;
             if (driver_params.qsgw_checkpoint_file != "none")
+            {
+                const auto checkpoint_file =
+                    resolve_input_path(opts.output_dir, driver_params.qsgw_checkpoint_file);
                 write_qsgw_checkpoint(
-                    resolve_input_path(opts.output_dir, driver_params.qsgw_checkpoint_file),
+                    checkpoint_file,
                     checkpoint_context, summary, dataset->mf,
                     compute_band ? &dataset->mf_band : nullptr,
                     current_hamiltonian, current_band_hamiltonian);
+                if (crpa_input)
+                    crpa_input->write_tracking_checkpoint(checkpoint_file + ".crpa", iteration,
+                                                          crpa_checkpoint_energies());
+            }
             write_iteration_summary(trace, summary);
             write_eigenvalue_trace(
                 eigenvalue_trace, iteration, IterationChannel::Grid,
@@ -1128,6 +1375,17 @@ void run_qsgw()
         dataset->comm_h.bcast(&converged_flag, 1, 0);
         converged = converged_flag != 0;
         if (converged) break;
+    }
+
+    if (crpa_input)
+    {
+        // The completed state has not entered a GW build yet. Rebuild only its
+        // response and constrained screening; no extra self-energy is needed.
+        prepare_optical_state(completed_iterations + 1, false, false);
+        auto input = crpa_input->input();
+        auto result = h.compute_crpa_u_window(opts, input);
+        write_crpa_state_outputs(result.get(), *crpa_input, crpa_directory(completed_iterations),
+                                 completed_iterations, completed_iterations, true);
     }
 
     if (dataset->comm_h.is_root())

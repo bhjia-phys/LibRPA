@@ -2,11 +2,12 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/distributed_matrix.h"
+#include "../core/qsgw/distributed_matrix.h"
 
 #include "../io/global_io.h"
 #include "../math/lapack_connector.h"
 #include "../math/utils_matrix_m_mpi.h"
+#include "../math/utils_matrix_mpi.h"
 #include "../mpi/global_mpi.h"
 #include "../mpi/utils_blacs.h"
 
@@ -22,7 +23,7 @@ using librpa_int::Matz;
 using librpa_int::ScalapackConnector;
 using librpa_int::cplxdb;
 using librpa_int::init_local_mat;
-using librpa_int::qsgw::collect_blacs_matrix_root;
+using librpa_int::collect_blacs_matrix_root;
 using librpa_int::qsgw::broadcast_spin_k_matrix_map;
 using librpa_int::qsgw::SpinKMatrixMap;
 

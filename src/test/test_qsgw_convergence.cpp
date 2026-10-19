@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/convergence.h"
+#include "../core/qsgw/convergence.h"
 
 #include <cassert>
 #include <cmath>

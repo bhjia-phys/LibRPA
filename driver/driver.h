@@ -477,16 +477,16 @@ struct DriverParams
     //! QSGW H_QSGW cut: 0 uncut, 1 shifted KS diagonal (formerly mode 2).
     //! Applies to the SCF grid and optional band path; HR exports the actual cut H.
     //! @par Default
-    //! 0
+    //! 1
     //! @par Status
     //! Experimental
     int qsgw_cut_mode;
 
     //! Hamiltonian energy shift applied to cut states in mode 1, in Hartree.
-    //! The omitted default is 2 eV converted using the selected constants.
+    //! The default matches the historical NiO cut (approximately 0.1 eV).
     //! Applies to the SCF grid and optional band path.
     //! @par Default
-    //! 2.0 / 27.211386245988 (2 eV in Hartree with internal constants)
+    //! 0.00367493 (Hartree)
     //! @par Status
     //! Experimental
     double qsgw_cut_shift_ha;
@@ -497,6 +497,16 @@ struct DriverParams
     //! @par Status
     //! Experimental
     bool qsgw_write_iteration_matrices;
+
+    //! Solve the diagonal G0W0 quasiparticle equation on every entering QSGW state.
+    //! Reuses the existing EXX/Sigma matrices in the current eigenbasis and the
+    //! G0W0 analytic-continuation/QPE options. Writes qsgw_qp.csv for the SCF grid
+    //! and optional band path; the results do not enter the QSGW update.
+    //! @par Default
+    //! true
+    //! @par Status
+    //! Experimental
+    bool qsgw_output_qp;
 
     //! Export the complete SCF-grid Hamiltonian before each QSGW diagonalization.
     //! Writes full complex Ry CSR as hrsS_nao_qsgw_iter_NNNN.csr, with H padded
@@ -521,7 +531,7 @@ struct DriverParams
     //! rejects an explicit reference or rotate_reference. It resolves to
     //! numerical option 3, with the same current-HR calculation and scope.
     //! @par Default
-    //! reference
+    //! current_hr with the default QSGW option-6 preset; reference for explicit option 4
     //! @par Status
     //! Experimental
     std::string qsgw_headwing_velocity;
@@ -563,6 +573,171 @@ struct DriverParams
     //! @par Status
     //! Experimental
     double qsgw_convergence_tolerance_ev;
+
+    //! Compute cRPA U at selected entering QSGW states and at the final state.
+    //! @par Default
+    //! false
+    //! @par Status
+    //! Experimental
+    bool crpa_enabled = false;
+    //! Electronic-state interval for cRPA during QSGW; the final state is always evaluated.
+    //! @par Default
+    //! 1
+    //! @par Status
+    //! Experimental
+    int crpa_interval = 1;
+    //! Import only cRPA model/analysis parameters from an existing native input file.
+    //! Main-input cRPA assignments override imported settings; shared GW options stay in the main input.
+    //! @par Default
+    //! none
+    //! @par Status
+    //! Experimental
+    std::string crpa_model_file = "none";
+    //! Native spatial or interleaved SOC S(R) CSR input, relative to the main input_dir.
+    //! @par Default
+    //! SR.csr
+    //! @par Status
+    //! Experimental
+    std::string crpa_overlap_file = "SR.csr";
+    //! Explicit species labels in numeric structure-type order, separated by spaces.
+    //! @par Default
+    //! Empty (required for task=crpa).
+    //! @par Status
+    //! Experimental
+    std::string crpa_species_labels;
+    //! Species supplying first-radial correlated atomic trials for the declared parent frame.
+    //! @par Default
+    //! Empty (required for interaction calculations with task=crpa).
+    //! @par Status
+    //! Experimental
+    std::string crpa_correlated_species;
+    //! Species supplying the first radial p shell of a dp parent frame.
+    //! Must differ from crpa_correlated_species; spectator species are not selected.
+    //! @par Default
+    //! Empty (required when crpa_parent_orbitals=dp).
+    //! @par Status
+    //! Experimental
+    std::string crpa_ligand_species;
+    //! Atomic trials projected into B and jointly metric-normalized: s, p, sp, d, dp, eg or t2g.
+    //! eg/t2g refer to global Cartesian axes, using the first radial shell.
+    //! @par Default
+    //! d
+    //! @par Status
+    //! Experimental
+    std::string crpa_parent_orbitals = "d";
+    //! Reported subset of the jointly normalized parent frame: s, p, sp, d, dp, eg or t2g.
+    //! Must be a subset of crpa_parent_orbitals; it does not select response bands A.
+    //! @par Default
+    //! d
+    //! @par Status
+    //! Experimental
+    std::string crpa_output_orbitals = "d";
+    //! Response rule: bands uses binary A windows/lists; orbital_weights uses
+    //! probabilities from the actual output orbitals, without an A selector.
+    //! @par Default
+    //! bands
+    //! @par Status
+    //! Experimental
+    std::string crpa_response_mode = "bands";
+    //! Transport the complete parent Phi through B after each QSGW update, without screening.
+    //! false; the first call uses the declared atomic trials. Restart retains the parent.
+    bool crpa_track_orbitals = false;
+    //! Smallest retained probability of a previous parent direction; default 0.99.
+    //! A loss stops the calculation and requires a wider declared B.
+    double crpa_tracking_min_capture = 0.99;
+    //! A: inclusive absolute-Hartree lower/upper pairs selecting original KS states
+    //! on both occupied and empty branches of Pd. Independent of output window B.
+    //! @par Default
+    //! Empty (specify exactly one of this parameter and crpa_response_bands).
+    //! @par Status
+    //! Experimental
+    std::vector<double> crpa_response_windows_ha;
+    //! B: inclusive absolute-Hartree lower/upper pairs for projecting atomic trials.
+    //! Does not change KS poles, occupations, or the response selection A.
+    //! @par Default
+    //! Empty (specify exactly one of this parameter and crpa_orbital_bands).
+    //! @par Status
+    //! Experimental
+    std::vector<double> crpa_orbital_windows_ha;
+    //! A: distinct zero-based original KS indices shared by all spin/k points.
+    //! @par Default
+    //! Empty (mutually exclusive with crpa_response_windows_ha).
+    //! @par Status
+    //! Experimental
+    std::vector<int> crpa_response_bands;
+    //! B: distinct zero-based original KS indices shared by all spin/k points.
+    //! @par Default
+    //! Empty (mutually exclusive with crpa_orbital_windows_ha).
+    //! @par Status
+    //! Experimental
+    std::vector<int> crpa_orbital_bands;
+    //! Positive metric/KS orthogonality tolerance. Frobenius residual gates use
+    //! this value times sqrt(matrix dimension); input KS states are never repaired.
+    //! @par Default
+    //! 1.0e-10
+    //! @par Status
+    //! Experimental
+    double crpa_residual_tol = 1.0e-10;
+
+    //! Output Mulliken/Lowdin weights and Gaussian PDOS before cRPA screening.
+    //! Uses existing scalar/spinor KS states and spatial S; includes every radial shell.
+    //! Spinor weights sum both components in one stored spin channel.
+    //! @par Default
+    //! true
+    bool crpa_output_analysis;
+    //! Save current E/f, complex parent/output projectors, H/density and U in compact NumPy archives.
+    //! @par Default
+    //! true
+    bool crpa_output_model = true;
+    //! Native model output container: npz or human-readable dat files. Both retain the same model.
+    //! @par Default
+    //! npz
+    std::string crpa_output_format = "npz";
+    //! Include C, S and AO coefficients Phi in the model archives for changing the local frame.
+    //! @par Default
+    //! false
+    bool crpa_output_raw = false;
+    //! Estimate U(0) with native Padé of U-v; retain entrywise numerical status and fit spread.
+    //! @par Default
+    //! true
+    bool crpa_output_static = true;
+    //! Absolute tolerance for static/real-axis subset and node residual diagnostics, in eV.
+    //! @par Default
+    //! 0.01
+    double crpa_fit_tol_ev = 0.01;
+    //! Real frequencies in eV relative to bosonic zero; an empty list skips real-axis output.
+    //! @par Default
+    //! Empty
+    std::vector<double> crpa_real_frequencies_ev;
+    //! Positive imaginary broadening for requested real-frequency interactions, in eV.
+    //! @par Default
+    //! 0.05
+    double crpa_eta_ev = 0.05;
+    //! Analyze orbital character only; skip RI/Coulomb input and screening.
+    //! A/B selections and correlated species are not required in this mode.
+    //! @par Default
+    //! false
+    bool crpa_analysis_only;
+    //! PDOS energy zero: vbm (highest occupied KS pole) or fermi.
+    //! @par Default
+    //! vbm
+    std::string crpa_pdos_reference;
+    //! Lower PDOS grid edge in eV relative to crpa_pdos_reference.
+    //! @par Default
+    //! -10
+    double crpa_pdos_min_ev;
+    //! Upper PDOS grid edge in eV relative to crpa_pdos_reference.
+    //! @par Default
+    //! 14
+    double crpa_pdos_max_ev;
+    //! PDOS grid spacing in eV.
+    //! @par Default
+    //! 0.02
+    double crpa_pdos_step_ev;
+    //! Gaussian standard deviation in eV (not FWHM).
+    //! @par Default
+    //! 0.15
+    double crpa_pdos_sigma_ev;
 
     std::string format();
 

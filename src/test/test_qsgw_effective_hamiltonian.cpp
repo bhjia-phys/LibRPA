@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/effective_hamiltonian.h"
+#include "../core/qsgw/effective_hamiltonian.h"
 
 #include <cassert>
 #include <complex>
