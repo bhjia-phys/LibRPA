@@ -229,8 +229,8 @@ source gauge; rotating the velocities independently of the coefficients is inval
 
 IBZ-only reconstruction currently requires `use_kpara_scf_eigvec = false`;
 ordinary multi-rank execution is supported. The existing paired full-BZ file
-route retains its k-BLACS support. This extension does not relax the full-mesh
-requirement of QSGW `current_hr` Hamiltonian reconstruction.
+route retains its k-BLACS support. QSGW `current_hr` expands paired IBZ sources internally before reconstructing
+its full-mesh Hamiltonian; see [QSGW](qsgw.md#analytic-head-and-wing-feedback).
 It checks the metric residual against 1e-6, Hamiltonian frame and
 Hermiticity residuals against 1e-4 eV, and the imaginary velocity diagonal against
 1e-8 Ha Bohr. These input checks establish frame consistency within their tolerances;

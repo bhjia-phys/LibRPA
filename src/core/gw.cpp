@@ -1445,6 +1445,25 @@ void G0W0::build_spacetime(
             throw LIBRPA_RUNTIME_ERROR(
                 "shrink Wc build_spacetime requires sinvS, compressed/full ABF bases, BLACS context, and WFC descriptor");
 
+        // Full live KS grids can retain an IBZ producer Coulomb grid. Once
+        // screening has restored W to all q, CT must allocate that actual grid;
+        // allocating only producer representatives loses (or dereferences) q blocks.
+        int local_full_q = 0, local_partial_q = 0;
+        for (const auto &[frequency, atoms] : *Wc_freq_q_atom_pair)
+            for (const auto &[left, rights] : atoms)
+                for (const auto &[right, qs] : rights)
+                {
+                    if (qs.size() == pbc.get_n_cells_bvk()) local_full_q = 1;
+                    else if (!qs.empty()) local_partial_q = 1;
+                }
+        int full_q = 0, partial_q = 0;
+        comm_h.allreduce(&local_full_q, &full_q, 1, MPI_MAX);
+        comm_h.allreduce(&local_partial_q, &partial_q, 1, MPI_MAX);
+        if (full_q && partial_q)
+            throw LIBRPA_RUNTIME_ERROR("compressed W has inconsistent q-grid coverage");
+        const auto &wc_qlist = full_q ? pbc.klist_full : pbc.klist_coul;
+        const bool restore_wc_symmetry = this->use_symmetry_context && !full_q;
+
         Chi0 unfold_helper(mf, atbasis_wfc, *basis_aux_compressed, pbc, symmetry_context, tfg, kblacs_ctxt,
                            *desc_wfc_in, is_eigvec_k_distributed_, this->use_symmetry_context);
 
@@ -1463,7 +1482,7 @@ void G0W0::build_spacetime(
                 if (freq_iter != Wc_freq_q_atom_pair->end()) Wc_q = freq_iter->second;
 
                 profiler.start("unfold_Wc_abfs", "Do shrink transformation");
-                unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, pbc.klist_coul,
+                unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, wc_qlist,
                                                *basis_aux_unfold, *blacs_ctxt_h);
                 profiler.stop("unfold_Wc_abfs");
 
@@ -1472,7 +1491,7 @@ void G0W0::build_spacetime(
                 profiler.stop("construct_Wc_freq_lower_half");
 
                 auto Wc_R = FT_Wc_q2R(comm_h, *basis_aux_unfold, symmetry_context, Wc_q, tfg,
-                                      pbc, pbc.Rlist, true, output_dir, this->use_symmetry_context);
+                                      pbc, pbc.Rlist, true, output_dir, restore_wc_symmetry);
                 if (output_wc_rf_atom_pair)
                     write_wc_rf_atom_blocks(Wc_R, pbc, output_dir, ifreq, freq);
                 else
@@ -1485,7 +1504,7 @@ void G0W0::build_spacetime(
         profiler.start("g0w0_build_spacetime_wt_ft_wc", "Tranform Wc (q,w) -> (q,t)");
         auto Wc_tau_q = CT_Wc_freq2time_q(
             comm_h, *basis_aux_compressed, *Wc_freq_q_atom_pair, tfg, pbc.get_n_cells_bvk(),
-            pbc.Rlist, pbc.klist_coul);
+            pbc.Rlist, wc_qlist);
         Wc_freq_q_atom_pair->clear();
         release_free_mem();
         profiler.stop("g0w0_build_spacetime_wt_ft_wc");
@@ -1502,7 +1521,7 @@ void G0W0::build_spacetime(
             auto &Wc_q = Wc_tau_q[tau];
 
             profiler.start("unfold_Wc_abfs", "Do shrink transformation");
-            unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, pbc.klist_coul,
+            unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, wc_qlist,
                                            *basis_aux_unfold, *blacs_ctxt_h);
             profiler.stop("unfold_Wc_abfs");
 
@@ -1512,7 +1531,7 @@ void G0W0::build_spacetime(
 
             profiler.start("g0w0_build_spacetime_Rq_ft_wc", "Tranform Wc (q,t) -> (R,t)");
             auto Wc_R = FT_Wc_q2R(comm_h, *basis_aux_unfold, symmetry_context, Wc_q, tfg,
-                                  pbc, pbc.Rlist, false, output_dir, this->use_symmetry_context);
+                                  pbc, pbc.Rlist, false, output_dir, restore_wc_symmetry);
             profiler.stop("g0w0_build_spacetime_Rq_ft_wc");
             Wc_q.clear();
 

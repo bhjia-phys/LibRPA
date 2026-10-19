@@ -3,7 +3,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/occupation.h"
+#include "../core/qsgw/occupation.h"
 
 #include <cassert>
 #include <cmath>

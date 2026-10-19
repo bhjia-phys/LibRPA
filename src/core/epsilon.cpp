@@ -2804,7 +2804,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     const auto abf_layouts =
         chi0.atbasis_abf.build_species_basis_layouts(chi0.symmetry_context.atom_to_type);
     const bool use_symmetry_dense_chi0_collect =
-        chi0.use_symmetry_context
+        chi0.use_symmetry_context && !chi0.qstar_only_symmetry
         && comm_h.nprocs > 1
         && can_symmetrize_symmetry_chi0_ibz_blocks(
             chi0.symmetry_context, abf_layouts, atom_nabf, chi0.pbc);
@@ -3212,7 +3212,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                 if (has_local_chi0_q)
                 {
                     chi0_wq = chi0.get_chi0_q().at(freq).at(q);
-                    if (chi0.use_symmetry_context)
+                    if (chi0.use_symmetry_context && !chi0.qstar_only_symmetry)
                     {
                         chi0_wq = symmetrize_symmetry_chi0_ibz_blocks_if_needed(
                             comm_h, chi0.symmetry_context, abf_layouts, chi0_wq, q,
@@ -3864,8 +3864,7 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
         {
             throw LIBRPA_RUNTIME_ERROR("Dense Wc symmetry restore is missing a representative q");
         }
-        const Vector3_Order<double> q_rep_frac =
-            restrict_fractional_coordinate(Vector3_Order<double>{pbc.latvec * q_rep});
+        const Vector3_Order<double> q_rep_frac{pbc.latvec * Wq_iter->first};
         const auto& star =
             find_symmetry_kstar_for_kpoint(symmetry_context.kstars, q_rep_frac,
                                            "dense Wc q-star restore");
@@ -3897,9 +3896,16 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
         for (std::size_t imember = 0; imember != members.size(); ++imember)
         {
             const auto& q_member = members[imember];
-            const Vector3_Order<double> q_member_frac =
-                restrict_fractional_coordinate(Vector3_Order<double>{pbc.latvec * q_member});
-            const Vector3_Order<double> q_member_internal{q_member_frac * pbc.G};
+            const auto full_key = std::find_if(pbc.klist_full.begin(), pbc.klist_full.end(),
+                [&](const auto &key)
+                {
+                    return same_fractional_kpoint(Vector3_Order<double>{pbc.latvec * key},
+                        Vector3_Order<double>{pbc.latvec * q_member}, 1e-8);
+                });
+            if (full_key == pbc.klist_full.end())
+                throw LIBRPA_RUNTIME_ERROR("Dense Wc restore has no matching full-grid key");
+            const Vector3_Order<double> q_member_internal = *full_key;
+            const Vector3_Order<double> q_member_frac{pbc.latvec * q_member_internal};
             const auto star_member_index = find_star_member_index(star, q_member_frac);
             if (star_member_index == star.members.size())
             {
@@ -4981,6 +4987,19 @@ CT_Wc_freq2time_q(
     lib_printf_root("Converting Wc(q,w) -> W(q,t)\n");
     comm_h.barrier();
 
+    int bad_local = 0, bad = 0;
+    for (const auto &[frequency, atoms] : Wc_freq_q)
+        for (const auto &[left, rights] : atoms)
+            for (const auto &[right, qs] : rights)
+                for (const auto &[q, block] : qs)
+                    if (std::find(qlist.begin(), qlist.end(), q) == qlist.end() ||
+                        block.nr() != atbasis_abf[left] || block.nc() != atbasis_abf[right] ||
+                        block.major() != major_Wc)
+                        bad_local = 1;
+    comm_h.allreduce(&bad_local, &bad, 1, MPI_MAX);
+    if (bad)
+        throw LIBRPA_RUNTIME_ERROR("Wc frequency-to-time transform has incompatible q/basis coverage");
+
     set<pair<atom_t, atom_t>> atpairs_unique;
     for (const auto &freq_MuNuqWc : Wc_freq_q)
     {
@@ -5089,10 +5108,22 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     lib_printf_root("Converting Wc(q) -> W(R)\n");
     comm_h.barrier();
 
+    int coverage[2] = {0, 0}, global_coverage[2] = {0, 0};
+    for (const auto &[left, rights] : Wc_q)
+        for (const auto &[right, qs] : rights)
+        {
+            if (qs.size() == pbc.get_n_cells_bvk()) coverage[0] = 1;
+            else if (!qs.empty()) coverage[1] = 1;
+        }
+    comm_h.allreduce(coverage, global_coverage, 2, MPI_MAX);
+    if (global_coverage[0] && global_coverage[1])
+        throw LIBRPA_RUNTIME_ERROR("Wc q-to-R transform has inconsistent q-grid coverage");
+    const bool has_full_q = global_coverage[0] != 0;
+
     const auto atom_nabf = build_atom_nabf_map(atbasis_abf);
     const auto abf_layouts =
         atbasis_abf.build_species_basis_layouts(symmetry_context.atom_to_type);
-    if (use_symmetry_context
+    if (!has_full_q && use_symmetry_context
         && can_use_symmetry_qstar_wr_restore(
             symmetry_context, abf_layouts, atom_nabf, pbc))
     {
@@ -5159,6 +5190,13 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
         {
             const auto q = Wc_q.first;
             const auto &Wc = Wc_q.second;
+            if (has_full_q)
+            {
+                const double angle = -q * (R * pbc.latvec) * TWO_PI;
+                WR_temp += Wc * (complex<double>(std::cos(angle), std::sin(angle)) /
+                                  double(n_k_points));
+                continue;
+            }
             for (auto q_bz : pbc.map_irk_ks.at(q))
             {
                 const double ang = -q_bz * (R * pbc.latvec) * TWO_PI;

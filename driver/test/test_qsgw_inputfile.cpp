@@ -98,8 +98,8 @@ void test_defaults_and_explicit_linear_mixing()
     assert(defaults.qsgw_min_iter == 1);
     assert(defaults.qsgw_max_iter == 10);
     assert(defaults.qsgw_unoccupied_keep == 10);
-    assert(defaults.qsgw_cut_mode == 0);
-    assert(std::abs(defaults.qsgw_cut_shift_ha - 2.0 / 27.211386245988) < 1.0e-14);
+    assert(defaults.qsgw_cut_mode == 1);
+    assert(std::abs(defaults.qsgw_cut_shift_ha - 0.00367493) < 1.0e-14);
 
     parse(valid_qsgw_prefix() +
           "qsgw_input_contract = manifests/si.contract\n"
@@ -304,8 +304,8 @@ void test_g0w0_parser_defaults_are_unchanged()
     assert(std::abs(driver::driver_params.qsgw_mixing_beta - 0.2) <
            1.0e-14);
     assert(driver::driver_params.qsgw_unoccupied_keep == 10);
-    assert(driver::driver_params.qsgw_cut_mode == 0);
-    assert(std::abs(driver::driver_params.qsgw_cut_shift_ha - 2.0 / 27.211386245988) <
+    assert(driver::driver_params.qsgw_cut_mode == 1);
+    assert(std::abs(driver::driver_params.qsgw_cut_shift_ha - 0.00367493) <
            1.0e-14);
     assert(driver::opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_OFF);
     assert(driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON);
