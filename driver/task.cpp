@@ -10,6 +10,7 @@ namespace driver
 
 static std::map<std::string, task_t> map_lowstr_task{
     {"rpa",           task_t::RPA},
+    {"crpa",          task_t::cRPA},
     {"sternheimer_rpa", task_t::SternheimerRPA},
     {"st_rpa",        task_t::SternheimerRPA},
     {"g0w0",          task_t::G0W0},
@@ -28,6 +29,7 @@ static std::map<std::string, task_t> map_lowstr_task{
 
 static std::map<task_t, std::string> map_task_lowstr{
     {task_t::RPA,           "RPA correlation energy"},
+    {task_t::cRPA,          "Constrained RPA orbital analysis and local interactions"},
     {task_t::SternheimerRPA, "Sternheimer RPA correlation energy from response matrices"},
     {task_t::G0W0,          "One-shot GW for quasi-paricle energies"},
     {task_t::G0W0_band,     "One-shot GW for quasi-paricle energies"},
@@ -70,6 +72,7 @@ static std::map<task_t, std::function<void(void)>> map_task_func_impl{
     {task_t::G0W0, task_g0w0},
     {task_t::G0W0_band, task_g0w0_band},
     {task_t::RPA, task_rpa},
+    {task_t::cRPA, task_crpa},
     {task_t::SternheimerRPA, task_sternheimer_rpa},
     {task_t::EXX, task_exx},
     {task_t::EXX_band, task_exx_band},

@@ -25,6 +25,7 @@
 #include "../read_data.h"
 #include "../task.h"
 #include "task_helper.h"
+#include "crpa.h"
 
 template <typename Function>
 static void g0w0_headwing_stage(const librpa_int::MpiCommHandler &comm, const std::string &label,
@@ -56,7 +57,7 @@ static void g0w0_headwing_stage(const librpa_int::MpiCommHandler &comm, const st
     }
 }
 
-static void prepare_g0w0_native_velocity()
+static void prepare_g0w0_native_velocity(bool prepare_optical = true)
 {
     using namespace librpa_int;
     using namespace librpa_int::qsgw;
@@ -238,6 +239,8 @@ static void prepare_g0w0_native_velocity()
             "diagonal_imag_HaBohr %.8e; SCF E/C/occupations retained\n",
             residuals[0], residuals[1], residuals[2], residuals[3]);
 
+    if (!prepare_optical) return;
+
     // Match the existing file reader's grid and analytic object preparation.
     // The ordinary G0W0 build will reuse this head/wing with the unchanged SCF frame.
     std::vector<double> frequency_weights;
@@ -245,6 +248,21 @@ static void prepare_g0w0_native_velocity()
     initialize_ds_headwing(*ds, driver::opts, driver::opts.option_dielect_func == 3);
     g0w0_headwing_stage(comm, "G0W0 head/wing Coulomb normalization", [&]
                         { configure_headwing_coulomb_head(params.input_dir, *ds->p_headwing); });
+}
+
+void driver::prepare_crpa_optical_velocity()
+{
+    if (driver_params.g0w0_headwing_velocity == "native")
+    {
+        prepare_g0w0_native_velocity(false);
+        return;
+    }
+    const auto dataset = librpa_int::api::get_dataset_instance(h);
+    const auto &name = driver_params.prefix_velocity;
+    const auto path = librpa_int::is_absolute_path(name)
+                          ? name : librpa_int::join_path(driver_params.input_dir, name);
+    g0w0_headwing_stage(dataset->comm_h, "cRPA optical velocity input",
+                       [&] { read_velocity(path, dataset->mf, dataset->velocity_matrix); });
 }
 
 static void write_g0w0_headwing_diagnostics()
@@ -889,7 +907,18 @@ void driver::task_g0w0()
     profiler.stop("read_vxc");
 
     // Build the self-energy matrix (including exchange and correlation)
-    h.build_g0w0_sigma(opts);
+    if (driver_params.crpa_enabled)
+    {
+        auto config = read_crpa_driver_input();
+        auto input = config.input();
+        auto result = h.build_g0w0_sigma_crpa(opts, input);
+        write_crpa_state_outputs(result.get(), config,
+                                 join_path(opts.output_dir, "crpa/state_0000"), 0, 0, true);
+    }
+    else
+    {
+        h.build_g0w0_sigma(opts);
+    }
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const std::string band_kpath_file =

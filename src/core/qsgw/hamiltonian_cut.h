@@ -19,7 +19,7 @@ struct HamiltonianCutOptions
     int unoccupied_keep = 10;
     HamiltonianCutMode mode =
         HamiltonianCutMode::ShiftedReferenceDiagonal;
-    double shift_ha = 2.0 / 27.211386245988;
+    double shift_ha = 0.00367493;
 };
 
 HamiltonianCutMode hamiltonian_cut_mode_from_int(int mode);

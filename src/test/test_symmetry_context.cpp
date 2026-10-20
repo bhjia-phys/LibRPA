@@ -1800,6 +1800,58 @@ void check_spinor_rspace_restore_driver(
     }
 }
 
+void test_rectangular_auxiliary_q_restore_with_reciprocal_gauge()
+{
+    PeriodicBoundaryData pbc;
+    pbc.set_latvec({1, 0, 0, 0, 1, 0, 0, 0, 1});
+    pbc.set_kgrids_kvec(3, 1, 1,
+        {0, 0, 0, TWO_PI / 3, 0, 0, 2 * TWO_PI / 3, 0, 0});
+    SymmetryContext context;
+    context.set_crystal_structure(pbc.latvec, pbc.G, {{0, 0}, {1, 1}},
+                                   {{0, {0.17, 0, 0}}, {1, {0.41, 0, 0}}});
+    context.set_rspace_operations({SpaceGroupSymOp::IDENTITY});
+    context.set_symmetry_spin_operations({SymmetrySpinOperation{}}, true);
+    context.build_periodic_mappings(pbc, pbc.Rlist);
+    context.build_rsh_rotations({-1, 1, LIBRPA_ANGULAR_ORDER_NATURAL,
+                                 LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
+    context.build_kstar_member_rotations(0);
+    context.set_available();
+    const auto view = build_symmetry_qpoint_view(context, pbc, true);
+    assert(view.representatives.size() == 2);
+    AtomicBasis left(std::vector<std::size_t>{1, 1});
+    AtomicBasis right(std::vector<std::size_t>{2, 1});
+    left.set_l_shells({{0}, {0}});
+    right.set_l_shells({{0, 0}, {0}});
+    ComplexMatrix gamma(2, 3), source(2, 3);
+    for (int i = 0; i < gamma.size; ++i)
+    {
+        gamma.c[i] = 0.2 + 0.03 * i;
+        source.c[i] = {0.3 + 0.05 * i, 0.07 * (i + 1)};
+    }
+    std::map<Vector3_Order<double>, ComplexMatrix> input{
+        {pbc.klist[0], gamma}, {pbc.klist[1], source}};
+    const auto full = restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right);
+    assert_matrix_close(full.at(pbc.klist[0]), gamma);
+    assert_matrix_close(full.at(pbc.klist[1]), source);
+    ComplexMatrix expected(2, 3);
+    const std::array<double, 2> left_position{0.17, 0.41};
+    const std::array<double, 3> right_position{0.17, 0.17, 0.41};
+    for (int i = 0; i < 2; ++i)
+        for (int j = 0; j < 3; ++j)
+            expected(i, j) = std::polar(1.0, TWO_PI * (left_position[i] - right_position[j])) *
+                              std::conj(source(i, j));
+    assert_matrix_close(full.at(pbc.klist[2]), expected, 1e-12);
+    input.emplace(pbc.klist[2], expected);
+    const auto checked = restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right);
+    for (int i = 0; i < expected.size; ++i)
+        assert(checked.at(pbc.klist[2]).c[i] == expected.c[i]);
+    input.at(pbc.klist[2])(1, 0) += 0.01;
+    bool rejected = false;
+    try { restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right); }
+    catch (const std::runtime_error &) { rejected = true; }
+    assert(rejected);
+}
+
 } // anonymous namespace
 
 /*!
@@ -2998,6 +3050,7 @@ int main()
     test_mgo_k333_irreducible_sector_matches_single();
     test_rspace_sector_star_member_isym_maps_full_to_ir_r();
     test_supercell_coset_symmetry_falls_back_from_rspace_reduction();
+    test_rectangular_auxiliary_q_restore_with_reciprocal_gauge();
     test_kstar_inverse_route_prefers_affine_inverse();
     test_rspace_block_restore_distinguishes_operator_and_density_rotations();
     test_rspace_sector_star_records_antiunitary_operation();

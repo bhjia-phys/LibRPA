@@ -793,7 +793,8 @@ VelocityBasisAlignmentResult align_distributed_velocity_to_reference_wfc(
         replicated_basis, reference, velocity, relative_tolerance);
 }
 
-SpinKMatrixMap reference_basis_rotation(const MeanField& live, const MeanField& reference)
+SpinKMatrixMap reference_basis_rotation(const MeanField& live,
+                                        const MeanField& reference)
 {
     require_same_meanfield_shape(live, reference);
     require_valid_wfc(reference, "reference");
@@ -803,11 +804,12 @@ SpinKMatrixMap reference_basis_rotation(const MeanField& live, const MeanField& 
     for (int spin = 0; spin < reference.get_n_spins(); ++spin)
         for (int kpoint = 0; kpoint < reference.get_n_kpoints(); ++kpoint)
         {
-            const Matz reference_rows =
-                collect_reference_wfc_rows(reference, spin, kpoint, MAJOR::ROW);
-            const Matz live_rows = collect_reference_wfc_rows(live, spin, kpoint, MAJOR::ROW);
-            const Matz transform =
-                live_rows * invert_complete_wfc_basis(reference_rows, 1e-10, diagnostics);
+            const Matz reference_rows = collect_reference_wfc_rows(
+                reference, spin, kpoint, MAJOR::ROW);
+            const Matz live_rows = collect_reference_wfc_rows(
+                live, spin, kpoint, MAJOR::ROW);
+            const Matz transform = live_rows * invert_complete_wfc_basis(
+                reference_rows, 1e-10, diagnostics);
             // Wavefunctions have band rows, so this is U^T, not U^dagger.
             if (maximum_unitarity_residual(transform) > 1e-8)
                 throw std::runtime_error("QSGW saved eigenframe rotation is not unitary");
