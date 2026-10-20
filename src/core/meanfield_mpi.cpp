@@ -6,6 +6,7 @@
 #include <cstring>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <unordered_map>
 
 #include "../io/stl_io_helper.h"
@@ -16,6 +17,7 @@
 #include "../utils/constants.h"
 #include "../utils/profiler.h"
 #include "atomic_basis.h"
+#include "dielecmodel.h"
 #include "librpa_enums.h"
 #include "symmetry_context.h"
 #include "utils_atomic_basis_blacs.h"
@@ -28,6 +30,213 @@
 
 namespace librpa_int
 {
+
+SymmetryExpandedMeanField expand_symmetry_meanfield(
+    const MeanField &source, const AtomicBasis &basis, const PeriodicBoundaryData &pbc,
+    const SymmetryContext &context)
+{
+    const int nk = pbc.get_n_cells_bvk(), loaded = source.get_n_kpoints();
+    const int bands = source.get_n_bands(), naos = source.get_n_aos();
+    const int spins = source.get_n_spins(), components = source.get_n_spinor();
+    const auto layouts = basis.build_species_basis_layouts(context.atom_to_type);
+    const auto atom_nw = basis.get_atom_nb_map();
+    if (bands != naos * components || loaded != pbc.kfrac_list.size() ||
+        nk != pbc.kfrac_list_full.size() || pbc.weight_k.size() != loaded ||
+        !can_restore_symmetry_kstar_meanfield(context, layouts, source,
+                                               pbc.kfrac_list, atom_nw))
+        throw LIBRPA_RUNTIME_ERROR("IBZ meanfield expansion requires complete square source frames and k stars");
+    validate_spin_operations_for_storage(context, spins, components);
+    SymmetryExpandedMeanField result{MeanField(spins, nk, bands, naos, components),
+                                     std::vector<int>(nk, -1), std::vector<bool>(nk)};
+    result.meanfield.get_efermi() = source.get_efermi();
+    for (int ik = 0; ik < loaded; ++ik)
+    {
+        const auto &star = find_symmetry_kstar_for_ibz_kpoint(context, pbc.kfrac_list[ik]);
+        const double weight = pbc.weight_k[ik];
+        if (!std::isfinite(weight) || weight <= 0 ||
+            std::abs(weight * nk - star.members.size()) > 1e-8)
+            throw LIBRPA_RUNTIME_ERROR("IBZ expansion requires normalized star-multiplicity k weights");
+        for (const auto &member : star.members)
+        {
+            const int target = fold_fractional_kpoint_to_targets(
+                member.k_bz, pbc.kfrac_list_full, 1e-8).target_k_index;
+            if (target < 0 || result.source_k[target] >= 0)
+                throw LIBRPA_RUNTIME_ERROR("IBZ expansion has a missing or duplicate k-star member");
+            result.source_k[target] = ik;
+            result.antiunitary[target] = member.time_reversal;
+            for (int spin = 0; spin < spins; ++spin)
+            {
+                if (components == 2)
+                {
+                    const std::array<ComplexMatrix, 2> input{
+                        *source.find_wfc(spin, 0, ik), *source.find_wfc(spin, 1, ik)};
+                    auto rotated = rotate_headwing_spinor_wfc_to_kstar_member(
+                        context, member, layouts, atom_nw, pbc.kfrac_list[ik], input,
+                        &pbc.kfrac_list_full[target]);
+                    for (int component = 0; component < 2; ++component)
+                        result.meanfield.get_eigenvectors()[spin][component][target] =
+                            std::move(rotated[component]);
+                }
+                else
+                    result.meanfield.get_eigenvectors()[spin][0][target] =
+                        rotate_headwing_wfc_to_kstar_member(
+                            context, member, layouts, atom_nw, pbc.kfrac_list[ik],
+                            *source.find_wfc(spin, 0, ik), &pbc.kfrac_list_full[target]);
+                for (int band = 0; band < bands; ++band)
+                {
+                    result.meanfield.get_eigenvals()[spin](target, band) =
+                        source.get_eigenvals()[spin](ik, band);
+                    // Loaded body occupations contain the star weight. Expand
+                    // to physical f/N_full exactly once, retaining source f.
+                    result.meanfield.get_weight()[spin](target, band) =
+                        source.get_weight()[spin](ik, band) / (weight * nk);
+                }
+            }
+        }
+    }
+    if (std::find(result.source_k.begin(), result.source_k.end(), -1) != result.source_k.end())
+        throw LIBRPA_RUNTIME_ERROR("IBZ expansion does not cover the complete full mesh");
+    return result;
+}
+
+void validate_symmetry_band_weights(
+    const MeanField &mf, const AtomicBasis &basis, const PeriodicBoundaryData &pbc,
+    const SymmetryContext &symmetry,
+    const std::vector<std::vector<std::vector<double>>> &weights)
+{
+    const int bands = mf.get_n_bands(), naos = mf.get_n_aos();
+    const int components = mf.get_n_spinor();
+    if (bands != naos * components || mf.get_n_kpoints() != pbc.get_n_cells_bvk() ||
+        !basis.has_l_shells() || !symmetry.available)
+        throw LIBRPA_RUNTIME_ERROR(
+            "magnetic endpoint weights require complete replicated full-grid AO/band frames");
+    for (int spin = 0; spin < mf.get_n_spins(); ++spin)
+        for (int k = 0; k < mf.get_n_kpoints(); ++k)
+        {
+            for (int component = 0; component < components; ++component)
+            {
+                const auto *c = mf.find_wfc(spin, component, k);
+                if (!c || c->nr != bands || c->nc != naos)
+                    throw LIBRPA_RUNTIME_ERROR("magnetic covariance requires complete KS coefficients");
+                for (int i = 0; i < c->size; ++i)
+                    if (!std::isfinite(c->c[i].real()) || !std::isfinite(c->c[i].imag()))
+                        throw LIBRPA_RUNTIME_ERROR("magnetic covariance found non-finite KS coefficients");
+            }
+            for (int band = 0; band < bands; ++band)
+                if (!std::isfinite(mf.get_eigenvals()[spin](k, band)) ||
+                    !std::isfinite(mf.get_weight()[spin](k, band)))
+                    throw LIBRPA_RUNTIME_ERROR("magnetic covariance found non-finite E/f");
+        }
+    validate_spin_operations_for_storage(symmetry, mf.get_n_spins(), components);
+    const auto layouts = basis.build_species_basis_layouts(symmetry.atom_to_type);
+    const auto atom_nw = basis.get_atom_nb_map();
+    int lmax = 0;
+    for (const auto &layout : layouts)
+        lmax = std::max(lmax, layout.max_l);
+
+    // Include little-group operations too: checking only the chosen k-star
+    // routes would miss a target that breaks a stabilizer of a representative.
+    auto context = symmetry;
+    context.kspace_actions.clear();
+    for (std::size_t operation = 0; operation < context.spin_operations.size(); ++operation)
+        context.kspace_actions.push_back({operation, {operation}});
+
+    constexpr double tolerance = 2e-7;
+    const auto packed = [&](int spin, int k)
+    {
+        ComplexMatrix result(bands, bands);
+        for (int component = 0; component < components; ++component)
+        {
+            const auto *c = mf.find_wfc(spin, component, k);
+            if (!c || c->nr != bands || c->nc != naos)
+                throw LIBRPA_RUNTIME_ERROR("magnetic endpoint weights found an incomplete KS frame");
+            for (int band = 0; band < bands; ++band)
+                for (int ao = 0; ao < naos; ++ao)
+                    result(component * naos + ao, band) = (*c)(band, ao);
+        }
+        return result;
+    };
+    for (int target = 0; target < mf.get_n_kpoints(); ++target)
+    {
+        std::vector<ComplexMatrix> inverse;
+        for (int spin = 0; spin < mf.get_n_spins(); ++spin)
+        {
+            auto c = packed(spin, target);
+            std::vector<int> pivot(bands);
+            std::vector<std::complex<double>> work(bands);
+            int info = 0;
+            LapackConnector::getrf(bands, bands, c.c, bands, pivot.data(), info);
+            if (!info)
+                LapackConnector::getri(bands, c.c, bands, pivot.data(), work.data(), bands, info);
+            if (info) throw LIBRPA_RUNTIME_ERROR("magnetic endpoint weights found a singular KS frame");
+            inverse.push_back(std::move(c));
+        }
+        for (std::size_t operation = 0; operation < context.spin_operations.size(); ++operation)
+        {
+            const auto &op = context.spin_operations[operation];
+            auto source_k = apply_space_group_rotation_to_kpoint(
+                context.rspace_operations.at(op.spatial_id), pbc.kfrac_list[target]);
+            if (op.antiunitary) source_k = source_k * -1.0;
+            const int source = fold_fractional_kpoint_to_targets(
+                source_k, pbc.kfrac_list, 1e-8).target_k_index;
+            if (source < 0)
+                throw LIBRPA_RUNTIME_ERROR("magnetic endpoint weights require a symmetry-closed k grid");
+            auto member = build_symmetry_kspace_operation_member(
+                context, static_cast<int>(op.spatial_id), op.antiunitary,
+                pbc.kfrac_list[target], pbc.kfrac_list[source], lmax);
+            member.action_id = operation;
+            for (int spin = 0; spin < mf.get_n_spins(); ++spin)
+            {
+                ComplexMatrix generated(bands, bands);
+                if (components == 2)
+                {
+                    const std::array<ComplexMatrix, 2> source_c{
+                        *mf.find_wfc(spin, 0, source), *mf.find_wfc(spin, 1, source)};
+                    const auto rotated = rotate_headwing_spinor_wfc_to_kstar_member(
+                        context, member, layouts, atom_nw, pbc.kfrac_list[source], source_c,
+                        &pbc.kfrac_list[target]);
+                    for (int component = 0; component < 2; ++component)
+                        for (int ao = 0; ao < naos; ++ao)
+                            for (int band = 0; band < bands; ++band)
+                                generated(component * naos + ao, band) = rotated[component](band, ao);
+                }
+                else
+                    generated = transpose(rotate_headwing_wfc_to_kstar_member(
+                        context, member, layouts, atom_nw, pbc.kfrac_list[source],
+                        *mf.find_wfc(spin, 0, source), &pbc.kfrac_list[target]), false);
+                const auto sewing = inverse[spin] * generated;
+                const auto metric = transpose(sewing, true) * sewing;
+                double residual = 0;
+                for (int row = 0; row < bands; ++row)
+                    for (int col = 0; col < bands; ++col)
+                    {
+                        residual = std::max(residual, std::abs(metric(row, col) -
+                            (row == col ? std::complex<double>(1.0) : std::complex<double>{})));
+                        const double e_target = mf.get_eigenvals()[spin](target, row);
+                        const double e_source = mf.get_eigenvals()[spin](source, col);
+                        residual = std::max(residual, std::abs(sewing(row, col)) *
+                            std::abs(e_target - e_source) /
+                            std::max({1.0, std::abs(e_target), std::abs(e_source)}));
+                        residual = std::max(residual, std::abs(sewing(row, col)) *
+                            mf.get_n_kpoints() * std::abs(mf.get_weight()[spin](target, row) -
+                                                          mf.get_weight()[spin](source, col)));
+                        if (!weights.empty())
+                            residual = std::max(residual, std::abs(sewing(row, col)) *
+                                std::abs(weights[spin][target][row] - weights[spin][source][col]));
+                    }
+                if (!std::isfinite(residual) || residual > tolerance)
+                {
+                    std::ostringstream message;
+                    message << "magnetic KS/endpoint-weight covariance failed: k=" << target
+                            << ", source=" << source << ", spin=" << spin
+                            << ", operation=" << operation << ", residual=" << residual
+                            << "; use the full grid or a symmetry-compatible target/gauge";
+                    throw LIBRPA_RUNTIME_ERROR(message.str());
+                }
+            }
+        }
+    }
+}
 
 void redistribute_meanfield_eigvecs_kblacs(
     MeanField &mf, const KPointBlacsParallelContext &kblacs_ctxt,

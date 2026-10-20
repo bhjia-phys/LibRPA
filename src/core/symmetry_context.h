@@ -242,6 +242,15 @@ symmetry_atom_block_matrix_map_t symmetrize_symmetry_ibz_kspace_operator_blocks(
     const std::map<atom_t, size_t>& atom_nabf,
     const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
 
+struct SymmetryQPointView;
+
+// Restore rectangular auxiliary maps using separate left/right shell actions.
+// Existing full-grid coefficients are checked and retained without averaging.
+std::map<Vector3_Order<double>, ComplexMatrix> restore_symmetry_rectangular_q_map(
+    const std::map<Vector3_Order<double>, ComplexMatrix> &input,
+    const PeriodicBoundaryData &pbc, const SymmetryQPointView &view,
+    const SymmetryContext &context, const AtomicBasis &left, const AtomicBasis &right);
+
 ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,
                                           const std::vector<SpeciesBasisLayout>& layouts,
                                           const SymmetryKStarMember& member,

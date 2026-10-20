@@ -166,6 +166,53 @@ blocks:
     fields:
       - api.use_scalapack_ecrpa
 
+  - heading: Constrained RPA
+    text: |
+      These experimental driver parameters apply to standalone `task = crpa`
+      and optional U evaluation during `task = g0w0` or `task = qsgw` with `crpa_enabled = true`.
+      `crpa_model_file` reuses an existing cRPA input, and `crpa_interval` selects
+      entering state indices; the final updated state is always evaluated.
+      Orbital analysis is enabled by default for scalar and two-component spinor states;
+      `crpa_analysis_only` skips RI/Coulomb inputs and screening for window inspection.
+      A selects the original KS bands on both branches of the excluded response
+      Pd. B independently selects the band space used to construct local output
+      orbitals. Specify either energy windows or a band list for each space.
+      Calculations use scalar or spinor full-grid LIBRI and native positive imaginary
+      frequencies; see [the cRPA guide](crpa.md) for supported numerical settings,
+      orbital conventions and the distinction between the first node and U(0).
+    fields:
+      - driver.crpa_overlap_file
+      - driver.crpa_enabled
+      - driver.crpa_interval
+      - driver.crpa_model_file
+      - driver.crpa_species_labels
+      - driver.crpa_correlated_species
+      - driver.crpa_ligand_species
+      - driver.crpa_parent_orbitals
+      - driver.crpa_output_orbitals
+      - driver.crpa_response_mode
+      - driver.crpa_response_windows_ha
+      - driver.crpa_orbital_windows_ha
+      - driver.crpa_response_bands
+      - driver.crpa_orbital_bands
+      - driver.crpa_residual_tol
+      - driver.crpa_track_orbitals
+      - driver.crpa_tracking_min_capture
+      - driver.crpa_output_analysis
+      - driver.crpa_output_model
+      - driver.crpa_output_format
+      - driver.crpa_output_raw
+      - driver.crpa_output_static
+      - driver.crpa_fit_tol_ev
+      - driver.crpa_real_frequencies_ev
+      - driver.crpa_eta_ev
+      - driver.crpa_analysis_only
+      - driver.crpa_pdos_reference
+      - driver.crpa_pdos_min_ev
+      - driver.crpa_pdos_max_ev
+      - driver.crpa_pdos_step_ev
+      - driver.crpa_pdos_sigma_ev
+
   - heading: ABF Compression
     fields:
       - api.use_shrink_abfs
@@ -212,19 +259,23 @@ blocks:
       selector becomes `native`; explicit `native` is accepted and explicit
       `file` is rejected. The log records requested option 6 and effective
       option 3. QSGW also supports option 6 with its `current_hr` velocity
-      convention, described below. Other tasks reject option 6. Direct
+      convention, described below. Standalone cRPA also accepts option 6 and
+      reuses these native velocity fields for its constrained optical calculation.
+      Other tasks reject option 6. Direct
       library/API callers use option 3 with the public velocity setter, not
       option 6.
       Existing options 3 and 4 still accept `g0w0_headwing_velocity = native`;
       their default `file` uses the existing velocity reader.
       The native path retains the loaded SCF energies,
       wavefunctions, and occupations and does not solve a second eigenproblem.
-      It requires a complete uniform full-BZ mesh and complete AO-spinor/band
-      frames. One/two collinear spin channels or one two-component SOC channel
+      It requires complete AO-spinor/band frames. Scalar input uses a uniform
+      full-BZ mesh; SOC also accepts paired IBZ states with complete magnetic
+      k stars and normalized multiplicity weights. One/two collinear spin channels or one two-component SOC channel
       are supported. SOC requires full complex H and full-dimension S/r of
       dimension `2 * N_AO`, with `use_spinor_wfc = true`; both spinor components
-      are retained in AO-major/spinor-minor order. Symmetry reduction and
-      k-point-parallel SCF eigenvectors are disabled. See the native head/wing example in
+      are retained in AO-major/spinor-minor order. IBZ head/wing uses joint
+      source-gauge velocity and spinor reconstruction. K-point-parallel SCF
+      eigenvectors are disabled on that IBZ route. See the native head/wing example in
       [Driver Usage](driver_usage.md#native-g0w0-headwing-velocity).
     fields:
       - driver.g0w0_headwing_velocity
@@ -243,16 +294,25 @@ blocks:
       band channel alongside the SCF grid and requires matching band E/C and
       full band Vxc inputs. Without that metadata file, only the SCF grid is
       computed, including for periodic inputs. Geometry does not select the
-      channel. `qsgw_cut_mode = 1` selects the shifted-reference cut on both
+      channel. `qsgw_cut_mode = 1` is the default shifted-reference cut on both
       the SCF grid and optional band path. The retained empty-state count
-      defaults to 10, and the shift defaults to 2 eV (explicit
-      `qsgw_cut_shift_ha` values are in Hartree). HR export is enabled by default.
+      defaults to 10, and `qsgw_cut_shift_ha` defaults to 0.00367493 Hartree
+      (approximately 0.1 eV), matching the historical NiO cut. Set
+      `qsgw_cut_mode = 0` for an uncut update. The cut does not truncate the
+      response or self-energy bands. HR export is enabled by default.
       Each band-enabled iteration writes `KS_band_spin_S_N.dat`,
       `EXX_band_spin_S_N.dat`, and `QSGW_band_spin_S_N.dat` for plotting;
       figures are not generated automatically. Keep band-channel presence and
-      original path inputs unchanged when restarting a checkpoint.
+      original path inputs unchanged when restarting a checkpoint. Older
+      checkpoints also require their original cut mode, keep count and shift
+      to be specified explicitly if they differ from the new defaults.
       These experimental parameters apply to `task = qsgw`.
-      `option_dielect_func = 6` selects
+      QSGW defaults to `qsgw_output_qp = true`, `replace_w_head = true` and
+      the driver preset `option_dielect_func = 6`. Set `qsgw_output_qp = false`
+      to disable quasiparticle output, or `replace_w_head = false` to disable
+      the default correction (omitted dielectric option then becomes 0).
+      Symmetry switches retain their false defaults. These task defaults do
+      not change library or G0W0 defaults. `option_dielect_func = 6` selects
       `qsgw_headwing_velocity = current_hr` and resolves to existing numerical
       option 3: rebuild velocity from the current native-baseline Hamiltonian
       in the entering E/C frame, then rebuild analytic head/wing using the live
@@ -270,8 +330,10 @@ blocks:
       other supported velocity conventions keeps its existing behavior.
       This is an experimental full, unshifted mesh path with complete square
       AO-spinor/state frames and replicated wavefunctions. SOC uses one physical
-      channel and two components with full-dimension S/r; SOC EXX/GW/RPA symmetry
-      switches and IBZ input are rejected by this native velocity route.
+      channel and two components with full-dimension S/r. Explicit magnetic
+      symmetry and paired IBZ sources are supported; the latter are expanded
+      internally into full-grid E/C/f and source-gauge Vxc. Live-state and target
+      covariance checks reject inconsistent symmetry assumptions.
       Finite-BvK interpolation retains the off-mesh and convergence limitations
       described in [QSGW](qsgw.md#analytic-head-and-wing-feedback).
       Independent-grid head/wing and Hartree updates are not supported.
@@ -316,32 +378,6 @@ blocks:
       - driver.qsgw_fn_rr
       - driver.qsgw_restart_file
       - driver.qsgw_checkpoint_file
-      - driver.qsgw_convergence_tolerance_ev
-
-  - heading: QSGW
-    text: |
-      These experimental driver parameters apply only to `task = qsgw` or
-      `task = qsgw_band`. Same-grid analytic head-only updates are enabled
-      with `replace_w_head = true` and `option_dielect_func = 4`.
-      The aligned velocity remains in the immutable `mf0` basis while live
-      eigenvalues and eigenvectors are updated after each diagonalization.
-      Independent-grid head/wing and Hartree updates are not supported.
-      Linear mixing is regression-tested for molecular QSGW only; the
-      current solid-state benchmark uses `qsgw_mixer = none`.
-      In an ABACUS Vxc manifest, an `OUT.MAT_XC` matrix already expressed
-      in the fixed KS-state basis must use `basis state` and
-      `gauge mf0_state`, regardless of an `_nao` filename suffix. Use
-      `basis nao` and `gauge ao_bloch` only for a genuine AO matrix.
-    fields:
-      - driver.qsgw_input_contract
-      - driver.qsgw_mixer
-      - driver.qsgw_mixing_beta
-      - driver.qsgw_min_iter
-      - driver.qsgw_max_iter
-      - driver.qsgw_band0_unoccupied_keep
-      - driver.qsgw_band0_cut_mode
-      - driver.qsgw_band0_cut_shift_ha
-      - driver.qsgw_write_iteration_matrices
       - driver.qsgw_convergence_tolerance_ev
 
   - heading: LibRI Filtering

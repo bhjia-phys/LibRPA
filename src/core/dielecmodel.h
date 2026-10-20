@@ -49,6 +49,8 @@ struct RpaHeadwingSettings
 
 //! Velocity/momentum matrix, indexed as [spin][k][cartesian].
 using velocity_matrix_t = std::vector<std::vector<std::vector<ComplexMatrix>>>;
+//! Original-KS endpoint probabilities [spin][k][band], without changing occupations.
+using HeadwingBandSelection = std::vector<std::vector<std::vector<double>>>;
 
 void initialize_velocity_matrix(velocity_matrix_t &velocity, int n_spins, int n_kpoints,
                                 int n_states);
@@ -247,6 +249,8 @@ private:
     const KPointBlacsParallelContext *kblacs_ctxt_;
     const ArrayDesc *desc_wfc_kblacs_;
     bool use_kpara_eigvec_;
+    HeadwingBandSelection excluded_band_pairs_;
+    double retained_band_pair_weight(int spin, int k, int n, int m) const;
     size_t n_nonsingular;
     // Lebedev-Laikov angular grid; qw has absorbed 4Pi.
     std::vector<double> qx_leb, qy_leb, qz_leb, qw_leb;
@@ -260,6 +264,10 @@ public:
     bool use_2d_dielectric = false;
     bool use_soc = false;
     bool debug = false;
+    //! Normalize only the angular Gamma-cell average, preserving its vacuum limit.
+    bool normalize_gamma_cell_weights = false;
+    //! Set before init/cal_head: omit pairs whose two original KS endpoints are selected.
+    void set_excluded_band_pairs(const HeadwingBandSelection &selection);
 
     void configure_strict_2d_coulomb_head(bool enabled);
     void configure_strict_2d_coulomb_head(bool enabled,
@@ -374,6 +382,10 @@ public:
     double cal_factor(std::string name);
     void test_head();
     std::vector<double> get_head_vec();
+    const matrix_m<std::complex<double>> &get_dielectric_head(int frequency) const
+    { return head.at(frequency); }
+    const matrix_m<std::complex<double>> &get_wing_mu(int frequency) const
+    { return wing_mu.at(frequency); }
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
     const std::vector<double> &get_frequency_nodes() const { return omega; }
     const std::vector<Matz> &get_head_tensors() const { return head; }

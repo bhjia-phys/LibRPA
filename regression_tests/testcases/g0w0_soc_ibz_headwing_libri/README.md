@@ -20,16 +20,41 @@ weights must remain unchanged. Unequal stars make this distinction visible.
 
 ## Independent reference
 
-Numerical reference files are copied unchanged from the independently supplied
-three-point, symmetry-OFF native run `full-native-np1-r4` of the preserved
-`20261017-msg-ibz-soc-velocity-r1/native-controls` campaign. That run used the
-validated source subsequently committed as `90a93c5d`, one MPI rank and one
-thread. Its source eigenvectors were obtained by direct generalized
-diagonalization at all three points, rather than by IBZ reconstruction.
-The H/S/r and eigenvectors have also been checked against independent Fourier
-derivatives and time-reversal sewing in that campaign.
+The active numerical reference comes from an independent, explicitly supplied
+three-point, symmetry-OFF native run with the same retained full-input bundle.
+The full-grid C was independently diagonalized, rather than restored from IBZ.
+Both magnetic/IBZ and full-grid native Sigma agree within 1.0e-17 Ha.
 
-The reference directory retains its complete stdout as `librpa/librpa.out`,
+The complex charge bubble now supplies the negative-time factor with the AO,
+translation and spin adjoint required by the charge trace. Swapping spin labels
+alone is insufficient for complex spinors. The corrected response was checked
+independently against the original-KS Lindhard sum
+
+`P_mu,nu(q,iw) = (1/Nk) sum_knm (f_kn-f_k+q,m)/(iw+E_kn-E_k+q,m)`
+`                 * V_mu(kn,k+q,m) * conj(V_nu(kn,k+q,m))`.
+
+For this one-center model, `V_mu = C_kn^dagger (Cs_mu+Cs_mu^T) C_k+q,m`, with
+both spinor components retained. At every one of the three q points and six
+original frequencies, the maximum error across 162 complex response entries is
+6.23e-11. The existing `test_crpa_soc` also checks the complex charge response
+against independent spectral sums. The old pre-adjoint Sigma differs by
+1.42e-4 Ha and is not used as the corrected target.
+
+All previous reference files and their original case README are preserved
+byte-for-byte in `refs/g0w0_soc_ibz_headwing_libri/reference-before-complex-bubble.tar.gz`;
+the adjacent SHA256 manifest verifies every original file. The historical
+90a93c5d run remains evidence of the prior implementation, not the acceptance
+target of the corrected complex charge trace.
+
+The reference run used the master-13bc5f3a integration source including the
+weighted cRPA/transport and magnetic/current-HR adaptations. Its executable
+SHA256 is `ef583518b7d723346fe226bfdb694c7f3b55d4d90c3540e413d4d23db81f0420`.
+The H/S/r and eigenvectors retain their independent Fourier-derivative and
+magnetic-sewing checks from the original fixture.
+
+The test fixture removes trailing padding from stdout only; the complete raw
+run is retained as `reference-complex-bubble-raw.stdout.gz` next to the legacy
+archive. The reference directory retains the full stdout content as `librpa/librpa.out`,
 complete head/wing CSV, and all 12 complete 4x4 Sigma matrices at the two
 common representatives and six original imaginary frequencies. The QP table
 contains all four states at all three full-grid points. These references

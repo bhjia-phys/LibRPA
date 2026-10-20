@@ -11,6 +11,27 @@
 namespace librpa_int
 {
 
+struct SymmetryExpandedMeanField
+{
+    MeanField meanfield;
+    std::vector<int> source_k;
+    std::vector<bool> antiunitary;
+};
+
+// Expand paired source-gauge IBZ states without a new eigensolve. Returned
+// band-space operators copy their source block, conjugating antiunitary routes.
+SymmetryExpandedMeanField expand_symmetry_meanfield(
+    const MeanField &source, const AtomicBasis &basis, const PeriodicBoundaryData &pbc,
+    const SymmetryContext &context);
+
+// Verify E, occupations and diagonal endpoint weights through magnetic sewing.
+// Degenerate permutations/mixing are allowed only when they preserve the weights.
+// Includes all active operations, including little-group stabilizers.
+void validate_symmetry_band_weights(
+    const MeanField &mf, const AtomicBasis &basis, const PeriodicBoundaryData &pbc,
+    const SymmetryContext &symmetry,
+    const std::vector<std::vector<std::vector<double>>> &weights = {});
+
 //! Shared block-size cap for permanent k-BLACS WFC layouts and their GEMM workspaces.
 constexpr int wfc_gemm_block_size_opt = 128;
 

@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/fixed_basis.h"
+#include "../core/qsgw/fixed_basis.h"
 
 #include <cassert>
 #include <cmath>
@@ -20,7 +20,6 @@ using librpa_int::qsgw::ScopedReferenceEigenvectors;
 using librpa_int::qsgw::VelocityMatrix;
 using librpa_int::qsgw::align_velocity_to_reference_wfc;
 using librpa_int::qsgw::diagonalize_in_reference_basis;
-using librpa_int::qsgw::prepare_fhi_aims_interband_velocity;
 
 namespace
 {
@@ -278,6 +277,23 @@ void test_fixed_reference_updates_live_wfc_from_mf0_each_iteration()
     assert_close(live.get_eigenvals()[0](0, 0), diagonal(0, 0).real());
     assert_close(live.get_eigenvals()[0](0, 1), diagonal(1, 1).real());
 
+    // A restart may carry independent complex phases. Recover its actual
+    // saved gauge rather than choosing new eigenvectors of the Hamiltonian.
+    MeanField phased_live = live;
+    const cplxdb phases[2] = {std::polar(1.0, 0.37), std::polar(1.0, -0.61)};
+    auto& phased_wfc = phased_live.get_eigenvectors()[0][0][0];
+    for (int row = 0; row < 2; ++row)
+        for (int column = 0; column < 2; ++column)
+            phased_wfc(row, column) *= phases[row];
+    const auto recovered = librpa_int::qsgw::reference_basis_rotation(phased_live, reference);
+    for (int row = 0; row < 2; ++row)
+        for (int column = 0; column < 2; ++column)
+            assert_close(recovered.at(0).at(0)(row, column), unitary(row, column) * phases[column]);
+    const Matz recovered_diagonal = transpose(recovered.at(0).at(0), true) *
+        hamiltonian.at(0).at(0) * recovered.at(0).at(0);
+    assert_close(recovered_diagonal(0, 0), diagonal(0, 0));
+    assert_close(recovered_diagonal(1, 1), diagonal(1, 1));
+
     // A second iteration must rotate directly from the immutable reference,
     // not compound the first iteration's live wavefunction.
     hamiltonian[0][0](0, 0) = 2.0;
@@ -496,44 +512,6 @@ void test_velocity_basis_unitary_is_aligned_to_fixed_reference()
     assert_velocity_equal(rejected_velocity, before_rejection);
 }
 
-void test_fhi_aims_interband_velocity_is_prepared_in_qsgw_only()
-{
-    MeanField reference(1, 1, 2, 2, 1);
-    VelocityMatrix velocity;
-    initialize_velocity_matrix(velocity, 1, 1, 2);
-    for (int direction = 0; direction < 3; ++direction)
-    {
-        const cplxdb off_diagonal(
-            0.25 + direction, -0.5 + 0.1 * direction);
-        velocity[0][0][direction](0, 0) =
-            cplxdb(1.0 + direction, 0.4);
-        velocity[0][0][direction](0, 1) = off_diagonal;
-        velocity[0][0][direction](1, 0) = std::conj(off_diagonal);
-        velocity[0][0][direction](1, 1) =
-            cplxdb(-2.0 - direction, -0.7);
-    }
-    const VelocityMatrix before = velocity;
-
-    prepare_fhi_aims_interband_velocity(velocity, reference);
-    for (int direction = 0; direction < 3; ++direction)
-    {
-        assert_close(velocity[0][0][direction](0, 0), 0.0);
-        assert_close(velocity[0][0][direction](1, 1), 0.0);
-        assert_close(velocity[0][0][direction](0, 1),
-                     before[0][0][direction](0, 1));
-        assert_close(velocity[0][0][direction](1, 0),
-                     before[0][0][direction](1, 0));
-    }
-
-    VelocityMatrix invalid = before;
-    invalid[0][0][2](1, 0) += cplxdb(0.0, 0.25);
-    const VelocityMatrix invalid_before = invalid;
-    assert_throws([&] {
-        prepare_fhi_aims_interband_velocity(invalid, reference);
-    });
-    assert_velocity_equal(invalid, invalid_before);
-}
-
 } // namespace
 
 int main()
@@ -543,7 +521,6 @@ int main()
     test_invalid_late_kpoint_does_not_partially_update_live_state();
     test_invalid_matrix_data_does_not_mutate_live_state();
     test_velocity_basis_unitary_is_aligned_to_fixed_reference();
-    test_fhi_aims_interband_velocity_is_prepared_in_qsgw_only();
     std::cout << "test_qsgw_fixed_basis: all tests passed\n";
     return 0;
 }

@@ -117,8 +117,8 @@ def main():
     cases = {
         "si-none": ("qsgw_aims_Si_k333_headonly_libri", {}),
         "h2o-band": ("qsgw_band_aims_mole_H2O_libri",
-                     {"qsgw_mixing_beta": "0.3", "qsgw_band0_unoccupied_keep": "1",
-                      "qsgw_band0_cut_shift_ha": "0.05"}),
+                     {"qsgw_mixing_beta": "0.3", "qsgw_unoccupied_keep": "1",
+                      "qsgw_cut_shift_ha": "0.05"}),
     }
     report = {}
     for case in args.case or cases:

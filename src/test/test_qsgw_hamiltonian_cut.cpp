@@ -126,6 +126,30 @@ void test_cut_modes_require_a_finite_live_spectrum()
     });
 }
 
+void test_default_cut_retains_ten_empty_states()
+{
+    MeanField live(1, 1, 14, 1, 1);
+    live.get_efermi() = 0.0;
+    for (int band = 0; band < 14; ++band) live.get_eigenvals()[0](0, band) = band - 1.5;
+
+    SpinKMatrixMap raw;
+    SpinKMatrixMap reference;
+    raw[0][0] = make_matrix(14, 10.0);
+    reference[0][0] = make_matrix(14, -3.0);
+    const auto result = apply_hamiltonian_cut(raw, reference, live, HamiltonianCutOptions{});
+
+    // Two occupied plus ten empty states retain the complete active block.
+    for (int row = 0; row < 14; ++row)
+        for (int column = 0; column < 14; ++column)
+        {
+            const cplxdb expected =
+                row < 12 && column < 12
+                    ? raw.at(0).at(0)(row, column)
+                    : (row == column ? reference.at(0).at(0)(row, column) + 0.00367493 : cplxdb{});
+            assert_close(result.at(0).at(0)(row, column), expected);
+        }
+}
+
 void test_mode_one_adds_hartree_shift_to_reference_diagonal()
 {
     const MeanField live = make_live_meanfield();
@@ -205,6 +229,7 @@ int main()
 {
     test_mode_zero_is_an_exact_uncut_copy();
     test_cut_modes_require_a_finite_live_spectrum();
+    test_default_cut_retains_ten_empty_states();
     test_mode_one_adds_hartree_shift_to_reference_diagonal();
     test_keep_covering_all_bands_is_uncut();
     test_invalid_options_and_layouts_fail_closed();

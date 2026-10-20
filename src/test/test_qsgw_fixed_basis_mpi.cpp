@@ -2,7 +2,7 @@
 #undef NDEBUG
 #endif
 
-#include "../qsgw/fixed_basis.h"
+#include "../core/qsgw/fixed_basis.h"
 
 #include <cassert>
 #include <cmath>

@@ -3,6 +3,7 @@
  * @brief Utilities for generated symmetry data.
  */
 #include "symmetry_context.h"
+#include "qpoint_view.h"
 
 #include "symmetry_spin_kernel.h"
 
@@ -2474,6 +2475,91 @@ SymmetrySpinOperation resolve_symmetry_kstar_member_spin_operation(
     restore_op.spin_u = {
         std::conj(u[0]), std::conj(u[2]), std::conj(u[1]), std::conj(u[3])};
     return restore_op;
+}
+
+std::map<Vector3_Order<double>, ComplexMatrix> restore_symmetry_rectangular_q_map(
+    const std::map<Vector3_Order<double>, ComplexMatrix> &input,
+    const PeriodicBoundaryData &pbc, const SymmetryQPointView &view,
+    const SymmetryContext &context, const AtomicBasis &left, const AtomicBasis &right)
+{
+    const auto left_layouts = left.build_species_basis_layouts(context.atom_to_type);
+    const auto right_layouts = right.build_species_basis_layouts(context.atom_to_type);
+    const auto left_counts = left.get_atom_nb_map(), right_counts = right.get_atom_nb_map();
+    const auto match = [&](const auto &matrices, const Vector3_Order<double> &fractional)
+    {
+        for (auto it = matrices.begin(); it != matrices.end(); ++it)
+            if (same_fractional_kpoint(Vector3_Order<double>{pbc.latvec * it->first},
+                                       fractional, 1e-8)) return it;
+        return matrices.end();
+    };
+    const auto transformations = [&](const auto &member, const auto &source, const auto &target)
+    {
+        return std::pair{
+            build_symmetry_kspace_operator_transform_matrix(context, left_layouts, member,
+                left_counts, source, member.time_reversal, &target),
+            build_symmetry_kspace_operator_transform_matrix(context, right_layouts, member,
+                right_counts, source, member.time_reversal, &target)};
+    };
+    std::map<Vector3_Order<double>, ComplexMatrix> result;
+    for (const auto &q : view.representatives)
+    {
+        const Vector3_Order<double> fractional{pbc.latvec * q};
+        const auto source = match(input, fractional);
+        if (source == input.end() || source->second.nr != left.nb_total ||
+            source->second.nc != right.nb_total)
+            throw LIBRPA_RUNTIME_ERROR("rectangular q restore is missing a representative or basis dimensions");
+        const auto &star = find_symmetry_kstar_for_kpoint(context.kstars, fractional,
+                                                         "rectangular q restore");
+        const SymmetryKStarMember *source_member = nullptr;
+        for (const auto &member : star.members)
+            if (same_fractional_kpoint(member.k_bz, fractional, 1e-8)) source_member = &member;
+        if (!source_member) throw LIBRPA_RUNTIME_ERROR("rectangular q restore misses its source member");
+        const Vector3_Order<double> source_fractional{pbc.latvec * source->first};
+        const auto [a_source, b_source] = transformations(*source_member, star.k_ibz, source_fractional);
+        const auto canonical = transpose(a_source, true) *
+            (source_member->time_reversal ? conj(source->second) : source->second) * b_source;
+        for (const auto &target : view.members.at(q))
+        {
+            const Vector3_Order<double> target_fractional{pbc.latvec * target};
+            const SymmetryKStarMember *target_member = nullptr;
+            for (const auto &member : star.members)
+                if (same_fractional_kpoint(member.k_bz, target_fractional, 1e-8))
+                    target_member = &member;
+            if (!target_member) throw LIBRPA_RUNTIME_ERROR("rectangular q restore misses a target member");
+            // Use the existing full-grid keys, including their reciprocal gauge.
+            auto key = std::find_if(pbc.klist_full.begin(), pbc.klist_full.end(), [&](const auto &k)
+            { return same_fractional_kpoint(Vector3_Order<double>{pbc.latvec * k}, target_fractional, 1e-8); });
+            if (key == pbc.klist_full.end())
+                throw LIBRPA_RUNTIME_ERROR("rectangular q restore targets an unavailable full-grid point");
+            const Vector3_Order<double> actual_target_fractional{pbc.latvec * *key};
+            const auto [a, b] = transformations(*target_member, star.k_ibz, actual_target_fractional);
+            auto restored = a * canonical * transpose(b, true);
+            if (target_member->time_reversal) restored = conj(restored);
+            const auto original = match(input, target_fractional);
+            if (original != input.end())
+            {
+                double residual = 0, scale = 1;
+                if (original->second.nr != restored.nr || original->second.nc != restored.nc)
+                    throw LIBRPA_RUNTIME_ERROR("rectangular q restore has inconsistent input dimensions");
+                for (int i = 0; i < restored.size; ++i)
+                {
+                    residual = std::max(residual, std::abs(restored.c[i] - original->second.c[i]));
+                    scale = std::max(scale, std::abs(original->second.c[i]));
+                }
+                if (!std::isfinite(residual) || residual > 2e-7 * scale)
+                    throw LIBRPA_RUNTIME_ERROR("auxiliary compression violates the supplied q-star symmetry");
+                restored = original->second;
+            }
+            for (int i = 0; i < restored.size; ++i)
+                if (!std::isfinite(restored.c[i].real()) || !std::isfinite(restored.c[i].imag()))
+                    throw LIBRPA_RUNTIME_ERROR("rectangular q restore contains non-finite coefficients");
+            if (!result.emplace(*key, std::move(restored)).second)
+                throw LIBRPA_RUNTIME_ERROR("rectangular q restore has a duplicate target");
+        }
+    }
+    if (result.size() != pbc.get_n_cells_bvk())
+        throw LIBRPA_RUNTIME_ERROR("rectangular q restore does not cover the full grid");
+    return result;
 }
 
 ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,

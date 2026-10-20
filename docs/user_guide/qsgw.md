@@ -135,41 +135,49 @@ its explicit `nao` projection includes all four spinor blocks.
 
 ## Hamiltonian cut
 
-`qsgw_cut_mode` accepts `0` (uncut, the default) and `1` (shifted DFT
+`qsgw_cut_mode` accepts `0` (uncut) and `1` (the default: shifted DFT
 reference diagonal, formerly mode 2). The former unshifted cut is removed;
 the old numeric value `2` is rejected. For mode 1, the fixed-reference matrix retains the leading block whose size
 is the current occupied-state count plus `qsgw_unoccupied_keep`
 (default 10), bounded by the complete state dimension. Every other diagonal
 is restored to its initial DFT energy plus `qsgw_cut_shift_ha`
-(default 2 eV, converted to about 0.07349864435131 Ha); all other off-diagonal entries are zero. The matrix and
+(default 0.00367493 Ha, approximately 0.1 eV); all other off-diagonal entries are zero. The matrix and
 reference basis remain complete.
 
 The selected cut applies when assembling the SCF-grid update and again after
 mixing; an optional band-path update uses the same rule. The HR exporter
 serializes this actual post-cut operator immediately before diagonalization.
-To select the shifted-cut HR requested for topology, use:
+The defaults match the historical NiO cut:
 
 ```ini
 qsgw_cut_mode = 1
+qsgw_unoccupied_keep = 10
+qsgw_cut_shift_ha = 0.00367493
 ```
 
-HR export is enabled by default. The omitted keep and shift defaults are
-10 empty states and exactly 2 eV under the selected constants. Explicit
-`qsgw_cut_shift_ha` values remain in Hartree; its suffix states the input unit.
+Set `qsgw_cut_mode = 0` to request an uncut update. The cut limits Hamiltonian
+updates; it does not reduce the bands supplied to the response or self-energy
+calculation. HR export is enabled by default. The default shift is the exact
+historical input value `0.00367493` Ha (approximately 0.1 eV), independent of
+the selected producer constants. Explicit `qsgw_cut_shift_ha` values remain
+in Hartree and override this default.
 A fresh iteration `0000` remains the actual entering PBE
 operator; update files `0001`, `0002`, etc. contain the
 mode-1 shifted operator. The complete DFT/IFT preserves that operator on the original
 SCF mesh, including the shifted high states. This identity does not prescribe
 or establish interpolation accuracy at points outside the mesh.
 
+When resuming an older checkpoint, explicitly retain its original cut mode,
+keep count and Hartree shift. Older inputs could omit the mode for an uncut
+update; they now need `qsgw_cut_mode = 0`. Older shifted-cut checkpoints could
+use an omitted 2 eV shift; retain their original Hartree shift explicitly.
+The checkpoint reader rejects changed cut settings rather than reinterpreting
+the saved state.
+
 ## Analytic head and wing feedback
 
-The native-velocity preset moved from 5 to **6**. Use 6 for native QSGW
-feedback. Value 5 follows upstream's input-dielectric s-subspace head
-correction for G0W0; it is not an alias for native-velocity feedback.
-The preset renumbering does not change the head/wing equations or feedback.
-
-The standalone `qsgw` driver accepts `option_dielect_func = 6`
+The standalone `qsgw` driver defaults to `replace_w_head = true` and
+`option_dielect_func = 6`
 to recompute velocity internally from the complete current Hamiltonian and
 then apply the existing analytic head/wing prescription at every iteration.
 This preset selects `qsgw_headwing_velocity = current_hr` and resolves to
@@ -178,6 +186,29 @@ explicit `reference` and `rotate_reference` are rejected for option 6. It
 requires `replace_w_head = true`, `use_scalapack_gw_wc = true`, and
 `use_pyatb = false`. The log records requested option 6 and effective option 3.
 The native mode remains experimental.
+
+Set `replace_w_head = false` to disable the default correction; with no explicit
+dielectric option this selects option 0. Explicit option 0, 1 or 2 also leaves
+head correction disabled when the head switch is omitted. Explicit option 3
+or 4 retains its supported velocity selection and enables head correction when
+the switch is omitted. Conflicting explicit assignments are still rejected.
+These defaults apply only to the QSGW driver. G0W0, standalone cRPA and direct
+library callers retain their existing defaults. EXX/GW/RPA symmetry switches
+remain off by default. Explicit magnetic symmetry is supported with current-HR
+velocity and coupled cRPA. The live E/C/f state is checked against every supplied
+magnetic operation before each update; cRPA also checks its diagonal endpoint
+weights. A target that breaks the group must use the full-grid route.
+
+For IBZ-only source E/C/f, enable all three EXX/GW/RPA symmetry switches. Native
+current-HR, HR export and coupled cRPA expand the paired source KS frames to the
+full unshifted mesh internally. This uses the existing unitary/antiunitary ket
+action and reciprocal gauge; it does not solve another eigenproblem. Source
+star-weighted occupations become f/N_full once, and full Vxc is read in the
+same source frame before its antiunitary band-space conjugation. Keep source
+Vxc, C and E paired. Complete source AO-spinor/state frames and explicit SOC
+magnetic metadata are required. The response can still screen only representative
+q points. Missing rectangular auxiliary transforms and bare/screened kernels
+are restored before full-grid local contraction.
 
 Existing option 3 provides both analytic head and wing, and option 4 provides
 head only, with `replace_w_head = true`. These options retain their explicit
@@ -223,13 +254,15 @@ qsgw_headwing_velocity = current_hr
 ABACUS files need no filename overrides. Paths are relative to `input_dir`
 unless absolute. This mode requires a full,
 unshifted uniform mesh, replicated wavefunctions and a complete square AO/state
-basis, with symmetry reduction disabled. The native SOC reader accepts a
+basis. Explicit magnetic symmetry is available with the covariance checks
+described above. The native SOC reader accepts a
 complete two-component spinor reference with matching full-dimension S/r,
 one physical spin channel and `2 * N_AO` states. Both reference and live
 coefficients use AO-major/spinor-minor ordering; the entire complex Hamiltonian,
 including cross-spinor entries, enters the same velocity projector. For this
-SOC route all EXX/GW/RPA symmetry switches must be off; IBZ input and k-parallel
-wavefunctions are unsupported. S/r and the native DFT baseline remain fixed.
+SOC route, explicit magnetic metadata is required when symmetry is enabled. Paired
+IBZ sources are expanded internally; k-parallel input remains unsupported.
+S/r and the native DFT baseline remain fixed.
 This mode also reads matching `hrs1_nao.csr` in Ry, plus `hrs2_nao.csr` for a
 second physical collinear channel, even if HR export is disabled. At each
 entering iteration, the driver embeds the complete reference-basis Hamiltonian
@@ -423,8 +456,9 @@ An overlap-only
 S(R) is dimensionless and r(R) is in
 Bohr; filenames are relative to `input_dir` unless absolute. They retain their
 original real-space support. The exporter requires a complete square AO
-reference and a full, unshifted uniform SCF mesh. IBZ or shifted-mesh export
-is rejected before the first GW update; the old
+reference on a full, unshifted uniform SCF mesh. Paired IBZ inputs use the
+internal expansion described above when all three symmetry switches are enabled;
+shifted meshes remain unsupported. The old
 `qsgw_hr_export_full_mp_rgrid` selector is not needed or supported.
 
 After mixing and the cut actually selected by the task, but **before
@@ -556,6 +590,10 @@ a fresh working/output directory, and set:
 qsgw_restart_file = /path/to/initial/librpa.d/qsgw_checkpoint.bin
 qsgw_max_iter = 3
 ```
+
+For a checkpoint produced without head correction, explicitly retain
+`replace_w_head = false`; the new option-5 task default must not change the saved
+map. Likewise retain an older run's explicit option-3/4 velocity convention.
 
 The restart path is relative to the working directory unless absolute.
 Restoration is explicit: a checkpoint already present in `output_dir` does
