@@ -122,7 +122,13 @@ key from input files.
 
 With band inputs, the existing band-cut options remain active and each
 iteration writes `KS_band_spin_S_N.dat`, `EXX_band_spin_S_N.dat`, and
-`QSGW_band_spin_S_N.dat` for plotting. The driver writes energy data rather
+`QSGW_band_spin_S_N.dat` for plotting. By default, `qsgw_output_qp = true`
+also solves the diagonal GW quasiparticle equation on the entering state and
+writes `GW_band_spin_S_N.dat` in the ordinary G0W0 band format and
+`energy_qp_N` in its native grid QP format, plus full-precision grid/path
+rows and solver statuses in `qsgw_qp.csv`. GW update `N` uses state `N-1`; the QSGW table
+contains the new state `N`. Set `qsgw_output_qp = false` to disable the
+additional roots. The driver writes energy data rather
 than PNG figures. Continue a checkpoint with the same band-channel presence
 and original band inputs. See [QSGW](qsgw.md) for the full Vxc input, option-6
 head/wing feedback, output and restart requirements.
