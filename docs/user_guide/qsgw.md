@@ -12,6 +12,69 @@ QSGW reuses the G0W0 input readers and EXX/Sigma kernels. Task-specific input
 and output live in `driver/qsgw`; numerical operations in `src/core/qsgw` accept
 matrices and mean-field objects.
 
+## Quasiparticle roots during iteration
+
+To also solve the diagonal G0W0 quasiparticle equation on each entering state:
+
+```ini
+task = qsgw
+qsgw_output_qp = true
+```
+
+The default is `true`; use `qsgw_output_qp = false` to disable these diagnostics.
+Results are written to `output_dir/qsgw_qp.csv` for the
+SCF grid and, when present, the band path. State 0 is the original DFT reference;
+GW update 1 evaluates its ordinary G0W0 roots. Update `t+1` evaluates roots for
+entering state `t`, using that state's energies, Fermi level and eigenvectors.
+The newly produced final state has no QP rows until it enters another GW build;
+the driver does not perform an extra final self-energy calculation for this output.
+
+The collected exchange and frequency-dependent Sigma matrices are rotated from
+the initial KS basis to the current eigenbasis. The subtracted static potential is
+`Vstatic_t = H_t - H_DFT + Vxc_DFT`, including the actual mixing/cut correction.
+The diagonal equation is therefore
+`E = epsilon_t - Vstatic_t + Sigma_x,t + Re Sigma_c,t(E - mu_t)`.
+The initial state uses the original uncut DFT operator. This output reuses the
+G0W0 continuation, resampling, Hedin-shift and `option_qpe_solver` settings; it
+does not rebuild W or alter QSGW staticization, mixing, cuts or occupations.
+The full QSGW Vxc input is sufficient; no separate diagonal `vxc_out` is needed.
+
+The CSV records the reference and QP energies, static potential, exchange,
+correlation and `solver_info` (`0` means solver success), all energies in eV.
+Failed roots remain NaN unless `override_qpe_solver_nan = true` requests the
+last unconverged value; their nonzero status is still retained. For perturbative
+solver 2 the real correlation column is the same effective value used by the
+G0W0 API to reconstruct the renormalized QP energy. `i_state_low`/`i_state_high`
+select the zero-based, upper-exclusive band range. Restart output starts at the
+restored entering state and recovers its saved eigenvector gauge.
+
+With a band path, each GW build additionally writes
+`output_dir/GW_band_spin_S_N.dat`, where `S` is the one-based spin channel
+and `N` is the update number. The native table contains point index,
+fractional coordinates, and occupation/energy pairs for the selected band
+window; energies are in eV. It uses the same writer as ordinary G0W0:
+no header, point index width 5, fractional coordinates with seven decimal
+places, and occupation/energy pairs with five decimal places (width 15).
+Thus `GW_band_spin_1_1.dat` contains the initial
+DFT-start G0W0 roots, while `QSGW_band_spin_1_1.dat` contains the newly
+constructed QSGW state's eigenvalues. Update `N` roots belong to entering
+state `N-1`. Later GW tables use that iteration's current eigenstates and
+static subtraction rather than repeating DFT-start G0W0. NaN roots are
+retained, with their solver status available in the CSV. Restarted runs
+continue the update numbering. State indices, the selected one-based band
+range and solver statuses remain available in the CSV rather than a custom
+band-file header.
+
+Every enabled QP update also writes `output_dir/energy_qp_N` on the SCF
+grid through the ordinary G0W0 `energy_qp` writer. Its header, k-point and
+spin blocks, band numbering and occupation convention match G0W0, with
+columns `state`, `occ_num`, `e_gs(Ha)`, and `e_qp(Ha)`. The energies use
+scientific notation with ten decimal places. Here `e_gs` is the entering
+state's mean-field energy. This per-update file is controlled by
+`qsgw_output_qp`; ordinary G0W0 retains its separate `output_energy_qp`
+switch and unnumbered filename. With no band path, the grid CSV and
+`energy_qp_N` are still written.
+
 ## Optional band-path channel
 
 The driver selects the band channel from the input files. If
