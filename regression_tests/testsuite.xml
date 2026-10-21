@@ -319,7 +319,7 @@
     <!-- Finite four-state model: only two weighted IBZ points are supplied.
          Independent native full-BZ references contain all three points. -->
     <testcase name="SOC IBZ-only native head/wing versus full BZ" directory="g0w0_soc_ibz_headwing_libri">
-      <labels refhash="90a93c5d5f7b8dfa7a53b6694aab785168bb6952"/>
+      <labels/>
       <build require_libri="true"/>
       <validate name="Native velocity, two-point IBZ and active magnetic restoration"
                 file_test="librpa/librpa.out"
@@ -348,6 +348,23 @@
                 rows="4"
                 comparison="cmp_table.abs_diff(1e-4)"
       />
+    </testcase>
+
+    <testcase name="SOC full-BZ native head/wing" directory="g0w0_soc_full_native_headwing_libri">
+      <labels/>
+      <build require_libri="true"/>
+      <validate name="Complete complex Cartesian head"
+                file="librpa/librpa.d/g0w0_headwing.csv"
+                regex="^head,([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)$"
+                comparison="cmp_table.abs_diff(1e-10)"/>
+      <validate name="Complete complex auxiliary wing"
+                file="librpa/librpa.d/g0w0_headwing.csv"
+                regex="^wing_auxiliary,([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)$"
+                comparison="cmp_table.abs_diff(1e-10)"/>
+      <validate name="Complete complex Sigma at two common points (Ha)"
+                file="librpa/librpa.d/Sigc_fk_mn_kgrid_ispin_0_ik_[01]_ifreq_*.bin"
+                binary_extract="2i32d"
+                comparison="cmp_float.abs_diff(1e-10)"/>
     </testcase>
 
     <testcase name="BN headwing shrink SOC (abacus input)" directory="g0w0_band_abacus_BN_headwing_shrink_soc_libri">

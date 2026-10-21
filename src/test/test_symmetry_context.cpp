@@ -1804,16 +1804,15 @@ void test_rectangular_auxiliary_q_restore_with_reciprocal_gauge()
 {
     PeriodicBoundaryData pbc;
     pbc.set_latvec({1, 0, 0, 0, 1, 0, 0, 0, 1});
-    pbc.set_kgrids_kvec(3, 1, 1,
-        {0, 0, 0, TWO_PI / 3, 0, 0, 2 * TWO_PI / 3, 0, 0});
+    pbc.set_kgrids_kvec(3, 1, 1, {0, 0, 0, TWO_PI / 3, 0, 0, 2 * TWO_PI / 3, 0, 0});
     SymmetryContext context;
     context.set_crystal_structure(pbc.latvec, pbc.G, {{0, 0}, {1, 1}},
-                                   {{0, {0.17, 0, 0}}, {1, {0.41, 0, 0}}});
+                                  {{0, {0.17, 0, 0}}, {1, {0.41, 0, 0}}});
     context.set_rspace_operations({SpaceGroupSymOp::IDENTITY});
     context.set_symmetry_spin_operations({SymmetrySpinOperation{}}, true);
     context.build_periodic_mappings(pbc, pbc.Rlist);
-    context.build_rsh_rotations({-1, 1, LIBRPA_ANGULAR_ORDER_NATURAL,
-                                 LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
+    context.build_rsh_rotations(
+        {-1, 1, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
     context.build_kstar_member_rotations(0);
     context.set_available();
     const auto view = build_symmetry_qpoint_view(context, pbc, true);
@@ -1828,8 +1827,8 @@ void test_rectangular_auxiliary_q_restore_with_reciprocal_gauge()
         gamma.c[i] = 0.2 + 0.03 * i;
         source.c[i] = {0.3 + 0.05 * i, 0.07 * (i + 1)};
     }
-    std::map<Vector3_Order<double>, ComplexMatrix> input{
-        {pbc.klist[0], gamma}, {pbc.klist[1], source}};
+    std::map<Vector3_Order<double>, ComplexMatrix> input{{pbc.klist[0], gamma},
+                                                         {pbc.klist[1], source}};
     const auto full = restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right);
     assert_matrix_close(full.at(pbc.klist[0]), gamma);
     assert_matrix_close(full.at(pbc.klist[1]), source);
@@ -1839,16 +1838,21 @@ void test_rectangular_auxiliary_q_restore_with_reciprocal_gauge()
     for (int i = 0; i < 2; ++i)
         for (int j = 0; j < 3; ++j)
             expected(i, j) = std::polar(1.0, TWO_PI * (left_position[i] - right_position[j])) *
-                              std::conj(source(i, j));
+                             std::conj(source(i, j));
     assert_matrix_close(full.at(pbc.klist[2]), expected, 1e-12);
     input.emplace(pbc.klist[2], expected);
     const auto checked = restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right);
-    for (int i = 0; i < expected.size; ++i)
-        assert(checked.at(pbc.klist[2]).c[i] == expected.c[i]);
+    for (int i = 0; i < expected.size; ++i) assert(checked.at(pbc.klist[2]).c[i] == expected.c[i]);
     input.at(pbc.klist[2])(1, 0) += 0.01;
     bool rejected = false;
-    try { restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right); }
-    catch (const std::runtime_error &) { rejected = true; }
+    try
+    {
+        restore_symmetry_rectangular_q_map(input, pbc, view, context, left, right);
+    }
+    catch (const std::runtime_error&)
+    {
+        rejected = true;
+    }
     assert(rejected);
 }
 
@@ -1963,9 +1967,8 @@ void test_rspace_restore_member_spin_operation_resolution()
     spin_tg.antiunitary = true;
     spin_tg.spin_source = SymmetrySpinActionSource::ExplicitSpinSpace;
     const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
-    spin_tg.spin_u = {
-        std::complex<double>(inv_sqrt2, -inv_sqrt2), 0.0,
-        0.0, std::complex<double>(inv_sqrt2, inv_sqrt2)};
+    spin_tg.spin_u = {std::complex<double>(inv_sqrt2, -inv_sqrt2), 0.0, 0.0,
+                      std::complex<double>(inv_sqrt2, inv_sqrt2)};
     ctx.set_symmetry_spin_operations({spin_e, spin_tg}, false);
 
     SymmetryRSpaceRestoreMember legacy_member;
@@ -1978,12 +1981,11 @@ void test_rspace_restore_member_spin_operation_resolution()
     SymmetryRSpaceRestoreMember linked_member;
     linked_member.isym = 1;
     linked_member.operation_id = 1;
-    const auto resolved =
-        resolve_symmetry_rspace_restore_member_spin_operation(ctx, linked_member);
+    const auto resolved = resolve_symmetry_rspace_restore_member_spin_operation(ctx, linked_member);
     assert(resolved.antiunitary);
     const std::array<std::complex<double>, 4> expected_inverse{
-        std::conj(spin_tg.spin_u[0]), std::conj(spin_tg.spin_u[2]),
-        std::conj(spin_tg.spin_u[1]), std::conj(spin_tg.spin_u[3])};
+        std::conj(spin_tg.spin_u[0]), std::conj(spin_tg.spin_u[2]), std::conj(spin_tg.spin_u[1]),
+        std::conj(spin_tg.spin_u[3])};
     for (std::size_t i = 0; i != expected_inverse.size(); ++i)
     {
         assert(std::abs(resolved.spin_u[i] - expected_inverse[i]) < 1e-12);
@@ -2676,12 +2678,12 @@ void test_realspace_restore_uses_only_active_spin_operation_subgroup()
     // an unused C2z must not discard or rotate those blocks.
     const auto pbc = make_cubic_mesh_pbc({3, 3, 1});
     auto ctx = make_single_atom_cubic_context(
-        pbc, {SpaceGroupSymOp::IDENTITY,
-              make_row_symmetry_operation({-1, 0, 0, 0, -1, 0, 0, 0, 1})});
+        pbc,
+        {SpaceGroupSymOp::IDENTITY, make_row_symmetry_operation({-1, 0, 0, 0, -1, 0, 0, 0, 1})});
     ctx.set_symmetry_spin_operations({SymmetrySpinOperation{}}, false);
     build_ctx_periodic_mappings(ctx, pbc);
-    ctx.build_rsh_rotations({-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL,
-                              LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
+    ctx.build_rsh_rotations(
+        {-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
 
     std::array<symmetry_rspace_block_map_t, 4> reference;
     for (const auto& R : pbc.Rlist)

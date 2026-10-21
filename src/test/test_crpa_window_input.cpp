@@ -2,9 +2,9 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "../core/crpa_model.h"
 #include "../core/crpa_window_input.h"
 #include "../core/orbital_weights.h"
-#include "../core/crpa_model.h"
 
 using namespace librpa_int;
 
@@ -113,8 +113,8 @@ void test_independent_windows_spin_frames_and_spectator()
     PeriodicBoundaryData pbc;
     pbc.kfrac_list = kpoints;
     pbc.Rlist = {{0, 0, 0}, {1, 0, 0}};
-    auto prepared = prepare_crpa_model(basis, convention, {0, 1, 2}, {"Li", "Co", "O"},
-                                       overlaps, pbc, meanfield, options);
+    auto prepared = prepare_crpa_model(basis, convention, {0, 1, 2}, {"Li", "Co", "O"}, overlaps,
+                                       pbc, meanfield, options);
     const auto snapshot = snapshot_crpa_model(prepared, meanfield);
     for (int spin = 0; spin < 2; ++spin)
         for (int k = 0; k < 2; ++k)
@@ -126,8 +126,8 @@ void test_independent_windows_spin_frames_and_spectator()
                     for (int band = 0; band < 9; ++band)
                         ao_h(i, j) += state.coefficients(i, band) * state.energies[band] *
                                       std::conj(state.coefficients(j, band));
-            const auto reference_h = transpose(state.output_phi, true) * overlap * ao_h *
-                                     overlap * state.output_phi;
+            const auto reference_h =
+                transpose(state.output_phi, true) * overlap * ao_h * overlap * state.output_phi;
             require(distance(reference_h, state.output_h) < 1e-11,
                     "snapshot one-body operator differs from independent AO projection");
             require(distance(state.parent_phi, dp.parent_orbitals_spin_k[spin][k]) < 1e-12,
@@ -255,8 +255,8 @@ void test_common_sp_frame_with_cross_shell_overlap()
     options.orbital_bands = {0, 1, 2, 3, 4};
     auto build = [&](const CrpaWindowOptions& selected)
     {
-        return build_crpa_window_input(basis, convention, {0}, {"Si"}, {overlap},
-                                       {{0, 0, 0}}, meanfield, selected);
+        return build_crpa_window_input(basis, convention, {0}, {"Si"}, {overlap}, {{0, 0, 0}},
+                                       meanfield, selected);
     };
     const auto sp = build(options);
     require(sp.sites.size() == 1 && sp.sites[0].n_orbitals == 4,
@@ -498,8 +498,7 @@ void test_parent_transport_across_band_reordering()
         // The excluded state swaps its energy rank, while a small complex
         // rotation changes the actual parent span. Fixed rank labels fail to
         // follow it; the declared wider/noncontiguous candidate follows it.
-        options.orbital_bands = update == 0 ? std::vector<int>{0, 1, 3}
-                                           : std::vector<int>{0, 2, 3};
+        options.orbital_bands = update == 0 ? std::vector<int>{0, 1, 3} : std::vector<int>{0, 2, 3};
         for (int spin = 0; spin < 2; ++spin)
             for (int k = 0; k < 2; ++k)
             {
@@ -519,8 +518,8 @@ void test_parent_transport_across_band_reordering()
                 coefficients[spin][k] = changed;
                 mf.get_eigenvectors()[spin][0][k] = transpose(changed, false);
             }
-        const auto current = build_crpa_window_input(basis, convention, {0}, {"X"}, {s, s}, ks,
-                                                      mf, options);
+        const auto current =
+            build_crpa_window_input(basis, convention, {0}, {"X"}, {s, s}, ks, mf, options);
         for (int spin = 0; spin < 2; ++spin)
             for (int k = 0; k < 2; ++k)
             {

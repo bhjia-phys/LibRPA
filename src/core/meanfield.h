@@ -189,13 +189,9 @@ ComplexMatrix get_symmetry_restored_dmat_cplx_R(
  * so a spin-mixing member cannot drop sparse blocks.
  */
 SpinorBlocks4<ComplexMatrix> get_symmetry_restored_dmat_cplx_R_spinor(
-    const SymmetryContext& ctx,
-    const std::vector<SpeciesBasisLayout>& wfc_layouts,
-    const MeanField& mf,
-    int ispin,
-    const std::vector<Vector3_Order<double>>& kfrac_list,
-    const Vector3_Order<int>& R,
-    const std::map<atom_t, size_t>& atom_nw,
+    const SymmetryContext& ctx, const std::vector<SpeciesBasisLayout>& wfc_layouts,
+    const MeanField& mf, int ispin, const std::vector<Vector3_Order<double>>& kfrac_list,
+    const Vector3_Order<int>& R, const std::map<atom_t, size_t>& atom_nw,
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets = nullptr,
     const symmetry_kstar_representative_indices_t* representative_k_indices = nullptr);
 

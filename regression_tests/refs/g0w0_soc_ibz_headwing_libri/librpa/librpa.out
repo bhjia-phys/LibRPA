@@ -12,7 +12,6 @@ LibRPA CMake build info:
 | Build time               : Oct 18 2026 12:38:40
 | Source code directory    : /home/bhjia/physics/topics/gw/workspace/development/LibRPA-crpa-msg-integration-20261018/src
 | Source code Git reference: refs/heads/feature/crpa-msg-integration-20261018
-| Source code Git hash     : 13bc5f3aa479a5cfba52309cfae31500553d49b3
 | C++ compiler             : /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx
 | C++ compiler flags       :   -fiopenmp
 | Fortran compiler         : /opt/intel/oneapi/mpi/2021.18/bin/mpiifx

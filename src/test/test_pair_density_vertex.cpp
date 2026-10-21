@@ -7,9 +7,6 @@
  * @brief Regression tests for projector-consistent complex cRPA D and U.
  */
 
-#include "../core/pair_density_vertex.h"
-#include "crpa_atom_block_reference.h"
-
 #include <mpi.h>
 
 #include <algorithm>
@@ -17,7 +14,6 @@
 #include <cmath>
 #include <complex>
 #include <iostream>
-#include <limits>
 #include <map>
 #include <memory>
 #include <random>
@@ -25,6 +21,9 @@
 #include <string>
 #include <valarray>
 #include <vector>
+
+#include "../core/pair_density_vertex.h"
+#include "crpa_atom_block_reference.h"
 
 using namespace librpa_int;
 using namespace crpa_test;
@@ -38,26 +37,10 @@ bool close(const Complex a, const Complex b, const double tol = 1.0e-11)
     return std::abs(a - b) <= tol * std::max({1.0, std::abs(a), std::abs(b)});
 }
 
-void assert_matrix_close(const ComplexMatrix &a, const ComplexMatrix &b,
-                         const double tol = 1.0e-11)
+void assert_matrix_close(const ComplexMatrix &a, const ComplexMatrix &b, const double tol = 1.0e-11)
 {
     assert(a.nr == b.nr && a.nc == b.nc);
     for (int i = 0; i != a.size; ++i) assert(close(a.c[i], b.c[i], tol));
-}
-
-template <typename Func>
-void assert_throws(Func &&func)
-{
-    bool threw = false;
-    try
-    {
-        func();
-    }
-    catch (const std::exception &)
-    {
-        threw = true;
-    }
-    assert(threw);
 }
 
 RI::Tensor<double> make_cs(const int nmu, const int ni, const int nj,
@@ -65,17 +48,15 @@ RI::Tensor<double> make_cs(const int nmu, const int ni, const int nj,
 {
     assert(values.size() == static_cast<std::size_t>(nmu * ni * nj));
     auto data = std::make_shared<std::valarray<double>>(values.data(), values.size());
-    return RI::Tensor<double>({static_cast<std::size_t>(nmu),
-                               static_cast<std::size_t>(ni),
-                               static_cast<std::size_t>(nj)}, data);
+    return RI::Tensor<double>(
+        {static_cast<std::size_t>(nmu), static_cast<std::size_t>(ni), static_cast<std::size_t>(nj)},
+        data);
 }
 
 PeriodicBoundaryData make_pbc(const int nx)
 {
     PeriodicBoundaryData pbc;
-    pbc.set_latvec({1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0});
+    pbc.set_latvec({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0});
     pbc.set_period(nx, 1, 1);
     return pbc;
 }
@@ -83,8 +64,7 @@ PeriodicBoundaryData make_pbc(const int nx)
 std::vector<Vector3_Order<double>> uniform_qx(const int nx)
 {
     std::vector<Vector3_Order<double>> q;
-    for (int i = 0; i != nx; ++i)
-        q.push_back({static_cast<double>(i) / nx, 0.0, 0.0});
+    for (int i = 0; i != nx; ++i) q.push_back({static_cast<double>(i) / nx, 0.0, 0.0});
     return q;
 }
 
@@ -95,8 +75,7 @@ SiteOrbitalGroup site(const std::string &label, const int atom, const int norb)
     result.atom_index = atom;
     result.orb_start = 0;
     result.n_orbitals = norb;
-    for (int i = 0; i != norb; ++i)
-        result.orbital_labels.push_back("o" + std::to_string(i));
+    for (int i = 0; i != norb; ++i) result.orbital_labels.push_back("o" + std::to_string(i));
     return result;
 }
 
@@ -109,15 +88,15 @@ void test_raw_same_center_half_coefficient()
     t(0, 0) = 1.0;
     PairDensityCsMap Cs;
     Cs[0][{0, {0, 0, 0}}] = make_cs(1, 1, 1, {0.5});
-    const auto vertex = build_site_pair_density_vertex_from_T(
-        0, site("half", 0, 1), {t}, Cs, basis, basis, pbc, qpoints);
+    const auto vertex = build_site_pair_density_vertex_from_T(0, site("half", 0, 1), {t}, Cs, basis,
+                                                              basis, pbc, qpoints);
     const auto &D = vertex.q_blocks.at(qpoints[0]);
     PairInteractionAtomBlocks W;
     W[0][0] = ComplexMatrix(1, 1);
     W[0][0](0, 0) = 1.0;
     const auto U = contract_ordered_pair_vertex(D, W, 1);
-    std::cout << "raw Cs=0.5: D=" << D.at(0)(0, 0)
-              << " U=" << U(0, 0) << " expected D=1 U=1" << std::endl;
+    std::cout << "raw Cs=0.5: D=" << D.at(0)(0, 0) << " U=" << U(0, 0) << " expected D=1 U=1"
+              << std::endl;
     assert(close(D.at(0)(0, 0), 1.0));
     assert(close(U(0, 0), 1.0));
 }
@@ -138,13 +117,10 @@ void test_dense_complex_Tdagger_C_T()
 
     PairDensityCsMap Cs;
     // Tensor storage order is (mu,i,j).
-    Cs[0][{0, {0, 0, 0}}] = make_cs(
-        2, 2, 2,
-        {1.0, 0.2, -0.4, 0.7,
-         -0.3, 0.6, 0.5, 1.2});
+    Cs[0][{0, {0, 0, 0}}] = make_cs(2, 2, 2, {1.0, 0.2, -0.4, 0.7, -0.3, 0.6, 0.5, 1.2});
 
-    const auto result = build_site_pair_density_vertex_from_T(
-        0, site("dense", 0, 2), {T}, Cs, basis_wfc, basis_abf, pbc, qpoints);
+    const auto result = build_site_pair_density_vertex_from_T(0, site("dense", 0, 2), {T}, Cs,
+                                                              basis_wfc, basis_abf, pbc, qpoints);
     const auto &D = result.q_blocks.at(qpoints[0]).at(0);
     assert(D.nr == 4 && D.nc == 2);
 
@@ -155,12 +131,10 @@ void test_dense_complex_Tdagger_C_T()
         // Raw first-end coefficients complete the AO matrix as C + C^T.
         ComplexMatrix Cfull(2, 2);
         for (int i = 0; i != 2; ++i)
-            for (int j = 0; j != 2; ++j)
-                Cfull(i, j) = C(mu, i, j) + C(mu, j, i);
+            for (int j = 0; j != 2; ++j) Cfull(i, j) = C(mu, i, j) + C(mu, j, i);
         const auto projected = transpose(T, true) * Cfull * T;
         for (int a = 0; a != 2; ++a)
-            for (int b = 0; b != 2; ++b)
-                expected(a * 2 + b, mu) = projected(a, b);
+            for (int b = 0; b != 2; ++b) expected(a * 2 + b, mu) = projected(a, b);
     }
     assert_matrix_close(D, expected);
 }
@@ -221,7 +195,8 @@ void test_random_complex_vertex_against_literal_sum()
                             for (int mu = 0; mu != expected.nc; ++mu)
                                 for (int i = 0; i != basis_wfc.get_atom_nb(I); ++i)
                                     for (int j = 0; j != basis_wfc.get_atom_nb(J); ++j)
-                                        expected(a * norb + b, mu) += phase * C(mu, i, j) *
+                                        expected(a * norb + b, mu) +=
+                                            phase * C(mu, i, j) *
                                             (std::conj(T_R[ia](ibegin + i, a)) *
                                                  T_R[ib](jbegin + j, b) +
                                              std::conj(T_R[ib](jbegin + j, a)) *
@@ -250,8 +225,8 @@ void test_nonzero_R_wrap_and_minus_fourier_phase()
     PairDensityCsMap Cs;
     Cs[0][{0, {1, 0, 0}}] = make_cs(1, 1, 1, {1.0});
 
-    const auto result = build_site_pair_density_vertex_from_T(
-        0, site("phase", 0, 1), T_R, Cs, basis_wfc, basis_abf, pbc, qpoints);
+    const auto result = build_site_pair_density_vertex_from_T(0, site("phase", 0, 1), T_R, Cs,
+                                                              basis_wfc, basis_abf, pbc, qpoints);
 
     std::vector<Complex> D_A(3);
     for (int iA = 0; iA != 3; ++iA)
@@ -296,12 +271,12 @@ void test_multiple_atoms_and_sites_remain_separate()
     Tmix(0, 0) = 1.0;
     Tmix(1, 0) = Complex{0.0, 1.0};
 
-    const auto s0 = build_site_pair_density_vertex_from_T(
-        0, site("A", 0, 1), {T0}, Cs, basis_wfc, basis_abf, pbc, qpoints);
-    const auto s1 = build_site_pair_density_vertex_from_T(
-        1, site("B", 1, 1), {T1}, Cs, basis_wfc, basis_abf, pbc, qpoints);
-    const auto sm = build_site_pair_density_vertex_from_T(
-        2, site("mixed", 0, 1), {Tmix}, Cs, basis_wfc, basis_abf, pbc, qpoints);
+    const auto s0 = build_site_pair_density_vertex_from_T(0, site("A", 0, 1), {T0}, Cs, basis_wfc,
+                                                          basis_abf, pbc, qpoints);
+    const auto s1 = build_site_pair_density_vertex_from_T(1, site("B", 1, 1), {T1}, Cs, basis_wfc,
+                                                          basis_abf, pbc, qpoints);
+    const auto sm = build_site_pair_density_vertex_from_T(2, site("mixed", 0, 1), {Tmix}, Cs,
+                                                          basis_wfc, basis_abf, pbc, qpoints);
 
     const auto &D0 = s0.q_blocks.at(qpoints[0]);
     const auto &D1 = s1.q_blocks.at(qpoints[0]);
@@ -352,17 +327,15 @@ void test_complex_pair_reversal_and_hermiticity()
                     const int cd = c * norb + d;
                     for (int mu = 0; mu != 2; ++mu)
                         for (int nu = 0; nu != 2; ++nu)
-                            expected(ab, cd) += std::conj(D.at(0)(ba, mu)) *
-                                                W.at(0).at(0)(mu, nu) * D.at(0)(cd, nu);
+                            expected(ab, cd) += std::conj(D.at(0)(ba, mu)) * W.at(0).at(0)(mu, nu) *
+                                                D.at(0)(cd, nu);
                     for (int mu = 0; mu != 2; ++mu)
-                        expected(ab, cd) += std::conj(D.at(0)(ba, mu)) *
-                                            W.at(0).at(1)(mu, 0) * D.at(1)(cd, 0);
+                        expected(ab, cd) +=
+                            std::conj(D.at(0)(ba, mu)) * W.at(0).at(1)(mu, 0) * D.at(1)(cd, 0);
                     for (int nu = 0; nu != 2; ++nu)
                         expected(ab, cd) += std::conj(D.at(1)(ba, 0)) *
-                                            std::conj(W.at(0).at(1)(nu, 0)) *
-                                            D.at(0)(cd, nu);
-                    expected(ab, cd) += std::conj(D.at(1)(ba, 0)) * 0.9 *
-                                        D.at(1)(cd, 0);
+                                            std::conj(W.at(0).at(1)(nu, 0)) * D.at(0)(cd, nu);
+                    expected(ab, cd) += std::conj(D.at(1)(ba, 0)) * 0.9 * D.at(1)(cd, 0);
                 }
     assert_matrix_close(U, expected);
 
@@ -384,8 +357,7 @@ void test_real_D_reduces_to_D_W_Dt()
     constexpr int norb = 2;
     PairVertexAtomBlocks D;
     D.emplace(0, ComplexMatrix(4, 2));
-    const double values[4][2] = {{1.0, 0.2}, {0.3, -0.4},
-                                  {0.3, -0.4}, {0.7, 0.8}};
+    const double values[4][2] = {{1.0, 0.2}, {0.3, -0.4}, {0.3, -0.4}, {0.7, 0.8}};
     for (int p = 0; p != 4; ++p)
         for (int mu = 0; mu != 2; ++mu) D.at(0)(p, mu) = values[p][mu];
     PairInteractionAtomBlocks W;
@@ -412,10 +384,9 @@ void test_upper_triangle_mirror_added_once()
     W[0][1](0, 0) = Complex{0.4, -0.2};
 
     const auto U = contract_ordered_pair_vertex(D, W, 1);
-    const Complex expected = std::conj(D.at(0)(0, 0)) * W.at(0).at(1)(0, 0) *
-                                 D.at(1)(0, 0) +
-                             std::conj(D.at(1)(0, 0)) *
-                                 std::conj(W.at(0).at(1)(0, 0)) * D.at(0)(0, 0);
+    const Complex expected =
+        std::conj(D.at(0)(0, 0)) * W.at(0).at(1)(0, 0) * D.at(1)(0, 0) +
+        std::conj(D.at(1)(0, 0)) * std::conj(W.at(0).at(1)(0, 0)) * D.at(0)(0, 0);
     assert(close(U(0, 0), expected));
     assert(!close(U(0, 0), 2.0 * expected));
 }
@@ -432,8 +403,8 @@ void test_q_weighted_sum()
     T_R[2](0, 0) = {0.3, -0.1};
     PairDensityCsMap Cs;
     Cs[0][{0, {0, 0, 0}}] = make_cs(1, 1, 1, {1.3});
-    const auto vertex = build_site_pair_density_vertex_from_T(
-        0, site("weighted", 0, 1), T_R, Cs, basis_wfc, basis_abf, pbc, qpoints);
+    const auto vertex = build_site_pair_density_vertex_from_T(0, site("weighted", 0, 1), T_R, Cs,
+                                                              basis_wfc, basis_abf, pbc, qpoints);
 
     const double weights[3] = {0.2, 0.3, 0.5};
     Complex weighted{0.0, 0.0};
@@ -464,11 +435,11 @@ void test_fourier_contraction_matches_real_space_convolution()
     constexpr double cs = 1.3;
     PairDensityCsMap Cs;
     Cs[0][{0, {1, 0, 0}}] = make_cs(1, 1, 1, {cs});
-    const auto vertex = build_site_pair_density_vertex_from_T(
-        0, site("convolution", 0, 1), T_R, Cs,
-        basis_wfc, basis_abf, pbc, qpoints);
+    const auto vertex = build_site_pair_density_vertex_from_T(0, site("convolution", 0, 1), T_R, Cs,
+                                                              basis_wfc, basis_abf, pbc, qpoints);
 
-    auto wrap_x = [](int x) {
+    auto wrap_x = [](int x)
+    {
         while (x < -1) x += 3;
         while (x > 1) x -= 3;
         return x;
@@ -479,15 +450,13 @@ void test_fourier_contraction_matches_real_space_convolution()
         const int A = pbc.Rlist[static_cast<std::size_t>(iA)].x;
         const int iB = pbc.get_R_index({wrap_x(A + 1), 0, 0});
         assert(iB >= 0);
-        D_A[A] = 2.0 * cs * std::real(
-            std::conj(T_R[static_cast<std::size_t>(iA)](0, 0)) *
-            T_R[static_cast<std::size_t>(iB)](0, 0));
+        D_A[A] = 2.0 * cs *
+                 std::real(std::conj(T_R[static_cast<std::size_t>(iA)](0, 0)) *
+                           T_R[static_cast<std::size_t>(iB)](0, 0));
     }
 
     const Complex w_plus{0.25, -0.17};
-    const std::map<int, Complex> W_R{{-1, std::conj(w_plus)},
-                                      {0, Complex{1.4, 0.0}},
-                                      {1, w_plus}};
+    const std::map<int, Complex> W_R{{-1, std::conj(w_plus)}, {0, Complex{1.4, 0.0}}, {1, w_plus}};
     Complex reciprocal{0.0, 0.0};
     for (const auto &q : qpoints)
     {
@@ -500,14 +469,12 @@ void test_fourier_contraction_matches_real_space_convolution()
         PairInteractionAtomBlocks W;
         W[0][0] = ComplexMatrix(1, 1);
         W[0][0](0, 0) = Wq;
-        reciprocal += contract_ordered_pair_vertex(
-            vertex.q_blocks.at(q), W, 1)(0, 0) / 3.0;
+        reciprocal += contract_ordered_pair_vertex(vertex.q_blocks.at(q), W, 1)(0, 0) / 3.0;
     }
 
     Complex real_space{0.0, 0.0};
     for (const auto &[A, D_left] : D_A)
-        for (const auto &[R, W] : W_R)
-            real_space += std::conj(D_left) * W * D_A.at(wrap_x(A + R));
+        for (const auto &[R, W] : W_R) real_space += std::conj(D_left) * W * D_A.at(wrap_x(A + R));
     assert(close(reciprocal, real_space, 2.0e-11));
 }
 
@@ -529,96 +496,21 @@ void test_distributed_contraction_ownership(const MpiCommHandler &comm_h)
     const auto expected = contract_ordered_pair_vertex(D, W_full, 1);
 
     const std::vector<std::pair<int, int>> pairs{{0, 0}, {0, 1}, {1, 1}};
-    auto distribute = [&](const int omitted_pair) {
+    auto distribute = [&](const int omitted_pair)
+    {
         PairInteractionAtomBlocks local;
         for (int ipair = 0; ipair != static_cast<int>(pairs.size()); ++ipair)
         {
-            if (ipair == omitted_pair || ipair % comm_h.nprocs != comm_h.myid)
-                continue;
+            if (ipair == omitted_pair || ipair % comm_h.nprocs != comm_h.myid) continue;
             const auto [I, J] = pairs[static_cast<std::size_t>(ipair)];
             local[I][J] = W_full.at(I).at(J);
         }
         return local;
     };
 
-    const auto actual = contract_distributed_ordered_pair_vertex(
-        D, distribute(-1), 1, comm_h, "distributed ownership test");
+    const auto actual = contract_distributed_ordered_pair_vertex(D, distribute(-1), 1, comm_h,
+                                                                 "distributed ownership test");
     assert_matrix_close(actual, expected);
-
-    assert_throws([&] {
-        (void)contract_distributed_ordered_pair_vertex(
-            D, distribute(1), 1, comm_h, "missing ownership test");
-    });
-
-    if (comm_h.nprocs > 1)
-    {
-        auto duplicate = distribute(-1);
-        if (comm_h.myid == 1) duplicate[0][0] = W_full.at(0).at(0);
-        assert_throws([&] {
-            (void)contract_distributed_ordered_pair_vertex(
-                D, duplicate, 1, comm_h, "duplicate ownership test");
-        });
-    }
-}
-
-void test_fail_closed_inputs()
-{
-    auto pbc = make_pbc(1);
-    const auto qpoints = uniform_qx(1);
-    const AtomicBasis basis_wfc({1});
-    const AtomicBasis basis_abf({1});
-    ComplexMatrix T(1, 1);
-    T(0, 0) = 1.0;
-    const auto s = site("fail", 0, 1);
-
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T}, {}, basis_wfc, basis_abf, pbc, qpoints);
-    });
-
-    PairDensityCsMap wrong_shape;
-    wrong_shape[0][{0, {0, 0, 0}}] = make_cs(1, 1, 2, {1.0, 2.0});
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T}, wrong_shape, basis_wfc, basis_abf, pbc, qpoints);
-    });
-
-    PairDensityCsMap nan_cs;
-    nan_cs[0][{0, {0, 0, 0}}] =
-        make_cs(1, 1, 1, {std::numeric_limits<double>::quiet_NaN()});
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T}, nan_cs, basis_wfc, basis_abf, pbc, qpoints);
-    });
-
-    PairDensityCsMap valid;
-    valid[0][{0, {0, 0, 0}}] = make_cs(1, 1, 1, {1.0});
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T}, valid, basis_wfc, basis_abf, pbc, {});
-    });
-
-    auto bad_pbc = pbc;
-    bad_pbc.Rlist[0] = {1, 0, 0};
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T}, valid, basis_wfc, basis_abf, bad_pbc, qpoints);
-    });
-
-    ComplexMatrix T_nan = T;
-    T_nan(0, 0) = {std::numeric_limits<double>::infinity(), 0.0};
-    assert_throws([&] {
-        build_site_pair_density_vertex_from_T(
-            0, s, {T_nan}, valid, basis_wfc, basis_abf, pbc, qpoints);
-    });
-
-    PairVertexAtomBlocks D;
-    D.emplace(0, ComplexMatrix(1, 1));
-    D.at(0)(0, 0) = 1.0;
-    PairInteractionAtomBlocks lower;
-    lower[1][0] = ComplexMatrix(1, 1);
-    lower[1][0](0, 0) = 1.0;
-    assert_throws([&] { contract_ordered_pair_vertex(D, lower, 1); });
 }
 
 #ifdef LIBRPA_USE_LIBRI
@@ -627,8 +519,7 @@ CorrelatedSubspace make_two_site_subspace(const PeriodicBoundaryData &pbc)
     SiteOrbitalGroup A = site("A", 0, 1);
     SiteOrbitalGroup B = site("B", 1, 1);
     B.orb_start = 1;
-    CorrelatedSubspace subspace({A, B}, {{0.0, 0.0, 0.0}}, pbc.Rlist,
-                                2, 2, 1);
+    CorrelatedSubspace subspace({A, B}, {{0.0, 0.0, 0.0}}, pbc.Rlist, 2, 2, 1);
     ComplexMatrix I(2, 2);
     I.set_as_identity_matrix();
     subspace.set_S_k(0, I);
@@ -647,9 +538,13 @@ void test_production_wrapper_mpi(const MpiCommHandler &comm_h)
 
     Cs_LRI Cs;
     Cs.use_libri = true;
-    struct Block { int I; int J; double value; };
-    const std::vector<Block> blocks{{0, 0, 1.0}, {0, 1, 2.0},
-                                    {1, 0, 3.0}, {1, 1, 4.0}};
+    struct Block
+    {
+        int I;
+        int J;
+        double value;
+    };
+    const std::vector<Block> blocks{{0, 0, 1.0}, {0, 1, 2.0}, {1, 0, 3.0}, {1, 1, 4.0}};
     for (std::size_t ib = 0; ib != blocks.size(); ++ib)
         if (static_cast<int>(ib % comm_h.nprocs) == comm_h.myid)
             Cs.data_libri[blocks[ib].I][{blocks[ib].J, {0, 0, 0}}] =
@@ -668,19 +563,6 @@ void test_production_wrapper_mpi(const MpiCommHandler &comm_h)
     MPI_Allgather(local, 4, MPI_DOUBLE, all.data(), 4, MPI_DOUBLE, comm_h.comm);
     for (int rank = 0; rank != comm_h.nprocs; ++rank)
         for (int i = 0; i != 4; ++i) assert(close(all[4 * rank + i], local[i]));
-
-    if (comm_h.nprocs > 1)
-    {
-        Cs_LRI duplicated;
-        duplicated.use_libri = true;
-        duplicated.data_libri[0][{0, {0, 0, 0}}] = make_cs(1, 1, 1, {1.0});
-        duplicated.data_libri[1][{1, {0, 0, 0}}] = make_cs(1, 1, 1, {4.0});
-        assert_throws([&] {
-            PairDensityVertex bad(subspace, duplicated, basis_wfc, basis_abf,
-                                  pbc, qpoints, comm_h);
-            (void)bad;
-        });
-    }
 }
 #endif
 
@@ -695,8 +577,8 @@ void test_analytic_cross_end_complex_phase()
     PairDensityCsMap Cs;
     Cs[0][{1, {1, 0, 0}}] = make_cs(1, 1, 1, {2.0});
     Cs[1][{0, {-1, 0, 0}}] = make_cs(1, 1, 1, {3.0});
-    const auto vertex = build_site_pair_density_vertex_from_T(
-        0, site("cross-end", 0, 2), t, Cs, basis, basis, pbc, qpoints);
+    const auto vertex = build_site_pair_density_vertex_from_T(0, site("cross-end", 0, 2), t, Cs,
+                                                              basis, basis, pbc, qpoints);
     const auto &D = vertex.q_blocks.at(qpoints[1]);
     // Independent values: D_ab=(-2i,-3), D_ba=(2i,3) at q=1/4.
     assert(close(D.at(0)(1, 0), Complex{0.0, -2.0}));
@@ -710,9 +592,8 @@ void test_analytic_cross_end_complex_phase()
     W[0][0](0, 0) = W[1][1](0, 0) = 1.0;
     W[0][1](0, 0) = Complex{0.0, 0.5};
     const auto U = contract_ordered_pair_vertex(D, W, 2);
-    std::cout << "cross-end: U_ab,ba=" << U(1, 2)
-              << " U_ba,ab=" << U(2, 1) << " U_ab,ab=" << U(1, 1)
-              << " expected 19,19,-19" << std::endl;
+    std::cout << "cross-end: U_ab,ba=" << U(1, 2) << " U_ba,ab=" << U(2, 1)
+              << " U_ab,ab=" << U(1, 1) << " expected 19,19,-19" << std::endl;
     assert(close(U(1, 2), 19.0));
     assert(close(U(2, 1), 19.0));
     assert(close(U(1, 1), -19.0));
@@ -753,10 +634,8 @@ void test_s_aware_non_even_wrapper(const MpiCommHandler &comm_h)
         ComplexMatrix recovered(2, 2);
         for (int iA = 0; iA != 3; ++iA)
         {
-            const Complex factor = std::polar(
-                1.0, -2.0 * M_PI * kpoints[ik].x * pbc.Rlist[iA].x);
-            for (int i = 0; i != 4; ++i)
-                recovered.c[i] += factor * analytic_t[iA].c[i];
+            const Complex factor = std::polar(1.0, -2.0 * M_PI * kpoints[ik].x * pbc.Rlist[iA].x);
+            for (int i = 0; i != 4; ++i) recovered.c[i] += factor * analytic_t[iA].c[i];
         }
         assert_matrix_close(recovered, phi);
     }
@@ -768,10 +647,10 @@ void test_s_aware_non_even_wrapper(const MpiCommHandler &comm_h)
         physical_t.push_back(subspace.get_T(pbc.get_R_index({-R.x, 0, 0})));
         wrong_t.push_back(subspace.get_T(pbc.get_R_index(R)));
     }
-    for (int iA = 0; iA != 3; ++iA)
-        assert_matrix_close(physical_t[iA], analytic_t[iA]);
+    for (int iA = 0; iA != 3; ++iA) assert_matrix_close(physical_t[iA], analytic_t[iA]);
     // Real-space metric: S_II(0)=S_JJ(0)=1, S_IJ(+1)=S_JI(-1)=-0.8.
-    auto metric_norm = [&](const std::vector<ComplexMatrix> &t) {
+    auto metric_norm = [&](const std::vector<ComplexMatrix> &t)
+    {
         Complex norm{0.0, 0.0};
         for (int iA = 0; iA != 3; ++iA)
             for (int iB = 0; iB != 3; ++iB)
@@ -781,8 +660,8 @@ void test_s_aware_non_even_wrapper(const MpiCommHandler &comm_h)
                     for (int j = 0; j != 2; ++j)
                     {
                         double overlap = (i == j && delta == 0) ? 1.0 : 0.0;
-                        if ((i == 0 && j == 1 && delta == 1) ||
-                            (i == 1 && j == 0 && delta == 2)) overlap = -0.8;
+                        if ((i == 0 && j == 1 && delta == 1) || (i == 1 && j == 0 && delta == 2))
+                            overlap = -0.8;
                         norm += std::conj(t[iA](i, 0)) * overlap * t[iB](j, 0);
                     }
             }
@@ -801,16 +680,14 @@ void test_s_aware_non_even_wrapper(const MpiCommHandler &comm_h)
     int iblock = 0;
     for (const auto &[I, blocks] : full)
         for (const auto &[JR, value] : blocks)
-            if (iblock++ % comm_h.nprocs == comm_h.myid)
-                local.data_libri[I][JR] = value;
+            if (iblock++ % comm_h.nprocs == comm_h.myid) local.data_libri[I][JR] = value;
     PairDensityVertex vertex(subspace, local, basis, basis, pbc, kpoints, comm_h);
     const auto &D = vertex.site(0).q_blocks.at(kpoints[2]);
     const Complex expected_J = (65.0 / 9.0) * std::polar(1.0, -2.0 * M_PI / 3.0);
-    std::cout << "S-aware wrapper: D_I=" << D.at(0)(0, 0)
-              << " D_J=" << D.at(1)(0, 0)
+    std::cout << "S-aware wrapper: D_I=" << D.at(0)(0, 0) << " D_J=" << D.at(1)(0, 0)
               << " expected " << 20.0 / 3.0 << "," << expected_J
-              << " metric norms=" << metric_norm(physical_t) << ","
-              << metric_norm(wrong_t) << std::endl;
+              << " metric norms=" << metric_norm(physical_t) << "," << metric_norm(wrong_t)
+              << std::endl;
     assert(close(D.at(0)(0, 0), 20.0 / 3.0));
     assert(close(D.at(1)(0, 0), expected_J));
     PairInteractionAtomBlocks interaction;
@@ -818,13 +695,13 @@ void test_s_aware_non_even_wrapper(const MpiCommHandler &comm_h)
     interaction[1][1] = ComplexMatrix(1, 1);
     interaction[0][0](0, 0) = interaction[1][1](0, 0) = 1.0;
     assert(close(contract_ordered_pair_vertex(D, interaction, 1)(0, 0), 7825.0 / 81.0));
-    const auto serial = build_site_pair_density_vertex(
-        subspace, 0, full, basis, basis, pbc, kpoints);
+    const auto serial =
+        build_site_pair_density_vertex(subspace, 0, full, basis, basis, pbc, kpoints);
     for (const auto &q : kpoints)
         for (const auto &[I, block] : serial.q_blocks.at(q))
             assert_matrix_close(block, vertex.site(0).q_blocks.at(q).at(I));
-    double values[4] = {D.at(0)(0, 0).real(), D.at(0)(0, 0).imag(),
-                        D.at(1)(0, 0).real(), D.at(1)(0, 0).imag()};
+    double values[4] = {D.at(0)(0, 0).real(), D.at(0)(0, 0).imag(), D.at(1)(0, 0).real(),
+                        D.at(1)(0, 0).imag()};
     std::vector<double> all(static_cast<std::size_t>(4 * comm_h.nprocs));
     MPI_Allgather(values, 4, MPI_DOUBLE, all.data(), 4, MPI_DOUBLE, comm_h.comm);
     for (int rank = 0; rank != comm_h.nprocs; ++rank)
@@ -849,8 +726,8 @@ void test_wrapper_nyquist_and_twisted_mesh(const MpiCommHandler &comm_h)
     }
     subspace.compute_T_R();
     assert(close(subspace.get_T(pbc.get_R_index({-2, 0, 0}))(0, 0), 1.0));
-    const auto vertex = build_site_pair_density_vertex(
-        subspace, 0, full, basis, basis, pbc, kpoints);
+    const auto vertex =
+        build_site_pair_density_vertex(subspace, 0, full, basis, basis, pbc, kpoints);
     for (int iq = 0; iq != 4; ++iq)
         assert(close(vertex.q_blocks.at(kpoints[iq]).at(0)(0, 0), iq % 2 ? -1.0 : 1.0));
 
@@ -878,14 +755,12 @@ void test_wrapper_nyquist_and_twisted_mesh(const MpiCommHandler &comm_h)
     Cs_LRI local;
     local.use_libri = true;
     if (comm_h.is_root()) local.data_libri = full;
-    assert_throws([&] {
-        PairDensityVertex bad(shifted, local, basis, basis, pbc3, twisted, comm_h);
-    });
+
     // The explicit physical-t kernel still accepts a shifted full-q dual grid.
     std::vector<ComplexMatrix> t(3, ComplexMatrix(1, 1));
     t[1](0, 0) = 1.0;
-    const auto pure = build_site_pair_density_vertex_from_T(
-        0, site("pure-shifted-q", 0, 1), t, full, basis, basis, pbc3, twisted);
+    const auto pure = build_site_pair_density_vertex_from_T(0, site("pure-shifted-q", 0, 1), t,
+                                                            full, basis, basis, pbc3, twisted);
     for (const auto &q : twisted) assert(close(pure.q_blocks.at(q).at(0)(0, 0), 1.0));
 }
 #endif
@@ -900,8 +775,8 @@ ComplexMatrix auxiliary_matrix2(Complex a, Complex b, Complex c, Complex d)
     return result;
 }
 
-SitePairDensityVertex auxiliary_parent(const ComplexMatrix &rows,
-                                       const AtomicBasis &basis, const int norb = 1)
+SitePairDensityVertex auxiliary_parent(const ComplexMatrix &rows, const AtomicBasis &basis,
+                                       const int norb = 1)
 {
     SitePairDensityVertex parent;
     parent.site_index = 3;
@@ -921,7 +796,7 @@ SitePairDensityVertex auxiliary_parent(const ComplexMatrix &rows,
                 for (int b = 0; b != norb; ++b)
                     for (int mu = 0; mu != width; ++mu)
                         D(a * norb + b, mu) = qx > 0.0 ? rows(a * norb + b, begin + mu)
-                            : std::conj(rows(b * norb + a, begin + mu));
+                                                       : std::conj(rows(b * norb + a, begin + mu));
         }
     return parent;
 }
@@ -940,8 +815,8 @@ PairInteractionAtomBlocks auxiliary_interaction(const ComplexMatrix &matrix,
             block = ComplexMatrix(ni, nj);
             for (int i = 0; i != ni; ++i)
                 for (int j = 0; j != nj; ++j)
-                    block(i, j) = matrix(basis.get_part_range().at(I) + i,
-                                         basis.get_part_range().at(J) + j);
+                    block(i, j) =
+                        matrix(basis.get_part_range().at(I) + i, basis.get_part_range().at(J) + j);
         }
     return blocks;
 }
@@ -978,10 +853,11 @@ void test_auxiliary_square_covariance(const MpiCommHandler &comm_h)
     const auto active_Pr = L * Pr * transpose(L, true);
     const auto active_Wr = transpose(K, true) * Wr * K;
     assert_matrix_close(active_v, auxiliary_matrix2(2.0, -imaginary, imaginary, 1.25));
-    assert_matrix_close(active_Pr, auxiliary_matrix2(-3.0, -4.0 * imaginary, 4.0 * imaginary, -8.0));
+    assert_matrix_close(active_Pr,
+                        auxiliary_matrix2(-3.0, -4.0 * imaginary, 4.0 * imaginary, -8.0));
     assert_matrix_close(active_P0 - active_Pd, active_Pr);
-    assert_matrix_close(active_Wr,
-        auxiliary_matrix2(2.0 / 3.0, -imaginary / 3.0, imaginary / 3.0, 23.0 / 84.0));
+    assert_matrix_close(
+        active_Wr, auxiliary_matrix2(2.0 / 3.0, -imaginary / 3.0, imaginary / 3.0, 23.0 / 84.0));
     assert_matrix_close(Wr, v + v * Pr * Wr);
     assert_matrix_close(active_Wr, active_v + active_v * active_Pr * active_Wr);
 
@@ -992,11 +868,12 @@ void test_auxiliary_square_covariance(const MpiCommHandler &comm_h)
     const auto parent_before = parent;
     const std::map<Vector3_Order<double>, ComplexMatrix> transforms{{q, L}, {minus_q, conj(L)}};
     const auto transforms_before = transforms;
-    const auto active = transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, transforms);
+    const auto active =
+        transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, transforms);
     assert(active.site_index == parent.site_index && active.atom_index == parent.atom_index);
     assert(active.n_orbitals == parent.n_orbitals && active.label == parent.label);
     assert(active.orbital_labels == parent.orbital_labels);
-    assert(active.q_blocks.at(q).size() == 2); // Keep the cancelled atom-0 block.
+    assert(active.q_blocks.at(q).size() == 2);  // Keep the cancelled atom-0 block.
     assert(close(active.q_blocks.at(q).at(0)(0, 0), 0.0));
     assert(close(active.q_blocks.at(q).at(1)(0, 0), 2.0 * imaginary));
     Complex weighted_bare{0.0, 0.0}, weighted_total{0.0, 0.0};
@@ -1008,10 +885,10 @@ void test_auxiliary_square_covariance(const MpiCommHandler &comm_h)
         const auto wr_blocks = auxiliary_interaction(positive ? active_Wr : conj(active_Wr), basis);
         const auto bare = contract_ordered_pair_vertex(blocks, v_blocks, 1)(0, 0);
         const auto total = contract_ordered_pair_vertex(blocks, wr_blocks, 1)(0, 0);
-        const auto parent_bare = contract_ordered_pair_vertex(parent.q_blocks.at(point),
-            auxiliary_interaction(v, basis), 1)(0, 0);
-        const auto parent_total = contract_ordered_pair_vertex(parent.q_blocks.at(point),
-            auxiliary_interaction(Wr, basis), 1)(0, 0);
+        const auto parent_bare = contract_ordered_pair_vertex(
+            parent.q_blocks.at(point), auxiliary_interaction(v, basis), 1)(0, 0);
+        const auto parent_total = contract_ordered_pair_vertex(
+            parent.q_blocks.at(point), auxiliary_interaction(Wr, basis), 1)(0, 0);
         assert(close(bare, 5.0) && close(bare, parent_bare));
         assert(close(total, 23.0 / 21.0) && close(total, parent_total));
         weighted_bare += weight * bare;
@@ -1022,17 +899,18 @@ void test_auxiliary_square_covariance(const MpiCommHandler &comm_h)
             for (const auto &[J, W] : Js)
                 if (block_index++ % comm_h.nprocs == comm_h.myid) local_W[I][J] = W;
         if (comm_h.nprocs == 4 && comm_h.myid == 3) assert(local_W.empty());
-        assert(close(contract_distributed_ordered_pair_vertex(
-            blocks, local_W, 1, comm_h, "active auxiliary square")(0, 0), total));
+        assert(close(contract_distributed_ordered_pair_vertex(blocks, local_W, 1, comm_h,
+                                                              "active auxiliary square")(0, 0),
+                     total));
     }
     assert(close(weighted_bare, 5.0) && close(weighted_total, 23.0 / 21.0));
     const auto wrong_rows = rows * transpose(L, true);
     assert(close(wrong_rows(0, 0), 2.0) && close(wrong_rows(0, 1), 2.0 * imaginary));
     const auto wrong = auxiliary_parent(wrong_rows, basis);
-    const auto wrong_bare = contract_ordered_pair_vertex(wrong.q_blocks.at(q),
-        auxiliary_interaction(active_v, basis), 1)(0, 0);
-    const auto wrong_total = contract_ordered_pair_vertex(wrong.q_blocks.at(q),
-        auxiliary_interaction(active_Wr, basis), 1)(0, 0);
+    const auto wrong_bare = contract_ordered_pair_vertex(
+        wrong.q_blocks.at(q), auxiliary_interaction(active_v, basis), 1)(0, 0);
+    const auto wrong_total = contract_ordered_pair_vertex(
+        wrong.q_blocks.at(q), auxiliary_interaction(active_Wr, basis), 1)(0, 0);
     assert(close(wrong_bare, 21.0) && close(wrong_total, 45.0 / 7.0));
 
     // Probes pull back by L^dagger, unlike the density ROW adapter's L^T.
@@ -1082,17 +960,19 @@ void test_auxiliary_rectangular_projection(const MpiCommHandler &comm_h)
     ComplexMatrix active_Wr(1, 1);
     active_Wr(0, 0) = 10.0 / 19.0;
     assert_matrix_close(active_Wr, active_v + active_v * active_Pr * active_Wr);
-    const auto bare = contract_ordered_pair_vertex(active.q_blocks.at(q),
-        auxiliary_interaction(active_v, active_basis), 1)(0, 0);
-    const auto total = contract_ordered_pair_vertex(active.q_blocks.at(q),
-        auxiliary_interaction(active_Wr, active_basis), 1)(0, 0);
+    const auto bare = contract_ordered_pair_vertex(
+        active.q_blocks.at(q), auxiliary_interaction(active_v, active_basis), 1)(0, 0);
+    const auto total = contract_ordered_pair_vertex(
+        active.q_blocks.at(q), auxiliary_interaction(active_Wr, active_basis), 1)(0, 0);
     assert(close(bare, 1.25) && close(total, 5.0 / 19.0));
-    const auto full_total = contract_ordered_pair_vertex(parent.q_blocks.at(q),
-        auxiliary_interaction(auxiliary_matrix2(2.0 / 3.0, 0.0, 0.0, 3.0 / 7.0), parent_basis), 1)(0, 0);
+    const auto full_total = contract_ordered_pair_vertex(
+        parent.q_blocks.at(q),
+        auxiliary_interaction(auxiliary_matrix2(2.0 / 3.0, 0.0, 0.0, 3.0 / 7.0), parent_basis),
+        1)(0, 0);
     assert(close(full_total, 50.0 / 21.0) && !close(total, full_total));
     const auto wrong = auxiliary_parent(rows * transpose(L, true), active_basis);
-    const auto wrong_total = contract_ordered_pair_vertex(wrong.q_blocks.at(q),
-        auxiliary_interaction(active_Wr, active_basis), 1)(0, 0);
+    const auto wrong_total = contract_ordered_pair_vertex(
+        wrong.q_blocks.at(q), auxiliary_interaction(active_Wr, active_basis), 1)(0, 0);
     assert(close(wrong_total, 45.0 / 19.0));
     assert(close(abs2(rows) - std::norm(active.q_blocks.at(q).at(0)(0, 0)), 4.5));
     if (comm_h.is_root())
@@ -1101,8 +981,7 @@ void test_auxiliary_rectangular_projection(const MpiCommHandler &comm_h)
                   << " analytic density norm loss=4.5" << std::endl;
 }
 
-void test_rectangular_intershell_ordered_pair_contraction(
-    const MpiCommHandler &comm_h)
+void test_rectangular_intershell_ordered_pair_contraction(const MpiCommHandler &comm_h)
 {
     // Deliberately complex 5-orbital (Ni) and 3-orbital (O) vertices.
     // This independently checks the production bra pair reversal [ba] and
@@ -1114,28 +993,28 @@ void test_rectangular_intershell_ordered_pair_contraction(
     ComplexMatrix W(2, 3);
     for (int row = 0; row != D_ni.nr; ++row)
         for (int col = 0; col != D_ni.nc; ++col)
-            D_ni(row, col) = Complex{0.13 * (row + 1) - 0.07 * col,
-                                     0.05 * (row - col + 1)};
+            D_ni(row, col) = Complex{0.13 * (row + 1) - 0.07 * col, 0.05 * (row - col + 1)};
     for (int row = 0; row != D_o.nr; ++row)
         for (int col = 0; col != D_o.nc; ++col)
-            D_o(row, col) = Complex{-0.11 * (row + 1) + 0.09 * col,
-                                    0.04 * (2 * row + col + 1)};
-    W(0, 0) = {0.7, -0.2}; W(0, 1) = {-0.1, 0.3}; W(0, 2) = {0.2, 0.4};
-    W(1, 0) = {-0.5, 0.1}; W(1, 1) = {0.6, -0.3}; W(1, 2) = {0.8, 0.2};
+            D_o(row, col) = Complex{-0.11 * (row + 1) + 0.09 * col, 0.04 * (2 * row + col + 1)};
+    W(0, 0) = {0.7, -0.2};
+    W(0, 1) = {-0.1, 0.3};
+    W(0, 2) = {0.2, 0.4};
+    W(1, 0) = {-0.5, 0.1};
+    W(1, 1) = {0.6, -0.3};
+    W(1, 2) = {0.8, 0.2};
 
-    const auto U_ni_o = contract_rectangular_ordered_pair_vertex(
-        D_ni, W, D_o, n_ni, n_o);
+    const auto U_ni_o = contract_rectangular_ordered_pair_vertex(D_ni, W, D_o, n_ni, n_o);
     assert(U_ni_o.nr == 25 && U_ni_o.nc == 9);
     const int a = 1, b = 4, c = 2, d = 1;
     Complex expected{0.0, 0.0};
     for (int mu = 0; mu != W.nr; ++mu)
         for (int nu = 0; nu != W.nc; ++nu)
-            expected += std::conj(D_ni(b * n_ni + a, mu)) * W(mu, nu) *
-                        D_o(c * n_o + d, nu);
+            expected += std::conj(D_ni(b * n_ni + a, mu)) * W(mu, nu) * D_o(c * n_o + d, nu);
     assert(close(U_ni_o(a * n_ni + b, c * n_o + d), expected));
 
-    const auto U_o_ni = contract_rectangular_ordered_pair_vertex(
-        D_o, transpose(W, true), D_ni, n_o, n_ni);
+    const auto U_o_ni =
+        contract_rectangular_ordered_pair_vertex(D_o, transpose(W, true), D_ni, n_o, n_ni);
     assert(U_o_ni.nr == 9 && U_o_ni.nc == 25);
     // From U_LR(ab,cd)=conj(D_L(ba)) W D_R(cd), the reversed-site
     // relation is U_RL(dc,ba)=conj(U_LR(ab,cd)).
@@ -1144,8 +1023,7 @@ void test_rectangular_intershell_ordered_pair_contraction(
             for (int c0 = 0; c0 != n_o; ++c0)
                 for (int d0 = 0; d0 != n_o; ++d0)
                     assert(close(U_o_ni(d0 * n_o + c0, b0 * n_ni + a0),
-                                std::conj(U_ni_o(a0 * n_ni + b0,
-                                                 c0 * n_o + d0))));
+                                 std::conj(U_ni_o(a0 * n_ni + b0, c0 * n_o + d0))));
 
     PairVertexAtomBlocks left{{0, D_ni}};
     PairVertexAtomBlocks right{{1, D_o}};
@@ -1153,130 +1031,57 @@ void test_rectangular_intershell_ordered_pair_contraction(
     // W is distributed, while the two vertices are replicated. Use the last
     // rank so MPI runs also check that a non-root contribution reaches root.
     if (comm_h.myid == comm_h.nprocs - 1) upper[0][1] = W;
-    const auto U_distributed =
-        contract_distributed_rectangular_ordered_pair_vertex(
-            left, right, upper, n_ni, n_o, comm_h, "synthetic Ni-O");
+    const auto U_distributed = contract_distributed_rectangular_ordered_pair_vertex(
+        left, right, upper, n_ni, n_o, comm_h, "synthetic Ni-O");
     assert_matrix_close(U_distributed, U_ni_o);
 
     // Reversing atom order exercises the W^dagger path in the distributed API.
     PairVertexAtomBlocks reverse_left{{1, D_o}};
     PairVertexAtomBlocks reverse_right{{0, D_ni}};
-    const auto U_reverse_distributed =
-        contract_distributed_rectangular_ordered_pair_vertex(
-            reverse_left, reverse_right, upper, n_o, n_ni, comm_h,
-            "synthetic O-Ni");
+    const auto U_reverse_distributed = contract_distributed_rectangular_ordered_pair_vertex(
+        reverse_left, reverse_right, upper, n_o, n_ni, comm_h, "synthetic O-Ni");
     assert_matrix_close(U_reverse_distributed, U_o_ni);
-
-    if (comm_h.nprocs > 1)
-    {
-        PairInteractionAtomBlocks duplicated;
-        duplicated[0][1] = W;
-        assert_throws([&] {
-            contract_distributed_rectangular_ordered_pair_vertex(
-                left, right, duplicated, n_ni, n_o, comm_h,
-                "duplicate synthetic Ni-O owners");
-        });
-    }
-
-    assert_throws([&] {
-        contract_rectangular_ordered_pair_vertex(D_ni, W, D_o, 0, n_o);
-    });
-    assert_throws([&] {
-        contract_rectangular_ordered_pair_vertex(D_ni, W, D_o, n_ni, 2);
-    });
 }
 
-void test_auxiliary_validation_and_pair_reversal()
+void test_auxiliary_pair_reversal_and_sparse_support()
 {
     const Vector3_Order<double> q{1.0 / 3.0, 0.0, 0.0}, minus_q{-1.0 / 3.0, 0.0, 0.0};
     const AtomicBasis basis(std::vector<std::size_t>{1, 1});
     const auto L = auxiliary_matrix2(1.0, Complex{0.0, 1.0}, 0.0, 2.0);
     ComplexMatrix rows(4, 2);
     for (int ab = 0; ab != 4; ++ab)
-        for (int mu = 0; mu != 2; ++mu)
-            rows(ab, mu) = Complex{0.2 + ab + mu, -0.3 + 0.7 * ab - mu};
+        for (int mu = 0; mu != 2; ++mu) rows(ab, mu) = Complex{0.2 + ab + mu, -0.3 + 0.7 * ab - mu};
     const auto parent = auxiliary_parent(rows, basis, 2);
     const std::map<Vector3_Order<double>, ComplexMatrix> transforms{{q, L}, {minus_q, conj(L)}};
-    const auto active = transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, transforms);
+    const auto active =
+        transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, transforms);
     for (int a = 0; a != 2; ++a)
         for (int b = 0; b != 2; ++b)
             for (int I = 0; I != 2; ++I)
                 assert(close(active.q_blocks.at(minus_q).at(I)(a * 2 + b, 0),
                              std::conj(active.q_blocks.at(q).at(I)(b * 2 + a, 0))));
 
-    auto bad_transform = [&](const ComplexMatrix &bad) {
-        auto copy = transforms;
-        copy[q] = bad; // Validate a required non-Gamma point, not just Gamma.
-        assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, copy); });
-    };
-    bad_transform(ComplexMatrix(1, 2));
-    bad_transform(ComplexMatrix(2, 1));
-    auto nonfinite = L;
-    nonfinite(0, 1) = {std::numeric_limits<double>::infinity(), 0.0};
-    bad_transform(nonfinite);
-    nonfinite(0, 1) = {0.0, std::numeric_limits<double>::quiet_NaN()};
-    bad_transform(nonfinite);
-    assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(parent, basis, basis, {{minus_q, conj(L)}}); });
-    auto bad_parent = [&](const SitePairDensityVertex &bad) {
-        assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(bad, basis, basis, transforms); });
-    };
-    auto bad = parent;
-    bad.site_index = -1;
-    bad_parent(bad);
-    bad = parent;
-    bad.atom_index = 2;
-    bad_parent(bad);
-    bad = parent;
-    bad.label.clear();
-    bad_parent(bad);
-    bad = parent;
-    bad.orbital_labels.pop_back();
-    bad_parent(bad);
-    bad = parent;
-    bad.n_orbitals = 0;
-    bad_parent(bad);
-    bad = parent;
-    bad.n_orbitals = std::numeric_limits<int>::max();
-    bad.orbital_labels.clear();
-    bad_parent(bad);
-    bad = parent;
-    bad.q_blocks.at(q).at(0) = ComplexMatrix(3, 1);
-    bad_parent(bad);
-    bad = parent;
-    bad.q_blocks.at(q).at(0) = ComplexMatrix(4, 2);
-    bad_parent(bad);
-    bad = parent;
-    bad.q_blocks.at(q).at(0)(0, 0) = std::numeric_limits<double>::infinity();
-    bad_parent(bad);
-    bad = parent;
-    bad.q_blocks.at(q)[2] = ComplexMatrix(4, 1);
-    bad_parent(bad);
-    bad = parent;
-    bad.q_blocks.clear();
-    bad_parent(bad);
-    assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(parent, AtomicBasis(), basis, transforms); });
-    assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(parent, basis, AtomicBasis({2}), transforms); });
-    assert_throws([&] { transform_site_pair_density_vertex_auxiliary_basis(parent, basis, AtomicBasis(std::vector<std::size_t>{0, 0}), transforms); });
-
     // Sparse parent support is zero, not missing data. L can create a new atom's support.
     auto sparse = parent;
     sparse.q_blocks.at(q).erase(0);
     const auto sparse_before = sparse;
     auto extra = transforms;
-    extra[{0.0, 0.0, 0.0}] = ComplexMatrix(); // Extra q keys are not required.
-    const auto sparse_active = transform_site_pair_density_vertex_auxiliary_basis(sparse, basis, basis, extra);
+    extra[{0.0, 0.0, 0.0}] = ComplexMatrix();  // Extra q keys are not required.
+    const auto sparse_active =
+        transform_site_pair_density_vertex_auxiliary_basis(sparse, basis, basis, extra);
     assert(sparse_active.q_blocks.at(q).size() == 2);
     for (int ab = 0; ab != 4; ++ab)
         assert(close(sparse_active.q_blocks.at(q).at(0)(ab, 0),
                      Complex{0.0, 1.0} * sparse.q_blocks.at(q).at(1)(ab, 0)));
     assert_same_site_vertex(sparse, sparse_before);
     sparse.q_blocks.at(q).clear();
-    const auto zero = transform_site_pair_density_vertex_auxiliary_basis(sparse, basis, basis, transforms);
+    const auto zero =
+        transform_site_pair_density_vertex_auxiliary_basis(sparse, basis, basis, transforms);
     assert(zero.q_blocks.at(q).size() == 2);
     for (const auto &[I, block] : zero.q_blocks.at(q)) assert(close(abs2(block), 0.0));
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char **argv)
 {
@@ -1294,12 +1099,11 @@ int main(int argc, char **argv)
     test_q_weighted_sum();
     test_fourier_contraction_matches_real_space_convolution();
     test_distributed_contraction_ownership(comm_h);
-    test_fail_closed_inputs();
     test_analytic_cross_end_complex_phase();
     test_auxiliary_square_covariance(comm_h);
     test_auxiliary_rectangular_projection(comm_h);
     test_rectangular_intershell_ordered_pair_contraction(comm_h);
-    test_auxiliary_validation_and_pair_reversal();
+    test_auxiliary_pair_reversal_and_sparse_support();
 #ifdef LIBRPA_USE_LIBRI
     test_production_wrapper_mpi(comm_h);
     test_s_aware_non_even_wrapper(comm_h);

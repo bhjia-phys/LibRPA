@@ -2,8 +2,13 @@
 #undef NDEBUG
 #endif
 
-#include "../core/qsgw/distributed_matrix.h"
+#include <mpi.h>
 
+#include <cassert>
+#include <complex>
+#include <iostream>
+
+#include "../core/qsgw/distributed_matrix.h"
 #include "../io/global_io.h"
 #include "../math/lapack_connector.h"
 #include "../math/utils_matrix_m_mpi.h"
@@ -11,19 +16,14 @@
 #include "../mpi/global_mpi.h"
 #include "../mpi/utils_blacs.h"
 
-#include <cassert>
-#include <complex>
-#include <iostream>
-#include <mpi.h>
-
 using librpa_int::ArrayDesc;
 using librpa_int::BlacsCtxtHandler;
+using librpa_int::collect_blacs_matrix_root;
+using librpa_int::cplxdb;
+using librpa_int::init_local_mat;
 using librpa_int::MAJOR;
 using librpa_int::Matz;
 using librpa_int::ScalapackConnector;
-using librpa_int::cplxdb;
-using librpa_int::init_local_mat;
-using librpa_int::collect_blacs_matrix_root;
 using librpa_int::qsgw::broadcast_spin_k_matrix_map;
 using librpa_int::qsgw::SpinKMatrixMap;
 
@@ -42,16 +42,13 @@ Matz make_global_matrix(const int rows, const int columns)
     {
         for (int column = 0; column < columns; ++column)
         {
-            result(row, column) =
-                cplxdb(10.0 * row + column + 0.25,
-                       row - 2.0 * column + 0.5);
+            result(row, column) = cplxdb(10.0 * row + column + 0.25, row - 2.0 * column + 0.5);
         }
     }
     return result;
 }
 
-void test_distributed_complex_matrix_is_collected_exactly_once_on_root(
-    BlacsCtxtHandler& blacs)
+void test_distributed_complex_matrix_is_collected_exactly_once_on_root(BlacsCtxtHandler& blacs)
 {
     blacs.set_square_grid();
     assert(blacs.nprocs == 4);
@@ -71,11 +68,8 @@ void test_distributed_complex_matrix_is_collected_exactly_once_on_root(
         global = make_global_matrix(rows, columns);
     }
     auto local = init_local_mat<cplxdb>(distributed_desc, MAJOR::COL);
-    ScalapackConnector::pgemr2d_f(
-        rows, columns,
-        global.ptr(), 1, 1, root_desc.desc,
-        local.ptr(), 1, 1, distributed_desc.desc,
-        distributed_desc.ictxt());
+    ScalapackConnector::pgemr2d_f(rows, columns, global.ptr(), 1, 1, root_desc.desc, local.ptr(), 1,
+                                  1, distributed_desc.desc, distributed_desc.ictxt());
 
     const auto collected = collect_blacs_matrix_root(local, distributed_desc);
     if (root_desc.is_src())
@@ -99,8 +93,7 @@ void test_distributed_complex_matrix_is_collected_exactly_once_on_root(
     distributed_desc.barrier();
 }
 
-void test_spin_k_matrix_map_is_broadcast_with_layout(
-    const librpa_int::MpiCommHandler& communicator)
+void test_spin_k_matrix_map_is_broadcast_with_layout(const librpa_int::MpiCommHandler& communicator)
 {
     SpinKMatrixMap values;
     if (communicator.myid == 0)
@@ -139,7 +132,7 @@ void test_spin_k_matrix_map_is_broadcast_with_layout(
     assert_close(second(0, 2), {-3.0, 2.5});
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv)
 {
@@ -152,8 +145,7 @@ int main(int argc, char** argv)
     BlacsCtxtHandler blacs(librpa_int::global::mpi_comm_global);
     blacs.init();
     test_distributed_complex_matrix_is_collected_exactly_once_on_root(blacs);
-    test_spin_k_matrix_map_is_broadcast_with_layout(
-        librpa_int::global::mpi_comm_global_h);
+    test_spin_k_matrix_map_is_broadcast_with_layout(librpa_int::global::mpi_comm_global_h);
     blacs.exit();
 
     const int rank = librpa_int::global::myid_global;

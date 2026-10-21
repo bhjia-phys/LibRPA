@@ -12,8 +12,8 @@
 namespace librpa_driver
 {
 
-librpa_int::ComplexMatrix spatial_nao_overlap(const librpa_int::ComplexMatrix& overlap,
-                                             int n_aos, int n_spinor)
+librpa_int::ComplexMatrix spatial_nao_overlap(const librpa_int::ComplexMatrix& overlap, int n_aos,
+                                              int n_spinor)
 {
     if (n_aos <= 0 || (n_spinor != 1 && n_spinor != 2) || overlap.nr != overlap.nc)
         throw std::runtime_error("invalid cRPA overlap dimensions");

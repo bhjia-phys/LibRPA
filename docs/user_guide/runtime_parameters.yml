@@ -262,8 +262,8 @@ blocks:
       convention, described below. Standalone cRPA also accepts option 6 and
       reuses these native velocity fields for its constrained optical calculation.
       Other tasks reject option 6. Direct
-      library/API callers use option 3 with the public velocity setter, not
-      option 6.
+      library/API callers use option 3 with the public velocity setter or
+      `librpa_prepare_native_velocity`.
       Existing options 3 and 4 still accept `g0w0_headwing_velocity = native`;
       their default `file` uses the existing velocity reader.
       The native path retains the loaded SCF energies,
@@ -294,25 +294,16 @@ blocks:
       band channel alongside the SCF grid and requires matching band E/C and
       full band Vxc inputs. Without that metadata file, only the SCF grid is
       computed, including for periodic inputs. Geometry does not select the
-      channel. `qsgw_cut_mode = 1` is the default shifted-reference cut on both
+      channel. `qsgw_cut_mode = 1` selects the shifted-reference cut on both
       the SCF grid and optional band path. The retained empty-state count
-      defaults to 10, and `qsgw_cut_shift_ha` defaults to 0.00367493 Hartree
-      (approximately 0.1 eV), matching the historical NiO cut. Set
-      `qsgw_cut_mode = 0` for an uncut update. The cut does not truncate the
-      response or self-energy bands. HR export is enabled by default.
+      defaults to 10, and the shift defaults to 2 eV (explicit
+      `qsgw_cut_shift_ha` values are in Hartree). HR export is enabled by default.
       Each band-enabled iteration writes `KS_band_spin_S_N.dat`,
       `EXX_band_spin_S_N.dat`, and `QSGW_band_spin_S_N.dat` for plotting;
       figures are not generated automatically. Keep band-channel presence and
-      original path inputs unchanged when restarting a checkpoint. Older
-      checkpoints also require their original cut mode, keep count and shift
-      to be specified explicitly if they differ from the new defaults.
+      original path inputs unchanged when restarting a checkpoint.
       These experimental parameters apply to `task = qsgw`.
-      QSGW defaults to `qsgw_output_qp = true`, `replace_w_head = true` and
-      the driver preset `option_dielect_func = 6`. Set `qsgw_output_qp = false`
-      to disable quasiparticle output, or `replace_w_head = false` to disable
-      the default correction (omitted dielectric option then becomes 0).
-      Symmetry switches retain their false defaults. These task defaults do
-      not change library or G0W0 defaults. `option_dielect_func = 6` selects
+      `option_dielect_func = 6` selects
       `qsgw_headwing_velocity = current_hr` and resolves to existing numerical
       option 3: rebuild velocity from the current native-baseline Hamiltonian
       in the entering E/C frame, then rebuild analytic head/wing using the live
@@ -331,9 +322,9 @@ blocks:
       This is an experimental full, unshifted mesh path with complete square
       AO-spinor/state frames and replicated wavefunctions. SOC uses one physical
       channel and two components with full-dimension S/r. Explicit magnetic
-      symmetry and paired IBZ sources are supported; the latter are expanded
-      internally into full-grid E/C/f and source-gauge Vxc. Live-state and target
-      covariance checks reject inconsistent symmetry assumptions.
+      operations and paired IBZ source E/C/f and Vxc can be expanded internally
+      to the full mesh when all three symmetry switches are enabled. Live-state
+      and endpoint-weight covariance checks must pass before magnetic reduction.
       Finite-BvK interpolation retains the off-mesh and convergence limitations
       described in [QSGW](qsgw.md#analytic-head-and-wing-feedback).
       Independent-grid head/wing and Hartree updates are not supported.

@@ -2,17 +2,17 @@
 #undef NDEBUG
 #endif
 
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <iostream>
+#include <limits>
+
 #include "../core/analycont.h"
 #include "../core/qsgw/correlation_potential.h"
-#include "../utils/constants.h"
 #include "../io/stl_io_helper.h"
-
-#include <cassert>
-#include <algorithm>
-#include <functional>
-#include <limits>
+#include "../utils/constants.h"
 #include "testutils.h"
-#include <iostream>
 
 using std::vector;
 using std::cout;
@@ -184,13 +184,13 @@ void test_qsgw_pade_zero_offdiagonal()
         matrix(0, 1) = matrix(1, 0) = 0.0;
         sigma.emplace(frequency, matrix);
     }
-    for (const auto mode : {qsgw::CorrelationPotentialMode::ModeA,
-                           qsgw::CorrelationPotentialMode::ModeB})
+    for (const auto mode :
+         {qsgw::CorrelationPotentialMode::ModeA, qsgw::CorrelationPotentialMode::ModeB})
     {
         qsgw::CorrelationPotentialSettings settings;
         settings.mode = mode;
-        const Matz potential = qsgw::build_qsgw_correlation_potential(
-            meanfield, frequencies, sigma, 0, 0, settings);
+        const Matz potential =
+            qsgw::build_qsgw_correlation_potential(meanfield, frequencies, sigma, 0, 0, settings);
         assert(std::abs(potential(0, 0) - 0.4 / 1.5) < 1.0e-13);
         assert(std::abs(potential(1, 1) - 0.3 / 2.5) < 1.0e-13);
         assert(potential(0, 1) == cplxdb(0.0, 0.0));
@@ -204,8 +204,8 @@ void test_analycont_pade_singular_reciprocal_differences()
                           const std::function<cplxdb(cplxdb)> &value,
                           const std::function<cplxdb(cplxdb)> &derivative)
     {
-        for (const cplxdb scale : {cplxdb{1.0, 0.0}, cplxdb{1.0e-20, 0.0},
-                                    cplxdb{0.6, 0.8}, cplxdb{6.0e-21, 8.0e-21}})
+        for (const cplxdb scale :
+             {cplxdb{1.0, 0.0}, cplxdb{1.0e-20, 0.0}, cplxdb{0.6, 0.8}, cplxdb{6.0e-21, 8.0e-21}})
         {
             vector<cplxdb> data;
             double data_scale = 0.0;
@@ -223,8 +223,8 @@ void test_analycont_pade_singular_reciprocal_differences()
                        64.0 * std::numeric_limits<double>::epsilon() * data_scale);
                 assert(std::abs(pade.get_derivative(x) / scale - derivative(x)) < 1.0e-11);
             }
-            for (const cplxdb x : {cplxdb{-0.7, 0.0}, cplxdb{0.0, 0.0},
-                                     cplxdb{0.31, 0.0}, cplxdb{1.2, 0.17}})
+            for (const cplxdb x :
+                 {cplxdb{-0.7, 0.0}, cplxdb{0.0, 0.0}, cplxdb{0.31, 0.0}, cplxdb{1.2, 0.17}})
             {
                 assert(std::abs(pade.get(x) / scale - value(x)) < 1.0e-11);
                 assert(std::abs(pade.get_derivative(x) / scale - derivative(x)) < 1.0e-11);
@@ -246,13 +246,13 @@ void test_analycont_pade_singular_reciprocal_differences()
     {
         const auto value = [=](cplxdb z) { return 1.0 / (z + 1.0) + residue / (z - 2.0); };
         const auto derivative = [=](cplxdb z)
-        {
-            return -1.0 / std::pow(z + 1.0, 2) - residue / std::pow(z - 2.0, 2);
-        };
+        { return -1.0 / std::pow(z + 1.0, 2) - residue / std::pow(z - 2.0, 2); };
         vector<cplxdb> data;
         for (const auto x : xs) data.push_back(value(x));
-        if (residue == cplxdb(1.7, -0.6)) data[0] = data[1] = {-0.3, -0.6};
-        else data[0] = 0.0;
+        if (residue == cplxdb(1.7, -0.6))
+            data[0] = data[1] = {-0.3, -0.6};
+        else
+            data[0] = 0.0;
         check(xs, data, value, derivative);
     }
     // An internal nested denominator can vanish at a regular numerator root.
@@ -262,8 +262,7 @@ void test_analycont_pade_singular_reciprocal_differences()
         vector<cplxdb> data;
         for (const auto x : root_xs) data.push_back(scale * (x - 3.0) / (x + 1.0));
         const AnalyContPade pade(root_xs.size(), root_xs, data);
-        assert(std::abs(pade.get(3.0) / scale) <
-               64.0 * std::numeric_limits<double>::epsilon());
+        assert(std::abs(pade.get(3.0) / scale) < 64.0 * std::numeric_limits<double>::epsilon());
         assert(std::abs(pade.get_derivative(3.0) / scale - 0.25) < 1.0e-13);
     }
 }
@@ -273,28 +272,26 @@ void test_analycont_pade_bi2se3_degenerate_pair()
     // Captured Gamma Sigma(12,13): samples 0 and 4 are bit-identical.
     // References: independent 90-decimal [7/8] polynomial interpolation.
     const vector<double> frequencies{
-        0.0025993820787061869, 0.0082933952369329336, 0.01559849436121215,
-        0.026034639453473118, 0.041908889091695815, 0.066926838652596854,
-        0.1072375165443057, 0.17327458156727799, 0.28307174355137721,
-        0.46836247951091897, 0.78609830679002524, 1.3410801386313786,
-        2.3340575185040118, 4.1840272211235652, 7.9800939324232596, 18.710213363255843};
-    const vector<cplxdb> original{
-        {9.0084190107475592e-15, -1.4285447824669006e-15},
-        {9.0222967985553737e-15, -1.4341826337638253e-15},
-        {9.0136231811754897e-15, -1.4333152720258369e-15},
-        {9.0240315220313505e-15, -1.4307131868118717e-15},
-        {9.0084190107475592e-15, -1.4285447824669006e-15},
-        {9.010153734223536e-15, -1.4298458250738832e-15},
-        {8.9719898177520463e-15, -1.4107638668381384e-15},
-        {8.9355606247565333e-15, -1.4003555259822775e-15},
-        {8.8627022387655074e-15, -1.3747683547116196e-15},
-        {8.6996382320236876e-15, -1.3418086086680603e-15},
-        {8.31799906730879e-15, -1.2654807757250808e-15},
-        {7.5234957153114124e-15, -1.1058862159352145e-15},
-        {6.0021432268797525e-15, -7.5113526509795747e-16},
-        {3.9794556538907955e-15, -2.8449465006019636e-16},
-        {2.0755966390062497e-15, 1.0061396160665481e-16},
-        {7.4213638706632779e-16, 1.4311468676808659e-16}};
+        0.0025993820787061869, 0.0082933952369329336, 0.01559849436121215, 0.026034639453473118,
+        0.041908889091695815,  0.066926838652596854,  0.1072375165443057,  0.17327458156727799,
+        0.28307174355137721,   0.46836247951091897,   0.78609830679002524, 1.3410801386313786,
+        2.3340575185040118,    4.1840272211235652,    7.9800939324232596,  18.710213363255843};
+    const vector<cplxdb> original{{9.0084190107475592e-15, -1.4285447824669006e-15},
+                                  {9.0222967985553737e-15, -1.4341826337638253e-15},
+                                  {9.0136231811754897e-15, -1.4333152720258369e-15},
+                                  {9.0240315220313505e-15, -1.4307131868118717e-15},
+                                  {9.0084190107475592e-15, -1.4285447824669006e-15},
+                                  {9.010153734223536e-15, -1.4298458250738832e-15},
+                                  {8.9719898177520463e-15, -1.4107638668381384e-15},
+                                  {8.9355606247565333e-15, -1.4003555259822775e-15},
+                                  {8.8627022387655074e-15, -1.3747683547116196e-15},
+                                  {8.6996382320236876e-15, -1.3418086086680603e-15},
+                                  {8.31799906730879e-15, -1.2654807757250808e-15},
+                                  {7.5234957153114124e-15, -1.1058862159352145e-15},
+                                  {6.0021432268797525e-15, -7.5113526509795747e-16},
+                                  {3.9794556538907955e-15, -2.8449465006019636e-16},
+                                  {2.0755966390062497e-15, 1.0061396160665481e-16},
+                                  {7.4213638706632779e-16, 1.4311468676808659e-16}};
     vector<cplxdb> xs;
     for (const double frequency : frequencies) xs.emplace_back(0.0, frequency);
     for (const double scale : {1.0, 1.0e14, 1.0e-20})

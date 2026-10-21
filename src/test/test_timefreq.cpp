@@ -1,18 +1,16 @@
-#include "../core/timefreq.h"
-
-#include "../mpi/global_mpi.h"
-#include "../io/global_io.h"
-#include "../io/stl_io_helper.h"
-
-#include "mpi_test_config.h"
-#include "testutils.h"
-
-#include <iostream>
 #include <array>
-#include <stdexcept>
 #include <cassert>
 #include <cmath>
+#include <iostream>
+#include <stdexcept>
 #include <vector>
+
+#include "../core/timefreq.h"
+#include "../io/global_io.h"
+#include "../io/stl_io_helper.h"
+#include "../mpi/global_mpi.h"
+#include "mpi_test_config.h"
+#include "testutils.h"
 
 using namespace std;
 using namespace librpa_int;
@@ -104,8 +102,8 @@ void check_minimax_narrow_transition_interval()
                 double actual = 0.0;
                 for (std::size_t j = 0; j < grid.size(); ++j)
                     actual += transform(i, j) * std::exp(-delta * times[j]);
-                const double expected = 2.0 * delta / (delta * delta +
-                                                       frequencies[i] * frequencies[i]);
+                const double expected =
+                    2.0 * delta / (delta * delta + frequencies[i] * frequencies[i]);
                 if (!std::isfinite(actual) || std::abs(actual - expected) > 1e-7)
                     throw std::runtime_error("native minimax transition transform is inaccurate");
             }

@@ -467,8 +467,8 @@ LiveVelocityResult compute_live_headwing_velocity(const MeanField& reference, co
         live.get_n_spinor() != reference.get_n_spinor())
         throw std::invalid_argument(
             "QSGW current-HR velocity has inconsistent AO/mean-field dimensions");
-    auto reconstruction = reconstruct_qsgw_hamiltonian(
-        reference, current_hamiltonian, operators, kpoints, period, lattice);
+    auto reconstruction = reconstruct_qsgw_hamiltonian(reference, current_hamiltonian, operators,
+                                                       kpoints, period, lattice);
     LiveVelocityResult result;
     result.hamiltonian = std::move(reconstruction.hamiltonian);
     result.reference_metric_residual = reconstruction.reference_metric_residual;

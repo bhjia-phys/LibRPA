@@ -318,35 +318,35 @@ CrpaLocalProjection prepare_crpa_local_projection(CrpaContext &context,
             const Matz dense(bare.nr, bare.nc, bare.c, MAJOR::ROW, MAJOR::COL);
             representative.emplace(q, get_local_mat(dense, desc));
         }
-        const auto bare = restore_symmetry_dense_wq_map(
-            representative, chi.pbc, chi.qpoint_view(), chi.symmetry_context, basis, desc);
+        const auto bare = restore_symmetry_dense_wq_map(representative, chi.pbc, chi.qpoint_view(),
+                                                        chi.symmetry_context, basis, desc);
         for (const auto &q : qs)
             for (auto &tensor : result.tensors)
             {
                 const int n = result.sites[tensor.site_index].n_orbitals;
                 tensor.bare += q_weight * contract_crpa_blacs(
-                    vertices[tensor.spin_left][tensor.site_index].at(q),
-                    vertices[tensor.spin_right][tensor.site_index].at(q), bare.at(q),
-                    desc, n, n, comm);
+                                              vertices[tensor.spin_left][tensor.site_index].at(q),
+                                              vertices[tensor.spin_right][tensor.site_index].at(q),
+                                              bare.at(q), desc, n, n, comm);
             }
     }
     else
     {
-    for (const auto &q : qs)
-    {
-        const auto bare = retained_coulomb(context, q);
-        for (auto &tensor : result.tensors)
+        for (const auto &q : qs)
         {
-            const int n = result.sites[tensor.site_index].n_orbitals;
-            ComplexMatrix block(n * n, n * n);
-            if (comm.is_root())
-                block = contract_rectangular_ordered_pair_vertex(
-                    vertices[tensor.spin_left][tensor.site_index].at(q), bare,
-                    vertices[tensor.spin_right][tensor.site_index].at(q), n, n);
-            comm.bcast(block.c, block.size, 0);
-            tensor.bare += q_weight * block;
+            const auto bare = retained_coulomb(context, q);
+            for (auto &tensor : result.tensors)
+            {
+                const int n = result.sites[tensor.site_index].n_orbitals;
+                ComplexMatrix block(n * n, n * n);
+                if (comm.is_root())
+                    block = contract_rectangular_ordered_pair_vertex(
+                        vertices[tensor.spin_left][tensor.site_index].at(q), bare,
+                        vertices[tensor.spin_right][tensor.site_index].at(q), n, n);
+                comm.bcast(block.c, block.size, 0);
+                tensor.bare += q_weight * block;
+            }
         }
-    }
     }
 
     return projection;

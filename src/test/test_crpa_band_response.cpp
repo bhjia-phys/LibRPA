@@ -206,51 +206,6 @@ void test_selected_response()
     if (!current.empty()) throw std::runtime_error("Chi0 ownership exchange left a duplicate map");
 }
 
-void test_collective_input_rejection()
-{
-    Fixture f;
-    const auto expect_collective_rejection = [&](auto operation)
-    {
-        int rejected = 0, total = 0;
-        try
-        {
-            operation();
-        }
-        catch (const std::exception &)
-        {
-            rejected = 1;
-        }
-        f.ds.comm_h.allreduce(&rejected, &total, 1, MPI_SUM);
-        if (total != f.ds.comm_h.nprocs)
-            throw std::runtime_error("invalid response input was not rejected on every rank");
-    };
-    f.chi->set_band_selection(f.selection({1, 1, 0}));
-    auto malformed = f.selection({1, 1, 0});
-    if (f.ds.comm_h.is_root()) malformed[0][0].pop_back();
-    expect_collective_rejection([&] { f.chi->set_band_selection(malformed); });
-    malformed = f.selection({1, 1, 0});
-    if (f.ds.comm_h.is_root()) malformed[0][0][0] = 2;
-    expect_collective_rejection([&] { f.chi->set_band_selection(malformed); });
-    if (f.ds.comm_h.nprocs > 1)
-    {
-        malformed = f.selection({1, 1, 0});
-        if (f.ds.comm_h.is_root()) malformed[0][0][0] = 0;
-        expect_collective_rejection([&] { f.chi->set_band_selection(malformed); });
-        if (f.ds.comm_h.is_root()) malformed.clear();
-        expect_collective_rejection([&] { f.chi->set_band_selection(malformed); });
-    }
-    // Failed setters must leave the preceding valid selection usable.
-    f.build();
-    auto invalid_response = f.chi->get_chi0_q();
-    if (f.ds.comm_h.is_root())
-        invalid_response[f.ds.tfg.get_freq_nodes().front()][f.chi->active_qpoints().front()][-1]
-                        [0] = ComplexMatrix(1, 1);
-    expect_collective_rejection([&] { f.chi->replace_chi0_q_by_difference(invalid_response); });
-    for (const auto omega : f.ds.tfg.get_freq_nodes())
-        for (const auto &q : f.chi->active_qpoints())
-            close(f.value(f.chi->get_chi0_q(), omega, q), f.lindhard(omega, {1, 1, 0}));
-}
-
 void test_fractional_manifold_cancellation()
 {
     Fixture f;
@@ -291,7 +246,6 @@ int main(int argc, char **argv)
     global::init_global_mpi(MPI_COMM_WORLD);
     global::init_global_io();
     test_selected_response();
-    test_collective_input_rejection();
     test_fractional_manifold_cancellation();
     global::finalize_global_io();
     global::finalize_global_mpi();

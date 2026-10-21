@@ -2,11 +2,10 @@
 
 #include "chi0.h"
 #include "correlated_subspace.h"
+#include "dielecmodel.h"
 
 namespace librpa_int
 {
-class diele_func;
-
 //! One site's ordered tensor U_ab,cd, with independently chosen spin frames.
 struct CrpaOnsiteTensor
 {

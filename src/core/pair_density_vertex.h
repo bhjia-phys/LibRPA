@@ -27,18 +27,17 @@
 #include <string>
 #include <vector>
 
+#include "../math/complexmatrix.h"
+#include "../mpi/base_mpi.h"
 #include "atomic_basis.h"
 #include "correlated_subspace.h"
 #include "pbc.h"
 #include "ri.h"
-#include "../math/complexmatrix.h"
-#include "../mpi/base_mpi.h"
 
 namespace librpa_int
 {
 
-using PairDensityCsMap =
-    std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>>;
+using PairDensityCsMap = std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>>;
 using PairVertexAtomBlocks = std::map<int, ComplexMatrix>;
 
 /*! Complex pair-density vertex for one correlated site. */
@@ -66,19 +65,14 @@ struct SitePairDensityVertex
  * independently accepts any complete full-q grid dual to pbc.Rlist.
  */
 SitePairDensityVertex build_site_pair_density_vertex_from_T(
-    int site_index, const SiteOrbitalGroup &site,
-    const std::vector<ComplexMatrix> &T_R_site,
-    const PairDensityCsMap &Cs_complete,
-    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-    const PeriodicBoundaryData &pbc,
-    const std::vector<Vector3_Order<double>> &qpoints);
+    int site_index, const SiteOrbitalGroup &site, const std::vector<ComplexMatrix> &T_R_site,
+    const PairDensityCsMap &Cs_complete, const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
+    const PeriodicBoundaryData &pbc, const std::vector<Vector3_Order<double>> &qpoints);
 
 /*! Build one site vertex from an already materialized CorrelatedSubspace. */
 SitePairDensityVertex build_site_pair_density_vertex(
-    CorrelatedSubspace &subspace, int site_index,
-    const PairDensityCsMap &Cs_complete,
-    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-    const PeriodicBoundaryData &pbc,
+    CorrelatedSubspace &subspace, int site_index, const PairDensityCsMap &Cs_complete,
+    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf, const PeriodicBoundaryData &pbc,
     const std::vector<Vector3_Order<double>> &qpoints);
 
 /*! Express a site vertex in an active auxiliary basis without modifying inputs.
@@ -92,8 +86,8 @@ SitePairDensityVertex build_site_pair_density_vertex(
  * No inverse, positivity, or time-reversal assumption is imposed on L.
  */
 SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
-    const SitePairDensityVertex &parent,
-    const AtomicBasis &parent_basis_abf, const AtomicBasis &active_basis_abf,
+    const SitePairDensityVertex &parent, const AtomicBasis &parent_basis_abf,
+    const AtomicBasis &active_basis_abf,
     const std::map<Vector3_Order<double>, ComplexMatrix> &sinvS);
 
 /*! Contract a rectangular ordered-pair vertex between two distinct sites.
@@ -103,9 +97,10 @@ SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
  * W is directed from the left auxiliary block to the right block; the
  * Hermitian reverse is obtained by conjugate-transposing the result.
  */
-ComplexMatrix contract_rectangular_ordered_pair_vertex(
-    const ComplexMatrix &D_left, const ComplexMatrix &W,
-    const ComplexMatrix &D_right, int n_left, int n_right);
+ComplexMatrix contract_rectangular_ordered_pair_vertex(const ComplexMatrix &D_left,
+                                                       const ComplexMatrix &W,
+                                                       const ComplexMatrix &D_right, int n_left,
+                                                       int n_right);
 
 /*! Production wrapper that redistributes the relevant distributed LibRI Cs
  * blocks to every rank and builds every configured site deterministically.
@@ -113,12 +108,10 @@ ComplexMatrix contract_rectangular_ordered_pair_vertex(
 class PairDensityVertex
 {
 public:
-    PairDensityVertex(
-        CorrelatedSubspace &subspace, const Cs_LRI &Cs,
-        const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-        const PeriodicBoundaryData &pbc,
-        const std::vector<Vector3_Order<double>> &qpoints,
-        const MpiCommHandler &comm_h);
+    PairDensityVertex(CorrelatedSubspace &subspace, const Cs_LRI &Cs, const AtomicBasis &basis_wfc,
+                      const AtomicBasis &basis_abf, const PeriodicBoundaryData &pbc,
+                      const std::vector<Vector3_Order<double>> &qpoints,
+                      const MpiCommHandler &comm_h);
 
     const std::vector<SitePairDensityVertex> &sites() const { return sites_; }
     const SitePairDensityVertex &site(int site_index) const;
@@ -127,4 +120,4 @@ private:
     std::vector<SitePairDensityVertex> sites_;
 };
 
-} // namespace librpa_int
+}  // namespace librpa_int

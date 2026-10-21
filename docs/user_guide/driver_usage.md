@@ -122,26 +122,13 @@ key from input files.
 
 With band inputs, the existing band-cut options remain active and each
 iteration writes `KS_band_spin_S_N.dat`, `EXX_band_spin_S_N.dat`, and
-`QSGW_band_spin_S_N.dat` for plotting. By default, `qsgw_output_qp = true`
-also solves the diagonal GW quasiparticle equation on the entering state and
-writes `GW_band_spin_S_N.dat` in the ordinary G0W0 band format and
-`energy_qp_N` in its native grid QP format, plus full-precision grid/path
-rows and solver statuses in `qsgw_qp.csv`. GW update `N` uses state `N-1`; the QSGW table
-contains the new state `N`. Set `qsgw_output_qp = false` to disable the
-additional roots. The driver writes energy data rather
+`QSGW_band_spin_S_N.dat` for plotting. Native per-update QP diagnostics are
+written when `qsgw_output_qp = true`; see [QSGW](qsgw.md#quasiparticle-roots-during-iteration). The driver writes energy data rather
 than PNG figures. Continue a checkpoint with the same band-channel presence
 and original band inputs. See [QSGW](qsgw.md) for the full Vxc input, option-6
 head/wing feedback, output and restart requirements.
 
 ### Native G0W0 head/wing velocity
-
-The native-velocity preset is numbered **6**, replacing the former fork
-value 5. Inputs that used the old native-velocity preset must select 6.
-Value 5 follows upstream: use the input dielectric data on the current
-frequency grid and replace only the head along the Gamma s-subspace
-direction, preserving the wings. It requires auxiliary l-shell metadata
-and does not select native velocity. Numerical options 0--4 retain their
-existing meanings.
 
 For analytic head/wing correction, the standalone `g0w0` driver and its
 `g0w0_band` alias accept `option_dielect_func = 6`. This experimental preset adds
@@ -175,12 +162,10 @@ Option 6 requires `replace_w_head = true`, `use_scalapack_gw_wc = true`, and
 `use_pyatb = false`. It selects `g0w0_headwing_velocity = native` when the selector
 is omitted; an explicit `native` is also accepted, while an explicit `file` is
 rejected. The driver log records requested option 6 and effective numerical
-option 3. The `qsgw` task also accepts option 6, selecting
-`qsgw_headwing_velocity = current_hr` to rebuild velocity from each iteration's
-complete current Hamiltonian and eigenpairs; see [QSGW](qsgw.md#analytic-head-and-wing-feedback).
-Other tasks reject option 6. Direct library/API callers must use option 3 and
-supply velocity through the public velocity setter; option 6 is resolved only
-by these standalone drivers.
+option 3. Other tasks reject option 6. Direct library/API callers must use
+option 3 and either supply velocity through the public setter or construct it with
+`librpa_prepare_native_velocity`; option 6 is
+resolved only by the standalone G0W0 driver.
 
 The previous explicit selection remains supported with the same H/S/r inputs
 and other settings:
@@ -198,46 +183,9 @@ once into Ha/Bohr. S is dimensionless, and the structure reader supplies the lat
 in Bohr. Option 4 uses the same native velocity for the existing analytic head-only
 prescription. The `g0w0_band` task alias accepts the same options.
 
-The native mode accepts one/two collinear spin channels, or a two-component SOC
-reference selected by `use_spinor_wfc = true` (`use_soc = true` is an alias).
-SOC has one physical channel, one full complex H file and full-dimension S/r
-files of dimension `2 * N_AO`; do not provide `g0w0_fn_hr_spin1`. Both components
-are assembled as AO-major/spinor-minor ket rows, preserving cross-spinor H and
-all band velocity entries. The original SCF energies, coefficients and occupations
-remain the entering state.
-
-Complete square AO-spinor/band frames are required. The scalar route uses a
-uniform full-BZ mesh. SOC also accepts an IBZ mesh when the supplied magnetic
-operations generate complete, nonoverlapping k-stars and its k weights equal
-the star multiplicities divided by the full mesh size. Enable
-`use_symmetry_rpa = true` and/or `use_symmetry_gw = true` and provide the usual
-AO/ABF shell metadata and magnetic operation table. Native H/S/r are evaluated
-only at the loaded representatives; head and wing reconstruct each member's
-complete complex velocity matrix and both spinor coefficients in one transported
-KS gauge. No independently diagonalized full-BZ frame is required.
-
-The main IBZ SCF input retains LibRPA's geometric occupation convention:
-its stored mean-field weights are `w_star * f`, where
-`w_star = star_size / N_full`. Thus raw `band_out`/API occupations are
-`N_IBZ * w_star * f`, because the ordinary input setter divides by `N_IBZ`.
-The native/API and ordinary velocity-file routes convert only the owned
-head/wing mean-field copy to `f / N_IBZ`; the main response state is unchanged.
-The separate PyATB head/wing `band_out` instead contains plain occupations
-`f` and already supplies this normalization, so it is not converted again.
-
-The file route likewise accepts paired IBZ wavefunctions and velocity matrices.
-An IBZ `pyatb_librpa_df/k_path_info` must list exactly the active representatives;
-the existing complete full-BZ PyATB input route remains available. Supply all
-band-pair matrix elements in the same source gauge as the paired wavefunctions.
-Time-reversed members use the odd polar-vector action on velocity and the joint
-spinor time-reversal action on coefficients. Degenerate states may use any common
-source gauge; rotating the velocities independently of the coefficients is invalid.
-
-IBZ-only reconstruction currently requires `use_kpara_scf_eigvec = false`;
-ordinary multi-rank execution is supported. The existing paired full-BZ file
-route retains its k-BLACS support. QSGW `current_hr` expands paired IBZ sources internally before reconstructing
-its full-mesh Hamiltonian; see [QSGW](qsgw.md#analytic-head-and-wing-feedback).
-It checks the metric residual against 1e-6, Hamiltonian frame and
+The current native mode requires complete square AO/band frames and a uniform full-BZ
+mesh, with scalar or SOC wavefunctions. Symmetry reduction and k-point-parallel
+SCF eigenvectors are unsupported. It checks the metric residual against 1e-6, Hamiltonian frame and
 Hermiticity residuals against 1e-4 eV, and the imaginary velocity diagonal against
 1e-8 Ha Bohr. These input checks establish frame consistency within their tolerances;
 they do not certify material or basis convergence.
@@ -274,3 +222,12 @@ mpirun -np 4 /path/to/LibRPA/build/chi0_main.exe
 ```
 
 This will run the LibRPA calculation using 4 MPI processes, each with 4 OpenMP threads.
+
+## Task-specific guides
+
+```{toctree}
+:maxdepth: 1
+
+QSGW <qsgw>
+cRPA <crpa>
+```

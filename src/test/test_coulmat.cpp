@@ -16,21 +16,16 @@ using namespace librpa_int;
 namespace
 {
 
-void add_scalar_vq_block(atpair_k_cplx_mat_t& vq,
-                         const atom_t atom_i,
-                         const atom_t atom_j,
-                         const Vector3_Order<double>& q,
-                         const std::complex<double> value)
+void add_scalar_vq_block(atpair_k_cplx_mat_t& vq, const atom_t atom_i, const atom_t atom_j,
+                         const Vector3_Order<double>& q, const std::complex<double> value)
 {
     auto block = std::make_shared<ComplexMatrix>(1, 1);
     (*block)(0, 0) = value;
     vq[atom_i][atom_j][q] = std::move(block);
 }
 
-void add_scalar_vq_blocks(
-    atpair_k_cplx_mat_t& vq,
-    const Vector3_Order<double>& q,
-    const std::map<atom_t, std::map<atom_t, std::complex<double>>>& blocks)
+void add_scalar_vq_blocks(atpair_k_cplx_mat_t& vq, const Vector3_Order<double>& q,
+                          const std::map<atom_t, std::map<atom_t, std::complex<double>>>& blocks)
 {
     for (const auto& [atom_i, row] : blocks)
     {
@@ -62,13 +57,9 @@ void scale_replicated_collective_input(atpair_k_cplx_mat_t& vq)
 PeriodicBoundaryData make_full_pbc()
 {
     PeriodicBoundaryData pbc;
-    pbc.set_latvec({1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0});
-    const std::vector<double> kvecs{
-        0.0, 0.0, 0.0,
-        TWO_PI / 3.0, 0.0, 0.0,
-        TWO_PI * 2.0 / 3.0, 0.0, 0.0};
+    pbc.set_latvec({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0});
+    const std::vector<double> kvecs{0.0, 0.0, 0.0, TWO_PI / 3.0, 0.0, 0.0, TWO_PI * 2.0 / 3.0,
+                                    0.0, 0.0};
     pbc.set_kgrids_kvec(3, 1, 1, kvecs);
     return pbc;
 }
@@ -76,15 +67,10 @@ PeriodicBoundaryData make_full_pbc()
 PeriodicBoundaryData make_reduced_pbc()
 {
     PeriodicBoundaryData pbc;
-    pbc.set_latvec({1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0});
-    const std::vector<double> kvecs_ibz{
-        0.0, 0.0, 0.0,
-        TWO_PI / 3.0, 0.0, 0.0};
+    pbc.set_latvec({1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0});
+    const std::vector<double> kvecs_ibz{0.0, 0.0, 0.0, TWO_PI / 3.0, 0.0, 0.0};
     const std::vector<std::vector<Vector3_Order<double>>> full_kstars{
-        {{0.0, 0.0, 0.0}},
-        {{1.0 / 3.0, 0.0, 0.0}, {-1.0 / 3.0, 0.0, 0.0}}};
+        {{0.0, 0.0, 0.0}}, {{1.0 / 3.0, 0.0, 0.0}, {-1.0 / 3.0, 0.0, 0.0}}};
     pbc.set_irreducible_kgrids_kvec(3, 1, 1, kvecs_ibz, full_kstars);
     return pbc;
 }
@@ -92,33 +78,23 @@ PeriodicBoundaryData make_reduced_pbc()
 SymmetryContext make_two_atom_inversion_context(const PeriodicBoundaryData& pbc)
 {
     SymmetryContext ctx;
-    const Matrix3 lattice(1.0, 0.0, 0.0,
-                          0.0, 1.0, 0.0,
-                          0.0, 0.0, 1.0);
-    ctx.set_crystal_structure(
-        lattice, lattice,
-        {{0, 0}, {1, 0}},
-        {{0, {0.25, 0.0, 0.0}}, {1, {0.75, 0.0, 0.0}}});
+    const Matrix3 lattice(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    ctx.set_crystal_structure(lattice, lattice, {{0, 0}, {1, 0}},
+                              {{0, {0.25, 0.0, 0.0}}, {1, {0.75, 0.0, 0.0}}});
 
     SymmetryOperation identity;
     identity.rotation.Identity();
     identity.translation = {0.0, 0.0, 0.0};
 
     SymmetryOperation inversion;
-    inversion.rotation = Matrix3(-1.0, 0.0, 0.0,
-                                  0.0, 1.0, 0.0,
-                                  0.0, 0.0, 1.0);
+    inversion.rotation = Matrix3(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
     inversion.translation = {0.0, 0.0, 0.0};
 
     ctx.set_rspace_operations({identity, inversion});
     ctx.set_available();
     ctx.build_periodic_mappings(pbc, pbc.Rlist);
-    ctx.build_rsh_rotations({-1,
-                             0,
-                             LIBRPA_ANGULAR_ORDER_NATURAL,
-                             LIBRPA_RSH_COEFF_1_M,
-                             LIBRPA_RSH_COEFF_1_M},
-                            0);
+    ctx.build_rsh_rotations(
+        {-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
     ctx.build_kstar_member_rotations(0);
     return ctx;
 }
@@ -126,12 +102,8 @@ SymmetryContext make_two_atom_inversion_context(const PeriodicBoundaryData& pbc)
 SymmetryContext make_single_atom_antiunitary_context(const PeriodicBoundaryData& pbc)
 {
     SymmetryContext ctx;
-    const Matrix3 lattice(1.0, 0.0, 0.0,
-                          0.0, 1.0, 0.0,
-                          0.0, 0.0, 1.0);
-    ctx.set_crystal_structure(lattice, lattice,
-                              {{0, 0}},
-                              {{0, {0.0, 0.0, 0.0}}});
+    const Matrix3 lattice(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+    ctx.set_crystal_structure(lattice, lattice, {{0, 0}}, {{0, {0.0, 0.0, 0.0}}});
 
     SymmetryOperation identity;
     identity.rotation.Identity();
@@ -145,18 +117,13 @@ SymmetryContext make_single_atom_antiunitary_context(const PeriodicBoundaryData&
 
     ctx.set_available();
     ctx.build_periodic_mappings(pbc, pbc.Rlist);
-    ctx.build_rsh_rotations({-1,
-                             0,
-                             LIBRPA_ANGULAR_ORDER_NATURAL,
-                             LIBRPA_RSH_COEFF_1_M,
-                             LIBRPA_RSH_COEFF_1_M},
-                            0);
+    ctx.build_rsh_rotations(
+        {-1, 0, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M, LIBRPA_RSH_COEFF_1_M}, 0);
     ctx.build_kstar_member_rotations(0);
     return ctx;
 }
 
-void assert_full_vr_matches_full(const atpair_R_mat_t& actual,
-                                 const atpair_R_mat_t& expected,
+void assert_full_vr_matches_full(const atpair_R_mat_t& actual, const atpair_R_mat_t& expected,
                                  const double tolerance = 1e-12)
 {
     assert(!actual.empty());
@@ -203,14 +170,11 @@ void test_vq_to_full_vr_inversion_matches_full_bz()
     basis_abf.set_l_shells({{0}, {0}});
 
     const std::map<atom_t, std::map<atom_t, std::complex<double>>> gamma_blocks{
-        {0, {{0, {1.5, 0.0}}, {1, {0.4, 0.0}}}},
-        {1, {{1, {1.5, 0.0}}}}};
+        {0, {{0, {1.5, 0.0}}, {1, {0.4, 0.0}}}}, {1, {{1, {1.5, 0.0}}}}};
     const std::map<atom_t, std::map<atom_t, std::complex<double>>> representative_blocks{
-        {0, {{0, {2.1, 0.0}}, {1, {-0.7, 0.5}}}},
-        {1, {{1, {1.4, 0.0}}}}};
+        {0, {{0, {2.1, 0.0}}, {1, {-0.7, 0.5}}}}, {1, {{1, {1.4, 0.0}}}}};
     const std::map<atom_t, std::map<atom_t, std::complex<double>>> inversion_blocks{
-        {0, {{0, {1.4, 0.0}}, {1, {-0.7, -0.5}}}},
-        {1, {{1, {2.1, 0.0}}}}};
+        {0, {{0, {1.4, 0.0}}, {1, {-0.7, -0.5}}}}, {1, {{1, {2.1, 0.0}}}}};
 
     atpair_k_cplx_mat_t vq_symmetry;
     add_scalar_vq_blocks(vq_symmetry, pbc_symmetry.klist.at(0), gamma_blocks);
@@ -224,13 +188,11 @@ void test_vq_to_full_vr_inversion_matches_full_bz()
 
     SymmetryContext no_symmetry;
     bool full_result_replicated = true;
-    const auto expected = FT_Vq(global::mpi_comm_global_h, basis_abf, no_symmetry,
-                                vq_full, pbc_full, false, false,
-                                &full_result_replicated);
+    const auto expected = FT_Vq(global::mpi_comm_global_h, basis_abf, no_symmetry, vq_full,
+                                pbc_full, false, false, &full_result_replicated);
     bool symmetry_result_replicated = false;
-    const auto actual = FT_Vq(global::mpi_comm_global_h, basis_abf, symmetry_context,
-                              vq_symmetry, pbc_symmetry, false, true,
-                              &symmetry_result_replicated);
+    const auto actual = FT_Vq(global::mpi_comm_global_h, basis_abf, symmetry_context, vq_symmetry,
+                              pbc_symmetry, false, true, &symmetry_result_replicated);
 
     assert(!full_result_replicated);
     assert(symmetry_result_replicated);
@@ -257,10 +219,10 @@ void test_vq_to_full_vr_antiunitary_matches_full_bz()
     add_scalar_vq_block(vq_full, 0, 0, pbc_full.klist.at(2), {2.1, 0.7});
 
     SymmetryContext no_symmetry;
-    const auto expected = FT_Vq(global::mpi_comm_global_h, basis_abf, no_symmetry,
-                                vq_full, pbc_full, false, false);
-    const auto actual = FT_Vq(global::mpi_comm_global_h, basis_abf, symmetry_context,
-                              vq_symmetry, pbc_symmetry, false, true);
+    const auto expected =
+        FT_Vq(global::mpi_comm_global_h, basis_abf, no_symmetry, vq_full, pbc_full, false, false);
+    const auto actual = FT_Vq(global::mpi_comm_global_h, basis_abf, symmetry_context, vq_symmetry,
+                              pbc_symmetry, false, true);
 
     assert_full_vr_matches_full(actual, expected);
 }

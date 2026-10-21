@@ -86,7 +86,7 @@ def load_qsgw_model(
     values = []
     for source in sources:
         vectors = np.asarray(source.R_direct_coor)
-        data = source.XR.toarray()
+        data = source.XR
         if (
             vectors.shape != (source.R_num, 3)
             or not np.isfinite(vectors).all()
@@ -96,7 +96,7 @@ def load_qsgw_model(
         vectors = vectors.astype(np.int64)
         if len(set(map(tuple, vectors))) != len(vectors):
             raise ValueError("H/S/r real-space cell vectors must be unique")
-        if data.shape != (source.R_num, packed_dimension) or not np.isfinite(data).all():
+        if data.shape != (source.R_num, packed_dimension) or not np.isfinite(data.data).all():
             raise ValueError("H/S/r upper-triangle arrays must have matching finite entries")
         coordinates.append(vectors)
         values.append(data)
@@ -107,40 +107,20 @@ def load_qsgw_model(
     )
     if union.size == 0:
         raise ValueError("H/S/r require a nonempty real-space support")
+    union_rows = {tuple(cell): index for index, cell in enumerate(union)}
     aligned_operators = []
     for name, vectors, data in zip(["H", "S", "r_x", "r_y", "r_z"], coordinates, values):
-        lookup = {tuple(cell): index for index, cell in enumerate(vectors)}
-        aligned = np.zeros((len(union), packed_dimension), dtype=complex)
-        for index, cell in enumerate(union):
-            source_index = lookup.get(tuple(cell))
-            if source_index is not None:
-                aligned[index] = data[source_index]
+        row_map = np.array([union_rows[tuple(cell)] for cell in vectors], dtype=np.int64)
+        entries = data.tocoo(copy=False)
+        aligned = csc_matrix(
+            (entries.data, (row_map[entries.row], entries.col)),
+            shape=(len(union), packed_dimension), dtype=complex,
+        )
         operator_matrix = multiXR(name)
-        operator_matrix.set_XR(len(union), union, n, csc_matrix(aligned))
+        operator_matrix.set_XR(len(union), union, n, aligned)
         aligned_operators.append(operator_matrix)
 
     model = tb(nspin, lattice_constant, lattice, max_kpoints)
     model.set_solver_HSR(*aligned_operators[:2], isSparse=False)
     model.set_solver_rR(*aligned_operators[2:], isSparse=False)
     return model
-
-
-def load_qsgw_spin_channel(
-    hr_file,
-    sr_file="srs1_nao.csr",
-    rr_file="rr.csr",
-    *,
-    lattice_constant_angstrom,
-    lattice_vector,
-    n_kpoints,
-    rr_unit="Bohr",
-):
-    """Load one scalar/collinear channel; use load_qsgw_model(nspin=4) for SOC."""
-    return load_qsgw_model(
-        hr_file, sr_file, rr_file,
-        lattice_constant_angstrom=lattice_constant_angstrom,
-        lattice_vector=lattice_vector,
-        n_kpoints=n_kpoints,
-        rr_unit=rr_unit,
-        nspin=1,
-    )

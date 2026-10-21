@@ -1,13 +1,13 @@
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
 
 #include "../core/crpa.h"
-#include "../core/crpa_workflow.h"
-#include "../core/crpa_model.h"
 #include "../core/crpa_continuation.h"
+#include "../core/crpa_model.h"
+#include "../core/crpa_workflow.h"
 #include "../utils/constants.h"
 #include "crpa_helper.h"
 #include "dataset_helper.h"
@@ -97,7 +97,8 @@ librpa_int::CrpaPreparedModel librpa_int::api::prepare_crpa_api_model(
         if ((optical && (options->option_dielect_func != 3 ||
                          options->use_2d_dielectric == LIBRPA_SWITCH_ON)) ||
             (!optical && options->option_dielect_func != 0) ||
-            options->tfgrids_type != LIBRPA_TFGRID_MINIMAX || options->n_bands_chi0 >= 0 || options->n_bands_exclude_chi0 != 0 ||
+            options->tfgrids_type != LIBRPA_TFGRID_MINIMAX || options->n_bands_chi0 >= 0 ||
+            options->n_bands_exclude_chi0 != 0 ||
             (mode == CrpaApiMode::Standalone && (options->use_fullcoul_eps != LIBRPA_SWITCH_ON ||
                                                  options->use_fullcoul_wc != LIBRPA_SWITCH_ON)))
             throw LIBRPA_INVALID_ARGUMENT(
@@ -255,8 +256,8 @@ LibrpaCrpaResult* own_crpa_result(librpa_int::CrpaResult values,
         }
         const auto& convention = dataset.basis_convention;
         result->basis_convention = {convention.bloch_phase, convention.bloch_ratom,
-                                   convention.order, convention.coeff_m_negative,
-                                   convention.coeff_m_positive};
+                                    convention.order, convention.coeff_m_negative,
+                                    convention.coeff_m_positive};
         for (const auto& k : dataset.pbc.kfrac_list)
             result->k_fractional.insert(result->k_fractional.end(), {k.x, k.y, k.z});
         result->k_weights = dataset.pbc.weight_k;
@@ -293,7 +294,8 @@ LibrpaCrpaResult* librpa_int::api::evaluate_crpa_api_from_response(Dataset& ds,
     std::vector<CorrelatedSubspace*> frames;
     for (const auto& frame : model.frames) frames.push_back(frame.get());
     return own_crpa_result(
-        evaluate_crpa_onsite_from_response(context, model.selection, frames, full_response), model, ds);
+        evaluate_crpa_onsite_from_response(context, model.selection, frames, full_response), model,
+        ds);
 }
 
 LibrpaCrpaResult* librpa_prepare_crpa_model(const LibrpaHandler* h, const LibrpaOptions* options,
@@ -355,15 +357,28 @@ void librpa_crpa_model_info(const LibrpaCrpaResult* result, LibrpaCrpaModelInfo*
     if (!result || !info) throw LIBRPA_INVALID_ARGUMENT("missing cRPA model info");
     const auto& model = result->model;
     const auto& state = model.spin_k.at(0).at(0);
-    *info = {model.n_spins, model.n_spinor, static_cast<int>(model.spin_k.at(0).size()),
-             model.n_bands, model.n_aos, static_cast<int>(result->atom_types.size()),
-             state.parent_projector.nr, state.output_projector.nr,
-             static_cast<int>(model.parent_sites.size()), static_cast<int>(model.output_sites.size()),
-             model.fermi, result->lattice.data(), result->positions.data(),
-             result->atom_types.data(), result->ao_counts.data(), result->k_fractional.data(),
-             result->k_weights.data(), model.output_columns.data(),
-             static_cast<int>(result->shell_l.size()), result->shell_offsets.data(),
-             result->shell_l.data(), result->basis_convention.data()};
+    *info = {model.n_spins,
+             model.n_spinor,
+             static_cast<int>(model.spin_k.at(0).size()),
+             model.n_bands,
+             model.n_aos,
+             static_cast<int>(result->atom_types.size()),
+             state.parent_projector.nr,
+             state.output_projector.nr,
+             static_cast<int>(model.parent_sites.size()),
+             static_cast<int>(model.output_sites.size()),
+             model.fermi,
+             result->lattice.data(),
+             result->positions.data(),
+             result->atom_types.data(),
+             result->ao_counts.data(),
+             result->k_fractional.data(),
+             result->k_weights.data(),
+             model.output_columns.data(),
+             static_cast<int>(result->shell_l.size()),
+             result->shell_offsets.data(),
+             result->shell_l.data(),
+             result->basis_convention.data()};
 }
 
 void librpa_crpa_model_k(const LibrpaCrpaResult* result, int spin, int kpoint,
@@ -375,12 +390,19 @@ void librpa_crpa_model_k(const LibrpaCrpaResult* result, int spin, int kpoint,
     const auto& state = model.spin_k.at(spin).at(kpoint);
     const auto packed = [](const librpa_int::ComplexMatrix& matrix)
     { return reinterpret_cast<const double*>(matrix.c); };
-    *view = {state.energies.data(), state.occupations.data(), packed(state.coefficients),
+    *view = {state.energies.data(),
+             state.occupations.data(),
+             packed(state.coefficients),
              model.overlap.empty() ? nullptr : packed(model.overlap.at(kpoint)),
-             packed(state.parent_phi), packed(state.output_phi),
-             packed(state.parent_projector), packed(state.output_projector),
-             packed(state.parent_h), packed(state.output_h),
-             packed(state.parent_density), packed(state.output_density), state.parent_capture_min};
+             packed(state.parent_phi),
+             packed(state.output_phi),
+             packed(state.parent_projector),
+             packed(state.output_projector),
+             packed(state.parent_h),
+             packed(state.output_h),
+             packed(state.parent_density),
+             packed(state.output_density),
+             state.parent_capture_min};
 }
 
 void librpa_crpa_model_local(const LibrpaCrpaResult* result, int parent, int spin, int site,
@@ -401,7 +423,8 @@ void librpa_crpa_model_local(const LibrpaCrpaResult* result, int parent, int spi
             for (int b = 0; b < group.n_orbitals; ++b)
             {
                 h(a, b) += result->k_weights.at(k) * hk(group.orb_start + a, group.orb_start + b);
-                density(a, b) += result->k_weights.at(k) * nk(group.orb_start + a, group.orb_start + b);
+                density(a, b) +=
+                    result->k_weights.at(k) * nk(group.orb_start + a, group.orb_start + b);
             }
     }
     std::copy_n(reinterpret_cast<const double*>(h.c), 2 * h.size, h_ha_ri);
@@ -438,12 +461,13 @@ librpa_int::ComplexMatrix unpack_complex(int rows, int columns, const double* va
     for (int i = 0; i < matrix.size; ++i) matrix.c[i] = {values[2 * i], values[2 * i + 1]};
     return matrix;
 }
-}
+}  // namespace
 
 void librpa_crpa_project_one_body(int n_orbitals, int n_bands, const double* projector_ri,
                                   const double* diagonal, double* operator_ri)
 {
-    if (!diagonal || !operator_ri) throw LIBRPA_INVALID_ARGUMENT("missing projected-operator buffers");
+    if (!diagonal || !operator_ri)
+        throw LIBRPA_INVALID_ARGUMENT("missing projected-operator buffers");
     const auto p = unpack_complex(n_orbitals, n_bands, projector_ri);
     const auto result = librpa_int::project_crpa_one_body(p, {diagonal, diagonal + n_bands});
     std::copy_n(reinterpret_cast<const double*>(result.c), 2 * result.size, operator_ri);
@@ -469,9 +493,8 @@ void librpa_crpa_project_orbitals(int n_aos, int n_spinor, int n_bands, int n_or
     std::copy_n(reinterpret_cast<const double*>(p.c), 2 * p.size, projector_ri);
 }
 
-void librpa_crpa_rotate_projector(int n_bands, int n_old, int n_new,
-                                  const double* projector_ri, const double* rotation_ri,
-                                  double* rotated_projector_ri)
+void librpa_crpa_rotate_projector(int n_bands, int n_old, int n_new, const double* projector_ri,
+                                  const double* rotation_ri, double* rotated_projector_ri)
 {
     using namespace librpa_int;
     if (!rotated_projector_ri) throw LIBRPA_INVALID_ARGUMENT("missing rotated-projector buffer");
@@ -517,16 +540,17 @@ void librpa_crpa_tensor_to_fermion(int n_orbitals, const double* density_ri, dou
 }
 
 LibrpaCrpaContinuedResult* librpa_continue_crpa(const LibrpaCrpaResult* result, int n_queries,
-                                               const double* queries_ha_ri,
-                                               int n_parameters, double tolerance_ha)
+                                                const double* queries_ha_ri, int n_parameters,
+                                                double tolerance_ha)
 {
     if (!result || n_queries <= 0 || !queries_ha_ri)
         throw LIBRPA_INVALID_ARGUMENT("missing cRPA continuation queries");
     std::vector<std::complex<double>> queries;
-    for (int i = 0; i < n_queries; ++i) queries.emplace_back(queries_ha_ri[2 * i], queries_ha_ri[2 * i + 1]);
+    for (int i = 0; i < n_queries; ++i)
+        queries.emplace_back(queries_ha_ri[2 * i], queries_ha_ri[2 * i + 1]);
     auto output = std::make_unique<LibrpaCrpaContinuedResult>();
-    output->tensors = librpa_int::continue_crpa_interactions(result->values, queries,
-                                                            n_parameters, tolerance_ha);
+    output->tensors =
+        librpa_int::continue_crpa_interactions(result->values, queries, n_parameters, tolerance_ha);
     return output.release();
 }
 
@@ -542,13 +566,19 @@ void librpa_crpa_continued_tensor(const LibrpaCrpaContinuedResult* result, int t
     if (!result || !view || tensor < 0 || query < 0)
         throw LIBRPA_INVALID_ARGUMENT("missing continued cRPA tensor view");
     const auto& record = result->tensors.at(tensor);
-    *view = {record.atom_index, record.spin_left, record.spin_right, record.n_orbitals,
-             reinterpret_cast<const double*>(record.values.at(query).c), record.status.at(query).data(),
-             record.spread.at(query).data(), record.max_source_residual, record.max_holdout_residual};
+    *view = {record.atom_index,
+             record.spin_left,
+             record.spin_right,
+             record.n_orbitals,
+             reinterpret_cast<const double*>(record.values.at(query).c),
+             record.status.at(query).data(),
+             record.spread.at(query).data(),
+             record.max_source_residual,
+             record.max_holdout_residual};
 }
 
-void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site,
-                            int* atom, int* column_start, int* n_orbitals)
+void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site, int* atom,
+                            int* column_start, int* n_orbitals)
 {
     if (!result || !atom || !column_start || !n_orbitals || site < 0)
         throw LIBRPA_INVALID_ARGUMENT("missing cRPA model site");
@@ -558,7 +588,8 @@ void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site
     *n_orbitals = group.n_orbitals;
 }
 
-const char* librpa_crpa_model_label(const LibrpaCrpaResult* result, int parent, int site, int orbital)
+const char* librpa_crpa_model_label(const LibrpaCrpaResult* result, int parent, int site,
+                                    int orbital)
 {
     if (!result || site < 0 || orbital < 0)
         throw LIBRPA_INVALID_ARGUMENT("missing cRPA model label");

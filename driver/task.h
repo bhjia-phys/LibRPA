@@ -4,7 +4,8 @@
 namespace driver
 {
 
-enum class task_t {
+enum class task_t
+{
     RPA,
     cRPA,
     SternheimerRPA,

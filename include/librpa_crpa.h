@@ -83,17 +83,17 @@ extern "C"
         int n_spins, n_spinor, n_kpoints, n_bands, n_aos, n_atoms;
         int n_parent, n_output, n_parent_sites, n_output_sites;
         double fermi_ha;
-        const double* lattice_bohr;          /* [3][3], row lattice vectors */
-        const double* positions_bohr;        /* [atom][3] */
+        const double* lattice_bohr;   /* [3][3], row lattice vectors */
+        const double* positions_bohr; /* [atom][3] */
         const int* atom_types;
-        const int* ao_counts;                /* spatial AO count per atom */
-        const double* k_fractional;          /* [k][3] */
-        const double* k_weights;             /* sum to one */
-        const int* output_columns;           /* indices in joint parent frame */
+        const int* ao_counts;       /* spatial AO count per atom */
+        const double* k_fractional; /* [k][3] */
+        const double* k_weights;    /* sum to one */
+        const int* output_columns;  /* indices in joint parent frame */
         int n_shells;
-        const int* shell_offsets;             /* [atom+1], indexing shell_l */
-        const int* shell_l;                   /* radial shells in producer AO order */
-        const int* basis_convention;          /* phase, ratom, order, coeff_negative, coeff_positive */
+        const int* shell_offsets;    /* [atom+1], indexing shell_l */
+        const int* shell_l;          /* radial shells in producer AO order */
+        const int* basis_convention; /* phase, ratom, order, coeff_negative, coeff_positive */
     } LibrpaCrpaModelInfo;
 
     /** Row-major complex views packed as [real,imag]; energies use Hartree.
@@ -124,11 +124,12 @@ extern "C"
     void librpa_crpa_model_info(const LibrpaCrpaResult* result, LibrpaCrpaModelInfo* info);
     void librpa_crpa_model_k(const LibrpaCrpaResult* result, int spin, int kpoint,
                              LibrpaCrpaModelK* view);
-    void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site,
-                                int* atom, int* column_start, int* n_orbitals);
-    const char* librpa_crpa_model_label(const LibrpaCrpaResult* result, int parent,
-                                       int site, int orbital);
-    /** Weighted onsite H and density in one site's actual frame, supplied output buffers [M][M][2]. */
+    void librpa_crpa_model_site(const LibrpaCrpaResult* result, int parent, int site, int* atom,
+                                int* column_start, int* n_orbitals);
+    const char* librpa_crpa_model_label(const LibrpaCrpaResult* result, int parent, int site,
+                                        int orbital);
+    /** Weighted onsite H and density in one site's actual frame, supplied output buffers [M][M][2].
+     */
     void librpa_crpa_model_local(const LibrpaCrpaResult* result, int parent, int spin, int site,
                                  double* h_ha_ri, double* density_ri);
     /** Full parent/output hopping at integer lattice R, [M][M][2], Hartree.
@@ -146,9 +147,8 @@ extern "C"
                                       const double* coefficients_ri, const double* overlap_ri,
                                       const double* phi_ri, double* projector_ri);
     /** P_new=R^dagger P_old for Phi_new=Phi_old R; use the same R on the corresponding U legs. */
-    void librpa_crpa_rotate_projector(int n_bands, int n_old, int n_new,
-                                      const double* projector_ri, const double* rotation_ri,
-                                      double* rotated_projector_ri);
+    void librpa_crpa_rotate_projector(int n_bands, int n_old, int n_new, const double* projector_ri,
+                                      const double* rotation_ri, double* rotated_projector_ri);
     /** Phi_new=Phi_old R, R=[old][new] is an isometry; rotate both density legs.
      * No screening response is changed. Use the matching rotated projector/H. */
     void librpa_crpa_rotate_tensor(int n_old, int n_new, const double* tensor_ri,
@@ -157,15 +157,16 @@ extern "C"
     /** Density U_ab,cd -> fermionic V_acbd: V_ijkl=U_ik,jl.
      * V multiplies (1/2) c_i^dagger c_j^dagger c_l c_k, with the stored spin-frame pair.
      * No antisymmetrization or Kanamori/Slater approximation is performed. */
-    void librpa_crpa_tensor_to_fermion(int n_orbitals, const double* density_ri, double* fermion_ri);
+    void librpa_crpa_tensor_to_fermion(int n_orbitals, const double* density_ri,
+                                       double* fermion_ri);
 
     typedef struct LibrpaCrpaContinuedResult LibrpaCrpaContinuedResult;
     typedef struct
     {
         int atom_index, spin_left, spin_right, n_orbitals;
         const double* values_ha_ri;
-        const int* status;                  /* [M^4], zero means numerical diagnostics pass */
-        const double* subset_spread_ha;     /* [M^4] */
+        const int* status;              /* [M^4], zero means numerical diagnostics pass */
+        const double* subset_spread_ha; /* [M^4] */
         double max_source_residual_ha, max_holdout_residual_ha;
     } LibrpaCrpaContinuedTensor;
     /** Native Padé of U-v using original z=i*nu; restores v, no chemical-potential shift.
@@ -176,12 +177,12 @@ extern "C"
      * 8 excessive source/holdout residual, 16 fewer than four nodes, 32 nonfinite value.
      * No passivity, causality, basis or mesh convergence certificate is implied. */
     LibrpaCrpaContinuedResult* librpa_continue_crpa(const LibrpaCrpaResult* result, int n_queries,
-                                                   const double* queries_ha_ri,
-                                                   int n_parameters, double tolerance_ha);
+                                                    const double* queries_ha_ri, int n_parameters,
+                                                    double tolerance_ha);
     void librpa_delete_crpa_continued_result(LibrpaCrpaContinuedResult* result);
     int librpa_crpa_continued_size(const LibrpaCrpaContinuedResult* result);
-    void librpa_crpa_continued_tensor(const LibrpaCrpaContinuedResult* result, int tensor, int query,
-                                      LibrpaCrpaContinuedTensor* view);
+    void librpa_crpa_continued_tensor(const LibrpaCrpaContinuedResult* result, int tensor,
+                                      int query, LibrpaCrpaContinuedTensor* view);
 
     /** Read-only tensor view. Arrays remain valid until the result is deleted.
      * Arrays contain M^4 complex entries, each packed as real/imag doubles.
@@ -209,16 +210,16 @@ extern "C"
      * Builds no response, W or self-energy; returns zero interaction tensors.
      * Useful for cheap parent transport between selected screening evaluations. */
     LibrpaCrpaResult* librpa_prepare_crpa_model(const LibrpaHandler* h,
-                                               const LibrpaOptions* options,
-                                               const LibrpaCrpaInput* input);
+                                                const LibrpaOptions* options,
+                                                const LibrpaCrpaInput* input);
 
     /** Collective calculation on the handler communicator; no input/output files.
      * All ranks must call with identical options and replicated LibrpaCrpaInput.
-     * Supports scalar or two-component spinor full-grid LIBRI with replicated KS eigenvectors and native
-     * positive minimax nodes. use_symmetry_rpa reduces q-space screening only,
-     * restoring full kernels before contraction; original full-k states are required.
-     * No static node or analytic continuation is added.
-     * The result is independently owned on each rank; delete it on every rank.
+     * Supports scalar or two-component spinor full-grid LIBRI with replicated KS eigenvectors and
+     * native positive minimax nodes. With use_symmetry_rpa enabled, only q-space screening is
+     * reduced; kernels are restored before full-grid local contraction. Original full-k states
+     * are required. No static node or analytic continuation is added. Each rank owns its result
+     * independently and must delete it.
      */
     LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h,
                                                  const LibrpaOptions* options,
@@ -227,8 +228,8 @@ extern "C"
     /** Build the ordinary GW self-energy and cRPA U for the same entering state.
      * P0 is built once by GW and borrowed by cRPA; only Pd and constrained
      * screening are added. GW P0, optical data, W and self-energy conventions
-     * remain unchanged. Requires full-grid LIBRI without symmetry or a SigC
-     * file-read shortcut. Input has the same contract as the standalone call.
+     * remain unchanged. Requires full-grid LIBRI and rejects a SigC file-read shortcut.
+     * Input has the same full-grid and optional q-star screening contract as the standalone call.
      * The owned result contains bare/U; fully_screened_ri is null.
      * cRPA screens and projects with full Coulomb independently of the GW
      * eps/Wc/EXX Coulomb flags, which keep their original GW meaning.
@@ -265,7 +266,8 @@ extern "C"
     /** Trial label for a local output column; owned by result until deletion.
      * SOC suffix up/down identifies a trial, not a conserved spin quantum number.
      * SOC tensor spin_left/right are channel zero; spinor indices are a,b,c,d. */
-    const char* librpa_crpa_result_orbital_label(const LibrpaCrpaResult* result, int atom, int orbital);
+    const char* librpa_crpa_result_orbital_label(const LibrpaCrpaResult* result, int atom,
+                                                 int orbital);
 
 #ifdef __cplusplus
 }

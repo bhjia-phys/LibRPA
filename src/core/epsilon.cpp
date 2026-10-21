@@ -394,9 +394,8 @@ static std::vector<int> build_symmetry_atom_offsets(const std::map<atom_t, size_
 }
 
 ComplexMatrix build_dense_symmetry_hermitian_matrix_from_local_blocks(
-    const librpa_int::symmetry_atom_block_matrix_map_t& local_blocks,
-    const std::map<atom_t, size_t>& atom_nabf,
-    const bool hermitize_diagonal_atom_blocks)
+    const librpa_int::symmetry_atom_block_matrix_map_t &local_blocks,
+    const std::map<atom_t, size_t> &atom_nabf, const bool hermitize_diagonal_atom_blocks)
 {
     const auto offsets = build_symmetry_atom_offsets(atom_nabf);
     ComplexMatrix dense(offsets.back(), offsets.back());
@@ -423,8 +422,7 @@ ComplexMatrix build_dense_symmetry_hermitian_matrix_from_local_blocks(
                 for (int col = 0; col < block.nc; ++col)
                 {
                     auto value = block(row, col);
-                    if (hermitize_diagonal_atom_blocks
-                        && atom_i_pair.first == atom_j_pair.first)
+                    if (hermitize_diagonal_atom_blocks && atom_i_pair.first == atom_j_pair.first)
                     {
                         // The ordinary chi0 collection path Hermitizes diagonal
                         // atom blocks before ScaLAPACK.  Apply that contract only
@@ -483,8 +481,8 @@ static librpa_int::symmetry_atom_block_matrix_map_t gather_symmetry_ibz_blocks_c
         return blocks_ibz_local;
     }
 
-    const auto dense_ibz_local = build_dense_symmetry_hermitian_matrix_from_local_blocks(
-        blocks_ibz_local, atom_nabf, false);
+    const auto dense_ibz_local =
+        build_dense_symmetry_hermitian_matrix_from_local_blocks(blocks_ibz_local, atom_nabf, false);
     ComplexMatrix dense_ibz_global(dense_ibz_local.nr, dense_ibz_local.nc);
     allreduce_ComplexMatrix(dense_ibz_local, dense_ibz_global, comm_h.comm);
     return build_symmetry_blocks_from_dense_matrix(dense_ibz_global, atom_nabf);
@@ -2804,10 +2802,9 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     const auto abf_layouts =
         chi0.atbasis_abf.build_species_basis_layouts(chi0.symmetry_context.atom_to_type);
     const bool use_symmetry_dense_chi0_collect =
-        chi0.use_symmetry_context && !chi0.qstar_only_symmetry
-        && comm_h.nprocs > 1
-        && can_symmetrize_symmetry_chi0_ibz_blocks(
-            chi0.symmetry_context, abf_layouts, atom_nabf, chi0.pbc);
+        chi0.use_symmetry_context && !chi0.qstar_only_symmetry && comm_h.nprocs > 1 &&
+        can_symmetrize_symmetry_chi0_ibz_blocks(chi0.symmetry_context, abf_layouts, atom_nabf,
+                                                chi0.pbc);
 
     vec<double> eigenvalues(n_abf);
     global::profiler.stop("compute_Wc_freq_q_blacs_init");
@@ -3395,12 +3392,9 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                     {
                         const int first_filtered = as_int(n_nonsingular) + 1;
                         ScalapackConnector::pgemm_f(
-                            'N', 'C', n_abf, n_abf, n_filtered, C_ONE,
-                            coul_eigen_block.ptr(), 1, first_filtered,
-                            desc_nabf_nabf_opt.desc,
-                            coul_eigen_block.ptr(), 1, first_filtered,
-                            desc_nabf_nabf_opt.desc,
-                            C_ONE, chi0_block.ptr(), 1, 1,
+                            'N', 'C', n_abf, n_abf, n_filtered, C_ONE, coul_eigen_block.ptr(), 1,
+                            first_filtered, desc_nabf_nabf_opt.desc, coul_eigen_block.ptr(), 1,
+                            first_filtered, desc_nabf_nabf_opt.desc, C_ONE, chi0_block.ptr(), 1, 1,
                             desc_nabf_nabf_opt.desc);
                     }
                     for (int i = 0; i != n_abf; ++i)
@@ -3840,12 +3834,9 @@ static Matz restore_symmetry_blacs_wq_to_star_source(const Matz& Wq_source,
 }
 
 std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
-    const std::map<Vector3_Order<double>, Matz>& Wq_rep_map,
-    const PeriodicBoundaryData& pbc,
-    const SymmetryQPointView& qpoint_view,
-    const SymmetryContext& symmetry_context,
-    const AtomicBasis& atbasis_Wc,
-    const ArrayDesc& ad_Wc)
+    const std::map<Vector3_Order<double>, Matz> &Wq_rep_map, const PeriodicBoundaryData &pbc,
+    const SymmetryQPointView &qpoint_view, const SymmetryContext &symmetry_context,
+    const AtomicBasis &atbasis_Wc, const ArrayDesc &ad_Wc)
 {
     const auto atom_nabf = build_atom_nabf_map(atbasis_Wc);
     const auto abf_layouts =
@@ -3896,12 +3887,14 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
         for (std::size_t imember = 0; imember != members.size(); ++imember)
         {
             const auto& q_member = members[imember];
-            const auto full_key = std::find_if(pbc.klist_full.begin(), pbc.klist_full.end(),
-                [&](const auto &key)
-                {
-                    return same_fractional_kpoint(Vector3_Order<double>{pbc.latvec * key},
-                        Vector3_Order<double>{pbc.latvec * q_member}, 1e-8);
-                });
+            const auto full_key =
+                std::find_if(pbc.klist_full.begin(), pbc.klist_full.end(),
+                             [&](const auto &key)
+                             {
+                                 return same_fractional_kpoint(
+                                     Vector3_Order<double>{pbc.latvec * key},
+                                     Vector3_Order<double>{pbc.latvec * q_member}, 1e-8);
+                             });
             if (full_key == pbc.klist_full.end())
                 throw LIBRPA_RUNTIME_ERROR("Dense Wc restore has no matching full-grid key");
             const Vector3_Order<double> q_member_internal = *full_key;
@@ -4998,7 +4991,8 @@ CT_Wc_freq2time_q(
                         bad_local = 1;
     comm_h.allreduce(&bad_local, &bad, 1, MPI_MAX);
     if (bad)
-        throw LIBRPA_RUNTIME_ERROR("Wc frequency-to-time transform has incompatible q/basis coverage");
+        throw LIBRPA_RUNTIME_ERROR(
+            "Wc frequency-to-time transform has incompatible q/basis coverage");
 
     set<pair<atom_t, atom_t>> atpairs_unique;
     for (const auto &freq_MuNuqWc : Wc_freq_q)
@@ -5112,8 +5106,10 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     for (const auto &[left, rights] : Wc_q)
         for (const auto &[right, qs] : rights)
         {
-            if (qs.size() == pbc.get_n_cells_bvk()) coverage[0] = 1;
-            else if (!qs.empty()) coverage[1] = 1;
+            if (qs.size() == pbc.get_n_cells_bvk())
+                coverage[0] = 1;
+            else if (!qs.empty())
+                coverage[1] = 1;
         }
     comm_h.allreduce(coverage, global_coverage, 2, MPI_MAX);
     if (global_coverage[0] && global_coverage[1])
@@ -5123,9 +5119,8 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     const auto atom_nabf = build_atom_nabf_map(atbasis_abf);
     const auto abf_layouts =
         atbasis_abf.build_species_basis_layouts(symmetry_context.atom_to_type);
-    if (!has_full_q && use_symmetry_context
-        && can_use_symmetry_qstar_wr_restore(
-            symmetry_context, abf_layouts, atom_nabf, pbc))
+    if (!has_full_q && use_symmetry_context &&
+        can_use_symmetry_qstar_wr_restore(symmetry_context, abf_layouts, atom_nabf, pbc))
     {
         lib_printf_root(
             "GW symmetry accumulates full `W(R)` directly from IBZ q-stars\n");
@@ -5193,8 +5188,8 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
             if (has_full_q)
             {
                 const double angle = -q * (R * pbc.latvec) * TWO_PI;
-                WR_temp += Wc * (complex<double>(std::cos(angle), std::sin(angle)) /
-                                  double(n_k_points));
+                WR_temp +=
+                    Wc * (complex<double>(std::cos(angle), std::sin(angle)) / double(n_k_points));
                 continue;
             }
             for (auto q_bz : pbc.map_irk_ks.at(q))

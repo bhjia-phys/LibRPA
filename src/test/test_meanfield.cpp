@@ -974,10 +974,7 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
 
     SymmetryContext ctx;
     ctx.set_available();
-    ctx.basis_convention = {-1,
-                            1,
-                            LIBRPA_ANGULAR_ORDER_NATURAL,
-                            LIBRPA_RSH_COEFF_1_M,
+    ctx.basis_convention = {-1, 1, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M,
                             LIBRPA_RSH_COEFF_1_M};
     const std::vector<SpeciesBasisLayout> wfc_layouts{{"X", {0}}};
     ctx.atom_to_type[0] = 0;
@@ -990,20 +987,18 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
 
     // U_s = (1/sqrt(2)) [[1, i], [i, 1]]: complex, off-diagonal, unitary.
     const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
-    const std::array<std::complex<double>, 4> U_s{
-        inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
-        std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
+    const std::array<std::complex<double>, 4> U_s{inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
+                                                  std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
     // U_s above is the physical representative-to-member action used by the
     // independently generated full-grid wavefunctions below. Generated k-star
     // metadata records the member-to-representative operation; the production
     // resolve_symmetry_kstar_member_spin_operation reverses it for restoration.
-    const std::array<std::complex<double>, 4> U_s_inverse{
-        std::conj(U_s[0]), std::conj(U_s[2]),
-        std::conj(U_s[1]), std::conj(U_s[3])};
-    ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
-    ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
+    const std::array<std::complex<double>, 4> U_s_inverse{std::conj(U_s[0]), std::conj(U_s[2]),
+                                                          std::conj(U_s[1]), std::conj(U_s[3])};
+    ctx.spin_operations.push_back(
+        SymmetrySpinOperation{0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
+    ctx.spin_operations.push_back(
+        SymmetrySpinOperation{0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{1, {1}});
 
@@ -1026,12 +1021,8 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     ctx.kstars.push_back(star);
 
     // per-band, per-AO channel values: c = channel 0, d = channel 1
-    const std::complex<double> c[2][2] = {
-        {{0.6, 0.1}, {-0.3, 0.2}},
-        {{-0.2, 0.7}, {0.4, 0.5}}};
-    const std::complex<double> d[2][2] = {
-        {{0.5, -0.3}, {0.1, 0.4}},
-        {{0.1, 0.4}, {-0.6, 0.2}}};
+    const std::complex<double> c[2][2] = {{{0.6, 0.1}, {-0.3, 0.2}}, {{-0.2, 0.7}, {0.4, 0.5}}};
+    const std::complex<double> d[2][2] = {{{0.5, -0.3}, {0.1, 0.4}}, {{0.1, 0.4}, {-0.6, 0.2}}};
     MeanField mf(1, 2, 2, 2, 2);
     mf.get_efermi() = 0.0;
     for (int ik = 0; ik != 2; ++ik)
@@ -1054,12 +1045,12 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     // i sigma_y = [[0, 1], [-1, 0]]. The wfc first index is the band index
     // and the second the AO index, so each (band, AO) spinor pair is imaged
     // separately.
-    const auto image = [&](const std::complex<double> &s0,
-                           const std::complex<double> &s1) {
-        const std::complex<double> t0 = std::conj(U_s[0]) * std::conj(s0)
-                                      + std::conj(U_s[1]) * std::conj(s1);
-        const std::complex<double> t1 = std::conj(U_s[2]) * std::conj(s0)
-                                      + std::conj(U_s[3]) * std::conj(s1);
+    const auto image = [&](const std::complex<double> &s0, const std::complex<double> &s1)
+    {
+        const std::complex<double> t0 =
+            std::conj(U_s[0]) * std::conj(s0) + std::conj(U_s[1]) * std::conj(s1);
+        const std::complex<double> t1 =
+            std::conj(U_s[2]) * std::conj(s0) + std::conj(U_s[3]) * std::conj(s1);
         return std::make_pair(t1, -t0);
     };
     // Reciprocal-gauge phase of the stored k2' = (3/4,0,0) wfc relative to
@@ -1068,8 +1059,7 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     // (bloch_phase, bloch_ratom) = (-1, 1). Atom 0 at the origin keeps
     // phase 1; atom 1 at tau = (0.2,0,0) gets exp(+i 2 pi 0.2).
     const double gauge_angle = 2.0 * std::acos(-1.0) * 0.2;
-    const std::complex<double> gauge_phase_atom1(std::cos(gauge_angle),
-                                                 std::sin(gauge_angle));
+    const std::complex<double> gauge_phase_atom1(std::cos(gauge_angle), std::sin(gauge_angle));
     mf.get_eigenvectors()[0][0][1].create(2, 2);
     mf.get_eigenvectors()[0][1][1].create(2, 2);
     for (int ib = 0; ib != 2; ++ib)
@@ -1102,10 +1092,10 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     for (const auto &R : Rs)
     {
         const auto restored = get_symmetry_restored_dmat_cplx_R_spinor(
-            ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw,
-            &member_kfrac_targets, &representative_indices);
-        const ComplexMatrix *channel_blocks[4] = {
-            &restored.b00, &restored.b01, &restored.b10, &restored.b11};
+            ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw, &member_kfrac_targets,
+            &representative_indices);
+        const ComplexMatrix *channel_blocks[4] = {&restored.b00, &restored.b01, &restored.b10,
+                                                  &restored.b11};
         for (int s = 0; s != 4; ++s)
         {
             const auto direct = mf.get_dmat_cplx_R(0, s / 2, s % 2, kfrac_list, R);
@@ -1123,9 +1113,9 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     // the old per-channel scalar restore must differ from the reference:
     // it conjugates each channel elementwise without the SU(2) mixing and
     // the Theta channel exchange
-    const auto scalar00 = get_symmetry_restored_dmat_cplx_R(
-        ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, Rs.front(), atom_nw,
-        &member_kfrac_targets, &representative_indices);
+    const auto scalar00 =
+        get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, Rs.front(),
+                                          atom_nw, &member_kfrac_targets, &representative_indices);
     const auto direct00 = mf.get_dmat_cplx_R(0, 0, 0, kfrac_list, Rs.front());
     const auto scalar_diff = scalar00 - direct00;
     if (scalar_diff.get_max_abs() < 1e-8)
@@ -1145,19 +1135,17 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
     add_identity_spatial_op(ctx);
 
     const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
-    const std::array<std::complex<double>, 4> U_s{
-        inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
-        std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
+    const std::array<std::complex<double>, 4> U_s{inv_sqrt2, std::complex<double>(0.0, inv_sqrt2),
+                                                  std::complex<double>(0.0, inv_sqrt2), inv_sqrt2};
     // Keep the physical forward action for both independent references. Only
     // the stored k-star action runs from member to representative, as in
     // generated metadata and resolve_symmetry_kstar_member_spin_operation.
-    const SymmetrySpinOperation forward_op{
-        0, U_s, true, SymmetrySpinActionSource::ExplicitSpinSpace};
-    const std::array<std::complex<double>, 4> U_s_inverse{
-        std::conj(U_s[0]), std::conj(U_s[2]),
-        std::conj(U_s[1]), std::conj(U_s[3])};
-    ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
+    const SymmetrySpinOperation forward_op{0, U_s, true,
+                                           SymmetrySpinActionSource::ExplicitSpinSpace};
+    const std::array<std::complex<double>, 4> U_s_inverse{std::conj(U_s[0]), std::conj(U_s[2]),
+                                                          std::conj(U_s[1]), std::conj(U_s[3])};
+    ctx.spin_operations.push_back(
+        SymmetrySpinOperation{0, U_s_inverse, true, SymmetrySpinActionSource::ExplicitSpinSpace});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
 
     SymmetryKStar star;
@@ -1188,21 +1176,21 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
     const Vector3_Order<int> R{0, 0, 0};
     const std::map<atom_t, size_t> atom_nw{{0, 1}};
 
-    const auto restored = get_symmetry_restored_dmat_cplx_R_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw);
+    const auto restored =
+        get_symmetry_restored_dmat_cplx_R_spinor(ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw);
 
     // Reference 1: the kernel applied directly to the four source blocks
     // (the restore adds only the star factor and the k phase, both unity here).
     const SpinorBlocks4<ComplexMatrix> source{
-        mf.get_dmat_cplx(0, 0, 0, 0), mf.get_dmat_cplx(0, 0, 1, 0),
-        mf.get_dmat_cplx(0, 1, 0, 0), mf.get_dmat_cplx(0, 1, 1, 0)};
-    const auto identity_orbit = [](std::size_t spatial_id, const ComplexMatrix &block) {
+        mf.get_dmat_cplx(0, 0, 0, 0), mf.get_dmat_cplx(0, 0, 1, 0), mf.get_dmat_cplx(0, 1, 0, 0),
+        mf.get_dmat_cplx(0, 1, 1, 0)};
+    const auto identity_orbit = [](std::size_t spatial_id, const ComplexMatrix &block)
+    {
         (void)spatial_id;
         return block;
     };
-    const auto kernel_ref = transform_spinor_bilinear(
-        forward_op, source, identity_orbit,
-        BilinearConvention::SourceToTarget_DXDdag);
+    const auto kernel_ref = transform_spinor_bilinear(forward_op, source, identity_orbit,
+                                                      BilinearConvention::SourceToTarget_DXDdag);
     assert_complex_matrix_near(restored.b00, kernel_ref.b00, 1e-12,
                                "antiunitary dmat restore vs kernel b00");
     assert_complex_matrix_near(restored.b01, kernel_ref.b01, 1e-12,
@@ -1233,8 +1221,8 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
     Js(1, 0) = {-1.0, 0.0};
     const auto Xp = Js * conj(Y) * transpose(Js, true);
     const std::complex<double> ref_blocks[4] = {Xp(0, 0), Xp(0, 1), Xp(1, 0), Xp(1, 1)};
-    const ComplexMatrix *out_blocks[4] = {
-        &restored.b00, &restored.b01, &restored.b10, &restored.b11};
+    const ComplexMatrix *out_blocks[4] = {&restored.b00, &restored.b01, &restored.b10,
+                                          &restored.b11};
     for (int s = 0; s != 4; ++s)
     {
         if (std::abs((*out_blocks[s])(0, 0) - ref_blocks[s]) > 1e-12)
@@ -1244,8 +1232,8 @@ void test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference()
 
     // the old per-channel scalar restore must differ from the Kronecker
     // reference (it would return conj(D00) for the (0,0) channel)
-    const auto scalar00 = get_symmetry_restored_dmat_cplx_R(
-        ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, R, atom_nw);
+    const auto scalar00 =
+        get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, R, atom_nw);
     if (std::abs(scalar00(0, 0) - ref_blocks[0]) < 1e-8)
         throw std::runtime_error(
             "scalar per-channel restore accidentally matches the Kronecker reference");
@@ -1261,8 +1249,8 @@ void test_spinor_kstar_dmat_restore_zero_fills_missing_channels()
     ctx.atom_to_type[0] = 0;
     ctx.input_coord_frac[0] = {0.0, 0.0, 0.0};
     add_identity_spatial_op(ctx);
-    ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, {1.0, 0.0, 0.0, 1.0}, true, SymmetrySpinActionSource::Identity});
+    ctx.spin_operations.push_back(
+        SymmetrySpinOperation{0, {1.0, 0.0, 0.0, 1.0}, true, SymmetrySpinActionSource::Identity});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
 
     SymmetryKStar star;
@@ -1287,20 +1275,19 @@ void test_spinor_kstar_dmat_restore_zero_fills_missing_channels()
     const Vector3_Order<int> R{0, 0, 0};
     const std::map<atom_t, size_t> atom_nw{{0, 1}};
 
-    const auto restored = get_symmetry_restored_dmat_cplx_R_spinor(
-        ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw);
+    const auto restored =
+        get_symmetry_restored_dmat_cplx_R_spinor(ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw);
 
-    if (restored.b00.get_max_abs() > 1e-14 || restored.b01.get_max_abs() > 1e-14
-        || restored.b10.get_max_abs() > 1e-14)
+    if (restored.b00.get_max_abs() > 1e-14 || restored.b01.get_max_abs() > 1e-14 ||
+        restored.b10.get_max_abs() > 1e-14)
         throw std::runtime_error("zero-fill restore did not zero the missing channels");
     // the occupied channel lands in b11 through the Theta remap: conj(D00)
     const auto d00 = mf.get_dmat_cplx(0, 0, 0, 0);
     if (std::abs(restored.b11(0, 0) - std::conj(d00(0, 0))) > 1e-12)
-        throw std::runtime_error(
-            "zero-fill restore: Theta remap did not map channel 0 into b11");
+        throw std::runtime_error("zero-fill restore: Theta remap did not map channel 0 into b11");
     // the scalar per-channel restore would report a spurious non-zero b00
-    const auto scalar00 = get_symmetry_restored_dmat_cplx_R(
-        ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, R, atom_nw);
+    const auto scalar00 =
+        get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, R, atom_nw);
     if (std::abs(scalar00(0, 0)) < 1e-12)
         throw std::runtime_error("scalar restore unexpectedly vanishes: test is vacuous");
 }
@@ -1311,10 +1298,7 @@ void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
 
     SymmetryContext ctx;
     ctx.set_available();
-    ctx.basis_convention = {-1,
-                            1,
-                            LIBRPA_ANGULAR_ORDER_NATURAL,
-                            LIBRPA_RSH_COEFF_1_M,
+    ctx.basis_convention = {-1, 1, LIBRPA_ANGULAR_ORDER_NATURAL, LIBRPA_RSH_COEFF_1_M,
                             LIBRPA_RSH_COEFF_1_M};
     const std::vector<SpeciesBasisLayout> wfc_layouts{{"X", {0}}};
     ctx.atom_to_type[0] = 0;
@@ -1324,8 +1308,8 @@ void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
         {1, {0.25, 0.0, 0.0}},
     };
     add_identity_spatial_op(ctx);
-    ctx.spin_operations.push_back(SymmetrySpinOperation{
-        0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
+    ctx.spin_operations.push_back(
+        SymmetrySpinOperation{0, {1.0, 0.0, 0.0, 1.0}, false, SymmetrySpinActionSource::Identity});
     ctx.kspace_actions.push_back(SymmetryGeometricAction{0, {0}});
 
     SymmetryKStar star;
@@ -1363,24 +1347,24 @@ void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
     {
         const auto restored_spinor = get_symmetry_restored_dmat_cplx_R_spinor(
             ctx, wfc_layouts, mf, 0, kfrac_list, R, atom_nw, &member_kfrac_targets);
-        const ComplexMatrix *channel_blocks[4] = {
-            &restored_spinor.b00, &restored_spinor.b01,
-            &restored_spinor.b10, &restored_spinor.b11};
+        const ComplexMatrix *channel_blocks[4] = {&restored_spinor.b00, &restored_spinor.b01,
+                                                  &restored_spinor.b10, &restored_spinor.b11};
         for (int s = 0; s != 4; ++s)
         {
-            const auto scalar = get_symmetry_restored_dmat_cplx_R(
-                ctx, wfc_layouts, mf, 0, s / 2, s % 2, kfrac_list, R,
-                atom_nw, &member_kfrac_targets);
+            const auto scalar =
+                get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, s / 2, s % 2, kfrac_list,
+                                                  R, atom_nw, &member_kfrac_targets);
             assert_complex_matrix_near(*channel_blocks[s], scalar, 1e-12,
                                        "spinor unitary dmat restore vs scalar restore with gauge");
         }
     }
     // off-diagonal channels must be genuinely non-zero, otherwise the
     // comparison above is vacuous
-    if (get_symmetry_restored_dmat_cplx_R_spinor(
-            ctx, wfc_layouts, mf, 0, kfrac_list, Rs.front(), atom_nw, &member_kfrac_targets)
+    if (get_symmetry_restored_dmat_cplx_R_spinor(ctx, wfc_layouts, mf, 0, kfrac_list, Rs.front(),
+                                                 atom_nw, &member_kfrac_targets)
             .b01.get_max_abs() < 1e-3)
-        throw std::runtime_error("spinor unitary dmat restore: off-diagonal block unexpectedly zero");
+        throw std::runtime_error(
+            "spinor unitary dmat restore: off-diagonal block unexpectedly zero");
 }
 
 int main(int argc, char *argv[])

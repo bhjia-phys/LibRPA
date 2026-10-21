@@ -82,13 +82,17 @@ def compare(reference, restarted, first_iteration, last_iteration,
     a = matrices(reference / "qsgw_matrices.dat", first_iteration, last_iteration)
     b = matrices(restarted / "qsgw_matrices.dat", first_iteration, last_iteration)
     # A restored boundary has mixed H, WFC and occupations; it does not recompute
-    # the previous Sigma, Vc or diagonalization rotation.
+    # the previous Sigma, Vc or diagonalization rotation. Entering-eigenframe
+    # velocities need a basis alignment, checked by the head/wing verifier.
     if exact_boundary:
         keys = set(b)
         assert keys <= set(a)
     else:
-        keys = {key for key in a if key[2] != "rotation_u" and not key[2].startswith("wfc")}
-        assert keys == {key for key in b if key[2] != "rotation_u" and not key[2].startswith("wfc")}
+        def fixed_basis(key):
+            return (key[2] != "rotation_u" and not key[2].startswith("wfc")
+                    and not key[2].startswith("head_velocity_"))
+        keys = {key for key in a if fixed_basis(key)}
+        assert keys == {key for key in b if fixed_basis(key)}
     delta = max(float(np.max(np.abs(a[key] - b[key]))) for key in keys)
     assert delta <= (0.0 if exact_boundary else 1e-8), delta
     metrics["maximum_matrix_difference_au"] = delta

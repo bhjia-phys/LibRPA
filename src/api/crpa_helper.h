@@ -1,11 +1,11 @@
 #pragma once
 
 #include "../core/crpa_workflow.h"
+#include "dataset.h"
 #include "librpa_crpa.h"
 
 namespace librpa_int
 {
-class Dataset;
 namespace api
 {
 enum class CrpaApiMode

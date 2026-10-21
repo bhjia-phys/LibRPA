@@ -255,8 +255,8 @@ void test_perturbative_zero_self_energy()
     const AnalyContPade pade(xs.size(), xs, std::vector<cplxdb>(xs.size(), 0.0));
     double energy, weight;
     cplxdb sigma, derivative;
-    const int info = qpe_solver_pade_perturbative(
-        pade, 0.5, 0.2, 0.1, 0.3, energy, sigma, derivative, weight);
+    const int info =
+        qpe_solver_pade_perturbative(pade, 0.5, 0.2, 0.1, 0.3, energy, sigma, derivative, weight);
     assert(info == 0);
     assert(std::abs(energy - 0.7) < 1.0e-14);
     assert(weight == 1.0);

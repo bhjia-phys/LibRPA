@@ -79,8 +79,7 @@ Matz project_vxc_nao_to_fixed_basis(const Matz& vxc_nao,
 {
     validate_reference_wfc(reference, spin, kpoint);
     const int spinor_count = reference.get_n_spinor();
-    validate_hermitian_matrix(vxc_nao, reference.get_n_aos() * spinor_count,
-                              "QSGW NAO Vxc matrix");
+    validate_hermitian_matrix(vxc_nao, reference.get_n_aos() * spinor_count, "QSGW NAO Vxc matrix");
     Matz result(reference.get_n_bands(), reference.get_n_bands(),
                 MAJOR::ROW);
     for (int bra = 0; bra < reference.get_n_bands(); ++bra)
@@ -90,26 +89,19 @@ Matz project_vxc_nao_to_fixed_basis(const Matz& vxc_nao,
             for (int bra_spinor = 0; bra_spinor < spinor_count; ++bra_spinor)
             {
                 const ComplexMatrix& bra_wfc =
-                    reference.get_eigenvectors()
-                        .at(spin)
-                        .at(bra_spinor)
-                        .at(kpoint);
+                    reference.get_eigenvectors().at(spin).at(bra_spinor).at(kpoint);
                 for (int ket_spinor = 0; ket_spinor < spinor_count; ++ket_spinor)
                 {
                     const ComplexMatrix& ket_wfc =
-                        reference.get_eigenvectors()
-                            .at(spin)
-                            .at(ket_spinor)
-                            .at(kpoint);
+                        reference.get_eigenvectors().at(spin).at(ket_spinor).at(kpoint);
                     for (int row = 0; row < reference.get_n_aos(); ++row)
                     {
                         for (int column = 0; column < reference.get_n_aos(); ++column)
                         {
-                            result(bra, ket) +=
-                                std::conj(bra_wfc(bra, row)) *
-                                vxc_nao(row * spinor_count + bra_spinor,
-                                        column * spinor_count + ket_spinor) *
-                                ket_wfc(ket, column);
+                            result(bra, ket) += std::conj(bra_wfc(bra, row)) *
+                                                vxc_nao(row * spinor_count + bra_spinor,
+                                                        column * spinor_count + ket_spinor) *
+                                                ket_wfc(ket, column);
                         }
                     }
                 }

@@ -233,15 +233,14 @@ double TFGrids::generate_minimax(double emin, double emax, double regulation)
 
     // GreenX can return success after an underflow in its transform fit.
     // Reject unusable grids here, before their coefficients enter Chi0 or GW.
-    const auto require_finite = [&](const double* values, std::size_t size,
-                                    const char* quantity)
+    const auto require_finite = [&](const double *values, std::size_t size, const char *quantity)
     {
         for (std::size_t i = 0; i < size; ++i)
             if (!std::isfinite(values[i]))
-                throw LIBRPA_RUNTIME_ERROR(
-                    "minimax grid generation produced non-finite " + string(quantity) +
-                    " (n=" + std::to_string(n_grids) + ", emin=" + std::to_string(emin) +
-                    ", emax=" + std::to_string(emax) + ")");
+                throw LIBRPA_RUNTIME_ERROR("minimax grid generation produced non-finite " +
+                                           string(quantity) + " (n=" + std::to_string(n_grids) +
+                                           ", emin=" + std::to_string(emin) +
+                                           ", emax=" + std::to_string(emax) + ")");
     };
     require_finite(time_nodes.data(), time_nodes.size(), "time nodes");
     require_finite(time_weights.data(), time_weights.size(), "time weights");

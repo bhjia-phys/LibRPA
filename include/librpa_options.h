@@ -458,7 +458,7 @@ typedef struct
 
     //! Option of computing dielectric function on imaginary axis.
     /*!
-     * Available numerical API values:
+     * Available values:
      * - 0: use data directly read from input
      * - 1: cubic-spline interpolation from input data
      * - 2: dielectric model fitting from input data
@@ -473,16 +473,12 @@ typedef struct
      *   Requires auxiliary l-shell metadata and the ScaLAPACK Wc path.
      *   Supported for three-dimensional G0W0 and G0W0 band calculations only.
      *
-     * Standalone g0w0/g0w0_band and qsgw drivers also accept 6:
-     * compute native velocity, then resolve to numerical API option 3 for
-     * analytic head and wing. G0W0 uses original H(R), S(R), and r(R) in
-     * the loaded SCF frame. QSGW uses fixed S/r and the entire current
-     * finite-BvK Hamiltonian in each entering iteration's E/C frame.
-     * This driver preset requires replace_w_head and use_scalapack_gw_wc,
-     * selects g0w0_headwing_velocity=native or qsgw_headwing_velocity=current_hr
-     * according to the task, and rejects use_pyatb=true.
-     * Direct library/API callers must select 3 and supply velocity through
-     * the public setter; do not pass 6 to LibrpaOptions.
+     * Standalone G0W0/cRPA/QSGW drivers also accept preset 6. G0W0 differentiates
+     * original H/S/r; QSGW differentiates its complete current native-baseline
+     * Hamiltonian. Both resolve to numerical option 3 for analytic head and wing.
+     * This requires replace_w_head and use_scalapack_gw_wc, and use_pyatb=false.
+     * API callers supply velocity or numerical H/S/r blocks and select 3/4;
+     * they must not pass driver preset 6 into a numerical options struct.
      *
      * @par Default
      * 0

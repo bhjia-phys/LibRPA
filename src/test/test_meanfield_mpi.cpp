@@ -999,8 +999,8 @@ static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
     std::map<Vector3_Order<int>, SpinorBlocks4<ComplexMatrix>> expected;
     for (const auto &R : Rs)
     {
-        expected.emplace(R, get_symmetry_restored_dmat_cplx_R_spinor(
-            ctx, wfc_layouts, mf_ref, 0, kfrac_list, R, atom_nw));
+        expected.emplace(R, get_symmetry_restored_dmat_cplx_R_spinor(ctx, wfc_layouts, mf_ref, 0,
+                                                                     kfrac_list, R, atom_nw));
     }
 
     KPointBlacsProcessShape shape(1, size_global, false);
@@ -1021,17 +1021,16 @@ static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
     }
 
     const auto actual = get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
-        0, mf, kfrac_list, Rs, context, desc_wfc, desc_dm, ctx, pbc,
-        atbasis_wfc);
+        0, mf, kfrac_list, Rs, context, desc_wfc, desc_dm, ctx, pbc, atbasis_wfc);
 
     for (const auto &R : Rs)
     {
         const auto &exp_blocks = expected.at(R);
         const auto &act_blocks = actual.at(R);
-        const ComplexMatrix *exp_channel[4] = {
-            &exp_blocks.b00, &exp_blocks.b01, &exp_blocks.b10, &exp_blocks.b11};
-        const Matz *act_channel[4] = {
-            &act_blocks.b00, &act_blocks.b01, &act_blocks.b10, &act_blocks.b11};
+        const ComplexMatrix *exp_channel[4] = {&exp_blocks.b00, &exp_blocks.b01, &exp_blocks.b10,
+                                               &exp_blocks.b11};
+        const Matz *act_channel[4] = {&act_blocks.b00, &act_blocks.b01, &act_blocks.b10,
+                                      &act_blocks.b11};
         for (int s = 0; s != 4; ++s)
         {
             for (int jloc = 0; jloc != desc_dm.n_loc(); ++jloc)
@@ -1040,8 +1039,8 @@ static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
                 for (int iloc = 0; iloc != desc_dm.m_loc(); ++iloc)
                 {
                     const int iglob = desc_dm.indx_l2g_r(iloc);
-                    if (!fequal((*act_channel[s])(iloc, jloc),
-                                (*exp_channel[s])(iglob, jglob), cplxdb{1e-12, 0.0}))
+                    if (!fequal((*act_channel[s])(iloc, jloc), (*exp_channel[s])(iglob, jglob),
+                                cplxdb{1e-12, 0.0}))
                     {
                         throw std::runtime_error(
                             "kBLACS spinor density matrix did not match serial restore");

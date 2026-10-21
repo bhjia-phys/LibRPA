@@ -24,10 +24,7 @@ namespace
 
 using Complex = std::complex<double>;
 
-bool finite(const Complex &z)
-{
-    return std::isfinite(z.real()) && std::isfinite(z.imag());
-}
+bool finite(const Complex &z) { return std::isfinite(z.real()) && std::isfinite(z.imag()); }
 
 bool finite(const Vector3_Order<double> &v)
 {
@@ -38,19 +35,16 @@ void validate_finite_matrix(const ComplexMatrix &m, const std::string &label)
 {
     for (int i = 0; i != m.size; ++i)
     {
-        if (!finite(m.c[i]))
-            throw LIBRPA_RUNTIME_ERROR(label + " contains a non-finite value");
+        if (!finite(m.c[i])) throw LIBRPA_RUNTIME_ERROR(label + " contains a non-finite value");
     }
 }
 
-void collective_stage_error(const MpiCommHandler &comm_h,
-                            const std::string &label,
+void collective_stage_error(const MpiCommHandler &comm_h, const std::string &label,
                             const std::string &local_error)
 {
     int local_failed = local_error.empty() ? 0 : 1;
     int global_failed = 0;
-    MPI_Allreduce(&local_failed, &global_failed, 1, MPI_INT, MPI_MAX,
-                  comm_h.comm);
+    MPI_Allreduce(&local_failed, &global_failed, 1, MPI_INT, MPI_MAX, comm_h.comm);
     if (global_failed != 0)
         throw LIBRPA_RUNTIME_ERROR(
             label + " failed on at least one MPI rank: " +
@@ -66,8 +60,7 @@ int wrap_component(const int value, const int period)
     return wrapped - period / 2;
 }
 
-Vector3_Order<int> wrap_bvk(const Vector3_Order<int> &R,
-                            const Vector3_Order<int> &period)
+Vector3_Order<int> wrap_bvk(const Vector3_Order<int> &R, const Vector3_Order<int> &period)
 {
     return {wrap_component(R.x, period.x), wrap_component(R.y, period.y),
             wrap_component(R.z, period.z)};
@@ -104,10 +97,8 @@ void validate_bvk_and_q_grid(const PeriodicBoundaryData &pbc,
             Complex overlap{0.0, 0.0};
             for (const auto &R : pbc.Rlist)
             {
-                const double arg = TWO_PI *
-                    ((qf_i.x - qf_j.x) * R.x +
-                     (qf_i.y - qf_j.y) * R.y +
-                     (qf_i.z - qf_j.z) * R.z);
+                const double arg = TWO_PI * ((qf_i.x - qf_j.x) * R.x + (qf_i.y - qf_j.y) * R.y +
+                                             (qf_i.z - qf_j.z) * R.z);
                 overlap += Complex(std::cos(arg), std::sin(arg));
             }
             overlap /= static_cast<double>(ncells);
@@ -125,14 +116,13 @@ bool atom_block_nonzero(const ComplexMatrix &T, const AtomicBasis &basis, const 
     const int end = begin + static_cast<int>(basis.get_atom_nb(atom));
     const int nao = static_cast<int>(basis.nb_total);
     for (int s = 0; s < T.nr / nao; ++s)
-    for (int i = begin; i != end; ++i)
-        for (int a = 0; a != T.nc; ++a)
-            if (T(s * nao + i, a) != Complex{0.0, 0.0}) return true;
+        for (int i = begin; i != end; ++i)
+            for (int a = 0; a != T.nc; ++a)
+                if (T(s * nao + i, a) != Complex{0.0, 0.0}) return true;
     return false;
 }
 
-std::set<int> support_atoms(const std::vector<ComplexMatrix> &T_R,
-                            const AtomicBasis &basis)
+std::set<int> support_atoms(const std::vector<ComplexMatrix> &T_R, const AtomicBasis &basis)
 {
     std::set<int> result;
     for (int atom = 0; atom != static_cast<int>(basis.n_atoms); ++atom)
@@ -149,8 +139,7 @@ std::set<int> support_atoms(const std::vector<ComplexMatrix> &T_R,
     return result;
 }
 
-void validate_cs_tensor(const RI::Tensor<double> &Cs, const int n_mu,
-                        const int n_i, const int n_j,
+void validate_cs_tensor(const RI::Tensor<double> &Cs, const int n_mu, const int n_i, const int n_j,
                         const std::string &label)
 {
     const std::size_t expected = static_cast<std::size_t>(n_mu) * n_i * n_j;
@@ -167,16 +156,12 @@ void validate_cs_tensor(const RI::Tensor<double> &Cs, const int n_mu,
             throw LIBRPA_RUNTIME_ERROR(label + " contains a non-finite value");
 }
 
-
-} // namespace
+}  // namespace
 
 SitePairDensityVertex build_site_pair_density_vertex_from_T(
-    const int site_index, const SiteOrbitalGroup &site,
-    const std::vector<ComplexMatrix> &T_R_site,
-    const PairDensityCsMap &Cs_complete,
-    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-    const PeriodicBoundaryData &pbc,
-    const std::vector<Vector3_Order<double>> &qpoints)
+    const int site_index, const SiteOrbitalGroup &site, const std::vector<ComplexMatrix> &T_R_site,
+    const PairDensityCsMap &Cs_complete, const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
+    const PeriodicBoundaryData &pbc, const std::vector<Vector3_Order<double>> &qpoints)
 {
     validate_bvk_and_q_grid(pbc, qpoints);
     if (!basis_wfc.initialized() || !basis_abf.initialized())
@@ -191,8 +176,7 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
         throw LIBRPA_INVALID_ARGUMENT("pair-density vertex site atom index is out of range");
     if (!site.orbital_labels.empty() &&
         static_cast<int>(site.orbital_labels.size()) != site.n_orbitals)
-        throw LIBRPA_INVALID_ARGUMENT(
-            "pair-density vertex orbital-label count is inconsistent");
+        throw LIBRPA_INVALID_ARGUMENT("pair-density vertex orbital-label count is inconsistent");
     if (T_R_site.size() != pbc.Rlist.size())
         throw LIBRPA_INVALID_ARGUMENT(
             "pair-density vertex T(R) count does not match the BvK R grid");
@@ -237,8 +221,8 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
             const int n_j = static_cast<int>(basis_wfc.get_atom_nb(J));
             const int j_begin = static_cast<int>(basis_wfc.get_part_range().at(J));
             std::ostringstream label;
-            label << "pair-density vertex Cs[I=" << I << ",J=" << J << ",R="
-                  << R.x << ',' << R.y << ',' << R.z << ']';
+            label << "pair-density vertex Cs[I=" << I << ",J=" << J << ",R=" << R.x << ',' << R.y
+                  << ',' << R.z << ']';
             validate_cs_tensor(Cs, n_mu, n_i, n_j, label.str());
             used_relevant_cs = true;
 
@@ -265,8 +249,7 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
                     !atom_block_nonzero(T_right, basis_wfc, J))
                     continue;
 
-                auto [it_D, inserted] =
-                    D_by_R[iA].emplace(I, ComplexMatrix(npair, n_mu));
+                auto [it_D, inserted] = D_by_R[iA].emplace(I, ComplexMatrix(npair, n_mu));
                 auto &D = it_D->second;
                 (void)inserted;
                 for (int a = 0; a != site.n_orbitals; ++a)
@@ -278,19 +261,17 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
                             {
                                 Complex density{};
                                 for (int s = 0; s < n_spinor; ++s)
-                                    density +=
-                                        std::conj(T_left(s * nao + i_begin + i, a)) *
-                                            T_right(s * nao + j_begin + j, b) +
-                                        std::conj(T_right(s * nao + j_begin + j, a)) *
-                                            T_left(s * nao + i_begin + i, b);
+                                    density += std::conj(T_left(s * nao + i_begin + i, a)) *
+                                                   T_right(s * nao + j_begin + j, b) +
+                                               std::conj(T_right(s * nao + j_begin + j, a)) *
+                                                   T_left(s * nao + i_begin + i, b);
                                 products(ab, i * n_j + j) = density;
                             }
                     }
                 // Ordinary transpose: the conjugations are already in products.
                 if (n_mu && nij)
-                    LapackConnector::gemm('N', 'T', npair, n_mu, nij, Complex{1.0, 0.0},
-                                          products.c, nij, coefficients.c, nij,
-                                          Complex{1.0, 0.0}, D.c, n_mu);
+                    LapackConnector::gemm('N', 'T', npair, n_mu, nij, Complex{1.0, 0.0}, products.c,
+                                          nij, coefficients.c, nij, Complex{1.0, 0.0}, D.c, n_mu);
             }
         }
     }
@@ -313,8 +294,7 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
         for (std::size_t iA = 0; iA != pbc.Rlist.size(); ++iA)
         {
             const auto &A = pbc.Rlist[iA];
-            const double arg = -TWO_PI *
-                (qfrac.x * A.x + qfrac.y * A.y + qfrac.z * A.z);
+            const double arg = -TWO_PI * (qfrac.x * A.x + qfrac.y * A.y + qfrac.z * A.z);
             const Complex phase{std::cos(arg), std::sin(arg)};
             for (const auto &[I, D_A] : D_by_R[iA])
             {
@@ -336,10 +316,8 @@ SitePairDensityVertex build_site_pair_density_vertex_from_T(
 }
 
 SitePairDensityVertex build_site_pair_density_vertex(
-    CorrelatedSubspace &subspace, const int site_index,
-    const PairDensityCsMap &Cs_complete,
-    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-    const PeriodicBoundaryData &pbc,
+    CorrelatedSubspace &subspace, const int site_index, const PairDensityCsMap &Cs_complete,
+    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf, const PeriodicBoundaryData &pbc,
     const std::vector<Vector3_Order<double>> &qpoints)
 {
     const auto &sites = subspace.get_sites();
@@ -353,11 +331,8 @@ SitePairDensityVertex build_site_pair_density_vertex(
     // Wrapping -A is valid without boundary phases only on an untwisted mesh.
     constexpr double mesh_tol = 1.0e-9;
     for (const auto &k : subspace.get_kfrac_list())
-        for (const double component : {k.x * pbc.period.x,
-                                       k.y * pbc.period.y,
-                                       k.z * pbc.period.z})
-            if (!std::isfinite(component) ||
-                std::abs(component - std::round(component)) > mesh_tol)
+        for (const double component : {k.x * pbc.period.x, k.y * pbc.period.y, k.z * pbc.period.z})
+            if (!std::isfinite(component) || std::abs(component - std::round(component)) > mesh_tol)
                 throw LIBRPA_INVALID_ARGUMENT(
                     "pair-density vertex wrapper does not support twisted BvK k meshes");
 
@@ -367,27 +342,25 @@ SitePairDensityVertex build_site_pair_density_vertex(
     {
         const int iR = pbc.get_R_index(wrap_bvk({-A.x, -A.y, -A.z}, pbc.period));
         if (iR < 0 || static_cast<std::size_t>(iR) >= pbc.Rlist.size())
-            throw LIBRPA_RUNTIME_ERROR(
-                "pair-density vertex failed to wrap -A onto the BvK grid");
+            throw LIBRPA_RUNTIME_ERROR("pair-density vertex failed to wrap -A onto the BvK grid");
         T_R_site.push_back(subspace.get_T_site(iR, site_index));
     }
     return build_site_pair_density_vertex_from_T(
-        site_index, sites[static_cast<std::size_t>(site_index)], T_R_site,
-        Cs_complete, basis_wfc, basis_abf, pbc, qpoints);
+        site_index, sites[static_cast<std::size_t>(site_index)], T_R_site, Cs_complete, basis_wfc,
+        basis_abf, pbc, qpoints);
 }
 
 SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
-    const SitePairDensityVertex &parent,
-    const AtomicBasis &parent_basis_abf, const AtomicBasis &active_basis_abf,
+    const SitePairDensityVertex &parent, const AtomicBasis &parent_basis_abf,
+    const AtomicBasis &active_basis_abf,
     const std::map<Vector3_Order<double>, ComplexMatrix> &sinvS)
 {
     const auto max_int = static_cast<std::size_t>(std::numeric_limits<int>::max());
     if (!parent_basis_abf.initialized() || !active_basis_abf.initialized() ||
-        parent_basis_abf.n_atoms == 0 ||
-        parent_basis_abf.n_atoms != active_basis_abf.n_atoms ||
-        parent_basis_abf.n_atoms > max_int ||
-        parent_basis_abf.nb_total == 0 || active_basis_abf.nb_total == 0 ||
-        parent_basis_abf.nb_total > max_int || active_basis_abf.nb_total > max_int)
+        parent_basis_abf.n_atoms == 0 || parent_basis_abf.n_atoms != active_basis_abf.n_atoms ||
+        parent_basis_abf.n_atoms > max_int || parent_basis_abf.nb_total == 0 ||
+        active_basis_abf.nb_total == 0 || parent_basis_abf.nb_total > max_int ||
+        active_basis_abf.nb_total > max_int)
         throw LIBRPA_INVALID_ARGUMENT(
             "pair-density auxiliary transform requires compatible initialized bases");
     if (parent.site_index < 0 || parent.atom_index < 0 ||
@@ -423,10 +396,10 @@ SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
             throw LIBRPA_INVALID_ARGUMENT("pair-density auxiliary transform has non-finite q");
         const auto it_L = sinvS.find(q);
         if (it_L == sinvS.end())
-            throw LIBRPA_INVALID_ARGUMENT("pair-density auxiliary transform is missing a required q");
+            throw LIBRPA_INVALID_ARGUMENT(
+                "pair-density auxiliary transform is missing a required q");
         const auto &L = it_L->second;
-        if (L.nr != nactive || L.nc != nparent ||
-            L.size != nactive * nparent || L.c == nullptr)
+        if (L.nr != nactive || L.nc != nparent || L.size != nactive * nparent || L.c == nullptr)
             throw LIBRPA_INVALID_ARGUMENT("pair-density auxiliary transform L has wrong shape");
         validate_finite_matrix(L, "pair-density auxiliary transform L");
 
@@ -434,7 +407,8 @@ SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
         for (const auto &[I, D] : blocks)
         {
             if (I < 0 || static_cast<std::size_t>(I) >= parent_basis_abf.n_atoms)
-                throw LIBRPA_INVALID_ARGUMENT("pair-density auxiliary transform atom is out of range");
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "pair-density auxiliary transform atom is out of range");
             const int width = static_cast<int>(parent_basis_abf.get_atom_nb(I));
             if (D.nr != npair || D.nc != width || D.size != npair * width ||
                 (D.size > 0 && D.c == nullptr))
@@ -442,8 +416,7 @@ SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
             validate_finite_matrix(D, "pair-density auxiliary transform D");
             const int begin = static_cast<int>(parent_basis_abf.get_part_range().at(I));
             for (int ab = 0; ab != npair; ++ab)
-                for (int mu = 0; mu != width; ++mu)
-                    Dparent(ab, begin + mu) = D(ab, mu);
+                for (int mu = 0; mu != width; ++mu) Dparent(ab, begin + mu) = D(ab, mu);
         }
         // Column coefficients obey d_active=L(q)d_parent; rows use transpose.
         const auto Dactive = Dparent * transpose(L, false);
@@ -456,24 +429,24 @@ SitePairDensityVertex transform_site_pair_density_vertex_auxiliary_basis(
             const int begin = static_cast<int>(active_basis_abf.get_part_range().at(I));
             auto &D = active_blocks.emplace(I, ComplexMatrix(npair, width)).first->second;
             for (int ab = 0; ab != npair; ++ab)
-                for (int mu = 0; mu != width; ++mu)
-                    D(ab, mu) = Dactive(ab, begin + mu);
+                for (int mu = 0; mu != width; ++mu) D(ab, mu) = Dactive(ab, begin + mu);
         }
     }
     return result;
 }
 
-ComplexMatrix contract_rectangular_ordered_pair_vertex(
-    const ComplexMatrix &D_left, const ComplexMatrix &W,
-    const ComplexMatrix &D_right, const int n_left, const int n_right)
+ComplexMatrix contract_rectangular_ordered_pair_vertex(const ComplexMatrix &D_left,
+                                                       const ComplexMatrix &W,
+                                                       const ComplexMatrix &D_right,
+                                                       const int n_left, const int n_right)
 {
     if (n_left <= 0 || n_right <= 0)
         throw LIBRPA_INVALID_ARGUMENT(
             "rectangular ordered-pair contraction requires positive orbital counts");
     const int left_pairs = n_left * n_left;
     const int right_pairs = n_right * n_right;
-    if (D_left.nr != left_pairs || D_left.nc != W.nr ||
-        D_right.nr != right_pairs || D_right.nc != W.nc)
+    if (D_left.nr != left_pairs || D_left.nc != W.nr || D_right.nr != right_pairs ||
+        D_right.nc != W.nc)
         throw LIBRPA_INVALID_ARGUMENT(
             "rectangular ordered-pair contraction received inconsistent dimensions");
     validate_finite_matrix(D_left, "rectangular ordered-pair left D");
@@ -488,30 +461,26 @@ ComplexMatrix contract_rectangular_ordered_pair_vertex(
     for (int a = 0; a != n_left; ++a)
         for (int b = 0; b != n_left; ++b)
             for (int mu = 0; mu != D_left.nc; ++mu)
-                left(a * n_left + b, mu) =
-                    std::conj(D_left(b * n_left + a, mu));
+                left(a * n_left + b, mu) = std::conj(D_left(b * n_left + a, mu));
     ComplexMatrix result = (left * W) * transpose(D_right, false);
     validate_finite_matrix(result, "rectangular ordered-pair result");
     return result;
 }
 
-PairDensityVertex::PairDensityVertex(
-    CorrelatedSubspace &subspace, const Cs_LRI &Cs,
-    const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
-    const PeriodicBoundaryData &pbc,
-    const std::vector<Vector3_Order<double>> &qpoints,
-    const MpiCommHandler &comm_h)
+PairDensityVertex::PairDensityVertex(CorrelatedSubspace &subspace, const Cs_LRI &Cs,
+                                     const AtomicBasis &basis_wfc, const AtomicBasis &basis_abf,
+                                     const PeriodicBoundaryData &pbc,
+                                     const std::vector<Vector3_Order<double>> &qpoints,
+                                     const MpiCommHandler &comm_h)
 {
     if (!comm_h.is_initialized())
-        throw LIBRPA_INVALID_ARGUMENT(
-            "PairDensityVertex requires an initialized MPI communicator");
+        throw LIBRPA_INVALID_ARGUMENT("PairDensityVertex requires an initialized MPI communicator");
 
     std::string local_error;
     // Empty MPI owners have no representation to contradict LIBRI routing.
     // Only owners of an actual block receive the storage tag from input APIs.
     if (!Cs.data_IJR.empty() || (!Cs.data_libri.empty() && !Cs.use_libri))
-        local_error =
-            "projector pair-density vertex requires LIBRPA_ROUTING_LIBRI Cs storage";
+        local_error = "projector pair-density vertex requires LIBRPA_ROUTING_LIBRI Cs storage";
     try
     {
         validate_bvk_and_q_grid(pbc, qpoints);
@@ -525,23 +494,20 @@ PairDensityVertex::PairDensityVertex(
         if (local_error.empty())
             local_error = "unknown pair-density vertex grid validation failure";
     }
-    collective_stage_error(comm_h, "PairDensityVertex initial validation",
-                           local_error);
+    collective_stage_error(comm_h, "PairDensityVertex initial validation", local_error);
 
 #ifndef LIBRPA_USE_LIBRI
     (void)basis_wfc;
     (void)basis_abf;
-    collective_stage_error(
-        comm_h, "PairDensityVertex LibRI availability",
-        "projector pair-density vertex requires a build with LibRI enabled");
+    collective_stage_error(comm_h, "PairDensityVertex LibRI availability",
+                           "projector pair-density vertex requires a build with LibRI enabled");
 #else
     std::set<int> support;
     local_error.clear();
     try
     {
         if (subspace.get_R_list() != pbc.Rlist)
-            local_error =
-                "PairDensityVertex subspace and Dataset use different R grids";
+            local_error = "PairDensityVertex subspace and Dataset use different R grids";
         else if (subspace.get_sites().empty())
             local_error = "PairDensityVertex has no configured sites";
         else
@@ -552,16 +518,14 @@ PairDensityVertex::PairDensityVertex(
                 const int nao = static_cast<int>(basis_wfc.nb_total);
                 if (nao <= 0 || (T.nr != nao && T.nr != 2 * nao))
                 {
-                    local_error =
-                        "PairDensityVertex subspace T(R) has the wrong AO dimension";
+                    local_error = "PairDensityVertex subspace T(R) has the wrong AO dimension";
                     break;
                 }
                 const auto support_R = support_atoms({T}, basis_wfc);
                 support.insert(support_R.begin(), support_R.end());
             }
             if (local_error.empty() && support.empty())
-                local_error =
-                    "PairDensityVertex correlated subspace has empty AO support";
+                local_error = "PairDensityVertex correlated subspace has empty AO support";
         }
     }
     catch (const std::exception &error)
@@ -572,21 +536,18 @@ PairDensityVertex::PairDensityVertex(
     {
         local_error = "unknown PairDensityVertex support validation failure";
     }
-    collective_stage_error(comm_h, "PairDensityVertex support validation",
-                           local_error);
+    collective_stage_error(comm_h, "PairDensityVertex support validation", local_error);
 
     // The LibRI collective receives the support set as a communication
     // parameter.  It must be identical on every rank; a local T(R) mismatch
     // would otherwise make ranks execute different collective schedules.
     std::vector<int> local_support_atoms(support.begin(), support.end());
     const int local_support_count =
-        local_support_atoms.size() <=
-                static_cast<std::size_t>(std::numeric_limits<int>::max())
+        local_support_atoms.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max())
             ? static_cast<int>(local_support_atoms.size())
             : -1;
     std::vector<int> support_counts(static_cast<std::size_t>(comm_h.nprocs), 0);
-    MPI_Allgather(&local_support_count, 1, MPI_INT, support_counts.data(), 1,
-                  MPI_INT, comm_h.comm);
+    MPI_Allgather(&local_support_count, 1, MPI_INT, support_counts.data(), 1, MPI_INT, comm_h.comm);
     std::vector<int> support_displacements(support_counts.size(), 0);
     int total_support = 0;
     bool support_metadata_overflow = local_support_count < 0;
@@ -603,8 +564,7 @@ PairDensityVertex::PairDensityVertex(
     }
     local_error.clear();
     if (support_metadata_overflow)
-        local_error =
-            "PairDensityVertex support metadata exceeds MPI count capacity";
+        local_error = "PairDensityVertex support metadata exceeds MPI count capacity";
     collective_stage_error(comm_h, "PairDensityVertex support metadata", local_error);
 
     // Keep valid addresses for zero-count MPI arguments.  This matters for a
@@ -612,12 +572,10 @@ PairDensityVertex::PairDensityVertex(
     // the corresponding buffer contents.
     int support_dummy = 0;
     std::vector<int> all_support_atoms(static_cast<std::size_t>(total_support), 0);
-    MPI_Allgatherv(
-        local_support_count == 0 ? &support_dummy : local_support_atoms.data(),
-        local_support_count, MPI_INT,
-        total_support == 0 ? &support_dummy : all_support_atoms.data(),
-        support_counts.data(), support_displacements.data(), MPI_INT,
-        comm_h.comm);
+    MPI_Allgatherv(local_support_count == 0 ? &support_dummy : local_support_atoms.data(),
+                   local_support_count, MPI_INT,
+                   total_support == 0 ? &support_dummy : all_support_atoms.data(),
+                   support_counts.data(), support_displacements.data(), MPI_INT, comm_h.comm);
 
     std::set<int> global_support(all_support_atoms.begin(), all_support_atoms.end());
     local_error.clear();
@@ -625,14 +583,12 @@ PairDensityVertex::PairDensityVertex(
     {
         if (atom < 0 || static_cast<std::size_t>(atom) >= basis_wfc.n_atoms)
         {
-            local_error =
-                "PairDensityVertex support contains an atom outside the AO basis";
+            local_error = "PairDensityVertex support contains an atom outside the AO basis";
             break;
         }
     }
     if (local_error.empty() && global_support != support)
-        local_error =
-            "PairDensityVertex correlated AO support differs between MPI ranks";
+        local_error = "PairDensityVertex correlated AO support differs between MPI ranks";
     collective_stage_error(comm_h, "PairDensityVertex support consensus", local_error);
 
     // The production LibRI reader distributes each Cs key uniquely.  Request
@@ -660,8 +616,7 @@ PairDensityVertex::PairDensityVertex(
         comm_h.comm, local_owners, support, support);
     local_error.clear();
     if (Cs_complete.empty())
-        local_error =
-            "PairDensityVertex found no global Cs block on the correlated AO support";
+        local_error = "PairDensityVertex found no global Cs block on the correlated AO support";
     if (local_error.empty())
     {
         for (const auto &[I, JR_Cs] : Cs_complete)
@@ -669,8 +624,7 @@ PairDensityVertex::PairDensityVertex(
             {
                 (void)tensor;
                 const auto it_I = owners_complete.find(I);
-                if (it_I == owners_complete.end() ||
-                    it_I->second.count(JR) == 0 ||
+                if (it_I == owners_complete.end() || it_I->second.count(JR) == 0 ||
                     it_I->second.at(JR)(0) != 1)
                 {
                     local_error =
@@ -679,8 +633,7 @@ PairDensityVertex::PairDensityVertex(
                 }
             }
     }
-    collective_stage_error(comm_h, "PairDensityVertex LibRI result validation",
-                           local_error);
+    collective_stage_error(comm_h, "PairDensityVertex LibRI result validation", local_error);
 
     const auto n_sites = subspace.get_sites().size();
     const int local_site_count =
@@ -689,15 +642,12 @@ PairDensityVertex::PairDensityVertex(
             : -1;
     int min_site_count = 0;
     int max_site_count = 0;
-    MPI_Allreduce(&local_site_count, &min_site_count, 1, MPI_INT, MPI_MIN,
-                  comm_h.comm);
-    MPI_Allreduce(&local_site_count, &max_site_count, 1, MPI_INT, MPI_MAX,
-                  comm_h.comm);
+    MPI_Allreduce(&local_site_count, &min_site_count, 1, MPI_INT, MPI_MIN, comm_h.comm);
+    MPI_Allreduce(&local_site_count, &max_site_count, 1, MPI_INT, MPI_MAX, comm_h.comm);
     local_error.clear();
     if (min_site_count != max_site_count || min_site_count < 0)
         local_error = "PairDensityVertex site count differs between MPI ranks";
-    collective_stage_error(comm_h, "PairDensityVertex site-count validation",
-                           local_error);
+    collective_stage_error(comm_h, "PairDensityVertex site-count validation", local_error);
 
     try
     {
@@ -719,8 +669,8 @@ PairDensityVertex::PairDensityVertex(
         local_error.clear();
         try
         {
-            site_result = build_site_pair_density_vertex(
-                subspace, isite, Cs_complete, basis_wfc, basis_abf, pbc, qpoints);
+            site_result = build_site_pair_density_vertex(subspace, isite, Cs_complete, basis_wfc,
+                                                         basis_abf, pbc, qpoints);
         }
         catch (const std::exception &error)
         {
@@ -743,4 +693,4 @@ const SitePairDensityVertex &PairDensityVertex::site(const int site_index) const
     return sites_[static_cast<std::size_t>(site_index)];
 }
 
-} // namespace librpa_int
+}  // namespace librpa_int

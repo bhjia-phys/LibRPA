@@ -211,8 +211,7 @@ static librpa_int::symmetry_atom_block_matrix_map_t gather_symmetry_ibz_blocks_c
 }
 
 static std::set<std::pair<atom_t, atom_t>> build_symmetry_full_target_atom_pairs(
-    const std::map<atom_t, size_t>& atom_nabf,
-    const bool return_ordered_atom_pair)
+    const std::map<atom_t, size_t>& atom_nabf, const bool return_ordered_atom_pair)
 {
     std::set<std::pair<atom_t, atom_t>> target_atom_pairs;
     for (std::size_t atom_i = 0; atom_i != atom_nabf.size(); ++atom_i)
@@ -220,8 +219,7 @@ static std::set<std::pair<atom_t, atom_t>> build_symmetry_full_target_atom_pairs
         const std::size_t atom_j_begin = return_ordered_atom_pair ? 0 : atom_i;
         for (std::size_t atom_j = atom_j_begin; atom_j != atom_nabf.size(); ++atom_j)
         {
-            target_atom_pairs.insert(
-                {static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j)});
+            target_atom_pairs.insert({static_cast<atom_t>(atom_i), static_cast<atom_t>(atom_j)});
         }
     }
     return target_atom_pairs;
@@ -300,8 +298,7 @@ static atpair_R_mat_t accumulate_symmetry_abf_full_sector_vr(
                 use_full_grid_member_targets
                     ? full_grid_member_targets[static_cast<std::size_t>(
                           star_mapping.star_list_index)][imember]
-                    : Vector3_Order<double>{pbc.latvec
-                                            * star_mapping.member_q_bz_keys[imember]};
+                    : Vector3_Order<double>{pbc.latvec * star_mapping.member_q_bz_keys[imember]};
             const Vector3_Order<double> q_bz_target_frac =
                 restrict_fractional_coordinate(raw_q_bz_target_frac);
             librpa_int::symmetry_atom_block_matrix_map_t rotated_blocks;

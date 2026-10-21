@@ -159,9 +159,8 @@ void test_trace_logdet_accounts_for_complex_row_pivot(const BlacsCtxtHandler &bl
 
     // response = I - A, where A = [[1, 2i], [-2i, 5]] is positive definite
     // with det(A) = 1. PZGETRF must pivot the first row because |-2i| > |1|.
-    const std::complex<double> response_dense[2][2] = {
-        {{0.0, 0.0}, {0.0, -2.0}},
-        {{0.0, 2.0}, {-4.0, 0.0}}};
+    const std::complex<double> response_dense[2][2] = {{{0.0, 0.0}, {0.0, -2.0}},
+                                                       {{0.0, 2.0}, {-4.0, 0.0}}};
     auto response = init_local_mat<std::complex<double>>(desc, MAJOR::COL);
     for (int i = 0; i != 2; ++i)
     {
@@ -870,8 +869,7 @@ void verify_gamma_wc_retained_identity(const BlacsCtxtHandler &blacs_h, const bo
             std::cout << "Gamma Wc dense control: rank=" << retained
                       << " zero_response=" << zero_response << " option=" << dielectric_option
                       << " cholesky=" << use_cholesky << " block_size=" << block_size
-                      << " iq=" << iq << " max_error=" << max_error
-                      << std::endl;
+                      << " iq=" << iq << " max_error=" << max_error << std::endl;
         assert(max_error < 1e-10);
     }
 }

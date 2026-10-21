@@ -124,10 +124,8 @@ bool preserves_lattice_metric(const Matrix3& rotation,
     // R G R^T and G has units of length squared: merely changing the lattice
     // unit or rounding a large cell can make a valid fractional operation
     // fail, causing callers to reinterpret it as a Cartesian rotation.
-    const Matrix3 cartesian = row_fractional_rotation_to_cartesian(
-        rotation, lattice_vectors);
-    return is_same_matrix(cartesian.Transpose() * cartesian,
-                          Matrix3::IDENTITY, tol);
+    const Matrix3 cartesian = row_fractional_rotation_to_cartesian(rotation, lattice_vectors);
+    return is_same_matrix(cartesian.Transpose() * cartesian, Matrix3::IDENTITY, tol);
 }
 
 static Vector3_Order<int> rotate_rspace_vector(

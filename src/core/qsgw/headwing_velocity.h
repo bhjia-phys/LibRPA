@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
-#include <map>
 #include <vector>
 
+#include "../../math/localized_operator.h"
 #include "../../math/matrix3.h"
 #include "../../math/vector3_order.h"
 #include "fixed_basis.h"
@@ -14,18 +14,8 @@ namespace librpa_int::qsgw
 // Localized matrices with independent real-space supports. H is full complex;
 // S and r use the upper-triangle Fourier completion specified below. Matrices
 // may be row-major or column-major. No filenames or reader units enter here.
-using LocalizedMatrix = std::map<Vector3_Order<int>, Matz>;
-
-struct HeadwingAoOperators
-{
-    int dimension = 0;
-    LocalizedMatrix overlap;
-    std::array<LocalizedMatrix, 3> position;
-    // Optional immutable native DFT H(R), in Ha, one model per spin channel.
-    // Preserve its real-space support and reconstruct only the difference from
-    // the current complete AO operator. Empty retains whole-H reconstruction.
-    std::vector<LocalizedMatrix> native_dft_hamiltonian;
-};
+using ::librpa_int::LocalizedMatrix;
+using HeadwingAoOperators = LocalizedAoOperators;
 
 struct LocalizedVelocityResult
 {

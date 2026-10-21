@@ -100,15 +100,11 @@ public:
 
 public:
     // Constructors
-    G0W0(const MeanField &mf_in,
-         const AtomicBasis& atbasis_wfc_in,
-         const PeriodicBoundaryData &pbc_in,
-         const SymmetryContext &symmetry_context_in,
+    G0W0(const MeanField &mf_in, const AtomicBasis &atbasis_wfc_in,
+         const PeriodicBoundaryData &pbc_in, const SymmetryContext &symmetry_context_in,
          const TFGrids &tfg_in, const KPointBlacsParallelContext &kblacs_ctxt_in,
-         const KPointBlacsParallelContext &band_kblacs_ctxt_in,
-         const ArrayDesc &desc_wfc_in,
-         const ArrayDesc &desc_band_wfc_in,
-         bool is_eigvec_k_distributed,
+         const KPointBlacsParallelContext &band_kblacs_ctxt_in, const ArrayDesc &desc_wfc_in,
+         const ArrayDesc &desc_band_wfc_in, bool is_eigvec_k_distributed,
          bool use_symmetry_context_in = true,
          const SymmetryQPointView *screening_qpoint_view = nullptr);
     // // delete copy/move constructors

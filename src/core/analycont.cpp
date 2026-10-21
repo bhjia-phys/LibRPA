@@ -2,7 +2,6 @@
  * @author    Min-Ye Zhang
  * @date      2024-04-25
  */
-#include "../utils/constants.h"
 #include "analycont.h"
 
 #include <algorithm>
@@ -10,6 +9,8 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+
+#include "../utils/constants.h"
 // #include <iostream>
 
 #include "../math/complexmatrix.h"
@@ -29,7 +30,7 @@ bool finite_complex(const cplxdb &value)
 using cplxld = std::complex<long double>;
 
 std::pair<cplxdb, cplxdb> evaluate_continuants(const std::vector<cplxdb> &coefficients,
-                                           const std::vector<cplxdb> &nodes, const cplxdb &x)
+                                               const std::vector<cplxdb> &nodes, const cplxdb &x)
 {
     // Forward convergents remain regular at an internal nested-fraction pole.
     const cplxld z(x.real(), x.imag());
@@ -52,11 +53,12 @@ std::pair<cplxdb, cplxdb> evaluate_continuants(const std::vector<cplxdb> &coeffi
         b = next_b;
         da = next_da;
         db = next_db;
-        const long double scale = std::max({std::abs(a), std::abs(b), std::abs(previous_a),
-                                           std::abs(previous_b), std::abs(da), std::abs(db),
-                                           std::abs(previous_da), std::abs(previous_db)});
+        const long double scale =
+            std::max({std::abs(a), std::abs(b), std::abs(previous_a), std::abs(previous_b),
+                      std::abs(da), std::abs(db), std::abs(previous_da), std::abs(previous_db)});
         if (scale > 0.0L)
-            for (auto *value : {&a, &b, &previous_a, &previous_b, &da, &db, &previous_da, &previous_db})
+            for (auto *value :
+                 {&a, &b, &previous_a, &previous_b, &da, &db, &previous_da, &previous_db})
                 *value /= scale;
     }
     const cplxld value = a / b;
@@ -147,7 +149,7 @@ std::vector<std::vector<cplxld>> rational_nullspace(std::vector<std::vector<cplx
     return basis;
 }
 
-} // namespace
+}  // namespace
 
 AnalyContPade::AnalyContPade(int n_pars_in, const std::vector<cplxdb> &xs, const std::vector<cplxdb> &data)
     : n_pars(n_pars_in)
@@ -178,8 +180,8 @@ AnalyContPade::AnalyContPade(int n_pars_in, const std::vector<cplxdb> &xs, const
             source_xs[ipar] = xs[ipar * step];
             source_data[ipar] = data[ipar * step];
         }
-        source_xs[n_pars-1] = xs[n_pars == 1 ? 0 : n_data-1];
-        source_data[n_pars-1] = data[n_pars == 1 ? 0 : n_data-1];
+        source_xs[n_pars - 1] = xs[n_pars == 1 ? 0 : n_data - 1];
+        source_data[n_pars - 1] = data[n_pars == 1 ? 0 : n_data - 1];
     }
 
     // Band exclusion can make the correlation self-energy identically zero.
@@ -380,10 +382,11 @@ std::pair<cplxdb, cplxdb> AnalyContPade::evaluate_rational(const cplxdb &x) cons
             hit = j;
             continue;
         }
-        const cplxld node = cplxld(source_xs[index].real(), source_xs[index].imag()) / rational_x_scale;
+        const cplxld node =
+            cplxld(source_xs[index].real(), source_xs[index].imag()) / rational_x_scale;
         const cplxld delta = z - node;
-        const cplxld value = cplxld(source_data[index].real(), source_data[index].imag()) /
-                            rational_y_scale;
+        const cplxld value =
+            cplxld(source_data[index].real(), source_data[index].imag()) / rational_y_scale;
         const cplxld term = rational_weights[j] / delta;
         if (rational_anchor >= 0)
         {
@@ -410,17 +413,17 @@ std::pair<cplxdb, cplxdb> AnalyContPade::evaluate_rational(const cplxdb &x) cons
         if (rational_anchor >= 0)
         {
             denominator += rational_weights[hit];
-            derivative = (numerator - value * denominator) /
-                         (rational_weights[hit] * (z - anchor));
+            derivative = (numerator - value * denominator) / (rational_weights[hit] * (z - anchor));
         }
-        else derivative = (numerator - value * denominator) / rational_weights[hit];
+        else
+            derivative = (numerator - value * denominator) / rational_weights[hit];
     }
     else
     {
         // Zero-weight supports must pass the actual ratio check as well.
         value = numerator / denominator;
-        derivative = (d_numerator * denominator - numerator * d_denominator) /
-                     (denominator * denominator);
+        derivative =
+            (d_numerator * denominator - numerator * d_denominator) / (denominator * denominator);
     }
     value *= rational_y_scale;
     derivative *= rational_y_scale / rational_x_scale;

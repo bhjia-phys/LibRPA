@@ -80,6 +80,7 @@ list(APPEND lib_sources
         api/compute_exx.cpp
         api/compute_crpa.cpp
         api/compute_orbital.cpp
+        api/compute_optical.cpp
         api/compute_helper.cpp
         api/compute_g0w0.cpp
         api/compute_rpa.cpp

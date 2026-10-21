@@ -21,6 +21,7 @@
 #include "librpa_crpa.h"
 #include "librpa_enums.h"
 #include "librpa_handler.h"
+#include "librpa_optical.h"
 #include "librpa_options.h"
 #include "librpa_orbital.h"
 
@@ -30,14 +31,17 @@
 namespace librpa
 {
 
+using OpticalResult = std::unique_ptr<LibrpaOpticalResult, decltype(&librpa_delete_optical_result)>;
 using OrbitalResult = std::unique_ptr<LibrpaOrbitalResult, decltype(&librpa_delete_orbital_result)>;
 using CrpaResult = std::unique_ptr<LibrpaCrpaResult, decltype(&librpa_delete_crpa_result)>;
-using CrpaContinuedResult = std::unique_ptr<LibrpaCrpaContinuedResult,
-                                          decltype(&librpa_delete_crpa_continued_result)>;
-/** Noncollective native continuation. Energies are Hartree; default diagnostic tolerance is 0.01 eV. */
-CrpaContinuedResult continue_crpa(const LibrpaCrpaResult* result,
-                                 const std::vector<std::complex<double>>& queries,
-                                 int n_parameters = -1, double tolerance_ha = 0.0003674932217565499);
+using CrpaContinuedResult =
+    std::unique_ptr<LibrpaCrpaContinuedResult, decltype(&librpa_delete_crpa_continued_result)>;
+/** Noncollective native continuation. Energies are Hartree; default diagnostic tolerance is 0.01
+ * eV. */
+CrpaContinuedResult continue_crpa(const LibrpaCrpaResult *result,
+                                  const std::vector<std::complex<double>> &queries,
+                                  int n_parameters = -1,
+                                  double tolerance_ha = 0.0003674932217565499);
 
 /* Enums */
 /**
@@ -591,6 +595,12 @@ public:
      */
     void set_velocity_matrix_packed(int n_spins, int n_kpts, int n_states,
                                     const std::complex<double> *velocity);
+
+    //! Collective original-H/S/r velocity in the loaded SCF frame; input on rank zero.
+    void prepare_native_velocity(const Options &opts, const LibrpaNativeVelocityInput *root_input,
+                                 bool prepare_optical = true);
+    //! Noncollective owning snapshot of this rank's numerical optical results.
+    OpticalResult get_optical_result() const;
 
     /**
      * @brief Set k-points for band-structure calculations.

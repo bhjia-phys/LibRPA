@@ -1,25 +1,24 @@
 #include "inputfile.h"
 
-#include <fstream>
-#include <filesystem>
-#include <tuple>
-#include <iostream>
-#include <stdexcept>
-#include <cstring>
-#include <regex>
-#include <sstream>
-#include <limits>
+#include <librpa_enums.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-
-#include "driver.h"
-
-#include <librpa_enums.h>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <regex>
+#include <sstream>
+#include <stdexcept>
+#include <tuple>
 
 #include "../src/io/fs.h"
 #include "../src/utils/constants.h"
 #include "../src/utils/dev_options.h"
+#include "driver.h"
 
 InputParser InputFile::load(const std::string &fn, bool error_if_fail_open)
 {
@@ -180,14 +179,15 @@ static void parse_qsgw_bool(const InputParser &parser,
 
 static void parse_crpa_parameters(const InputParser &parser, driver::DriverParams &params)
 {
-    for (auto selection : {
-             std::make_tuple("crpa_response_windows_ha", "crpa_response_bands",
-                             &params.crpa_response_windows_ha, &params.crpa_response_bands),
-             std::make_tuple("crpa_orbital_windows_ha", "crpa_orbital_bands",
-                             &params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})
+    for (auto selection :
+         {std::make_tuple("crpa_response_windows_ha", "crpa_response_bands",
+                          &params.crpa_response_windows_ha, &params.crpa_response_bands),
+          std::make_tuple("crpa_orbital_windows_ha", "crpa_orbital_bands",
+                          &params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})
     {
         std::string windows, bands;
-        const bool assigned_windows = get_last_assigned_value(parser, std::get<0>(selection), windows);
+        const bool assigned_windows =
+            get_last_assigned_value(parser, std::get<0>(selection), windows);
         const bool assigned_bands = get_last_assigned_value(parser, std::get<1>(selection), bands);
         if (assigned_windows && !assigned_bands) std::get<3>(selection)->clear();
         if (assigned_bands && !assigned_windows) std::get<2>(selection)->clear();
@@ -216,10 +216,10 @@ static void parse_crpa_parameters(const InputParser &parser, driver::DriverParam
           {"crpa_response_mode", &params.crpa_response_mode},
           {"crpa_output_format", &params.crpa_output_format}})
         get_last_assigned_value(parser, item.first, *item.second);
-    for (auto item : {
-             std::pair<const char*, std::vector<double>*>{"crpa_response_windows_ha", &params.crpa_response_windows_ha},
-             {"crpa_orbital_windows_ha", &params.crpa_orbital_windows_ha},
-             {"crpa_real_frequencies_ev", &params.crpa_real_frequencies_ev}})
+    for (auto item : {std::pair<const char *, std::vector<double> *>{
+                          "crpa_response_windows_ha", &params.crpa_response_windows_ha},
+                      {"crpa_orbital_windows_ha", &params.crpa_orbital_windows_ha},
+                      {"crpa_real_frequencies_ev", &params.crpa_real_frequencies_ev}})
     {
         std::string text;
         if (!get_last_assigned_value(parser, item.first, text)) continue;
@@ -233,9 +233,9 @@ static void parse_crpa_parameters(const InputParser &parser, driver::DriverParam
         if (!stream.eof())
             throw std::runtime_error(std::string(item.first) + " contains an invalid number");
     }
-    for (auto item : {
-             std::pair<const char*, std::vector<int>*>{"crpa_response_bands", &params.crpa_response_bands},
-             {"crpa_orbital_bands", &params.crpa_orbital_bands}})
+    for (auto item : {std::pair<const char *, std::vector<int> *>{"crpa_response_bands",
+                                                                  &params.crpa_response_bands},
+                      {"crpa_orbital_bands", &params.crpa_orbital_bands}})
     {
         std::string text;
         if (!get_last_assigned_value(parser, item.first, text)) continue;
@@ -284,10 +284,13 @@ static void validate_input_parameters()
             if (driver::opts.replace_w_head != LIBRPA_SWITCH_ON ||
                 (driver::opts.option_dielect_func != 3 && driver::opts.option_dielect_func != 4))
                 throw std::runtime_error(
-                    "G0W0 native velocity requires replace_w_head and option_dielect_func = 3 or 4");
+                    "G0W0 native velocity requires replace_w_head and option_dielect_func = 3 or "
+                    "4");
             if (params.g0w0_fn_hr.empty() || params.g0w0_fn_sr.empty() || params.g0w0_fn_rr.empty())
-                throw std::runtime_error("G0W0 native velocity requires g0w0_fn_hr, g0w0_fn_sr, and g0w0_fn_rr");
-            if (params.g0w0_hr_unit != "Ha" && params.g0w0_hr_unit != "Ry" && params.g0w0_hr_unit != "eV")
+                throw std::runtime_error(
+                    "G0W0 native velocity requires g0w0_fn_hr, g0w0_fn_sr, and g0w0_fn_rr");
+            if (params.g0w0_hr_unit != "Ha" && params.g0w0_hr_unit != "Ry" &&
+                params.g0w0_hr_unit != "eV")
                 throw std::runtime_error("g0w0_hr_unit must be Ha, Ry, or eV");
             if (params.g0w0_rr_unit != "Bohr" && params.g0w0_rr_unit != "Angstrom")
                 throw std::runtime_error("g0w0_rr_unit must be Bohr or Angstrom");
@@ -300,17 +303,19 @@ static void validate_input_parameters()
                                       driver::opts.use_symmetry_exx == LIBRPA_SWITCH_ON;
             if (use_symmetry && !params.use_spinor_wfc)
                 throw std::runtime_error(
-                    "Scalar G0W0 native velocity requires a full-BZ input without symmetry reduction");
+                    "Scalar G0W0 native velocity requires a full-BZ input without symmetry "
+                    "reduction");
             if (params.use_pyatb)
                 throw std::runtime_error("G0W0 native velocity requires use_pyatb = false");
         }
     }
     if (params.crpa_enabled && task != "qsgw" && task != "g0w0" && task != "g0w0_band")
-        throw std::runtime_error("crpa_enabled requires task=g0w0 or task=qsgw; use task=crpa for standalone screening");
-    if (params.crpa_interval < 1)
-        throw std::runtime_error("crpa_interval must be positive");
+        throw std::runtime_error(
+            "crpa_enabled requires task=g0w0 or task=qsgw; use task=crpa for standalone screening");
+    if (params.crpa_interval < 1) throw std::runtime_error("crpa_interval must be positive");
     if (params.crpa_enabled && params.crpa_analysis_only)
-        throw std::runtime_error("Coupled GW cRPA requires screening, so crpa_analysis_only must be false");
+        throw std::runtime_error(
+            "Coupled GW cRPA requires screening, so crpa_analysis_only must be false");
     if (task == "crpa" || params.crpa_enabled)
     {
         if (params.crpa_response_mode != "bands" && params.crpa_response_mode != "orbital_weights")
@@ -351,20 +356,22 @@ static void validate_input_parameters()
         }
         if (params.crpa_output_format != "npz" && params.crpa_output_format != "dat")
             throw std::runtime_error("crpa_output_format must be npz or dat");
-        for (const auto selection : {
-                 std::make_pair(&params.crpa_response_windows_ha, &params.crpa_response_bands),
-                 std::make_pair(&params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})
+        for (const auto selection :
+             {std::make_pair(&params.crpa_response_windows_ha, &params.crpa_response_bands),
+              std::make_pair(&params.crpa_orbital_windows_ha, &params.crpa_orbital_bands)})
         {
             if (params.crpa_analysis_only) continue;
             if (selection.first == &params.crpa_response_windows_ha &&
                 params.crpa_response_mode == "orbital_weights")
                 continue;
-            const auto* edges = selection.first;
-            const auto* bands = selection.second;
+            const auto *edges = selection.first;
+            const auto *bands = selection.second;
             if (edges->empty() == bands->empty())
-                throw std::runtime_error("each cRPA A/B selection requires either energy windows or explicit bands");
+                throw std::runtime_error(
+                    "each cRPA A/B selection requires either energy windows or explicit bands");
             if (edges->size() % 2 != 0)
-                throw std::runtime_error("cRPA A/B energy windows require lower/upper pairs in Hartree");
+                throw std::runtime_error(
+                    "cRPA A/B energy windows require lower/upper pairs in Hartree");
             for (std::size_t i = 0; i < edges->size(); i += 2)
                 if (!std::isfinite((*edges)[i]) || !std::isfinite((*edges)[i + 1]) ||
                     (*edges)[i] > (*edges)[i + 1])
@@ -389,18 +396,14 @@ static void validate_input_parameters()
             throw std::runtime_error(
                 "qsgw iteration bounds must satisfy 1 <= min <= max");
         if (params.qsgw_unoccupied_keep < 0)
-            throw std::runtime_error(
-                "qsgw_unoccupied_keep must be non-negative");
+            throw std::runtime_error("qsgw_unoccupied_keep must be non-negative");
         if (params.qsgw_cut_mode == 2)
             throw std::runtime_error(
                 "qsgw_cut_mode = 2 was renumbered to 1; use 0 (uncut) or 1 (shifted KS diagonal)");
-        if (params.qsgw_cut_mode != 0 &&
-            params.qsgw_cut_mode != 1)
-            throw std::runtime_error(
-                "qsgw_cut_mode must be 0 or 1");
+        if (params.qsgw_cut_mode != 0 && params.qsgw_cut_mode != 1)
+            throw std::runtime_error("qsgw_cut_mode must be 0 or 1");
         if (!std::isfinite(params.qsgw_cut_shift_ha))
-            throw std::runtime_error(
-                "qsgw_cut_shift_ha must be finite");
+            throw std::runtime_error("qsgw_cut_shift_ha must be finite");
         if (!(params.qsgw_convergence_tolerance_ev > 0.0) ||
             !std::isfinite(params.qsgw_convergence_tolerance_ev))
             throw std::runtime_error(
@@ -509,7 +512,8 @@ void parse_inputfile_to_params(const std::string &fn)
         if (driver_params.crpa_model_file != "none")
         {
             std::filesystem::path model_path(driver_params.crpa_model_file);
-            if (model_path.is_relative()) model_path = std::filesystem::path(fn).parent_path() / model_path;
+            if (model_path.is_relative())
+                model_path = std::filesystem::path(fn).parent_path() / model_path;
             InputFile model_file;
             const auto model_parser = model_file.load(model_path.string(), true);
             parse_crpa_parameters(model_parser, driver_params);
@@ -540,8 +544,8 @@ void parse_inputfile_to_params(const std::string &fn)
             std::string ignored;
             if (get_last_assigned_value(parser, removed, ignored))
             {
-                throw std::runtime_error(
-                    removed + " is not supported by the current QSGW workflow");
+                throw std::runtime_error(removed +
+                                         " is not supported by the current QSGW workflow");
             }
         }
         for (const std::string renamed :
@@ -549,8 +553,8 @@ void parse_inputfile_to_params(const std::string &fn)
         {
             std::string ignored;
             if (get_last_assigned_value(parser, renamed, ignored))
-                throw std::runtime_error(
-                    renamed + " was renamed; remove band0_ from the parameter name");
+                throw std::runtime_error(renamed +
+                                         " was renamed; remove band0_ from the parameter name");
         }
         parse_qsgw_string(parser, "prefix_vxc_scf", driver_params.prefix_vxc_scf);
         parse_qsgw_string(parser, "prefix_vxc_band", driver_params.prefix_vxc_band);
@@ -566,12 +570,10 @@ void parse_inputfile_to_params(const std::string &fn)
                           driver_params.qsgw_mixing_beta);
         parse_qsgw_int(parser, "qsgw_min_iter", driver_params.qsgw_min_iter);
         parse_qsgw_int(parser, "qsgw_max_iter", driver_params.qsgw_max_iter);
-        parse_qsgw_int(parser, "qsgw_unoccupied_keep",
-                       driver_params.qsgw_unoccupied_keep);
-        parse_qsgw_int(parser, "qsgw_cut_mode",
-                       driver_params.qsgw_cut_mode);
-        parse_qsgw_double(parser, "qsgw_cut_shift_ha",
-                          driver_params.qsgw_cut_shift_ha);
+        parse_qsgw_int(parser, "qsgw_unoccupied_keep", driver_params.qsgw_unoccupied_keep);
+        parse_qsgw_int(parser, "qsgw_cut_mode", driver_params.qsgw_cut_mode);
+        driver_params.qsgw_cut_shift_ha = 2.0 / librpa_int::HA2EV;
+        parse_qsgw_double(parser, "qsgw_cut_shift_ha", driver_params.qsgw_cut_shift_ha);
         parse_qsgw_bool(parser, "qsgw_write_iteration_matrices",
                         driver_params.qsgw_write_iteration_matrices);
         parse_qsgw_bool(parser, "qsgw_output_qp", driver_params.qsgw_output_qp);
@@ -721,21 +723,7 @@ void parse_inputfile_to_params(const std::string &fn)
     _parse_double(opts, libri_g0w0_threshold_Wc);
     _parse_switch(opts, replace_w_head);
     _parse_int(opts, option_dielect_func);
-    if (task_normalized == "qsgw")
-    {
-        // Task defaults belong to the driver; keep library/G0W0 defaults intact.
-        // An explicit head-off switch or non-optical dielectric option also
-        // disables the implicit native preset, preserving existing controls.
-        std::string assigned;
-        const bool head_assigned = get_last_assigned_value(parser, "replace_w_head", assigned);
-        const bool option_assigned = get_last_assigned_value(parser, "option_dielect_func", assigned);
-        if (!head_assigned)
-            opts.replace_w_head = !option_assigned || opts.option_dielect_func == 3 ||
-                                  opts.option_dielect_func == 4 || opts.option_dielect_func == 6
-                                      ? LIBRPA_SWITCH_ON : LIBRPA_SWITCH_OFF;
-        if (!option_assigned)
-            opts.option_dielect_func = opts.replace_w_head == LIBRPA_SWITCH_ON ? 6 : 0;
-    }
+
     _parse_switch(opts, use_2d_dielectric);
     _parse_switch(opts, output_gw_sigc_ks_kf);
     if (flag != 0)  // backward-compatible

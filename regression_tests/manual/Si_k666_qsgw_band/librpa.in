@@ -39,4 +39,6 @@ qsgw_unoccupied_keep = 10
 qsgw_cut_mode = 1
 qsgw_cut_shift_ha = 0.0
 qsgw_write_iteration_matrices = false
+# This legacy head-only dataset does not require native H/S/r.
+qsgw_export_hamiltonian_for_pyatb = false
 option_bvk_remap = 1

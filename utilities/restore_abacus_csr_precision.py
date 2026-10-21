@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Restore small ABACUS CSR export losses from matching dense full-mesh H/S.
 
-Requires NumPy and the modern, single-ionic-step ABACUS CSR format. Dense
+Requires NumPy and the modern, single-ionic-step scalar ABACUS CSR format. Dense
 hk*_nao.txt/sk*_nao.txt files and bz_sampling_out must belong to the same
 complete, unshifted SCF mesh. H stays in ABACUS Ry units throughout.
 
@@ -43,7 +43,7 @@ def read_csr(path):
                 values.append(complex(real, imag))
             else:
                 values.append(complex(float(value)))
-        columns = np.array([int(next(tokens)) for _ in range(nnz)])
+        columns = np.array([int(next(tokens)) for _ in range(nnz)], dtype=int)
         pointers = np.array([int(next(tokens)) for _ in range(n + 1)])
         if (r in blocks or pointers[0] != 0 or pointers[-1] != nnz
                 or np.any(np.diff(pointers) < 0) or np.any(columns < 0)
@@ -61,7 +61,7 @@ def read_csr(path):
     return blocks
 
 
-def write_csr(path, blocks):
+def write_csr(path, blocks, real_values=False):
     n = next(iter(blocks.values())).shape[0]
     with path.open('x') as output:
         output.write(f'--- Ionic Step 1 ---\n{n} # number of localized basis\n'
@@ -71,7 +71,8 @@ def write_csr(path, blocks):
             values = matrix[rows, columns]
             pointers = np.r_[0, np.cumsum(np.bincount(rows, minlength=n))]
             output.write(' '.join(map(str, (*r, len(values)))) + '\n# CSR values\n')
-            output.write(' '.join(f'({x.real:.17e},{x.imag:.17e})' for x in values) + '\n')
+            output.write(' '.join(f'{x.real:.17e}' if real_values else
+                                  f'({x.real:.17e},{x.imag:.17e})' for x in values) + '\n')
             output.write('# CSR column indices\n' + ' '.join(map(str, columns)) + '\n')
             output.write('# CSR row pointers\n' + ' '.join(map(str, pointers)) + '\n')
 
@@ -101,7 +102,7 @@ def images(index, size):
     return (index if index <= size // 2 else index - size,)
 
 
-def restore(blocks, dense, kpoints, mesh, max_residual):
+def restore(blocks, dense, kpoints, mesh, max_residual, real_values=False):
     sampled = fourier(blocks, kpoints)
     delta = dense - sampled
     residual = float(np.max(abs(delta)))
@@ -118,6 +119,11 @@ def restore(blocks, dense, kpoints, mesh, max_residual):
             if r not in result:
                 result[r] = np.zeros_like(dense[0])
             result[r] += correction[index] / len(copies)
+    if real_values:
+        if max(float(np.max(abs(matrix.imag))) for matrix in result.values()) > 1e-11:
+            raise ValueError('Scalar ABACUS overlap requires real R-space entries')
+        result = {r: matrix.real.copy() for r, matrix in result.items()}
+    # Check the actual output operator, including scalar-S real projection.
     roundtrip = float(np.max(abs(fourier(result, kpoints) - dense)))
     hermiticity = max(float(np.max(abs(matrix - result.get(tuple(-x for x in r),
                                             np.zeros_like(matrix)).conj().T)))
@@ -145,9 +151,12 @@ def main():
     mesh = np.array(list(map(int, lines[0].split())))
     counts = list(map(int, lines[1].split()))
     sampling = np.loadtxt(lines[2:], ndmin=2)
+    if (mesh.shape != (3,) or np.any(mesh <= 0) or sampling.shape[1] < 5
+            or not np.all(np.isfinite(sampling))):
+        raise ValueError('Requires a complete ordered unshifted full mesh')
     kpoints = sampling[:, 2:5]
     indices = np.rint(kpoints * mesh).astype(int) % mesh
-    if (mesh.shape != (3,) or np.any(mesh <= 0) or counts != [int(np.prod(mesh))] * 2
+    if (counts != [int(np.prod(mesh))] * 2
             or len(kpoints) != np.prod(mesh) or len(set(map(tuple, indices))) != len(kpoints)
             or np.max(abs(kpoints * mesh - np.rint(kpoints * mesh))) > 1e-6
             or not np.array_equal(sampling[:, 0], np.arange(1, len(kpoints) + 1))):
@@ -162,10 +171,13 @@ def main():
         n = next(iter(blocks.values())).shape[0]
         dense = np.array([read_dense(args.dense_dir / f'{prefix}{i}_nao.txt', n)
                           for i in range(1, len(kpoints) + 1)])
-        restored[kind], report[kind] = restore(blocks, dense, kpoints, mesh, args.max_residual)
+        restored[kind], report[kind] = restore(
+            blocks, dense, kpoints, mesh, args.max_residual, real_values=(kind == 'S'))
+    if next(iter(restored['H'].values())).shape != next(iter(restored['S'].values())).shape:
+        raise ValueError('Hamiltonian and overlap dimensions differ')
     args.output_dir.mkdir(parents=True, exist_ok=False)
     for kind, source in (('H', args.hr), ('S', args.sr)):
-        write_csr(args.output_dir / source.name, restored[kind])
+        write_csr(args.output_dir / source.name, restored[kind], real_values=(kind == 'S'))
     (args.output_dir / 'restoration.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 

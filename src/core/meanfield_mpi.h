@@ -20,9 +20,10 @@ struct SymmetryExpandedMeanField
 
 // Expand paired source-gauge IBZ states without a new eigensolve. Returned
 // band-space operators copy their source block, conjugating antiunitary routes.
-SymmetryExpandedMeanField expand_symmetry_meanfield(
-    const MeanField &source, const AtomicBasis &basis, const PeriodicBoundaryData &pbc,
-    const SymmetryContext &context);
+SymmetryExpandedMeanField expand_symmetry_meanfield(const MeanField &source,
+                                                    const AtomicBasis &basis,
+                                                    const PeriodicBoundaryData &pbc,
+                                                    const SymmetryContext &context);
 
 // Verify E, occupations and diagonal endpoint weights through magnetic sewing.
 // Degenerate permutations/mixing are allowed only when they preserve the weights.
@@ -114,11 +115,10 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
  */
 std::map<Vector3_Order<int>, SpinorBlocks4<Matz>>
 get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
-    int ispin, const MeanField &mf,
-    const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
-    const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc);
+    int ispin, const MeanField &mf, const std::vector<Vector3_Order<double>> &kfrac_list,
+    const std::vector<Vector3_Order<int>> &Rs, const KPointBlacsParallelContext &kblacs_ctxt,
+    const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm, const SymmetryContext &symmetry_context,
+    const PeriodicBoundaryData &pbc, const AtomicBasis &atbasis_wfc);
 
 // Similar to above, but for Green's function. Note that imagtimes must be the same across kblacs_ctxt.
 std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kblacs_para(

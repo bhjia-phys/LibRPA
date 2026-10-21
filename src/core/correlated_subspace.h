@@ -89,9 +89,9 @@ struct SpinKptDiagnostics
     double q_completeness_residual;  //!< ||Q†Q - I|| for the supplied KS band space
     double qqt_lambda_min;           //!< min eigenvalue of Q†Q (always computed)
     double qqt_lambda_max;           //!< max eigenvalue of Q†Q (always computed)
-    double
-        qqt_captured_fraction;  //!< trace(Q†Q) / n_corr, in [0,1] for an S-orthonormal KS band space
-    bool computed;              //!< whether this (spin,k) has been built
+    double qqt_captured_fraction;    //!< trace(Q†Q) / n_corr, in [0,1] for an S-orthonormal KS band
+                                     //!< space
+    bool computed;                   //!< whether this (spin,k) has been built
 };
 
 /*! Aggregate diagnostics across all k / spin. */

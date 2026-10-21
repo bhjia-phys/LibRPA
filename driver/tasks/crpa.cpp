@@ -1,5 +1,4 @@
 #include "crpa.h"
-#include "crpa_model_output.h"
 
 #include <algorithm>
 #include <array>
@@ -21,6 +20,7 @@
 #include "../read_data.h"
 #include "../reader_nao_overlap.h"
 #include "../task.h"
+#include "crpa_model_output.h"
 #include "librpa_crpa.h"
 #include "librpa_orbital.h"
 
@@ -48,8 +48,9 @@ void write_orbital_analysis(const LibrpaOrbitalResult* result,
     if (!std::isfinite(reference))
         throw std::runtime_error(
             "no finite PDOS energy reference; use fermi if no occupied state exists");
-    auto metadata = output_file(directory, params.crpa_output_format == "dat"
-                                               ? "crpa_orbital_analysis.dat" : "crpa_orbital_analysis.txt");
+    auto metadata =
+        output_file(directory, params.crpa_output_format == "dat" ? "crpa_orbital_analysis.dat"
+                                                                  : "crpa_orbital_analysis.txt");
     metadata
         << "Existing scalar/spinor KS states; no Hamiltonian read or physical KS solve.\n"
         << "Mulliken=sum_s Re[c_mu,s* (S c_s)_mu]; "
@@ -153,18 +154,22 @@ void write_result(const LibrpaCrpaResult* result, const std::string& directory, 
     librpa_crpa_result_tensor(result, 0, &first);
     const bool has_full_w = first.fully_screened_ri != nullptr;
     auto metadata = output_file(directory, driver::driver_params.crpa_output_format == "dat"
-                                               ? "crpa_metadata.dat" : "crpa_metadata.txt");
+                                               ? "crpa_metadata.dat"
+                                               : "crpa_metadata.txt");
     if (state_index >= 0)
         metadata << "state_index = " << state_index << '\n'
                  << "gw_update = " << gw_update << '\n'
                  << "final_state = " << (final_state ? "true" : "false") << '\n'
                  << "response_source = "
-                 << (final_state && driver::get_task(driver::driver_params.task) == driver::task_t::QSGW
-                         ? "final_state_response_only" : "shared_entering_state_GW_P0")
+                 << (final_state &&
+                             driver::get_task(driver::driver_params.task) == driver::task_t::QSGW
+                         ? "final_state_response_only"
+                         : "shared_entering_state_GW_P0")
                  << '\n';
     metadata << "full_W_computed = " << (has_full_w ? "true" : "false") << '\n';
     metadata
-        << "Current loaded eigenstate poles; P_d weights both endpoints by the emitted probabilities.\n"
+        << "Current loaded eigenstate poles; P_d weights both endpoints by the emitted "
+           "probabilities.\n"
         << (driver::n_spinor == 2
                 ? "Output Phi uses independent B and one jointly normalized spinor frame.\n"
                   "Spinor trial labels are not conserved spin quantum numbers.\n"
@@ -313,7 +318,8 @@ void CrpaDriverInput::update_tracking()
 }
 
 void CrpaDriverInput::write_tracking_checkpoint(
-    const std::string& filename, int iteration, const std::vector<double>& checkpoint_energies) const
+    const std::string& filename, int iteration,
+    const std::vector<double>& checkpoint_energies) const
 {
     if (!driver_params.crpa_track_orbitals) return;
     if (n_parent <= 0 || previous_parent.empty())
@@ -321,9 +327,10 @@ void CrpaDriverInput::write_tracking_checkpoint(
     const std::string temporary = filename + ".tmp";
     std::ofstream out(temporary);
     out.exceptions(std::ios::badbit | std::ios::failbit);
-    out << std::setprecision(17) << "LIBRPA_CRPA_TRACKING_1\n" << iteration << ' '
-        << n_spins << ' ' << n_spinor << ' ' << n_kpoints << ' ' << n_basis_ao << ' '
-        << n_parent << '\n' << std::quoted(tracking_definition()) << '\n';
+    out << std::setprecision(17) << "LIBRPA_CRPA_TRACKING_1\n"
+        << iteration << ' ' << n_spins << ' ' << n_spinor << ' ' << n_kpoints << ' ' << n_basis_ao
+        << ' ' << n_parent << '\n'
+        << std::quoted(tracking_definition()) << '\n';
     out << checkpoint_energies.size() << '\n';
     for (double energy : checkpoint_energies) out << energy << '\n';
     for (double capture : parent_capture) out << capture << '\n';
@@ -333,15 +340,16 @@ void CrpaDriverInput::write_tracking_checkpoint(
         throw std::runtime_error("cannot replace cRPA tracking checkpoint " + filename);
 }
 
-void CrpaDriverInput::read_tracking_checkpoint(
-    const std::string& filename, int iteration, const std::vector<double>& checkpoint_energies)
+void CrpaDriverInput::read_tracking_checkpoint(const std::string& filename, int iteration,
+                                               const std::vector<double>& checkpoint_energies)
 {
     std::ifstream in(filename);
     if (!in) throw std::runtime_error("missing cRPA tracking checkpoint " + filename);
     in.exceptions(std::ios::badbit | std::ios::failbit);
     std::string magic, definition;
     int saved_iteration, spins, spinor, nk, nao, parent;
-    in >> magic >> saved_iteration >> spins >> spinor >> nk >> nao >> parent >> std::quoted(definition);
+    in >> magic >> saved_iteration >> spins >> spinor >> nk >> nao >> parent >>
+        std::quoted(definition);
     if (magic != "LIBRPA_CRPA_TRACKING_1" || saved_iteration != iteration || spins != n_spins ||
         spinor != n_spinor || nk != n_kpoints || nao != n_basis_ao || parent <= 0 ||
         parent > nao * spinor || definition != tracking_definition())

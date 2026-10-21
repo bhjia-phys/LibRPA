@@ -10,8 +10,7 @@ namespace
 
 using namespace librpa_int;
 
-void assert_close(const std::complex<double> actual,
-                  const std::complex<double> expected,
+void assert_close(const std::complex<double> actual, const std::complex<double> expected,
                   const double tolerance = 1e-12)
 {
     assert(std::abs(actual - expected) <= tolerance);
@@ -38,8 +37,8 @@ void test_dense_symmetry_collection_hermitizes_diagonal_atom_blocks()
     blocks[1][1] = block_11;
 
     const std::map<atom_t, size_t> atom_nabf{{0, 2}, {1, 1}};
-    const auto dense = build_dense_symmetry_hermitian_matrix_from_local_blocks(
-        blocks, atom_nabf, true);
+    const auto dense =
+        build_dense_symmetry_hermitian_matrix_from_local_blocks(blocks, atom_nabf, true);
 
     assert(dense.nr == 3);
     assert(dense.nc == 3);
@@ -63,8 +62,8 @@ void test_dense_symmetry_collection_preserves_generic_q_diagonal_blocks()
     blocks[0][0] = block;
 
     const std::map<atom_t, size_t> atom_nabf{{0, 1}};
-    const auto dense = build_dense_symmetry_hermitian_matrix_from_local_blocks(
-        blocks, atom_nabf, false);
+    const auto dense =
+        build_dense_symmetry_hermitian_matrix_from_local_blocks(blocks, atom_nabf, false);
 
     assert_close(dense(0, 0), {2.1, -0.7});
 }

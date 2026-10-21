@@ -56,13 +56,13 @@ HamiltonianCutMode hamiltonian_cut_mode_from_int(const int mode)
     switch (mode)
     {
         case 0: return HamiltonianCutMode::Uncut;
-        case 1: return HamiltonianCutMode::ShiftedReferenceDiagonal;
+        case 1:
+            return HamiltonianCutMode::ShiftedReferenceDiagonal;
         case 2:
             throw std::invalid_argument(
                 "QSGW Hamiltonian cut mode 2 was removed; shifted cut is mode 1");
         default:
-            throw std::invalid_argument(
-                "QSGW Hamiltonian cut mode must be 0 or 1");
+            throw std::invalid_argument("QSGW Hamiltonian cut mode must be 0 or 1");
     }
 }
 
@@ -131,9 +131,9 @@ SpinKMatrixMap apply_hamiltonian_cut(
                     {
                         if (row < active_limit && column < active_limit)
                             continue;
-                        cut(row, column) = row == column
-                            ? reference_kpoint->second(row, row) + options.shift_ha
-                            : cplxdb(0.0, 0.0);
+                        cut(row, column) =
+                            row == column ? reference_kpoint->second(row, row) + options.shift_ha
+                                          : cplxdb(0.0, 0.0);
                     }
                 }
             }

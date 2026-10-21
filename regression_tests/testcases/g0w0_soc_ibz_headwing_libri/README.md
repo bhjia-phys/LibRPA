@@ -40,21 +40,15 @@ original frequencies, the maximum error across 162 complex response entries is
 against independent spectral sums. The old pre-adjoint Sigma differs by
 1.42e-4 Ha and is not used as the corrected target.
 
-All previous reference files and their original case README are preserved
-byte-for-byte in `refs/g0w0_soc_ibz_headwing_libri/reference-before-complex-bubble.tar.gz`;
-the adjacent SHA256 manifest verifies every original file. The historical
-90a93c5d run remains evidence of the prior implementation, not the acceptance
-target of the corrected complex charge trace.
+The corrected full-grid reference includes both charge-vertex and negative-time
+Green-function corrections. The H/S/r, eigenpairs, occupations, frequency nodes
+and existing tolerances are retained. Historical pre-correction outputs remain
+in the preserved development workspace and are not regression targets.
 
-The reference run used the master-13bc5f3a integration source including the
-weighted cRPA/transport and magnetic/current-HR adaptations. Its executable
-SHA256 is `ef583518b7d723346fe226bfdb694c7f3b55d4d90c3540e413d4d23db81f0420`.
 The H/S/r and eigenvectors retain their independent Fourier-derivative and
 magnetic-sewing checks from the original fixture.
 
-The test fixture removes trailing padding from stdout only; the complete raw
-run is retained as `reference-complex-bubble-raw.stdout.gz` next to the legacy
-archive. The reference directory retains the full stdout content as `librpa/librpa.out`,
+The reference directory retains the full stdout content as `librpa/librpa.out`,
 complete head/wing CSV, and all 12 complete 4x4 Sigma matrices at the two
 common representatives and six original imaginary frequencies. The QP table
 contains all four states at all three full-grid points. These references

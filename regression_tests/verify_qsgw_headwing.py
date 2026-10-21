@@ -24,11 +24,26 @@ TRACE_DTYPE = [
 ]
 
 
-def compare_feedback(continuous, resumed):
+def compare_feedback(continuous, resumed, initial):
     a = np.loadtxt(continuous / "librpa.d/qsgw_matrices.dat", dtype=TRACE_DTYPE)
     b = np.loadtxt(resumed / "librpa.d/qsgw_matrices.dat", dtype=TRACE_DTYPE)
+    boundary = np.loadtxt(initial / "librpa.d/qsgw_matrices.dat", dtype=TRACE_DTYPE)
     errors = {}
+    raw_velocity_errors = {}
+    frame_error = 0.0
     changes = {}
+
+    def block(data, iteration, name, channel, spin, k):
+        rows = data[(data["iteration"] == iteration) & (data["component"] == name)
+                    & (data["channel"] == channel) & (data["spin"] == spin)
+                    & (data["k"] == k)]
+        assert len(rows), (iteration, name, channel, spin, k)
+        n = int(max(rows["row"].max(), rows["column"].max())) + 1
+        assert len(rows) == n*n
+        matrix = np.full((n, n), np.nan + 1j*np.nan)
+        matrix[rows["row"], rows["column"]] = rows["real"] + 1j*rows["imag"]
+        return matrix
+
     components = ["head_tensor", "wing_auxiliary",
                   "head_velocity_0", "head_velocity_1", "head_velocity_2"]
     for name in components:
@@ -37,8 +52,30 @@ def compare_feedback(continuous, resumed):
             y = b[(b["iteration"] == iteration) & (b["component"] == name)]
             assert len(x) == len(y) > 0, (name, iteration)
             for key, _ in TRACE_DTYPE[:9]:
-                np.testing.assert_array_equal(x[key], y[key])
+                if key == "frequency":
+                    # Nodes are regenerated from the live spectrum; MPI
+                    # roundoff also perturbs their frequency scale.
+                    np.testing.assert_allclose(x[key], y[key], rtol=1e-12, atol=1e-12)
+                else:
+                    np.testing.assert_array_equal(x[key], y[key])
             error = np.max(abs(x["real"] + 1j*x["imag"] - y["real"] - 1j*y["imag"]))
+            if name.startswith("head_velocity_"):
+                raw_velocity_errors[f"{iteration}:{name}"] = float(error)
+                error = 0.0
+                for channel, spin, k in set(zip(x["channel"], x["spin"], x["k"])):
+                    # V enters update n in the eigenbasis produced by n-1.
+                    # Compare it through the independently saved rotations:
+                    # G = U_cont^dagger U_restart, V_restart = G^dagger V_cont G.
+                    u = block(a, iteration-1, "rotation_u", channel, spin, k)
+                    v = block(boundary if iteration == 2 else b, iteration-1,
+                              "rotation_u", channel, spin, k)
+                    frame = u.conj().T @ v
+                    residual = np.max(abs(frame.conj().T @ frame - np.eye(len(frame))))
+                    frame_error = max(frame_error, float(residual))
+                    assert residual < 1e-10
+                    va = block(a, iteration, name, channel, spin, k)
+                    vb = block(b, iteration, name, channel, spin, k)
+                    error = max(error, float(np.max(abs(frame.conj().T @ va @ frame - vb))))
             assert error < 1e-8, (name, iteration, error)
             errors[f"{iteration}:{name}"] = float(error)
         x = a[(a["iteration"] == 1) & (a["component"] == name)]
@@ -68,7 +105,9 @@ def compare_feedback(continuous, resumed):
                 np.max(abs(wing_nodes - body_nodes)),
             )),
         })
-    return {"restart_component_errors": errors, "first_to_second_update_changes": changes,
+    return {"restart_component_errors": errors, "raw_velocity_errors": raw_velocity_errors,
+            "maximum_frame_unitarity_error": frame_error,
+            "first_to_second_update_changes": changes,
             "frequency_node_checks": frequency_checks}
 
 
@@ -112,7 +151,7 @@ def main():
         "first_update": compare(continuous, initial, 1, 1),
         "restored_boundary": compare(initial, resumed, 1, 1, exact_boundary=True),
         "continued_updates": compare(continuous, resumed, 2, 3),
-        "feedback": compare_feedback(continuous, resumed),
+        "feedback": compare_feedback(continuous, resumed, initial),
     }
     (root / "comparison.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

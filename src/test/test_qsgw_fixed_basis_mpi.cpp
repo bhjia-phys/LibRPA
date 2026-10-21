@@ -2,8 +2,6 @@
 #undef NDEBUG
 #endif
 
-#include "../core/qsgw/fixed_basis.h"
-
 #include <cassert>
 #include <cmath>
 #include <complex>
@@ -11,12 +9,13 @@
 #include <utility>
 #include <vector>
 
+#include "../core/qsgw/fixed_basis.h"
 #include "../io/global_io.h"
 #include "../mpi/global_mpi.h"
 
 using librpa_int::ComplexMatrix;
-using librpa_int::MeanField;
 using librpa_int::cplxdb;
+using librpa_int::MeanField;
 using librpa_int::global::finalize_global_io;
 using librpa_int::global::finalize_global_mpi;
 using librpa_int::global::init_global_io;
@@ -24,46 +23,37 @@ using librpa_int::global::init_global_mpi;
 using librpa_int::global::mpi_comm_global_h;
 using librpa_int::global::myid_global;
 using librpa_int::global::size_global;
-using librpa_int::qsgw::VelocityMatrix;
 using librpa_int::qsgw::align_distributed_velocity_to_reference_wfc;
+using librpa_int::qsgw::VelocityMatrix;
 
 namespace
 {
 
-void initialize_velocity(VelocityMatrix& velocity,
-                         const int kpoints,
-                         const int states)
+void initialize_velocity(VelocityMatrix& velocity, const int kpoints, const int states)
 {
     velocity.assign(1, {});
     velocity[0].assign(kpoints, {});
     for (int kpoint = 0; kpoint < kpoints; ++kpoint)
     {
-        velocity[0][kpoint].assign(
-            3, ComplexMatrix(states, states));
+        velocity[0][kpoint].assign(3, ComplexMatrix(states, states));
     }
 }
 
-void assert_close(const cplxdb actual,
-                  const cplxdb expected,
-                  const double tolerance = 1.0e-12)
+void assert_close(const cplxdb actual, const cplxdb expected, const double tolerance = 1.0e-12)
 {
     assert(std::abs(actual - expected) < tolerance);
 }
 
-void assert_velocity_equal(const VelocityMatrix& actual,
-                           const VelocityMatrix& expected)
+void assert_velocity_equal(const VelocityMatrix& actual, const VelocityMatrix& expected)
 {
     assert(actual.size() == expected.size());
     for (std::size_t spin = 0; spin < actual.size(); ++spin)
     {
         assert(actual[spin].size() == expected[spin].size());
-        for (std::size_t kpoint = 0;
-             kpoint < actual[spin].size(); ++kpoint)
+        for (std::size_t kpoint = 0; kpoint < actual[spin].size(); ++kpoint)
         {
-            assert(actual[spin][kpoint].size() ==
-                   expected[spin][kpoint].size());
-            for (std::size_t direction = 0;
-                 direction < actual[spin][kpoint].size(); ++direction)
+            assert(actual[spin][kpoint].size() == expected[spin][kpoint].size());
+            for (std::size_t direction = 0; direction < actual[spin][kpoint].size(); ++direction)
             {
                 const auto& lhs = actual[spin][kpoint][direction];
                 const auto& rhs = expected[spin][kpoint][direction];
@@ -73,8 +63,7 @@ void assert_velocity_equal(const VelocityMatrix& actual,
                 {
                     for (int column = 0; column < lhs.nc; ++column)
                     {
-                        assert_close(lhs(row, column),
-                                     rhs(row, column));
+                        assert_close(lhs(row, column), rhs(row, column));
                     }
                 }
             }
@@ -99,9 +88,8 @@ void test_distributed_velocity_basis_alignment()
         identity.set_as_identity_matrix();
         reference.get_eigenvectors()[0][0][kpoint] = identity;
 
-        const std::vector<cplxdb> phases{
-            std::polar(1.0, 0.2 * (kpoint + 1)),
-            std::polar(1.0, -0.3 * (kpoint + 1))};
+        const std::vector<cplxdb> phases{std::polar(1.0, 0.2 * (kpoint + 1)),
+                                         std::polar(1.0, -0.3 * (kpoint + 1))};
         if (kpoint % size_global == myid_global)
         {
             ComplexMatrix phased = identity;
@@ -109,12 +97,10 @@ void test_distributed_velocity_basis_alignment()
             {
                 for (int ao = 0; ao < states; ++ao)
                 {
-                    phased(band, ao) *=
-                        phases[static_cast<std::size_t>(band)];
+                    phased(band, ao) *= phases[static_cast<std::size_t>(band)];
                 }
             }
-            distributed_basis.get_eigenvectors()[0][0][kpoint] =
-                std::move(phased);
+            distributed_basis.get_eigenvectors()[0][0][kpoint] = std::move(phased);
         }
 
         for (int direction = 0; direction < 3; ++direction)
@@ -122,8 +108,7 @@ void test_distributed_velocity_basis_alignment()
             auto& matrix = expected_velocity[0][kpoint][direction];
             matrix(0, 0) = 0.5 + kpoint + direction;
             matrix(1, 1) = -0.25 - 0.1 * kpoint;
-            matrix(0, 1) = cplxdb(
-                0.2 + 0.01 * kpoint, 0.3 + 0.02 * direction);
+            matrix(0, 1) = cplxdb(0.2 + 0.01 * kpoint, 0.3 + 0.02 * direction);
             matrix(1, 0) = std::conj(matrix(0, 1));
         }
     }
@@ -131,9 +116,8 @@ void test_distributed_velocity_basis_alignment()
     source_velocity = expected_velocity;
     for (int kpoint = 0; kpoint < kpoints; ++kpoint)
     {
-        const std::vector<cplxdb> phases{
-            std::polar(1.0, 0.2 * (kpoint + 1)),
-            std::polar(1.0, -0.3 * (kpoint + 1))};
+        const std::vector<cplxdb> phases{std::polar(1.0, 0.2 * (kpoint + 1)),
+                                         std::polar(1.0, -0.3 * (kpoint + 1))};
         for (int direction = 0; direction < 3; ++direction)
         {
             for (int row = 0; row < states; ++row)
@@ -150,8 +134,7 @@ void test_distributed_velocity_basis_alignment()
     }
 
     const auto alignment = align_distributed_velocity_to_reference_wfc(
-        distributed_basis, reference, source_velocity,
-        mpi_comm_global_h);
+        distributed_basis, reference, source_velocity, mpi_comm_global_h);
     assert(alignment.maximum_relative_wfc_residual < 1.0e-14);
     assert(alignment.maximum_unitarity_residual < 1.0e-14);
     assert(alignment.maximum_transform_deviation_from_identity > 0.1);
@@ -166,9 +149,8 @@ void test_distributed_velocity_basis_alignment()
     bool threw = false;
     try
     {
-        (void)align_distributed_velocity_to_reference_wfc(
-            missing_basis, reference, untouched,
-            mpi_comm_global_h);
+        (void)align_distributed_velocity_to_reference_wfc(missing_basis, reference, untouched,
+                                                          mpi_comm_global_h);
     }
     catch (const std::invalid_argument&)
     {
@@ -178,7 +160,7 @@ void test_distributed_velocity_basis_alignment()
     assert_velocity_equal(untouched, expected_velocity);
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char* argv[])
 {

@@ -84,12 +84,9 @@ ComplexMatrix rotate_headwing_wfc_to_kstar_member(
     const Vector3_Order<double> *k_bz_target = nullptr);
 //! Restore both SOC components in one common KS gauge; rows are bands.
 std::array<ComplexMatrix, 2> rotate_headwing_spinor_wfc_to_kstar_member(
-    const SymmetryContext &ctx,
-    const SymmetryKStarMember &member,
-    const std::vector<SpeciesBasisLayout> &wfc_layouts,
-    const std::map<atom_t, size_t> &atom_nw,
-    const Vector3_Order<double> &k_ibz,
-    const std::array<ComplexMatrix, 2> &wfc_ibz,
+    const SymmetryContext &ctx, const SymmetryKStarMember &member,
+    const std::vector<SpeciesBasisLayout> &wfc_layouts, const std::map<atom_t, size_t> &atom_nw,
+    const Vector3_Order<double> &k_ibz, const std::array<ComplexMatrix, 2> &wfc_ibz,
     const Vector3_Order<double> *k_bz_target = nullptr);
 std::array<ComplexMatrix, 3> rotate_headwing_velocity_to_kstar_member(
     const SymmetryContext &ctx,
@@ -382,10 +379,6 @@ public:
     double cal_factor(std::string name);
     void test_head();
     std::vector<double> get_head_vec();
-    const matrix_m<std::complex<double>> &get_dielectric_head(int frequency) const
-    { return head.at(frequency); }
-    const matrix_m<std::complex<double>> &get_wing_mu(int frequency) const
-    { return wing_mu.at(frequency); }
     bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
     const std::vector<double> &get_frequency_nodes() const { return omega; }
     const std::vector<Matz> &get_head_tensors() const { return head; }

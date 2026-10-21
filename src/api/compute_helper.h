@@ -1,13 +1,13 @@
 #pragma once
 
-#include <vector>
-
 #include <librpa_options.h>
+
+#include <vector>
 
 #include "../core/atom.h"
 #include "../core/geometry.h"
-#include "../core/pbc.h"
 #include "../core/meanfield.h"
+#include "../core/pbc.h"
 #include "../core/timefreq.h"
 #include "../mpi/base_mpi.h"
 
@@ -29,11 +29,11 @@ AtomPairBvKRemap<atom_t> build_band_bvk_remap(const Atoms &atoms,
 //! Potentials and outputs: [spin][requested k][selected state], in Hartree.
 //! All inputs refer to the same mean-field eigenbasis; solver_info retains failures
 //! even when override_qpe_solver_nan requests the final unconverged value.
-void solve_g0w0_qpe_diagonal(
-    const MeanField &mf, const TFGrids &tfg, const LibrpaOptions &opts,
-    const std::vector<cplxdb> &sigc_diag, const std::vector<int> &iks_collect,
-    int n_kpts_this, const int *iks_this, int i_state_low, int n_states_calc,
-    const double *vxc, const double *vexx, double *sigc_re, double *sigc_im,
-    double *eqp, const char *context, int *solver_info = nullptr);
-
+void solve_g0w0_qpe_diagonal(const MeanField &mf, const TFGrids &tfg, const LibrpaOptions &opts,
+                             const std::vector<cplxdb> &sigc_diag,
+                             const std::vector<int> &iks_collect, int n_kpts_this,
+                             const int *iks_this, int i_state_low, int n_states_calc,
+                             const double *vxc, const double *vexx, double *sigc_re,
+                             double *sigc_im, double *eqp, const char *context,
+                             int *solver_info = nullptr);
 }

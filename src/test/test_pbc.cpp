@@ -1,13 +1,14 @@
-#include "../api/compute_helper.h"
-#include "../core/pbc.h"
-#include "../utils/constants.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cstddef>
 #include <cmath>
-#include <stdexcept>
 #include <complex>
+#include <cstddef>
+#include <stdexcept>
+
+#include "../api/compute_helper.h"
+#include "../core/pbc.h"
+#include "../utils/constants.h"
 
 using namespace librpa_int;
 
@@ -388,8 +389,7 @@ static AtomMatrix interpolate_displaced_atom(const std::vector<Vector3_Order<int
             phase = std::polar(1.0, TWO_PI * (k * Rs[ir]));
         else
         {
-            for (const auto &image : *images)
-                phase += std::polar(1.0, TWO_PI * (k * image));
+            for (const auto &image : *images) phase += std::polar(1.0, TWO_PI * (k * image));
             phase /= static_cast<double>(images->size());
         }
         for (std::size_t e = 0; e != result.size(); ++e) result[e] += phase * cells[ir][e];

@@ -16,11 +16,13 @@ namespace librpa
 {
 
 CrpaContinuedResult continue_crpa(const LibrpaCrpaResult* result,
-                                 const std::vector<std::complex<double>>& queries,
-                                 int n_parameters, double tolerance_ha)
+                                  const std::vector<std::complex<double>>& queries,
+                                  int n_parameters, double tolerance_ha)
 {
-    return CrpaContinuedResult(::librpa_continue_crpa(result, queries.size(),
-        reinterpret_cast<const double*>(queries.data()), n_parameters, tolerance_ha),
+    return CrpaContinuedResult(
+        ::librpa_continue_crpa(result, queries.size(),
+                               reinterpret_cast<const double*>(queries.data()), n_parameters,
+                               tolerance_ha),
         ::librpa_delete_crpa_continued_result);
 }
 
@@ -432,6 +434,18 @@ LIBRPA_CPP_H_METHOD_DEF_WRAP_VOID(
 void Handler::reset_band_data()
 {
     ::librpa_reset_band_data(this->h_);
+}
+
+void Handler::prepare_native_velocity(const Options& opts,
+                                      const LibrpaNativeVelocityInput* root_input,
+                                      bool prepare_optical)
+{
+    ::librpa_prepare_native_velocity(h_, &opts, root_input, prepare_optical ? 1 : 0);
+}
+
+OpticalResult Handler::get_optical_result() const
+{
+    return OpticalResult(::librpa_get_optical_result(h_), ::librpa_delete_optical_result);
 }
 
 /* Compute (build/get) functions */

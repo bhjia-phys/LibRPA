@@ -448,8 +448,7 @@ bool rspace_symmetry_has_complete_band_space(const MeanField &mf, const int n_ba
 {
     const int n_bands_used = n_bands < 0 ? mf.get_n_bands() : n_bands;
     const int n_basis_states = mf.get_n_aos() * mf.get_n_spinor();
-    return n_bands_used == n_basis_states
-        && n_bands_used <= mf.get_n_bands();
+    return n_bands_used == n_basis_states && n_bands_used <= mf.get_n_bands();
 }
 
 #ifdef LIBRPA_USE_LIBRI
@@ -982,12 +981,15 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
     // Other routes must not silently ignore an attached selection.
     if (!band_selection_.empty())
     {
-        const bool supported = routing == LIBRPA_ROUTING_LIBRI &&
-            !is_mf_eigvec_k_distributed_ && (!use_symmetry_context || qstar_only_symmetry) &&
-            (mf.get_n_spinor() == 1 ||
-             (mf.get_n_spinor() == 2 && mf.get_n_spins() == 1)) && tfg.has_time_grids();
-        check_chi0_collective_error(comm_h, supported ? "" :
-            "Chi0 selected bands require scalar/spinor full-grid LIBRI with replicated eigenvectors and time grids");
+        const bool supported =
+            routing == LIBRPA_ROUTING_LIBRI && !is_mf_eigvec_k_distributed_ &&
+            (!use_symmetry_context || qstar_only_symmetry) &&
+            (mf.get_n_spinor() == 1 || (mf.get_n_spinor() == 2 && mf.get_n_spins() == 1)) &&
+            tfg.has_time_grids();
+        check_chi0_collective_error(
+            comm_h, supported ? ""
+                              : "Chi0 selected bands require scalar/spinor full-grid LIBRI with "
+                                "replicated eigenvectors and time grids");
     }
 
     if (nbands_G > mf.get_n_bands())
@@ -1235,15 +1237,10 @@ void Chi0::build_chi0_q_space_time(const LibrpaParallelRouting routing,
 template <typename Tdata>
 static void build_gf_Rt_libri_serial(
     const MeanField &mf, const std::vector<bool> &band_mask,
-    const Chi0::BandSelection &band_selection,
-    const AtomicBasis &atbasis_wfc,
-    int ispin, int isoc1, int isoc2,
-    const PeriodicBoundaryData &pbc,
-    const SymmetryContext &symmetry_context,
-    const bool use_symmetry_context,
-    const vector<Vector3_Order<double>> &kfrac_list,
-    const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs,
-    double tau,
+    const Chi0::BandSelection &band_selection, const AtomicBasis &atbasis_wfc, int ispin, int isoc1,
+    int isoc2, const PeriodicBoundaryData &pbc, const SymmetryContext &symmetry_context,
+    const bool use_symmetry_context, const vector<Vector3_Order<double>> &kfrac_list,
+    const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs, double tau,
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri)
 {
     global::profiler.start("build_gf_Rt_libri_serial");
@@ -2208,8 +2205,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             "cRPA q-star screening retains full original k-grid Green functions and full "
             "real-space contractions\n");
     }
-    else if (chi0_rspace_symmetry_available && !chi0_band_space_complete
-        && comm_h.is_root())
+    else if (chi0_rspace_symmetry_available && !chi0_band_space_complete && comm_h.is_root())
     {
         const int n_bands_used =
             std::max(0, (this->nbands_G < 0 ? this->mf.get_n_bands() : this->nbands_G)
@@ -2519,25 +2515,25 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     }
                     else
                     {
-                        build_gf_Rt_libri_serial(this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc, isp, is1, is2,
-                                                 this->pbc, this->symmetry_context,
-                                                 this->use_symmetry_context && !this->qstar_only_symmetry,
-                                                 this->pbc.kfrac_list, this->IJRs_gf_local, tau,
-                                                 gf_po_libri);
-                        build_gf_Rt_libri_serial(this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc, isp, is1, is2,
-                                                 this->pbc, this->symmetry_context,
-                                                 this->use_symmetry_context && !this->qstar_only_symmetry,
-                                                 this->pbc.kfrac_list, this->IJRs_gf_local, -tau,
-                                                 gf_ne_libri);
+                        build_gf_Rt_libri_serial(
+                            this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc,
+                            isp, is1, is2, this->pbc, this->symmetry_context,
+                            this->use_symmetry_context && !this->qstar_only_symmetry,
+                            this->pbc.kfrac_list, this->IJRs_gf_local, tau, gf_po_libri);
+                        build_gf_Rt_libri_serial(
+                            this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc,
+                            isp, is1, is2, this->pbc, this->symmetry_context,
+                            this->use_symmetry_context && !this->qstar_only_symmetry,
+                            this->pbc.kfrac_list, this->IJRs_gf_local, -tau, gf_ne_libri);
                     }
                     // LibRI contracts both Gs in the same AO/translation ordering.
                     // The bubble needs G_{s2,s1}(J,I,-R,-tau), which is the
                     // adjoint of G_{s1,s2}(I,J,R,-tau). Supply its elementwise
                     // conjugate here; swapping spin indices alone is insufficient.
                     if constexpr (std::is_same<Tdata, std::complex<double>>::value)
-                        for (auto& [I, blocks] : gf_ne_libri)
-                            for (auto& [JR, tensor] : blocks)
-                                for (auto& value : *tensor.data) value = std::conj(value);
+                        for (auto &[I, blocks] : gf_ne_libri)
+                            for (auto &[JR, tensor] : blocks)
+                                for (auto &value : *tensor.data) value = std::conj(value);
                     global::profiler.start("chi0_set_Gs");
                     rpa.set_Gs_pos(gf_po_libri, libri_threshold_G);
                     rpa.set_Gs_neg(gf_ne_libri, libri_threshold_G);

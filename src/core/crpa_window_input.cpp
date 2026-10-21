@@ -19,8 +19,7 @@ std::vector<OrbitalComponent> orbital_components(const std::string& orbitals)
     if (orbitals == "s") return {{0, 0}};
     if (orbitals == "p") return {{1, 0}, {1, 1}, {1, -1}};
     if (orbitals == "sp") return {{0, 0}, {1, 0}, {1, 1}, {1, -1}};
-    if (orbitals == "d" || orbitals == "dp")
-        return {{2, 0}, {2, 1}, {2, -1}, {2, 2}, {2, -2}};
+    if (orbitals == "d" || orbitals == "dp") return {{2, 0}, {2, 1}, {2, -1}, {2, 2}, {2, -2}};
     if (orbitals == "eg") return {{2, 0}, {2, 2}};
     if (orbitals == "t2g") return {{2, 1}, {2, -1}, {2, -2}};
     throw LIBRPA_INVALID_ARGUMENT("cRPA orbitals must be s, p, sp, d, dp, eg, or t2g");
@@ -133,7 +132,8 @@ std::vector<std::vector<std::vector<int>>> select_bands(const MeanField& meanfie
 ComplexMatrix crpa_spinor_overlap(const ComplexMatrix& overlap, int n_spinor)
 {
     if (overlap.nr <= 0 || overlap.nr != overlap.nc || (n_spinor != 1 && n_spinor != 2))
-        throw LIBRPA_INVALID_ARGUMENT("cRPA requires a square spatial overlap and one or two components");
+        throw LIBRPA_INVALID_ARGUMENT(
+            "cRPA requires a square spatial overlap and one or two components");
     if (n_spinor == 1) return overlap;
     ComplexMatrix lifted(n_spinor * overlap.nr, n_spinor * overlap.nc);
     for (int s = 0; s < n_spinor; ++s)
@@ -154,8 +154,7 @@ CrpaWindowBuildResult build_crpa_window_input(
     const int n_rows = nao * n_spinor;
     if (!basis.initialized() || !basis.has_l_shells() || !meanfield.initialized() ||
         (n_spinor != 1 && (n_spinor != 2 || meanfield.get_n_spins() != 1)) ||
-        basis.nb_total != nao ||
-        atom_types.size() != basis.n_atoms || kfrac_list.empty() ||
+        basis.nb_total != nao || atom_types.size() != basis.n_atoms || kfrac_list.empty() ||
         kfrac_list.size() != static_cast<std::size_t>(meanfield.get_n_kpoints()) ||
         overlap_k.size() != kfrac_list.size())
         throw LIBRPA_INVALID_ARGUMENT(
@@ -206,9 +205,8 @@ CrpaWindowBuildResult build_crpa_window_input(
     std::vector<int> output_columns;
     int n_parent = 0;
     int n_output = 0;
-    auto append_site =
-        [&](int atom, const std::vector<OrbitalComponent>& components,
-            const std::vector<OrbitalComponent>& selected)
+    auto append_site = [&](int atom, const std::vector<OrbitalComponent>& components,
+                           const std::vector<OrbitalComponent>& selected)
     {
         SiteOrbitalGroup parent;
         parent.label = species_labels[atom_types[atom]] + "-atom-" + std::to_string(atom);
@@ -216,18 +214,20 @@ CrpaWindowBuildResult build_crpa_window_input(
         parent.orb_start = n_parent;
         parent.n_orbitals = n_spinor * static_cast<int>(components.size());
         for (int s = 0; s < n_spinor; ++s)
-        for (const auto& component : components)
-        {
-            const int l = component.first;
-            const int m = component.second;
-            const int shell = first_shell_offset(basis.get_l_shells(atom), l);
-            const int local = shell + rsh_m_to_index(l, m, convention.order);
-            if (local < 0 || local >= static_cast<int>(basis.get_atom_nb(atom)))
-                throw LIBRPA_INVALID_ARGUMENT("cRPA shell metadata exceeds the atom basis size");
-            trial_rows.push_back(s * nao + static_cast<int>(basis.get_part_range()[atom]) + local);
-            parent.orbital_labels.push_back(orbital_label(l, m) +
-                (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
-        }
+            for (const auto& component : components)
+            {
+                const int l = component.first;
+                const int m = component.second;
+                const int shell = first_shell_offset(basis.get_l_shells(atom), l);
+                const int local = shell + rsh_m_to_index(l, m, convention.order);
+                if (local < 0 || local >= static_cast<int>(basis.get_atom_nb(atom)))
+                    throw LIBRPA_INVALID_ARGUMENT(
+                        "cRPA shell metadata exceeds the atom basis size");
+                trial_rows.push_back(s * nao + static_cast<int>(basis.get_part_range()[atom]) +
+                                     local);
+                parent.orbital_labels.push_back(orbital_label(l, m) +
+                                                (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
+            }
         parent_sites.push_back(parent);
         if (!selected.empty())
         {
@@ -236,14 +236,15 @@ CrpaWindowBuildResult build_crpa_window_input(
             output.n_orbitals = n_spinor * static_cast<int>(selected.size());
             output.orbital_labels.clear();
             for (int s = 0; s < n_spinor; ++s)
-            for (const auto& component : selected)
-            {
-                const auto found = std::find(components.begin(), components.end(), component);
-                output_columns.push_back(n_parent + s * static_cast<int>(components.size()) +
-                                         static_cast<int>(found - components.begin()));
-                output.orbital_labels.push_back(orbital_label(component.first, component.second) +
-                    (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
-            }
+                for (const auto& component : selected)
+                {
+                    const auto found = std::find(components.begin(), components.end(), component);
+                    output_columns.push_back(n_parent + s * static_cast<int>(components.size()) +
+                                             static_cast<int>(found - components.begin()));
+                    output.orbital_labels.push_back(
+                        orbital_label(component.first, component.second) +
+                        (n_spinor == 2 ? (s == 0 ? ":up" : ":down") : ""));
+                }
             result.sites.push_back(output);
             n_output += output.n_orbitals;
         }
@@ -302,10 +303,11 @@ CrpaWindowBuildResult build_crpa_window_input(
                 throw LIBRPA_INVALID_ARGUMENT("cRPA spatial overlap has an inconsistent shape");
             const auto overlap = crpa_spinor_overlap(overlap_k[k], n_spinor);
             parent.set_S_k(k, overlap);
-            const auto& reference = tracking ? options.previous_parent_spin_k.at(spin).at(k)
-                                             : trials;
+            const auto& reference =
+                tracking ? options.previous_parent_spin_k.at(spin).at(k) : trials;
             if (reference.nr != n_rows || reference.nc != n_parent)
-                throw LIBRPA_INVALID_ARGUMENT("cRPA previous parent must retain all parent columns");
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "cRPA previous parent must retain all parent columns");
             if (tracking)
             {
                 const auto metric = transpose(reference, true) * overlap * reference;
@@ -327,7 +329,8 @@ CrpaWindowBuildResult build_crpa_window_input(
                 if (capture < options.tracking_min_capture)
                     throw LIBRPA_INVALID_ARGUMENT(
                         "cRPA B loses a previous parent direction; widen the declared B "
-                        "(minimum retained probability=" + std::to_string(capture) + ")");
+                        "(minimum retained probability=" +
+                        std::to_string(capture) + ")");
             }
             parent.build_spin_k(0, k, wfc);
             ComplexMatrix output(n_rows, n_output);

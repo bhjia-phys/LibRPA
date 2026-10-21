@@ -156,10 +156,7 @@ public:
     const BandSelection &get_band_selection() const noexcept { return band_selection_; }
     //! Restore a previously validated selector without collectives or allocation.
     //! New masks must enter through the collective set_band_selection method.
-    void swap_band_selection(BandSelection &selection) noexcept
-    {
-        band_selection_.swap(selection);
-    }
+    void swap_band_selection(BandSelection &selection) noexcept { band_selection_.swap(selection); }
     void clear_band_selection() { set_band_selection({}); }
     //! Transfer local map ownership without copying distributed blocks.
     Chi0QMap take_chi0_q() noexcept;

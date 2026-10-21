@@ -11,8 +11,8 @@
 #include "../api/dataset_helper.h"
 #include "../api/instance_manager.h"
 #include "../core/crpa.h"
-#include "../core/crpa_workflow.h"
 #include "../core/crpa_window_input.h"
+#include "../core/crpa_workflow.h"
 #include "../core/dielecmodel.h"
 #include "../core/orbital_weights.h"
 #include "../core/symmetry_spin_kernel.h"
@@ -1018,41 +1018,41 @@ void test_magnetic_qstar_screening()
     // Fractional endpoints, not a binary band mask. The exact spectral sum
     // checks Pd before comparing all components of the screened local tensors.
     auto weights = f.selection();
-    for (int k = 0; k < 4; ++k)
-        weights[0][k] = {0.82, 0.82, 0.57, 0.57, 0.13, 0.13};
+    for (int k = 0; k < 4; ++k) weights[0][k] = {0.82, 0.82, 0.57, 0.57, 0.13, 0.13};
     const auto calculate_weighted = [&](bool symmetry, bool spectral)
     {
         Chi0 chi(f.ds.mf, f.ds.basis_wfc, f.ds.basis_aux, f.ds.pbc, ctx, f.ds.tfg,
-                  f.ds.scfk_blacs_ctxt, f.ds.desc_wfc_kb_full, false, symmetry);
+                 f.ds.scfk_blacs_ctxt, f.ds.desc_wfc_kb_full, false, symmetry);
         chi.qstar_only_symmetry = true;
         chi.gf_threshold = chi.libri_threshold_C = chi.libri_threshold_G = 0;
-        CrpaContext context{chi, f.ds.cs_data, f.ds.basis_aux, f.pairs,
-                             f.no_shrink, f.ds.vq, f.ds.blacs_h, f.ds.desc_abf};
+        CrpaContext context{chi,         f.ds.cs_data, f.ds.basis_aux, f.pairs,
+                            f.no_shrink, f.ds.vq,      f.ds.blacs_h,   f.ds.desc_abf};
         if (spectral)
         {
             const auto pd = build_crpa_excluded_response(context, weights);
             for (const auto frequency : f.ds.tfg.get_freq_nodes())
-                for (const auto &q : chi.active_qpoints())
+                for (const auto& q : chi.active_qpoints())
                 {
                     ComplexMatrix local(2, 2), total(2, 2);
                     if (pd.count(frequency))
                     {
-                        const auto &qs = pd.at(frequency);
+                        const auto& qs = pd.at(frequency);
                         if (qs.count(q) && qs.at(q).count(0) && qs.at(q).at(0).count(0))
                             local = qs.at(q).at(0).at(0);
                     }
-                    MPI_Allreduce(local.c, total.c, total.size, MPI_C_DOUBLE_COMPLEX,
-                                  MPI_SUM, MPI_COMM_WORLD);
-                    const auto iq = std::distance(f.ds.pbc.klist.begin(),
-                        std::find(f.ds.pbc.klist.begin(), f.ds.pbc.klist.end(), q));
+                    MPI_Allreduce(local.c, total.c, total.size, MPI_C_DOUBLE_COMPLEX, MPI_SUM,
+                                  MPI_COMM_WORLD);
+                    const auto iq =
+                        std::distance(f.ds.pbc.klist.begin(),
+                                      std::find(f.ds.pbc.klist.begin(), f.ds.pbc.klist.end(), q));
                     const auto expected = f.response(frequency, false, iq, &weights);
                     for (int i = 0; i < total.size; ++i) close(total.c[i], expected.c[i]);
                 }
         }
         const auto all = compute_crpa_onsite(context, weights, {f.frame.get()});
         const auto p0 = build_crpa_total_response(context);
-        const auto shared = evaluate_crpa_onsite_from_response(
-            context, weights, {f.frame.get()}, p0);
+        const auto shared =
+            evaluate_crpa_onsite_from_response(context, weights, {f.frame.get()}, p0);
         compare_u_only(shared, all);
         return all;
     };
@@ -1063,10 +1063,16 @@ void test_magnetic_qstar_screening()
     // Same-index arrays are insufficient at a TR-invariant point: the
     // diagonal weight operator must also commute with its Kramers sewing.
     auto little_group_bad = weights;
-    for (auto &k : little_group_bad[0]) k[0] = 0.21;
+    for (auto& k : little_group_bad[0]) k[0] = 0.21;
     bool little_rejected = false;
-    try { f.chi->set_band_selection(little_group_bad); }
-    catch (const std::exception &) { little_rejected = true; }
+    try
+    {
+        f.chi->set_band_selection(little_group_bad);
+    }
+    catch (const std::exception&)
+    {
+        little_rejected = true;
+    }
     if (!little_rejected)
         throw std::runtime_error("a target breaking the magnetic little group was accepted");
 
@@ -1092,8 +1098,14 @@ void test_magnetic_qstar_screening()
     maximum = std::max(maximum, compare_tensors(permuted, weighted_full));
     f.ds.mf.get_eigenvals()[0](3, 0) += 0.01;
     bool energy_rejected = false;
-    try { f.chi->set_band_selection(weights); }
-    catch (const std::exception &) { energy_rejected = true; }
+    try
+    {
+        f.chi->set_band_selection(weights);
+    }
+    catch (const std::exception&)
+    {
+        energy_rejected = true;
+    }
     if (!energy_rejected)
         throw std::runtime_error("a live spectrum breaking the magnetic group was accepted");
     f.ds.mf = old_mf;
@@ -1410,7 +1422,7 @@ void test_soc_and_spin_representation()
     theta(0, 1) = 1;
     theta(1, 0) = -1;
     SpinorBlocks4<ComplexMatrix> blocks{ComplexMatrix(1, 1), ComplexMatrix(1, 1),
-                                       ComplexMatrix(1, 1), ComplexMatrix(1, 1)};
+                                        ComplexMatrix(1, 1), ComplexMatrix(1, 1)};
     blocks.b00(0, 0) = density(0, 0);
     blocks.b01(0, 0) = density(0, 1);
     blocks.b10(0, 0) = density(1, 0);
@@ -1424,8 +1436,7 @@ void test_soc_and_spin_representation()
         for (const auto& operation : public_ds->symmetry_context.spin_operations)
         {
             auto expected = provided ? supplied * density * transpose(supplied, true) : density;
-            if (operation.antiunitary)
-                expected = theta * conj(expected) * transpose(theta, true);
+            if (operation.antiunitary) expected = theta * conj(expected) * transpose(theta, true);
             const auto transformed = transform_spinor_bilinear(
                 operation, blocks, [](std::size_t, const ComplexMatrix& value) { return value; },
                 BilinearConvention::SourceToTarget_DXDdag);
@@ -1517,14 +1528,14 @@ void test_constrained_soc_optical()
             for (int i = 0; i < 3; ++i)
                 for (int j = 0; j < 3; ++j)
                 {
-                    close(actual->get_dielectric_head(iw)(i, j), head(i, j), 2e-12);
+                    close(actual->get_head_tensors().at(iw)(i, j), head(i, j), 2e-12);
                     excluded_signal = std::max(excluded_signal,
-                                               std::abs(full->get_dielectric_head(iw)(i, j) -
-                                                        retained->get_dielectric_head(iw)(i, j)));
+                                               std::abs(full->get_head_tensors().at(iw)(i, j) -
+                                                        retained->get_head_tensors().at(iw)(i, j)));
                 }
             for (int mu = 0; mu < 2; ++mu)
                 for (int alpha = 0; alpha < 3; ++alpha)
-                    close(actual->get_wing_mu(iw)(mu, alpha), wing(mu, alpha), 2e-12);
+                    close(actual->get_wing_auxiliary().at(iw)(mu, alpha), wing(mu, alpha), 2e-12);
         }
     if (excluded_signal < 1e-4) throw std::runtime_error("optical Pd control was trivial");
 

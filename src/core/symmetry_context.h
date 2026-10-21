@@ -13,15 +13,16 @@
 #include <string>
 #include <vector>
 
-#include "atom.h"
-#include "atomic_basis.h"
-#include "geometry.h"
-#include "pbc.h"
-#include "symmetry_types.h"
 #include "../math/complexmatrix.h"
 #include "../math/matrix3.h"
 #include "../math/symmetry.h"
 #include "../math/vector3_order.h"
+#include "atom.h"
+#include "atomic_basis.h"
+#include "geometry.h"
+#include "pbc.h"
+#include "qpoint_types.h"
+#include "symmetry_types.h"
 
 namespace librpa_int
 {
@@ -242,14 +243,12 @@ symmetry_atom_block_matrix_map_t symmetrize_symmetry_ibz_kspace_operator_blocks(
     const std::map<atom_t, size_t>& atom_nabf,
     const std::set<std::pair<atom_t, atom_t>>* target_atom_pairs = nullptr);
 
-struct SymmetryQPointView;
-
 // Restore rectangular auxiliary maps using separate left/right shell actions.
 // Existing full-grid coefficients are checked and retained without averaging.
 std::map<Vector3_Order<double>, ComplexMatrix> restore_symmetry_rectangular_q_map(
-    const std::map<Vector3_Order<double>, ComplexMatrix> &input,
-    const PeriodicBoundaryData &pbc, const SymmetryQPointView &view,
-    const SymmetryContext &context, const AtomicBasis &left, const AtomicBasis &right);
+    const std::map<Vector3_Order<double>, ComplexMatrix>& input, const PeriodicBoundaryData& pbc,
+    const SymmetryQPointView& view, const SymmetryContext& context, const AtomicBasis& left,
+    const AtomicBasis& right);
 
 ComplexMatrix rotate_symmetry_kspace_matrix(const SymmetryContext& ctx,
                                           const std::vector<SpeciesBasisLayout>& layouts,
@@ -313,8 +312,7 @@ std::vector<std::complex<double>> build_symmetry_kstar_member_target_gauge_phase
  * the member's legacy (spatial_isym, time_reversal) fields.
  */
 SymmetrySpinOperation resolve_symmetry_kstar_member_spin_operation(
-    const SymmetryContext& ctx,
-    const SymmetryKStarMember& member);
+    const SymmetryContext& ctx, const SymmetryKStarMember& member);
 
 symmetry_irreducible_sector_t build_symmetry_rspace_irreducible_sector(
     const SymmetryContext& ctx,
@@ -391,8 +389,7 @@ bool symmetry_rspace_restore_member_is_antiunitary(
  * inconsistent link throws.
  */
 SymmetrySpinOperation resolve_symmetry_rspace_restore_member_spin_operation(
-    const SymmetryContext& ctx,
-    const SymmetryRSpaceRestoreMember& member);
+    const SymmetryContext& ctx, const SymmetryRSpaceRestoreMember& member);
 
 /*!
  * @brief Jointly restore the four spin-channel real-space maps of a spinor
