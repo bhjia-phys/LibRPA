@@ -1,36 +1,26 @@
 #pragma once
 
-#include <iosfwd>
-#include <string>
+#include <complex>
 #include <vector>
 
-#include "../../src/core/meanfield.h"
+#include "../../src/math/matrix.h"
+#include "../../src/math/vector3_order.h"
 #include "../../src/utils/base_utility.h"
+#include "librpa.hpp"
 
-void print_band_analysis(const librpa_int::MeanField &mf,
-                         const std::vector<librpa_int::Vector3_Order<double>> &kfrac_output,
-                         const std::vector<int> &output_to_input_kpoint,
-                         const std::vector<librpa_int::matrix> &vxc,
-                         const std::vector<double> &vexx,
-                         const std::vector<librpa_int::cplxdb> &sigc,
-                         int i_state_low,
-                         int n_states_calc);
+//! Borrowed public output view with owning storage for layout conversions only.
+struct GwOutputView
+{
+    std::vector<double> fractional_k, vxc;
+    LibrpaGwOutputInput input{};
 
-double occupation_number_from_kpoint_weight(double weighted_occupation, double kpoint_weight);
+    GwOutputView(const librpa::MeanfieldData &snapshot, bool band_path,
+                 const std::vector<librpa_int::Vector3_Order<double>> &kfrac,
+                 const std::vector<int> &mapping, const std::vector<librpa_int::matrix> &vxc,
+                 const std::vector<double> &vexx, const std::vector<std::complex<double>> &sigc,
+                 int state_low, int state_high, const std::vector<double> &weights = {});
+};
 
-void write_energy_qp(const librpa_int::MeanField &mf,
-                     const std::vector<librpa_int::Vector3_Order<double>> &kfrac_output,
-                     const std::vector<int> &output_to_input_kpoint,
-                     const std::vector<librpa_int::matrix> &vxc, const std::vector<double> &vexx,
-                     const std::vector<librpa_int::cplxdb> &sigc, int n_kpoints_data,
-                     int i_state_low, int n_states_calc, const std::vector<double> &kpoint_weights,
-                     const std::string &filename = "energy_qp");
-
-// Native G0W0 path table: k index/coordinates, followed by occupation/energy
-// pairs. Inputs are in Hartree; output energies are in eV, without a header.
-void write_gw_band_spin_table(std::ostream &output, const librpa_int::MeanField &mf,
-                              const std::vector<librpa_int::Vector3_Order<double>> &kfrac,
-                              const std::vector<librpa_int::matrix> &vxc,
-                              const std::vector<double> &vexx,
-                              const std::vector<librpa_int::cplxdb> &sigc, int spin,
-                              int i_state_low, int n_states_calc);
+//! Flat index in a public owning spectrum/occupation snapshot.
+std::size_t meanfield_output_index(const librpa::MeanfieldData &snapshot, int spin, int k,
+                                   int state);

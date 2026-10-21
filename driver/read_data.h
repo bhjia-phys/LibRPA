@@ -87,6 +87,8 @@ int read_vxc(const string &file_path, std::vector<matrix> &vxc);
 void read_ri(const string &dir_path, librpa::ParallelRouting &routing);
 
 void read_velocity(const string &file_path, const MeanField &mf, velocity_matrix_t &velocity);
+void read_velocity(const string &file_path, int n_spins, int n_kpoints, int n_states,
+                   velocity_matrix_t &velocity);
 void read_velocity(const string &file_path, const MeanField &mf, velocity_matrix_t &velocity,
                    const std::vector<int> &source_to_target_ik, int source_n_kpoints);
 void read_velocity_abacus(const MeanField &mf, const std::string &dir_path,
@@ -95,8 +97,6 @@ void read_velocity_aims(const MeanField &mf, const std::string &file_path,
                         velocity_matrix_t &velocity);
 void read_velocity_aims(const MeanField &mf, const std::string &file_path,
                         const std::string &file_prefix, velocity_matrix_t &velocity);
-// Apply producer normalization to a newly constructed analytic head/wing object.
-void configure_headwing_coulomb_head(const string &dir_path, librpa_int::diele_func &headwing);
 void read_headwing_input(const string &dir_path, bool need_wing,
                          const std::vector<double> *frequencies_override = nullptr);
 
