@@ -2,8 +2,8 @@
 
 This folder contains regression test cases used to verify LibRPA features.
 
-The LibRI CI also runs `verify_qsgw_restart.py --case h2o-band` and
-`verify_qsgw_headwing.py --case aims-rotate` with four MPI ranks. These reuse
+The LibRI CI also runs `verification/verify_qsgw_restart.py --case h2o-band` and
+`verification/verify_qsgw_headwing.py --case aims-rotate` with four MPI ranks. These reuse
 the bundled datasets to compare three continuous updates with a one-update
 checkpoint followed by two resumed updates. They check fixed-basis matrices,
 spectra, entering-state QP roots and live optical feedback. The QP comparison
@@ -156,7 +156,7 @@ After a LibRI build, run the standalone/shared-G0W0 and tracked current-HR QSGW
 companion from this directory with NumPy and the matching MPI runtime:
 
 ```bash
-python3 verify_crpa_workflows.py --binary /path/to/build/chi0_main.exe \
+python3 verification/verify_crpa_workflows.py --binary /path/to/build/chi0_main.exe \
   --work-dir /path/to/new-crpa-workspace
 ```
 
@@ -181,7 +181,7 @@ convergence.
 
 ### Magnetic coupled cRPA control
 
-The magnetic stage also provides `verify_magnetic_crpa_workflows.py` with the
+The magnetic stage also provides `verification/verify_magnetic_crpa_workflows.py` with the
 same `--binary`, `--work-dir` and optional repeatable `--ranks` arguments. It
 reuses the full-BZ and paired-IBZ SOC archives, enables all three symmetry
 routes, and compares two current-HR updates with weighted/tracked cRPA at
