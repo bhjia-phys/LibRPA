@@ -344,7 +344,7 @@
       />
     </testcase>
 
-    <testcase name="SOC full-BZ native head/wing" directory="g0w0_soc_full_native_headwing_libri">
+    <testcase name="Four-state SOC model (SciPy), full-BZ native head/wing" directory="g0w0_scipy_fourstate_soc_full_native_headwing">
       <labels/>
       <build require_libri="true"/>
       <validate name="Complete complex Cartesian velocity (Ha Bohr)"

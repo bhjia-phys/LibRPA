@@ -12,6 +12,7 @@
 #include "../../src/io/npz_writer.h"
 #include "../../src/utils/constants.h"
 #include "../driver.h"
+#include "librpa_compute.h"
 
 namespace driver
 {

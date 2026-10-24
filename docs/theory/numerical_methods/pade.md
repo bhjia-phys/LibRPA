@@ -2,8 +2,12 @@
 
 `AnalyContPade` retains the original sample selection and multiplicative
 Thiele fraction whenever its construction and evaluation are regular.
+`AnalyContPadeBarycentric`, separately derived from `AnalyCont`, implements
+barycentric interpolation of already-selected samples. The Thiele class
+explicitly delegates to this class at the existing singular-construction
+conditions; barycentric state and evaluation belong entirely to the new class.
 A zero reciprocal difference need not mean that the data have no rational
-interpolant. The checked fallback changes coordinates for the same Padé
+interpolant. The checked fallback constructs an interpolant in the same Padé
 degree class, preserving the samples and their complex amplitudes.
 
 ## The failure and the degree class
@@ -114,10 +118,12 @@ pole remains nonfinite. Finite original evaluations are preserved.
 
 ## Numerical controls and the material boundary
 
-`test_analycont` checks repeated values with no admissible finite Thiele
-ordering, raw zero samples, complex matrix-causal offdiagonal examples,
-analytic derivatives, a regular numerator root, and amplitude/phase
-rescalings down to $10^{-20}$. A captured sixteen-point Bi2Se3 Gamma
+`test_analycont` directly checks `AnalyContPadeBarycentric` on repeated values
+with no admissible finite Thiele ordering, raw zero samples, complex
+matrix-causal offdiagonal examples, analytic derivatives, and amplitude/phase
+rescalings down to $10^{-20}$. Separate controls compare the explicit Thiele
+fallback against direct barycentric evaluation and keep the regular numerator
+root on the Thiele continuant path. A captured sixteen-point Bi2Se3 Gamma
 offdiagonal provides an additional numerical regression. Its samples zero
 and four are bit-identical, causing a second-stage reciprocal-difference
 zero; the function is not constant. The reference at the Mode-B target is

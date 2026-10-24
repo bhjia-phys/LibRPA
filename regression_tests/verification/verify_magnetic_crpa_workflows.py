@@ -147,7 +147,7 @@ def main():
         "crpa_output_raw": "true", "crpa_output_static": "false", "crpa_output_format": "npz",
     }
     datasets, templates = {}, {}
-    for name, fixture in (("full", "g0w0_soc_full_native_headwing_libri"),
+    for name, fixture in (("full", "g0w0_scipy_fourstate_soc_full_native_headwing"),
                           ("ibz", "g0w0_scipy_fourstate_soc_ibz_native_headwing")):
         home = root / name
         home.mkdir()

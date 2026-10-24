@@ -14,13 +14,10 @@
  * @note This header includes librpa_options.h and librpa_handler.h which provide the underlying C types.
  */
 
-#include "librpa_crpa.h"
-#include "librpa_orbital.h"
 #include "librpa_enums.h"
 #include "librpa_options.h"
 #include "librpa_handler.h"
-#include "librpa_optical.h"
-#include "librpa_qsgw.h"
+#include "librpa_compute.h"
 
 #include <array>
 #include <vector>

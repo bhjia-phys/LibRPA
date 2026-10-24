@@ -377,7 +377,8 @@ call MPI_Finalize(ierr)
 ## Native optical velocity from in-memory operators
 
 The experimental C/C++ optical API accepts numerical real-space H/S/r blocks
-through `LibrpaNativeVelocityInput` in `librpa_optical.h`. The driver selects
+through `LibrpaNativeVelocityInput` in `librpa_input.h`. Computation and result
+access are declared in `librpa_compute.h`. The driver selects
 files and converts units before this call; no filenames or producer presets
 enter the library. Supply H in Hartree, S dimensionless, and position in Bohr.
 The public header specifies Fourier, spinor and matrix-storage conventions.
@@ -394,16 +395,23 @@ auxiliary monopole normalization decoded from the matching producer export.
 
 `librpa_get_optical_result` provides a noncollective, rank-local owning snapshot
 of the computed velocity, frequency nodes, head and auxiliary wing matrices.
-Retrieve its borrowed arrays with `librpa_get_optical_view`, then release the
-result with `librpa_delete_optical_result`. A snapshot does not gather a global
+Its public `LibrpaOpticalResult` fields describe row-major, interleaved-complex
+arrays and their dimensions. Read those fields directly or obtain a borrowed
+copy with `librpa_get_optical_view`; both refer to the same read-only arrays.
+The snapshot survives changes to, or destruction of, its handler. Release only
+the original result with `librpa_delete_optical_result`; do not free individual
+arrays or delete a copied view. A snapshot does not gather a global
 matrix from distributed ranks. The C++ Handler wrappers preserve the same
 collective and ownership rules. These optical convenience functions currently
 have C and C++ interfaces; no high-level Fortran wrapper is advertised.
 
 ## QSGW task API
 
-The experimental C API in `librpa_qsgw.h` creates an opaque task with
-`librpa_create_qsgw_task`; `Handler::create_qsgw_task` provides C++ ownership.
+The experimental C API declares QSGW controls and their initialization in
+`librpa_options.h`, numerical input structures and their setter in `librpa_input.h`,
+and task execution, output views and callback registration in `librpa_compute.h`.
+The latter creates an opaque task with `librpa_create_qsgw_task`;
+`Handler::create_qsgw_task` provides C++ ownership.
 Initialize its controls with `librpa_init_qsgw_controls`, prepare its numerical
 state, supply Vxc/native-operator buffers with `librpa_set_qsgw_input`, then run
 `librpa_run_qsgw_task`. The same loaded grid/path and EXX/GW options apply.

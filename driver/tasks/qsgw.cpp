@@ -18,7 +18,7 @@
 #include "../task.h"
 #include "crpa.h"
 #include "librpa_input.h"
-#include "librpa_qsgw.h"
+#include "librpa_compute.h"
 
 namespace
 {
