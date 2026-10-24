@@ -6,7 +6,7 @@
 #include "../core/orbital_weights.h"
 #include "../utils/error.h"
 #include "instance_manager.h"
-#include "librpa_orbital.h"
+#include "librpa_compute.h"
 #include "orbital_helper.h"
 
 struct LibrpaOrbitalResult

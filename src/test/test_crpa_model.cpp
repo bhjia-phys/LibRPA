@@ -5,7 +5,7 @@
 #include "../core/crpa_continuation.h"
 #include "../core/crpa_model.h"
 #include "../core/pair_density_vertex.h"
-#include "librpa_crpa.h"
+#include "librpa_compute.h"
 
 using namespace librpa_int;
 using Z = std::complex<double>;

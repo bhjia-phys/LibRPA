@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "../mpi/base_mpi.h"
-#include "librpa_optical.h"
+#include "librpa_input.h"
 #include "meanfield.h"
 #include "pbc.h"
 #include "symmetry_context.h"

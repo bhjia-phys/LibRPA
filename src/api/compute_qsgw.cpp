@@ -8,7 +8,7 @@
 #include "instance_manager.h"
 #include "dataset_helper.h"
 #include "gw_response_helper.h"
-#include "librpa_qsgw.h"
+#include "librpa_compute.h"
 #include "qsgw_helper.h"
 
 struct LibrpaQsgwTask

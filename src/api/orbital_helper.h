@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../core/orbital_weights.h"
-#include "librpa_orbital.h"
+#include "librpa_handler.h"
 
 namespace librpa_int::api
 {

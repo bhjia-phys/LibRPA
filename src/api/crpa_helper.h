@@ -2,7 +2,7 @@
 
 #include "../core/crpa_task.h"
 #include "dataset.h"
-#include "librpa_crpa.h"
+#include "librpa_input.h"
 
 namespace librpa_int::api
 {

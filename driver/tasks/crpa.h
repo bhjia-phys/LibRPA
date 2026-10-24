@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "librpa_crpa.h"
+#include "librpa_input.h"
 
 namespace driver
 {

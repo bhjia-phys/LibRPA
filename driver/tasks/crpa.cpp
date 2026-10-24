@@ -19,9 +19,8 @@
 #include "../reader/reader_nao_overlap.h"
 #include "../task.h"
 #include "crpa_model_output.h"
-#include "librpa_crpa.h"
+#include "librpa_compute.h"
 #include "librpa_input.h"
-#include "librpa_orbital.h"
 
 namespace
 {
