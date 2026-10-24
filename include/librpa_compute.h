@@ -5,6 +5,7 @@
  */
 
 #include "librpa_handler.h"
+#include "librpa_input.h"
 #include "librpa_options.h"
 
 // C APIs
@@ -267,6 +268,98 @@ void librpa_get_g0w0_spectral_function_band_k(
     int i_state_high, const int n_omegas, const double *omegas,
     const double *vxc_band, const double *vexx_band, double *spectral_function_band,
     double *sigc_band);
+
+/** Collective velocity computation and setter; optional analytic head/wing
+ * preparation reuses the ordinary numerical API. Options use API values 3/4,
+ * never driver preset 6. Optical preparation requires replace_w_head enabled.
+ * Option 3 also requires use_scalapack_gw_wc to consume the analytic wing.
+ * Input is borrowed only for this call; input structures are in librpa_input.h.
+ */
+void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *options,
+                                    const LibrpaNativeVelocityInput *root_input,
+                                    int prepare_optical);
+
+/** Independently owned, rank-local snapshot of numerical optical outputs.
+ * Obtain this structure with librpa_get_optical_result and release it only with
+ * librpa_delete_optical_result. Do not modify its fields, free its arrays, or
+ * pass a copied structure to the deletion function. All arrays are read-only
+ * and remain valid until that original result is deleted, including after the
+ * handler is changed or destroyed. Empty arrays have null pointers.
+ *
+ * Complex arrays are row-major, interleaved [real,imag]. Velocity is
+ * [n_spins][n_kpoints][3][n_states][n_states][2], in Hartree*Bohr;
+ * frequencies_ha contains n_frequencies imaginary-frequency nodes in Hartree.
+ * Head and wing are [n_frequencies][rows][columns][2], with their respective
+ * dimensions below. Head is dimensionless; the auxiliary-basis wing uses
+ * LibRPA's Coulomb-normalized response convention. No MPI gathering is done.
+ */
+typedef struct LibrpaOpticalResult
+{
+    int n_spins, n_kpoints, n_states, n_frequencies;
+    int head_rows, head_columns, wing_rows, wing_columns;
+    const double *velocity_ri;
+    const double *frequencies_ha;
+    const double *head_ri;
+    const double *wing_ri;
+} LibrpaOpticalResult;
+
+/** Source-compatible borrowed view. Copying it does not copy or own the arrays. */
+typedef LibrpaOpticalResult LibrpaOpticalView;
+
+/** Noncollective snapshot; analytic head/wing preparation must be complete. */
+LibrpaOpticalResult *librpa_get_optical_result(const LibrpaHandler *h);
+/** Return a borrowed copy of the public fields, with the original result's lifetime. */
+LibrpaOpticalView librpa_get_optical_view(const LibrpaOpticalResult *result);
+/** Release a result and its arrays. Passing NULL is permitted. */
+void librpa_delete_optical_result(LibrpaOpticalResult *result);
+
+typedef enum
+{
+    LIBRPA_QSGW_ITERATIONS,
+    LIBRPA_QSGW_EIGENVALUES,
+    LIBRPA_QSGW_MATRICES,
+    LIBRPA_QSGW_QUASIPARTICLES,
+    LIBRPA_QSGW_ENERGY_QP,
+    LIBRPA_QSGW_GW_BAND,
+    LIBRPA_QSGW_KS_BAND,
+    LIBRPA_QSGW_EXX_BAND,
+    LIBRPA_QSGW_QSGW_BAND,
+    LIBRPA_QSGW_HAMILTONIAN,
+    LIBRPA_QSGW_HEAD_HAMILTONIAN
+} LibrpaQsgwOutputKind;
+/** Borrowed output on rank zero only, valid during the callback. spin is
+ * zero-based; text_size excludes the terminating zero. The callback presents
+ * output only and must not mutate or recursively use the handler/task. */
+typedef struct
+{
+    LibrpaQsgwOutputKind kind;
+    int iteration, spin, append;
+    const char *text;
+    size_t text_size;
+    const LibrpaLocalizedOperator *hamiltonian;
+} LibrpaQsgwOutput;
+typedef int (*LibrpaQsgwOutputSink)(const LibrpaQsgwOutput *, void *user_data);
+
+/** All energies are Hartree unless the field explicitly says eV. Strings and
+ * numeric inputs are copied by the call receiving them. Checkpoints preserve
+ * the immutable input eigenframe; original producer inputs remain required.
+ * Keep the handler alive until the task is deleted. After preparation keep
+ * its SCF eigenframe/grid fixed; finish band/Coulomb/velocity input before
+ * run. Do not modify or reenter the handler during run or its callbacks. Call prepare and
+ * set_input collectively before the single run call. */
+LibrpaQsgwTask *librpa_create_qsgw_task(LibrpaHandler *, const LibrpaOptions *,
+                                        const LibrpaQsgwControls *);
+/** Collective validation before ordinary numerical input is installed. */
+void librpa_prepare_qsgw_task(LibrpaQsgwTask *);
+void librpa_set_qsgw_output_sink(LibrpaQsgwTask *, LibrpaQsgwOutputSink, void *user_data);
+void librpa_run_qsgw_task(LibrpaQsgwTask *);
+void librpa_delete_qsgw_task(LibrpaQsgwTask *);
+
+/** Query the numerical dimensions needed to prepare a QSGW task's host input.
+ * band_path selects band input when nonzero. This call is noncollective.
+ */
+void librpa_get_meanfield_dimensions(const LibrpaHandler *h, int band_path, int *nspins, int *nkpts,
+                                     int *nstates, int *naos, int *nspinor);
 
 #ifdef __cplusplus
 }

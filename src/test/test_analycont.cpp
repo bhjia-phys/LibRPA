@@ -198,7 +198,7 @@ void test_qsgw_pade_zero_offdiagonal()
     }
 }
 
-void test_analycont_pade_singular_reciprocal_differences()
+void test_analycont_pade_barycentric()
 {
     const auto check = [](const vector<cplxdb> &xs, const vector<cplxdb> &unscaled_data,
                           const std::function<cplxdb(cplxdb)> &value,
@@ -214,7 +214,7 @@ void test_analycont_pade_singular_reciprocal_differences()
                 data.push_back(scale * datum);
                 data_scale = std::max(data_scale, std::abs(data.back()));
             }
-            const AnalyContPade pade(xs.size(), xs, data);
+            const AnalyContPadeBarycentric pade(xs, data);
             assert(pade.get_source_xs() == xs);
             assert(pade.get_source_data() == data);
             for (const auto x : xs)
@@ -238,6 +238,10 @@ void test_analycont_pade_singular_reciprocal_differences()
     const auto zero_value = [](cplxdb z) { return z / (1.0 + z * z); };
     const auto zero_derivative = [](cplxdb z) { return (1.0 - z * z) / std::pow(1.0 + z * z, 2); };
     check({0.0, 1.0, 2.0, 3.0}, {0.0, 0.5, 0.4, 0.3}, zero_value, zero_derivative);
+    // Odd sample counts retain equal numerator and denominator degree.
+    check(
+        {0.0, 1.0, 2.0}, {0.0, 0.5, 2.0 / 3.0}, [](cplxdb z) { return z / (1.0 + z); },
+        [](cplxdb z) { return 1.0 / std::pow(1.0 + z, 2); });
 
     // Complex offdiagonals of a matrix self-energy with PSD residues at real poles.
     // A zero sample and repeated samples are both compatible with matrix causality.
@@ -255,6 +259,47 @@ void test_analycont_pade_singular_reciprocal_differences()
             data[0] = 0.0;
         check(xs, data, value, derivative);
     }
+}
+
+void test_analycont_pade_barycentric_constants()
+{
+    const cplxdb target{0.3, 0.2};
+    for (const int count : {1, 4})
+        for (const cplxdb value : {cplxdb{0.0, 0.0}, cplxdb{2.0, 0.5}})
+        {
+            vector<cplxdb> xs;
+            for (int i = 0; i < count; ++i) xs.emplace_back(0.0, i + 1.0);
+            const AnalyContPadeBarycentric pade(xs, vector<cplxdb>(count, value));
+            const AnalyCont &continuation = pade;
+            assert(continuation.get(target) == value);
+            assert(pade.get_derivative(target) == cplxdb(0.0, 0.0));
+        }
+}
+
+void test_analycont_pade_barycentric_fallback()
+{
+    const auto check = [](const vector<cplxdb> &xs, const vector<cplxdb> &data)
+    {
+        const AnalyContPade fallback(xs.size(), xs, data);
+        const AnalyContPadeBarycentric direct(xs, data);
+        assert(fallback.get_source_xs() == direct.get_source_xs());
+        assert(fallback.get_source_data() == direct.get_source_data());
+        auto targets = xs;
+        targets.emplace_back(0.31, 0.0);
+        targets.emplace_back(1.2, 0.17);
+        for (const auto target : targets)
+        {
+            assert(fallback.get(target) == direct.get(target));
+            assert(fallback.get_derivative(target) == direct.get_derivative(target));
+        }
+    };
+    check({-1.0, 1.0, -2.0, 2.0}, {0.5, 0.5, 0.2, 0.2});
+    check({0.0, 1.0, 2.0, 3.0}, {0.0, 0.5, 0.4, 0.3});
+}
+
+void test_analycont_pade_removable_singularity()
+{
+    // This is the Thiele continuant evaluation, not barycentric construction.
     // An internal nested denominator can vanish at a regular numerator root.
     const vector<cplxdb> root_xs{0.0, 1.0, 2.0, 4.0};
     for (const double scale : {1.0, 1.0e-20})
@@ -298,13 +343,16 @@ void test_analycont_pade_bi2se3_degenerate_pair()
     {
         vector<cplxdb> data;
         for (const auto value : original) data.push_back(scale * value);
-        const AnalyContPade pade(xs.size(), xs, data);
+        const AnalyContPadeBarycentric pade(xs, data);
+        const AnalyContPade fallback(xs.size(), xs, data);
         for (int i = 0; i < static_cast<int>(xs.size()); ++i)
             assert(std::abs(pade.get(xs[i]) / scale - original[i]) < 1.3e-28);
         assert(std::abs(pade.get(0.0) / scale -
                         cplxdb(9.0136364054620232e-15, -1.4319544233203666e-15)) < 1.0e-27);
         assert(std::abs(pade.get_derivative(0.0) / scale -
                         cplxdb(6.0543052717614809e-16, 1.2025620912849089e-15)) < 1.0e-26);
+        assert(fallback.get(0.0) == pade.get(0.0));
+        assert(fallback.get_derivative(0.0) == pade.get_derivative(0.0));
     }
 }
 
@@ -322,6 +370,9 @@ int main(int argc, char *argv[])
     test_analycont_pade_resample_imag_grid();
     test_analycont_pade_terminated_data();
     test_qsgw_pade_zero_offdiagonal();
-    test_analycont_pade_singular_reciprocal_differences();
+    test_analycont_pade_barycentric();
+    test_analycont_pade_barycentric_constants();
+    test_analycont_pade_barycentric_fallback();
+    test_analycont_pade_removable_singularity();
     test_analycont_pade_bi2se3_degenerate_pair();
 }

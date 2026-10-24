@@ -17,7 +17,7 @@
 #include "../reader_2d_coulomb_head.h"
 #include "../task.h"
 #include "librpa_input.h"
-#include "librpa_qsgw.h"
+#include "librpa_compute.h"
 
 namespace
 {

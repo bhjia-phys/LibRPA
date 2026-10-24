@@ -10,8 +10,49 @@
 
 // C APIs
 #ifdef __cplusplus
+#define LIBRPA_INPUT_DEFAULT(value) = value
 extern "C" {
+#else
+#define LIBRPA_INPUT_DEFAULT(value)
 #endif
+
+    /** One dense real-space block, with interleaved complex values.
+     * translation is an integer lattice translation; row_major is zero or one.
+     * The caller owns values_ri and retains it until the collective call returns.
+     */
+    typedef struct
+    {
+        int translation[3];
+        const double* values_ri;
+        int row_major;
+    } LibrpaLocalizedBlock;
+
+    typedef struct
+    {
+        int dimension;
+        int n_blocks;
+        const LibrpaLocalizedBlock* blocks;
+    } LibrpaLocalizedOperator;
+
+    /** Original-H/S/r velocity in the loaded complete SCF eigenframe.
+     * Operators are supplied on handler rank zero only. Other ranks pass NULL.
+     * H is in Hartree, S dimensionless, and position/lattice lengths in Bohr.
+     * AO-spinor rows are AO-major, component-minor. Fourier phase is +i k.R.
+     * S and its derivative use Hermitian upper-triangle completion; position
+     * completion is r_ij=conj(raw_r_ji+i*dS_ji) for i>=j. These are numerical
+     * conventions, independent of a producer filename or input-file format.
+     * No SCF energies, occupations or coefficients are changed.
+     */
+    typedef struct
+    {
+        int n_spins;
+        const LibrpaLocalizedOperator* hamiltonian;
+        LibrpaLocalizedOperator overlap;
+        LibrpaLocalizedOperator position[3];
+        /** Required positive values only for strict-2D optical preparation. */
+        double inplane_area_bohr2;
+        double auxiliary_monopole_norm_squared;
+    } LibrpaNativeVelocityInput;
 
 /**
  * @brief Set meanfield wavefunction dimension.
@@ -22,7 +63,7 @@ extern "C" {
  * @param[in] nbasis   Number of atomic basis functions.
  * @param[in] nspinor  Number of spin components per wavefunction
  */
-void librpa_set_scf_dimension(LibrpaHandler* h, int nspins, int nkpts, int nstates, int nbasis, int nspinor = 1);
+void librpa_set_scf_dimension(LibrpaHandler* h, int nspins, int nkpts, int nstates, int nbasis, int nspinor LIBRPA_INPUT_DEFAULT(1));
 
 /**
  * @brief Set occupation numbers, eigenvalues, and Fermi level of meanfield input.
@@ -99,7 +140,7 @@ void librpa_set_wfc_spinor_packed(LibrpaHandler* h, int ik, int nstates_local,
  * @param[in] l_shells  Optional concatenated angular momenta, grouped by atom.
  */
 void librpa_set_ao_basis_wfc(LibrpaHandler* h, int natoms, const size_t* nbs_wfc,
-                             const int* nshells = nullptr, const int* l_shells = nullptr);
+                             const int* nshells LIBRPA_INPUT_DEFAULT(nullptr), const int* l_shells LIBRPA_INPUT_DEFAULT(nullptr));
 
 /**
  * @brief Set auxiliary atomic orbital basis size.
@@ -110,7 +151,7 @@ void librpa_set_ao_basis_wfc(LibrpaHandler* h, int natoms, const size_t* nbs_wfc
  * @param[in] l_shells  Optional concatenated angular momenta, grouped by atom.
  */
 void librpa_set_ao_basis_aux(LibrpaHandler* h, int natoms, const size_t* nbs_aux,
-                             const int* nshells = nullptr, const int* l_shells = nullptr);
+                             const int* nshells LIBRPA_INPUT_DEFAULT(nullptr), const int* l_shells LIBRPA_INPUT_DEFAULT(nullptr));
 
 /**
  * @brief Set shrink auxiliary atomic orbital basis size.
@@ -122,8 +163,8 @@ void librpa_set_ao_basis_aux(LibrpaHandler* h, int natoms, const size_t* nbs_aux
  */
 void librpa_set_ao_basis_aux_shrink(LibrpaHandler* h, int natoms,
                                     const size_t* nbs_aux_shrink,
-                                    const int* nshells = nullptr,
-                                    const int* l_shells = nullptr);
+                                    const int* nshells LIBRPA_INPUT_DEFAULT(nullptr),
+                                    const int* l_shells LIBRPA_INPUT_DEFAULT(nullptr));
 
 /**
  * @brief Set basis convention metadata used by symmetry-based reductions.
@@ -260,7 +301,7 @@ void librpa_set_irreducible_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int 
  */
 void librpa_set_lri_coeff(LibrpaHandler* h, LibrpaParallelRouting routing, int I, int J,
                           int nbasis_i, int nbasis_j, int naux_mu, const int R[3],
-                          const double* Cs_in, int shrink_aux = 0);
+                          const double* Cs_in, int shrink_aux LIBRPA_INPUT_DEFAULT(0));
 
 /**
  * @brief Set bare Coulomb matrix elements (atom-pair format).
@@ -519,12 +560,30 @@ void librpa_set_wfc_band_spinor_packed(LibrpaHandler* h, int ik_band, int nstate
  */
 void librpa_reset_band_data(LibrpaHandler* h);
 
-/** Query the numerical dimensions needed to prepare a QSGW task's host input.
- * band_path selects band input when nonzero. This call is noncollective.
+/** QSGW Vxc and native-operator input. Complex values are interleaved
+ * [real,imag]; square matrix storage follows row_major (zero: column major,
+ * one: row major). Spin and k-point indices are zero based; energies are Hartree.
+ * Buffers are supplied on handler rank zero and copied by librpa_set_qsgw_input.
  */
-void librpa_get_meanfield_dimensions(const LibrpaHandler* h, int band_path, int* nspins,
-                                     int* nkpts, int* nstates, int* naos, int* nspinor);
+typedef struct
+{
+    int spin, kpoint, dimension, row_major;
+    const double* values_ri;
+} LibrpaQsgwMatrix;
+typedef struct
+{
+    int n_vxc, n_vxc_band;
+    const LibrpaQsgwMatrix *vxc, *vxc_band;
+    int vxc_in_ao_basis;
+    const LibrpaNativeVelocityInput* native_operators;
+    double inplane_area_bohr2, auxiliary_monopole_norm_squared;
+} LibrpaQsgwInput;
+
+/** Collective. Vxc and native operators are supplied on root; ignored elsewhere. */
+void librpa_set_qsgw_input(LibrpaQsgwTask*, const LibrpaQsgwInput* root_input);
 
 #ifdef __cplusplus
 }
 #endif
+
+#undef LIBRPA_INPUT_DEFAULT

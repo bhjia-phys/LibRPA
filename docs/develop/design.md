@@ -17,9 +17,10 @@ LibRPA is designed to provide efficient and scalable implementations of various 
 ## QSGW task boundary
 
 The new QSGW iteration, restart state, live optical updates and diagnostic results
-are implemented in `src/core/qsgw/`. The public functions in `librpa_qsgw.h`
-marshal numerical inputs and output callbacks; the driver reads host files and
-writes the returned output events.
+are implemented in `src/core/qsgw/`. The public API separates runtime controls
+in `librpa_options.h`, numerical input and its setter in `librpa_input.h`, and
+task execution and output callbacks in `librpa_compute.h`. The driver reads
+host files and writes the returned output events.
 
 The existing `src/api/Dataset` ownership and G0W0 workflow remain in place.
 QSGW borrows only the numerical objects it uses through its own `TaskContext`;
