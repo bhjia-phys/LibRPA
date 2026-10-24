@@ -312,7 +312,7 @@
 
     <!-- Finite four-state model: only two weighted IBZ points are supplied.
          Independent native full-BZ references contain all three points. -->
-    <testcase name="SOC IBZ-only native head/wing versus full BZ" directory="g0w0_soc_ibz_headwing_libri">
+    <testcase name="Four-state SOC model (SciPy), IBZ native head/wing versus full BZ" directory="g0w0_scipy_fourstate_soc_ibz_native_headwing">
       <labels/>
       <build require_libri="true"/>
       <validate name="Native velocity, two-point IBZ and active magnetic restoration"

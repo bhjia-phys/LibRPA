@@ -1,4 +1,15 @@
-# IBZ-only SOC native head/wing regression
+# SciPy four-state SOC model: IBZ native head/wing regression
+
+The standalone Python `native-controls/prepare.py` generator uses NumPy and
+SciPy's generalized Hermitian eigensolver to construct this synthetic model.
+Its `prepare_weighted.py` companion copies the original IBZ dataset and adjusts
+only the occupied `band_out` entries to `2/3` and `4/3`, as explained below.
+All 14 archived data files match that weighted dataset; the unused velocity
+file is omitted because this case computes native velocity from H/S/r.
+`input_preset = abacus` selects the generator's output format rather than an
+ABACUS material calculation. The testcase and reference directory are named
+`g0w0_scipy_fourstate_soc_ibz_native_headwing`; the LibRI requirement remains
+in the suite's build metadata.
 
 This finite software model has one atom, two spatial s NAOs, four spinor
 bands, two occupied states, a positive nonorthogonal overlap, interorbital
@@ -75,5 +86,5 @@ One `testsuite.xml` entry uses existing comparators for:
   (energies in eV; printed energy resolution is `1e-5 eV`).
 
 The standard LibRI suite runs this case on four MPI ranks; it also supports
-the normal `--only g0w0_soc_ibz_headwing_libri -n 1` invocation. No special
+the normal `--only g0w0_scipy_fourstate_soc_ibz_native_headwing -n 1` invocation. No special
 runner, comparison module or reference-update script is needed.

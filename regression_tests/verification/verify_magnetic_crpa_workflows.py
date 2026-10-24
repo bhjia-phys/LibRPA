@@ -148,7 +148,7 @@ def main():
     }
     datasets, templates = {}, {}
     for name, fixture in (("full", "g0w0_soc_full_native_headwing_libri"),
-                          ("ibz", "g0w0_soc_ibz_headwing_libri")):
+                          ("ibz", "g0w0_scipy_fourstate_soc_ibz_native_headwing")):
         home = root / name
         home.mkdir()
         with tarfile.open(fixtures / fixture / "dataset.tar.gz") as archive:
