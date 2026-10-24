@@ -15,7 +15,8 @@ are not implemented. Same-grid analytic head and wing updates are supported
 with an explicit velocity convention; independent-grid updates are rejected.
 
 QSGW reuses the G0W0 input readers and EXX/Sigma kernels. The driver reads
-producer files and calls the public opaque-task API in `librpa_qsgw.h`.
+producer files and calls the public opaque-task API in `librpa_compute.h`, using
+controls from `librpa_options.h` and numerical input from `librpa_input.h`.
 Iteration, numerical state and checkpoint handling live in `src/core/qsgw`;
 the driver's output callback writes the requested tables and native CSR files.
 The task API is available without building the command-line driver.

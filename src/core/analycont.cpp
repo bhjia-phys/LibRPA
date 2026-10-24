@@ -242,31 +242,46 @@ AnalyContPade::AnalyContPade(int n_pars_in, const std::vector<cplxdb> &xs, const
         }
         if (zero_pivot)
         {
-            if (initialize_rational()) return;
-            throw std::runtime_error(
-                "Padé reciprocal differences have a zero pivot without a valid lower-order fit");
+            barycentric_fallback.emplace(source_xs, source_data);
+            return;
         }
         for (int i = i_par; i < n_pars; i++)
         {
             const cplxdb denominator = (source_xs[i] - source_xs[i_par - 1]) * g(i, i_par - 1);
             if (denominator == cplxdb{0.0, 0.0} || !finite_complex(denominator))
             {
-                if (initialize_rational()) return;
-                throw std::runtime_error("Padé reciprocal-difference denominator is singular");
+                barycentric_fallback.emplace(source_xs, source_data);
+                return;
             }
             g(i, i_par) = (pivot - g(i, i_par - 1)) / denominator;
             if (!finite_complex(g(i, i_par)))
             {
-                if (initialize_rational()) return;
-                throw std::runtime_error(
-                    "Padé reciprocal differences produced non-finite coefficients");
+                barycentric_fallback.emplace(source_xs, source_data);
+                return;
             }
         }
         par_y[i_par] = g(i_par, i_par);
     }
 }
 
-bool AnalyContPade::initialize_rational()
+AnalyContPadeBarycentric::AnalyContPadeBarycentric(const std::vector<cplxdb> &xs,
+                                                   const std::vector<cplxdb> &data)
+{
+    if (xs.empty() || xs.size() != data.size())
+        throw std::invalid_argument("Barycentric Padé requires nonempty matching data");
+    for (std::size_t i = 0; i < xs.size(); ++i)
+        if (!finite_complex(xs[i]) || !finite_complex(data[i]))
+            throw std::invalid_argument("Barycentric Padé source data must be finite");
+    source_xs = xs;
+    source_data = data;
+    if (std::all_of(data.begin(), data.end(),
+                    [&](const cplxdb &value) { return value == data.front(); }))
+        return;
+    if (!initialize_rational())
+        throw std::runtime_error("Barycentric Padé could not fit all selected samples");
+}
+
+bool AnalyContPadeBarycentric::initialize_rational()
 {
     // The same type [(N-1)/2, N/2] interpolant in barycentric coordinates.
     // Unlike the multiplicative fraction, this representation permits zeros.
@@ -360,8 +375,9 @@ bool AnalyContPade::initialize_rational()
     return false;
 }
 
-std::pair<cplxdb, cplxdb> AnalyContPade::evaluate_rational(const cplxdb &x) const
+std::pair<cplxdb, cplxdb> AnalyContPadeBarycentric::evaluate_rational(const cplxdb &x) const
 {
+    if (rational_weights.empty()) return {source_data.front(), cplxdb{0.0, 0.0}};
     const cplxld z = cplxld(x.real(), x.imag()) / rational_x_scale;
     cplxld numerator = 0.0L, denominator = 0.0L;
     cplxld d_numerator = 0.0L, d_denominator = 0.0L;
@@ -431,10 +447,16 @@ std::pair<cplxdb, cplxdb> AnalyContPade::evaluate_rational(const cplxdb &x) cons
             {static_cast<double>(derivative.real()), static_cast<double>(derivative.imag())}};
 }
 
-cplxdb
-AnalyContPade::get(const cplxdb &x) const
+cplxdb AnalyContPadeBarycentric::get(const cplxdb &x) const { return evaluate_rational(x).first; }
+
+cplxdb AnalyContPadeBarycentric::get_derivative(const cplxdb &x) const
 {
-    if (!rational_weights.empty()) return evaluate_rational(x).first;
+    return evaluate_rational(x).second;
+}
+
+cplxdb AnalyContPade::get(const cplxdb &x) const
+{
+    if (barycentric_fallback) return barycentric_fallback->get(x);
     cplxdb tmp = {1.0, 0.0};
 
     for (int i_par = n_pars - 1; i_par > 0; i_par--)
@@ -448,7 +470,7 @@ AnalyContPade::get(const cplxdb &x) const
 cplxdb
 AnalyContPade::get_derivative(const cplxdb &x) const
 {
-    if (!rational_weights.empty()) return evaluate_rational(x).second;
+    if (barycentric_fallback) return barycentric_fallback->get_derivative(x);
     if (n_pars <= 1)
     {
         return {0.0, 0.0};

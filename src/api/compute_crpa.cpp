@@ -15,7 +15,7 @@
 #include "dataset_helper.h"
 #include "gw_response_helper.h"
 #include "instance_manager.h"
-#include "librpa_crpa.h"
+#include "librpa_compute.h"
 #include "orbital_helper.h"
 #include "qsgw_helper.h"
 

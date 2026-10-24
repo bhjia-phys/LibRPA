@@ -397,16 +397,19 @@ is bounded. Using a full-response optical head unchanged for nonzero Pd would
 screen with the wrong response. Small-case optical tests do not establish
 material mesh or basis convergence.
 
-Library callers use `librpa_crpa.h`: initialize `LibrpaCrpaInput`, supply S(k)
-and the window/species data, call `librpa_compute_crpa_window` collectively,
+Library callers use `LibrpaCrpaInput` and its initializer from `librpa_input.h`,
+and the QSGW companion controls and initializer from `librpa_options.h`.
+Numerical result views, accessors, continuation and task attachment are declared
+in `librpa_compute.h`; `librpa_handler.h` declares the indexed result handles.
+Supply S(k) and the window/species data, call `librpa_compute_crpa_window` collectively,
 then inspect the owned result and release it with `librpa_delete_crpa_result`.
 The standalone computation accepts numerical data and returns an owned snapshot.
 The separate tracking-checkpoint function writes library state; the iterative
 companion restores and saves its checkpoint at the QSGW completed-state boundary.
 
-The separate `librpa_orbital.h` C interface computes an owned orbital-analysis
-result through `librpa_analyze_orbitals`, exposes spatial AO/group weights and
-state metadata including the number of spinor components, and evaluates
+The orbital-analysis functions in `librpa_compute.h` compute an owned
+result through `librpa_analyze_orbitals`, expose spatial AO/group weights and
+state metadata including the number of spinor components, and evaluate
 Gaussian PDOS in Hartree units. C++ callers can use `Handler::analyze_orbitals`,
 which returns an owning result. Neither path modifies the handler, KS states,
 response masks or local output frames. Orbital analysis uses the original full
@@ -415,8 +418,11 @@ k-grid states.
 Every participating rank must supply identical numerical options, species,
 selections and S(k) arrays. Input buffers remain owned by the caller and must
 stay valid until the collective call returns. Each rank receives its own result
-and releases it locally. The driver supplies this replicated input by reading
-the same native source on every rank. KS orthogonality and frame checks validate
+and releases it locally. Accessor arrays and strings remain valid until that
+owned result is deleted. QSGW output callbacks instead receive borrowed result
+handles and views that must not be deleted or retained after the callback returns.
+The driver supplies this replicated input by reading the same native source on
+every rank. KS orthogonality and frame checks validate
 the supplied data; they do not reorthogonalize or repair the KS eigenvectors.
 
 The scalar nspin=1 response retains the native spin-degeneracy convention.
