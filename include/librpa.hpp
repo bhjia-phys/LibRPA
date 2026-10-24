@@ -17,7 +17,7 @@
 #include "librpa_enums.h"
 #include "librpa_options.h"
 #include "librpa_handler.h"
-#include "librpa_optical.h"
+#include "librpa_compute.h"
 
 #include <vector>
 #include <complex>

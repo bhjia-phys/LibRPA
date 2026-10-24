@@ -5,6 +5,7 @@
  */
 
 #include "librpa_handler.h"
+#include "librpa_input.h"
 #include "librpa_options.h"
 
 // C APIs
@@ -267,6 +268,50 @@ void librpa_get_g0w0_spectral_function_band_k(
     int i_state_high, const int n_omegas, const double *omegas,
     const double *vxc_band, const double *vexx_band, double *spectral_function_band,
     double *sigc_band);
+
+/** Collective velocity computation and setter; optional analytic head/wing
+ * preparation reuses the ordinary numerical API. Options use API values 3/4,
+ * never driver preset 6. Optical preparation requires replace_w_head enabled.
+ * Option 3 also requires use_scalapack_gw_wc to consume the analytic wing.
+ * Input is borrowed only for this call; input structures are in librpa_input.h.
+ */
+void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *options,
+                                    const LibrpaNativeVelocityInput *root_input,
+                                    int prepare_optical);
+
+/** Independently owned, rank-local snapshot of numerical optical outputs.
+ * Obtain this structure with librpa_get_optical_result and release it only with
+ * librpa_delete_optical_result. Do not modify its fields, free its arrays, or
+ * pass a copied structure to the deletion function. All arrays are read-only
+ * and remain valid until that original result is deleted, including after the
+ * handler is changed or destroyed. Empty arrays have null pointers.
+ *
+ * Complex arrays are row-major, interleaved [real,imag]. Velocity is
+ * [n_spins][n_kpoints][3][n_states][n_states][2], in Hartree*Bohr;
+ * frequencies_ha contains n_frequencies imaginary-frequency nodes in Hartree.
+ * Head and wing are [n_frequencies][rows][columns][2], with their respective
+ * dimensions below. Head is dimensionless; the auxiliary-basis wing uses
+ * LibRPA's Coulomb-normalized response convention. No MPI gathering is done.
+ */
+typedef struct LibrpaOpticalResult
+{
+    int n_spins, n_kpoints, n_states, n_frequencies;
+    int head_rows, head_columns, wing_rows, wing_columns;
+    const double *velocity_ri;
+    const double *frequencies_ha;
+    const double *head_ri;
+    const double *wing_ri;
+} LibrpaOpticalResult;
+
+/** Source-compatible borrowed view. Copying it does not copy or own the arrays. */
+typedef LibrpaOpticalResult LibrpaOpticalView;
+
+/** Noncollective snapshot; analytic head/wing preparation must be complete. */
+LibrpaOpticalResult *librpa_get_optical_result(const LibrpaHandler *h);
+/** Return a borrowed copy of the public fields, with the original result's lifetime. */
+LibrpaOpticalView librpa_get_optical_view(const LibrpaOpticalResult *result);
+/** Release a result and its arrays. Passing NULL is permitted. */
+void librpa_delete_optical_result(LibrpaOpticalResult *result);
 
 #ifdef __cplusplus
 }

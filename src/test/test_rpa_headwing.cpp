@@ -3950,7 +3950,20 @@ void test_native_optical_uses_handler_communicator()
     const int color = world_rank % 2;
     MPI_Comm subgroup;
     MPI_Comm_split(MPI_COMM_WORLD, color, world_rank, &subgroup);
+    int subgroup_rank = 0;
+    MPI_Comm_rank(subgroup, &subgroup_rank);
     double error = 0.0;
+    const auto check = [&](const std::complex<double> actual, const std::complex<double> expected)
+    {
+        const double difference = std::abs(actual - expected);
+        error = !std::isfinite(difference) ? std::numeric_limits<double>::infinity()
+                                           : std::max(error, difference);
+    };
+    const double scale = color + 1.0;
+    const std::array<std::complex<double>, 3> dipole{scale * std::complex<double>{0.2, 0.1},
+                                                     scale * std::complex<double>{0.3, -0.15},
+                                                     scale * std::complex<double>{-0.4, 0.05}};
+    librpa::OpticalResult snapshot(nullptr, librpa_delete_optical_result);
     {
         librpa::Handler handler(subgroup);
         const auto ds = librpa_int::api::get_dataset_instance(handler);
@@ -3969,11 +3982,6 @@ void test_native_optical_uses_handler_communicator()
 
         // Distinct subgroup dipoles and charge vertices must not cross-sum.
         // The two-level model has C=S=I, gap=1 Ha and v_01=-i*r_01.
-        const double scale = color + 1.0;
-        const std::array<std::complex<double>, 3> dipole{
-            scale * std::complex<double>{0.2, 0.1},
-            scale * std::complex<double>{0.3, -0.15},
-            scale * std::complex<double>{-0.4, 0.05}};
         const std::array<double, 8> h_values{-0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0};
         const std::array<double, 8> s_values{1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0};
         std::array<std::array<double, 8>, 3> r_values{};
@@ -4010,14 +4018,7 @@ void test_native_optical_uses_handler_communicator()
         opts.tfgrids_freq_min = 0.5;
         opts.tfgrids_freq_interval = 0.75;
         handler.prepare_native_velocity(opts, ds->comm_h.is_root() ? &input : nullptr);
-
-        const auto check = [&](const std::complex<double> actual,
-                               const std::complex<double> expected)
-        {
-            const double difference = std::abs(actual - expected);
-            error = !std::isfinite(difference) ? std::numeric_limits<double>::infinity()
-                                               : std::max(error, difference);
-        };
+        snapshot = handler.get_optical_result();
         const auto check_wing = [&]
         {
             const auto &frequencies = ds->p_headwing->get_frequency_nodes();
@@ -4070,9 +4071,40 @@ void test_native_optical_uses_handler_communicator()
         ds->p_headwing->set_direct_full_bz_headwing_inputs(ds->velocity_matrix, ds->mf, {{0}});
         ds->p_headwing->cal_wing(ds->cs_data, 0.0, ds->vq);
         check_wing();
-        if (ds->comm_h.is_root())
-            std::cout << "Native optical subgroup " << color << " max error " << error << '\n';
     }
+    // The public snapshot owns numerical arrays independently of the handler.
+    // Check its storage layout and surviving values against the same model.
+    require_condition(snapshot && snapshot->n_spins == 1 && snapshot->n_kpoints == 1 &&
+                          snapshot->n_states == 2 && snapshot->n_frequencies == 2 &&
+                          snapshot->head_rows == 3 && snapshot->head_columns == 3 &&
+                          snapshot->wing_rows == 1 && snapshot->wing_columns == 3,
+                      "Native optical snapshot has incompatible model dimensions");
+    const auto view = librpa_get_optical_view(snapshot.get());
+    const auto packed = [](const double *values, int entry)
+    { return std::complex<double>{values[2 * entry], values[2 * entry + 1]}; };
+    for (int iw = 0; iw != view.n_frequencies; ++iw)
+    {
+        const double frequency = 0.5 + 0.75 * iw;
+        check(view.frequencies_ha[iw], frequency);
+        for (int axis = 0; axis != 3; ++axis)
+        {
+            const auto v01 = std::complex<double>{0.0, -1.0} * dipole[axis];
+            check(packed(view.velocity_ri, axis * 4 + 1), v01);
+            check(packed(view.velocity_ri, axis * 4 + 2), std::conj(v01));
+            const auto expected_wing = -4.0 * std::sqrt(4.0 * librpa_int::PI) * (0.375 * scale) *
+                                       v01 / (1.0 + frequency * frequency);
+            check(packed(view.wing_ri, iw * 3 + axis), expected_wing);
+            for (int beta = 0; beta != 3; ++beta)
+            {
+                const auto expected_head =
+                    (axis == beta ? 1.0 : 0.0) + 16.0 * librpa_int::PI * std::conj(dipole[axis]) *
+                                                     dipole[beta] / (1.0 + frequency * frequency);
+                check(packed(view.head_ri, iw * 9 + axis * 3 + beta), expected_head);
+            }
+        }
+    }
+    if (subgroup_rank == 0)
+        std::cout << "Native optical subgroup " << color << " max error " << error << '\n';
     MPI_Comm_free(&subgroup);
     double maximum = 0.0;
     MPI_Allreduce(&error, &maximum, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);

@@ -377,7 +377,8 @@ call MPI_Finalize(ierr)
 ## Native optical velocity from in-memory operators
 
 The experimental C/C++ optical API accepts numerical real-space H/S/r blocks
-through `LibrpaNativeVelocityInput` in `librpa_optical.h`. The driver selects
+through `LibrpaNativeVelocityInput` in `librpa_input.h`. Computation and result
+access are declared in `librpa_compute.h`. The driver selects
 files and converts units before this call; no filenames or producer presets
 enter the library. Supply H in Hartree, S dimensionless, and position in Bohr.
 The public header specifies Fourier, spinor and matrix-storage conventions.
@@ -394,8 +395,12 @@ auxiliary monopole normalization decoded from the matching producer export.
 
 `librpa_get_optical_result` provides a noncollective, rank-local owning snapshot
 of the computed velocity, frequency nodes, head and auxiliary wing matrices.
-Retrieve its borrowed arrays with `librpa_get_optical_view`, then release the
-result with `librpa_delete_optical_result`. A snapshot does not gather a global
+Its public `LibrpaOpticalResult` fields describe row-major, interleaved-complex
+arrays and their dimensions. Read those fields directly or obtain a borrowed
+copy with `librpa_get_optical_view`; both refer to the same read-only arrays.
+The snapshot survives changes to, or destruction of, its handler. Release only
+the original result with `librpa_delete_optical_result`; do not free individual
+arrays or delete a copied view. A snapshot does not gather a global
 matrix from distributed ranks. The C++ Handler wrappers preserve the same
 collective and ownership rules. These optical convenience functions currently
 have C and C++ interfaces; no high-level Fortran wrapper is advertised.
