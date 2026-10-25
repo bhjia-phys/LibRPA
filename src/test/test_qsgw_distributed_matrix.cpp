@@ -137,8 +137,9 @@ void test_spin_k_matrix_map_is_broadcast_with_layout(const librpa_int::MpiCommHa
 int main(int argc, char** argv)
 {
     int provided = 0;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-    assert(provided >= MPI_THREAD_MULTIPLE);
+    // The matrix collectives run on the initializing thread.
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
+    assert(provided >= MPI_THREAD_FUNNELED);
     librpa_int::global::init_global_mpi(MPI_COMM_WORLD);
     librpa_int::global::init_global_io();
 
