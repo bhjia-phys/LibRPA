@@ -92,8 +92,7 @@ More details can be found in the documentation for
 ## Documentation
 
 See the [documentation](https://aesm-group.github.io/LibRPA/) for installation instructions, user
-guides, examples, and tutorials.
-Theory and numerical-method notes are collected in [docs/theory/](docs/theory/README.md).
+guides, theory, examples, and tutorials.
 
 ## How to cite
 
