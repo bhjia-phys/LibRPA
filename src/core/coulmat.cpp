@@ -1,45 +1,30 @@
+#include "qpoint_match.h"
 #include <algorithm>
 #include <cmath>
+#include <array>
 #include <complex>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include "../utils/constants.h"
 #include "../io/global_io.h"
 #include "../math/utils_matrix_mpi.h"
+#include "../mpi/collective_stage.h"
 #include "symmetry_context.h"
+#include "bloch_embedding.h"
 #include "coulmat.h"
 
 namespace librpa_int {
 
-static bool are_equivalent_symmetry_qpoints(const Vector3_Order<double>& lhs,
-                                            const Vector3_Order<double>& rhs,
-                                            const double tol = 1e-5)
-{
-    const auto same_component = [tol](const double lhs_component, const double rhs_component) {
-        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
-               < tol;
-    };
-    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y)
-           && same_component(lhs.z, rhs.z);
-}
-
 template <typename QMap>
 static typename QMap::const_iterator find_matching_symmetry_qpoint(
-    const QMap& q_map,
+    const QMap& q_map, const PeriodicBoundaryData& pbc,
     const Vector3_Order<double>& q_target)
 {
-    const auto exact_iter = q_map.find(q_target);
-    if (exact_iter != q_map.end())
-    {
-        return exact_iter;
-    }
-
-    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto& entry) {
-        return are_equivalent_symmetry_qpoints(entry.first, q_target);
-    });
+    return find_internal_qpoint(q_map, pbc, q_target);
 }
 
 static std::map<atom_t, size_t> build_atom_nabf_map(const AtomicBasis& basis_abf)
@@ -81,7 +66,7 @@ static bool has_complete_symmetry_abf_ibz_coverage(
                           : lower_iter->second.at(static_cast<atom_t>(atom_i));
             for (const auto& q_ibz : pbc.klist)
             {
-                if (find_matching_symmetry_qpoint(q_blocks, q_ibz) == q_blocks.end())
+                if (find_matching_symmetry_qpoint(q_blocks, pbc, q_ibz) == q_blocks.end())
                 {
                     return false;
                 }
@@ -93,22 +78,28 @@ static bool has_complete_symmetry_abf_ibz_coverage(
 
 static librpa_int::symmetry_atom_block_matrix_map_t collect_symmetry_abf_ibz_blocks_for_q(
     const atpair_k_cplx_mat_t& blocks_by_q,
-    const Vector3_Order<double>& q_ibz_internal)
+    const Vector3_Order<double>& q_ibz_internal, const PeriodicBoundaryData& pbc,
+    const SymmetryContext& context, const MpiCommHandler& comm, std::size_t atom_count)
 {
     librpa_int::symmetry_atom_block_matrix_map_t blocks_ibz;
-    for (const auto& atom_i_pair : blocks_by_q)
+    std::string frame_error;
+    try
     {
-        const auto atom_i = atom_i_pair.first;
-        for (const auto& atom_j_pair : atom_i_pair.second)
-        {
-            const auto atom_j = atom_j_pair.first;
-            const auto q_iter = find_matching_symmetry_qpoint(atom_j_pair.second, q_ibz_internal);
-            if (q_iter != atom_j_pair.second.end())
+        for (const auto& [left, rights] : blocks_by_q)
+            for (const auto& [right, samples] : rights)
             {
-                blocks_ibz[atom_i][atom_j] = *q_iter->second;
+                const auto found = find_matching_symmetry_qpoint(samples, pbc, q_ibz_internal);
+                if (found == samples.end()) continue;
+                const auto phases = internal_q_gauge_phases(
+                    context, pbc, found->first, q_ibz_internal, atom_count);
+                auto block = *found->second;
+                const auto factor = phases.at(left) * std::conj(phases.at(right));
+                if (factor != std::complex<double>{1., 0.}) block *= factor;
+                blocks_ibz[left][right] = std::move(block);
             }
-        }
     }
+    catch (const std::exception& error) { frame_error = error.what(); }
+    check_internal_q_error_collective(comm.comm, frame_error);
     return blocks_ibz;
 }
 
@@ -241,7 +232,8 @@ static atpair_R_mat_t accumulate_symmetry_abf_full_sector_vr(
     const AtomicBasis& basis_abf,
     const atpair_k_cplx_mat_t& blocks_by_q_ibz,
     const PeriodicBoundaryData& pbc,
-    const bool return_ordered_atom_pair)
+    const bool return_ordered_atom_pair,
+    const BlochEmbedding& embedding)
 {
     atpair_R_mat_t blocks_by_R_real;
     atpair_R_cplx_mat_t blocks_by_R_complex;
@@ -277,7 +269,7 @@ static atpair_R_mat_t accumulate_symmetry_abf_full_sector_vr(
         const auto q_ibz_internal = pbc.klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto q_ibz_frac = pbc.kfrac_list.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         auto blocks_ibz =
-            collect_symmetry_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_internal);
+            collect_symmetry_abf_ibz_blocks_for_q(blocks_by_q_ibz, q_ibz_internal, pbc, ctx, comm_h, atom_nabf.size());
         blocks_ibz = gather_symmetry_ibz_blocks_collective(comm_h, blocks_ibz, atom_nabf);
         if (blocks_ibz.empty())
         {
@@ -302,11 +294,15 @@ static atpair_R_mat_t accumulate_symmetry_abf_full_sector_vr(
             const Vector3_Order<double> q_bz_target_frac =
                 restrict_fractional_coordinate(raw_q_bz_target_frac);
             librpa_int::symmetry_atom_block_matrix_map_t rotated_blocks;
+            std::vector<std::complex<double>> member_embedding_phases;
             try
             {
                 rotated_blocks = librpa_int::rotate_symmetry_kspace_operator_blocks(
                     ctx, abf_layouts, member, blocks_ibz, atom_nabf, star.k_ibz,
                     member.time_reversal, &target_atom_pairs, &q_bz_target_frac);
+                // Rotation and reciprocal sewing act on the unchanged raw
+                // auxiliary frame. Convert this actual member only afterwards.
+                member_embedding_phases = embedding.atom_phases(q_bz_target_frac);
             }
             catch (const std::exception& ex)
             {
@@ -324,11 +320,23 @@ static atpair_R_mat_t accumulate_symmetry_abf_full_sector_vr(
             {
                 for (const auto& atom_j_pair : atom_i_pair.second)
                 {
+                    const auto to_cell = member_embedding_phases.empty()
+                        ? std::complex<double>{1.0, 0.0}
+                        : std::conj(member_embedding_phases.at(atom_i_pair.first))
+                              * member_embedding_phases.at(atom_j_pair.first);
                     for (const auto& R : pbc.Rlist)
                     {
                         const auto phase = build_ft_vq_phase(pbc, q_internal, R);
-                        *blocks_by_R_complex.at(atom_i_pair.first).at(atom_j_pair.first).at(R) +=
-                            atom_j_pair.second * phase;
+                        if (member_embedding_phases.empty())
+                        {
+                            *blocks_by_R_complex.at(atom_i_pair.first).at(atom_j_pair.first).at(R) +=
+                                atom_j_pair.second * phase;
+                        }
+                        else
+                        {
+                            *blocks_by_R_complex.at(atom_i_pair.first).at(atom_j_pair.first).at(R) +=
+                                atom_j_pair.second * (to_cell * phase);
+                        }
                     }
                 }
             }
@@ -394,6 +402,34 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
     const auto &map_irk_ks = pbc.map_irk_ks;
     const auto n_k_points = pbc.get_n_cells_bvk();
 
+    std::optional<BlochEmbedding> embedding;
+    // This cache reuses literal source labels; it performs no geometric
+    // matching. Keep its exact finite ordering separate from q equivalence.
+    std::map<std::array<double, 3>, std::vector<std::complex<double>>> source_embedding_phases;
+    collective_all_stage(comm_h, "EXX Coulomb atomic embedding frame", [&]
+    {
+        embedding.emplace(symmetry_context, basis_abf);
+        if (!embedding->active()) return;
+        for (const auto &[I, rights] : coulmat_k)
+            for (const auto &[J, samples] : rights)
+                for (const auto &[q, block] : samples)
+                {
+                    if (I >= static_cast<atom_t>(basis_abf.n_atoms)
+                        || J >= static_cast<atom_t>(basis_abf.n_atoms)
+                        || !block || block->nr != static_cast<int>(basis_abf[I])
+                        || block->nc != static_cast<int>(basis_abf[J]))
+                        throw std::invalid_argument("EXX Coulomb embedding has an inconsistent atom block");
+                    const auto qfrac = pbc.latvec * q;
+                    if (!std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z)
+                        || !std::isfinite(qfrac.x) || !std::isfinite(qfrac.y)
+                        || !std::isfinite(qfrac.z))
+                        throw std::invalid_argument("EXX Coulomb embedding requires finite q points");
+                    const std::array<double, 3> key{q.x, q.y, q.z};
+                    if (source_embedding_phases.count(key)) continue;
+                    source_embedding_phases.emplace(key, embedding->atom_phases(qfrac));
+                }
+    });
+
     if (use_symmetry_context
         && can_use_symmetry_qstar_ft_vq(
             symmetry_context, basis_abf, coulmat_k, pbc, comm_h))
@@ -403,7 +439,7 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
         if (result_is_replicated) *result_is_replicated = true;
         return accumulate_symmetry_abf_full_sector_vr(
             comm_h, symmetry_context, basis_abf, coulmat_k, pbc,
-            return_ordered_atom_pair);
+            return_ordered_atom_pair, *embedding);
     }
 
     for (auto R: Rlist)
@@ -424,6 +460,10 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
                 for (const auto &q_V: Nu_qV.second)
                 {
                     auto q = q_V.first;
+                    const auto to_cell = embedding->active()
+                        ? std::conj(source_embedding_phases.at({q.x, q.y, q.z}).at(Mu))
+                              * source_embedding_phases.at({q.x, q.y, q.z}).at(Nu)
+                        : std::complex<double>{1.0, 0.0};
                     for (auto q_bz: map_irk_ks.at(q))
                     {
                         double ang = - q_bz * (R * latvec) * TWO_PI;
@@ -432,12 +472,21 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
                         if (q_bz == q)
                         {
                             // cout << "Direct:  " << q_bz << " => " << q << ", phase = " << kphase << endl;
-                            VR_cplx += (*q_V.second) * kphase;
+                            if (embedding->active())
+                                VR_cplx += (*q_V.second) * (to_cell * kphase);
+                            else
+                                VR_cplx += (*q_V.second) * kphase;
                         }
                         else
                         {
                             // cout << "Inverse: " << q_bz << " => " << q << ", phase = " << kphase << endl;
-                            VR_cplx += conj(*q_V.second) * kphase;
+                            // Inversion applies after source-frame de-embedding.
+                            // Its reciprocal aliases are then periodic in the
+                            // localized cell frame, without a second raw sewing.
+                            if (embedding->active())
+                                VR_cplx += conj(*q_V.second) * (std::conj(to_cell) * kphase);
+                            else
+                                VR_cplx += conj(*q_V.second) * kphase;
                         }
                     }
                     // minyez debug: check hermicity of Vq
@@ -464,17 +513,28 @@ atpair_R_mat_t FT_Vq(const MpiCommHandler &comm_h,
                     for (const auto &q_V: Nu_qV.second)
                     {
                         auto q = q_V.first;
+                        const auto to_cell = embedding->active()
+                            ? std::conj(source_embedding_phases.at({q.x, q.y, q.z}).at(Mu))
+                                  * source_embedding_phases.at({q.x, q.y, q.z}).at(Nu)
+                            : std::complex<double>{1.0, 0.0};
                         for (auto q_bz: map_irk_ks.at(q))
                         {
                             double ang = - q_bz * (R * latvec) * TWO_PI;
                             complex<double> kphase = complex<double>(cos(ang), sin(ang)) / double(n_k_points);
                             if (q_bz == q)
                             {
-                                VR_cplx += transpose(*q_V.second, true) * kphase;
+                                if (embedding->active())
+                                    VR_cplx += transpose(*q_V.second, true)
+                                               * (std::conj(to_cell) * kphase);
+                                else
+                                    VR_cplx += transpose(*q_V.second, true) * kphase;
                             }
                             else
                             {
-                                VR_cplx += transpose(*q_V.second, false) * kphase;
+                                if (embedding->active())
+                                    VR_cplx += transpose(*q_V.second, false) * (to_cell * kphase);
+                                else
+                                    VR_cplx += transpose(*q_V.second, false) * kphase;
                             }
                         }
                     }

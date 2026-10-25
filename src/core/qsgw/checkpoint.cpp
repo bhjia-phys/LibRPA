@@ -14,10 +14,11 @@ namespace librpa_int::qsgw
 // Checkpoint serialization belongs to the numerical task.
 constexpr char CHECKPOINT_MAGIC[] = "LIBRPA_QSGW";
 constexpr std::uint32_t CHECKPOINT_BYTE_ORDER = 0x01020304;
-// ASCII format tags, not content hashes. Preserve the existing checkpoint bytes.
+// ASCII format tags, not content hashes. Reference velocity retains its format.
 constexpr std::uint32_t REFERENCE_VELOCITY_TAG = 0x48575631;  // HWV1
-constexpr std::uint32_t NATIVE_VELOCITY_TAG = 0x48575632;     // HWV2
-constexpr std::uint32_t HARTREE_TAG = 0x48525431;             // HRT1
+// HWV3 binds native DFT plus correction to shortest physical atom-pair images.
+constexpr std::uint32_t NATIVE_VELOCITY_TAG = 0x48575633;  // HWV3
+constexpr std::uint32_t HARTREE_TAG = 0x48525431;          // HRT1
 
 template <typename T>
 void put(std::ostream& output, const T& value)
@@ -198,7 +199,8 @@ int velocity_mode_code(const CheckpointContext& context)
 
 void require_native_velocity_context(const CheckpointContext& context)
 {
-    if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice)
+    if (!context.ao_operators || !context.velocity_period || !context.velocity_lattice ||
+        !context.velocity_centers_fractional)
         throw std::runtime_error("Missing current-HR checkpoint operators or geometry");
     const auto& operators = *context.ao_operators;
     if (operators.dimension != context.reference.get_n_aos() * context.reference.get_n_spinor() ||
@@ -206,6 +208,13 @@ void require_native_velocity_context(const CheckpointContext& context)
             static_cast<std::size_t>(context.reference.get_n_spins()))
         throw std::runtime_error(
             "QSGW current-HR checkpoint requires one native DFT Hamiltonian per spin channel");
+    const auto& centers = *context.velocity_centers_fractional;
+    if (centers.size() != static_cast<std::size_t>(operators.dimension))
+        throw std::runtime_error("QSGW current-HR checkpoint requires one center per AO row");
+    for (const auto& center : centers)
+        for (double value : {center.x, center.y, center.z})
+            if (!std::isfinite(value))
+                throw std::runtime_error("Non-finite QSGW current-HR checkpoint center");
     for (const auto& blocks : operators.native_dft_hamiltonian)
     {
         if (blocks.empty())
@@ -228,7 +237,7 @@ void require_native_velocity_context(const CheckpointContext& context)
 void write_velocity_context(std::ostream& output, const CheckpointContext& context)
 {
     const int mode = velocity_mode_code(context);
-    // HWV2 binds current-HR velocities to the method-2 native DFT baseline.
+    // HWV3 also binds the centers that determine the correction's image weights.
     // Reference rotation retains its existing HWV1 numerical contract.
     put(output, mode == 1 ? NATIVE_VELOCITY_TAG : REFERENCE_VELOCITY_TAG);
     put(output, std::int32_t(mode));
@@ -242,6 +251,8 @@ void write_velocity_context(std::ostream& output, const CheckpointContext& conte
                              lattice.e23, lattice.e31, lattice.e32, lattice.e33})
             put(output, value);
         put(output, std::int32_t(context.ao_operators->dimension));
+        for (const auto& center : *context.velocity_centers_fractional)
+            for (double value : {center.x, center.y, center.z}) put(output, value);
         const auto write_localized = [&](const LocalizedMatrix& blocks)
         {
             put(output, std::uint64_t(blocks.size()));
@@ -288,6 +299,9 @@ void check_velocity_context(std::istream& input, const CheckpointContext& contex
             require_equal(get_real(input), value);
         const int n = context.ao_operators->dimension;
         require_equal(get<std::int32_t>(input), n);
+        for (const auto& center : *context.velocity_centers_fractional)
+            for (double value : {center.x, center.y, center.z})
+                require_equal(get_real(input), value);
         const auto check_localized = [&](const LocalizedMatrix& blocks)
         {
             if (get<std::uint64_t>(input) != blocks.size())
@@ -485,12 +499,13 @@ void write_qsgw_checkpoint(const std::string& filename, const CheckpointContext&
     // versions 6/7 identified the older grid-only mode-2 shifted cut.
     // Versions 10/11 replace whole-H current-HR reconstruction with native
     // DFT plus correction interpolation and bind H0(R) in the velocity context.
+    // Versions 12/13 bind shortest atom-pair images and their AO centers.
     // Version 4 belongs to another equation/mixer branch. Do not reinterpret it.
     const bool live_velocity = live_velocity_checkpoint(context);
     const bool native_velocity = native_velocity_checkpoint(context);
     const bool shifted_cut = shifted_cut_checkpoint(context);
     const std::uint32_t version =
-        native_velocity ? (shifted_cut ? 11 : 10)
+        native_velocity ? (shifted_cut ? 13 : 12)
                         : (shifted_cut ? (live_velocity ? 9 : 8) : (live_velocity ? 5 : 3));
     // A +100 envelope adds the Hartree context without altering disabled files.
     const bool hartree = hartree_checkpoint(context);
@@ -534,7 +549,8 @@ IterationSummary read_qsgw_checkpoint(const std::string& filename, const Checkpo
     const bool hartree = encoded_version >= 100;
     const auto version = hartree ? encoded_version - 100 : encoded_version;
     if ((version < 1 || (version > 3 && version != 5 && version != 6 && version != 7 &&
-                         version != 8 && version != 9 && version != 10 && version != 11)) ||
+                         version != 8 && version != 9 && version != 10 && version != 11 &&
+                         version != 12 && version != 13)) ||
         get<std::uint32_t>(input) != CHECKPOINT_BYTE_ORDER)
         throw std::runtime_error("Unsupported QSGW checkpoint format or byte order");
     if (hartree != hartree_checkpoint(context))
@@ -543,21 +559,25 @@ IterationSummary read_qsgw_checkpoint(const std::string& filename, const Checkpo
         throw std::runtime_error(
             "QSGW checkpoint versions 6/7 use the historical mode-2 cut; "
             "automatic migration to shifted mode 1 is unsupported");
-    const bool native_velocity = version == 10 || version == 11;
+    if (version == 10 || version == 11)
+        throw std::runtime_error(
+            "QSGW current-HR checkpoint versions 10/11 use the historical image policy; "
+            "shortest atom-pair images and AO centers require version 12 or 13");
+    const bool native_velocity = version == 12 || version == 13;
     const bool requested_native_velocity = native_velocity_checkpoint(context);
     if (requested_native_velocity && !native_velocity)
         throw std::runtime_error(
-            "QSGW current-HR native-baseline velocities require checkpoint version 10 or 11; "
-            "legacy whole-H velocity checkpoints cannot continue with this convention");
+            "QSGW current-HR shortest-image velocities require checkpoint version 12 or 13; "
+            "legacy velocity checkpoints cannot continue with this convention");
     if (native_velocity && !requested_native_velocity)
         throw std::runtime_error(
             "QSGW checkpoint uses a different native-baseline head/wing velocity convention");
-    const bool shifted_cut = version == 8 || version == 9 || version == 11;
+    const bool shifted_cut = version == 8 || version == 9 || version == 13;
     const bool requested_shifted_cut = shifted_cut_checkpoint(context);
     if (requested_shifted_cut && !shifted_cut)
         throw std::runtime_error(
             "Legacy QSGW cut checkpoints cannot continue shifted mode 1; "
-            "this convention requires checkpoint version 8, 9 or 11");
+            "this convention requires checkpoint version 8, 9 or 13");
     if (shifted_cut != requested_shifted_cut)
         throw std::runtime_error("QSGW checkpoint shifted-cut convention differs from the input");
     const bool live_velocity = version == 5 || version == 9 || native_velocity;

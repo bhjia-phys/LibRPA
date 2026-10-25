@@ -107,11 +107,6 @@ double localized_hermiticity_error(const LocalizedMatrix& blocks, const int n)
     return result;
 }
 
-std::vector<int> images(const int index, const int size)
-{
-    if (size % 2 == 0 && index == size / 2) return {-size / 2, size / 2};
-    return {index <= size / 2 ? index : index - size};
-}
 }  // namespace
 
 LocalizedVelocityResult solve_localized_velocity(const LocalizedMatrix& hamiltonian,
@@ -142,7 +137,8 @@ LocalizedVelocityResult solve_localized_velocity(const LocalizedMatrix& hamilton
 HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
     const MeanField& reference, const SpinKMatrixMap& current_hamiltonian,
     const HeadwingAoOperators& operators, const std::vector<Vector3_Order<double>>& kpoints,
-    const Vector3_Order<int>& period, const Matrix3& lattice)
+    const Vector3_Order<int>& period, const Matrix3& lattice,
+    const std::vector<Vector3_Order<double>>& centers_fractional)
 {
     const int n = reference.get_n_bands();
     const int nk = reference.get_n_kpoints();
@@ -153,6 +149,20 @@ HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
     if (operators.dimension != n || operators.overlap.empty())
         throw std::invalid_argument(
             "QSGW Hamiltonian reconstruction has inconsistent AO/reference dimensions");
+    if (static_cast<int>(centers_fractional.size()) != n)
+        throw std::invalid_argument("QSGW Hamiltonian reconstruction needs one center per AO row");
+    // All orbitals and spin components on one center must share image weights.
+    // Grouping avoids a geometric search for every individual matrix element.
+    // Vector3_Order<double> uses a tolerance comparator, unsuitable for exact
+    // grouping (and not a strict weak ordering for chains of near centers).
+    std::map<std::array<double, 3>, std::vector<int>> center_rows;
+    for (int row = 0; row < n; ++row)
+    {
+        const auto& center = centers_fractional[row];
+        if (!std::isfinite(center.x) || !std::isfinite(center.y) || !std::isfinite(center.z))
+            throw std::invalid_argument("QSGW AO centers must be finite");
+        center_rows[{center.x, center.y, center.z}].push_back(row);
+    }
     const bool preserve_native = !operators.native_dft_hamiltonian.empty();
     if (preserve_native &&
         static_cast<int>(operators.native_dft_hamiltonian.size()) != reference.get_n_spins())
@@ -249,8 +259,6 @@ HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
             for (int iy = 0; iy < period.y; ++iy)
                 for (int iz = 0; iz < period.z; ++iz)
                 {
-                    const auto xs = images(ix, period.x), ys = images(iy, period.y),
-                               zs = images(iz, period.z);
                     Matz block = zero_matrix(n);
                     const Vector3_Order<int> residue(ix, iy, iz);
                     for (int ik = 0; ik < nk; ++ik)
@@ -260,21 +268,22 @@ HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
                         for (std::size_t j = 0; j < block.size(); ++j)
                             block.ptr()[j] += weight * samples[ik].ptr()[j];
                     }
-                    for (const int x : xs)
-                        for (const int y : ys)
-                            for (const int z : zs)
+                    for (const auto& [from, rows] : center_rows)
+                        for (const auto& [to, cols] : center_rows)
+                        {
+                            const auto images = localized_operator::shortest_periodic_images(
+                                residue, period, {from[0], from[1], from[2]}, {to[0], to[1], to[2]},
+                                lattice);
+                            const double weight = 1.0 / images.size();
+                            for (const auto& r : images)
                             {
-                                Matz image = block.copy();
-                                const double weight = 1.0 / (xs.size() * ys.size() * zs.size());
-                                for (std::size_t j = 0; j < image.size(); ++j)
-                                    image.ptr()[j] *= weight;
-                                const Vector3_Order<int> r(x, y, z);
-                                const auto found = hr.find(r);
-                                if (found == hr.end())
-                                    hr.emplace(r, std::move(image));
-                                else
-                                    found->second += image;
+                                auto found = hr.find(r);
+                                if (found == hr.end()) found = hr.emplace(r, zero_matrix(n)).first;
+                                for (const int row : rows)
+                                    for (const int col : cols)
+                                        found->second(row, col) += weight * block(row, col);
                             }
+                        }
                 }
         for (int ik = 0; ik < nk; ++ik)
         {
@@ -295,12 +304,11 @@ HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
     return result;
 }
 
-LiveVelocityResult compute_live_headwing_velocity(const MeanField& reference, const MeanField& live,
-                                                  const SpinKMatrixMap& current_hamiltonian,
-                                                  const HeadwingAoOperators& operators,
-                                                  const std::vector<Vector3_Order<double>>& kpoints,
-                                                  const Vector3_Order<int>& period,
-                                                  const Matrix3& lattice)
+LiveVelocityResult compute_live_headwing_velocity(
+    const MeanField& reference, const MeanField& live, const SpinKMatrixMap& current_hamiltonian,
+    const HeadwingAoOperators& operators, const std::vector<Vector3_Order<double>>& kpoints,
+    const Vector3_Order<int>& period, const Matrix3& lattice,
+    const std::vector<Vector3_Order<double>>& centers_fractional)
 {
     const int n = reference.get_n_bands();
     const int nk = reference.get_n_kpoints();
@@ -310,8 +318,8 @@ LiveVelocityResult compute_live_headwing_velocity(const MeanField& reference, co
         live.get_n_spinor() != reference.get_n_spinor())
         throw std::invalid_argument(
             "QSGW current-HR velocity has inconsistent AO/mean-field dimensions");
-    auto reconstruction = reconstruct_qsgw_hamiltonian(reference, current_hamiltonian, operators,
-                                                       kpoints, period, lattice);
+    auto reconstruction = reconstruct_qsgw_hamiltonian(
+        reference, current_hamiltonian, operators, kpoints, period, lattice, centers_fractional);
     LiveVelocityResult result;
     result.hamiltonian = std::move(reconstruction.hamiltonian);
     result.reference_metric_residual = reconstruction.reference_metric_residual;

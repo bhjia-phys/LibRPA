@@ -695,11 +695,13 @@ tasks require replicated wavefunctions. This experimental binary format
 rejects incompatible byte order and accepts legacy fixed-mode versions 1--3.
 The rotated-reference velocity map writes version 5 without cut and version
 9 with shifted mode 1, preserving its immutable-velocity contract. The
-native-baseline `current_hr` map writes version 10 without cut and version 11
-with shifted mode 1. It binds the actual native DFT H(R), S/r, geometry and
-velocity convention. Older whole-H current-HR versions 5/9 cannot continue
-under this changed map. A restart cannot switch maps or replace these
-numerical operators. Version 4 belongs to a separate equation/mixer branch
+native-baseline `current_hr` map with shortest atom-pair images writes version
+12 without cut and version 13 with shifted mode 1. It binds the actual native
+DFT H(R), S/r, lattice, periods, fractional AO centers and image convention.
+Older whole-H current-HR versions 5/9 and rectangular-image versions 10/11
+cannot continue under this changed feedback map. A restart cannot switch maps,
+change the centers or replace these numerical operators. Output-only HR export
+without current-HR feedback retains its existing restart format. Version 4 belongs to a separate equation/mixer branch
 and is not interpreted here.
 Reference-velocity shifted mode 1 retains version 8, on both grid-only and
 band-enabled routes. Older cut checkpoints, including

@@ -1,6 +1,8 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -9,6 +11,7 @@
 #include "../io/global_io.h"
 #include "../io/stl_io_helper.h"
 #include "../mpi/global_mpi.h"
+#include "../utils/base_utility.h"
 #include "mpi_test_config.h"
 #include "testutils.h"
 
@@ -127,6 +130,117 @@ void check_minimax_narrow_transition_interval()
     check_transform(common);
     narrow.generate_minimax(0.4286910870734395, 3.021313235509797, 1e-12);
     check_transform(narrow);
+}
+
+void check_signed_minimax_transform()
+{
+    // Independent single-transition Laplace kernels, not a matrix-inverse
+    // identity: minimax transforms approximate a spectral function family.
+    // Regularization is explicit for this control, not a production default.
+    TFGrids legacy(24), grid(24);
+    const double emin = .4286910870734395, emax = 3.021313235509797;
+    legacy.generate_minimax(emin, emax, 1e-12);
+    grid.generate_minimax(emin, emax, 1e-12, true);
+    assert(!legacy.has_inverse_sine_transform());
+    bool rejected = false;
+    try { legacy.get_sintrans_f2t(); }
+    catch (const std::runtime_error&) { rejected = true; }
+    assert(rejected && grid.has_inverse_sine_transform());
+    assert(grid.get_time_nodes() == legacy.get_time_nodes());
+    assert(grid.get_freq_nodes() == legacy.get_freq_nodes());
+    for (const auto pair : {std::make_pair(&grid.get_costrans_t2f(), &legacy.get_costrans_t2f()),
+                            std::make_pair(&grid.get_costrans_f2t(), &legacy.get_costrans_f2t()),
+                            std::make_pair(&grid.get_sintrans_t2f(), &legacy.get_sintrans_t2f())})
+        for (int i = 0; i != pair.first->size; ++i) assert(pair.first->c[i] == pair.second->c[i]);
+
+    const auto times = grid.get_time_nodes(), frequencies = grid.get_freq_nodes();
+    const auto& cosine = grid.get_costrans_t2f();
+    const auto& sine = grid.get_sintrans_t2f();
+    const auto& cosine_inverse = grid.get_costrans_f2t();
+    const auto& sine_inverse = grid.get_sintrans_f2t();
+    const cplxdb amplitude(.31, .27);
+    double max_forward = 0., max_inverse = 0.;
+    for (const double delta : {.45, .8, 1.7, 2.8})
+    {
+        for (int f = 0; f != 24; ++f)
+        {
+            cplxdb positive{}, negative{};
+            for (int t = 0; t != 24; ++t)
+            {
+                const cplxdb a = amplitude * std::exp(-delta * times[t]);
+                const cplxdb b = std::conj(a);
+                positive += .5 * (cosine(f, t) * (a + b) + cplxdb(0., sine(f, t)) * (a - b));
+                negative += .5 * (cosine(f, t) * (a + b) - cplxdb(0., sine(f, t)) * (a - b));
+            }
+            const cplxdb z(0., frequencies[f]);
+            const auto exact = [&](cplxdb arg) {
+                return amplitude / (delta - arg) + std::conj(amplitude) / (delta + arg);
+            };
+            max_forward = std::max(max_forward, std::max(std::abs(positive - exact(z)),
+                                                         std::abs(negative - exact(-z))));
+        }
+        for (int t = 0; t != 24; ++t)
+        {
+            cplxdb positive{}, negative{};
+            for (int f = 0; f != 24; ++f)
+            {
+                const double w = frequencies[f], denominator = delta * delta + w * w;
+                const double even = 2. * delta * amplitude.real() / denominator;
+                const double odd = -2. * w * amplitude.imag() / denominator;
+                positive += cosine_inverse(t, f) * even - cplxdb(0., sine_inverse(t, f) * odd);
+                negative += cosine_inverse(t, f) * even + cplxdb(0., sine_inverse(t, f) * odd);
+            }
+            const cplxdb exact = amplitude * std::exp(-delta * times[t]);
+            max_inverse = std::max(max_inverse, std::max(std::abs(positive - exact),
+                                                         std::abs(negative - std::conj(exact))));
+        }
+    }
+    cout << "Signed minimax spectral kernels: forward " << max_forward
+         << ", inverse " << max_inverse << endl;
+    assert(max_forward < 1e-6 && max_inverse < 1e-6);
+
+    // Read back the exported transform and use its sine inverse on an analytic
+    // odd spectral kernel. This also checks the serialized availability header.
+    const std::string filename = "test-signed-minimax-transform.bin";
+    grid.write_cos_sin_trans_matrices(filename);
+    std::ifstream input(filename, std::ios::binary);
+    int n = 0;
+    std::array<int, 4> available{};
+    input.read(reinterpret_cast<char*>(&n), sizeof(n));
+    input.read(reinterpret_cast<char*>(available.data()), sizeof(available));
+    assert(n == 24 && (available == std::array<int, 4>{{1, 1, 1, 1}}));
+    input.seekg(3 * n * n * sizeof(double), std::ios::cur);
+    std::vector<double> restored(n * n);
+    input.read(reinterpret_cast<char*>(restored.data()), restored.size() * sizeof(double));
+    assert(input);
+    for (int t = 0; t != n; ++t)
+    {
+        double actual = 0.;
+        for (int f = 0; f != n; ++f)
+            actual += restored[t * n + f] * 2. * frequencies[f] / (1.7 * 1.7 + frequencies[f] * frequencies[f]);
+        assert(std::abs(actual - std::exp(-1.7 * times[t])) < 1e-6);
+    }
+    input.close();
+    std::remove(filename.c_str());
+    grid.generate_GaussLegendre();
+    assert(grid.get_grid_type() == LIBRPA_TFGRID_GAUSS_LEGENDRE);
+    assert(!grid.has_time_grids() && !grid.has_inverse_sine_transform());
+    rejected = false;
+    try { grid.get_sintrans_f2t(); }
+    catch (const std::runtime_error&) { rejected = true; }
+    assert(rejected);
+    // The inverse belongs to its frequency nodes, even when N is unchanged.
+    grid.generate_minimax(emin, emax, 1e-12, true);
+    for (int t = 0; t != 24; ++t)
+    {
+        double actual = 0.;
+        for (int f = 0; f != 24; ++f)
+            actual += grid.get_sintrans_f2t()(t, f) * 2. * frequencies[f] /
+                      (1.7 * 1.7 + frequencies[f] * frequencies[f]);
+        assert(std::abs(actual - std::exp(-1.7 * times[t])) < 1e-6);
+    }
+    grid.reset(16);
+    assert(!grid.has_inverse_sine_transform());
 }
 
 void check_minimax_ng16_diamond_k222()
@@ -258,6 +372,7 @@ int main (int argc, char **argv)
     check_initialize();
     check_gauss_grids();
     check_minimax_narrow_transition_interval();
+    check_signed_minimax_transform();
     check_minimax_ng16_diamond_k222();
     check_minimax_ng6_HF_123();
     check_minimax_ng32_H2O();

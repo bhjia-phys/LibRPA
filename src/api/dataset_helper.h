@@ -21,6 +21,9 @@ void initialize_ds_global_ddla(Dataset &ds, const LibrpaOptions &opts);
 void initialize_ds_atpairs_local(Dataset &ds, LibrpaParallelRouting routing);
 
 // Initialize response function component
+// Fresh response object sharing Dataset inputs; used by internal body diagnostics.
+std::unique_ptr<Chi0> make_ds_chi0(Dataset &ds, const LibrpaOptions &opts,
+                                  bool qstar_only = false);
 void initialize_ds_chi0(Dataset &ds, const LibrpaOptions &opts);
 void initialize_ds_chi0_qstar(Dataset &ds, const LibrpaOptions &opts);
 
@@ -41,6 +44,9 @@ void initialize_ds_g0w0(Dataset &ds, const LibrpaOptions &opts);
 void initialize_ds_headwing(Dataset &ds, const LibrpaOptions &opts, bool need_wing);
 
 void initialize_symmetry_context(Dataset &ds, bool build_shell_rotations);
+// Collective physical-frame refresh for operator q+G transport. This does not
+// enable symmetry, build stars, or invalidate existing calculation objects.
+void refresh_ds_symmetry_frame(Dataset &ds);
 void require_symmetry_shell_layouts(const Dataset &ds, const char *calculation);
 void reject_spinor_symmetry_speedup(const Dataset &ds, const char *calculation);
 

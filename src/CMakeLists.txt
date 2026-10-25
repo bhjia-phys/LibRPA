@@ -82,6 +82,7 @@ list(APPEND lib_sources
         api/compute_crpa.cpp
         api/compute_orbital.cpp
         api/compute_helper.cpp
+        api/gw_decay_bound.cpp
         api/compute_g0w0.cpp
         api/compute_qsgw.cpp
         core/qsgw/task.cpp
@@ -120,6 +121,7 @@ list(APPEND lib_sources
         core/hartree.cpp
         api/hartree_input.cpp
         core/geometry.cpp
+        core/gw_decay_bound.cpp
         core/gw.cpp
         core/headwing_velocity.cpp
         core/meanfield.cpp

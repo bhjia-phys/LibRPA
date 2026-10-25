@@ -410,11 +410,16 @@ LIBRPA_CPP_H_METHOD_DEF_WRAP_VOID(
     (ik, mu_begin, mu_end, nu_begin, nu_end, reinterpret_cast<const double*>(Vq))
 )
 
-LIBRPA_CPP_H_METHOD_DEF_WRAP_VOID(
-    set_dielect_func_imagfreq,
-    (const std::vector<double> &omegas_imag, const std::vector<double> &dielect_func),
-    (omegas_imag.size(), omegas_imag.data(), dielect_func.data())
-)
+void Handler::set_dielect_func_imagfreq(const std::vector<double> &omegas_imag,
+                                      const std::vector<double> &dielect_func)
+{
+    if (omegas_imag.size() != dielect_func.size())
+        throw LIBRPA_INVALID_ARGUMENT("Dielectric frequency and sample vector lengths differ");
+    if (omegas_imag.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw LIBRPA_INVALID_ARGUMENT("Dielectric sample count exceeds the C API integer range");
+    ::librpa_set_dielect_func_imagfreq(h_, static_cast<int>(omegas_imag.size()),
+                                     omegas_imag.data(), dielect_func.data());
+}
 
 LIBRPA_CPP_H_METHOD_DEF_WRAP_VOID(
     set_velocity_matrix,

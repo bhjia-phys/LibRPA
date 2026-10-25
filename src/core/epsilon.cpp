@@ -1,12 +1,15 @@
+#include "qpoint_match.h"
 #include "epsilon.h"
 #include <math.h>
 #include <omp.h>
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <iomanip>
 #include <iterator>
 #include <limits>
+#include <numeric>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -22,6 +25,7 @@
 #include "../math/utils_matrix_m_mpi.h"
 #include "../math/utils_matrix_mpi.h"
 #include "../math/vector3_order.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/base_utility.h"
 #include "../utils/constants.h"
 #include "../utils/libri_utils.h"
@@ -30,6 +34,7 @@
 #include "symmetry_context.h"
 #include "atom.h"
 #include "atomic_basis.h"
+#include "bloch_embedding.h"
 #include "librpa_enums.h"
 #include "pbc.h"
 #include "utils_atomic_basis_blacs.h"
@@ -93,6 +98,37 @@ using abf_rspace_complex_block_map_t =
     atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old;
 using abf_rspace_dense_block_map_t =
     std::map<atom_t, std::map<atom_t, std::map<Vector3_Order<int>, ComplexMatrix>>>;
+
+void order_optical_coulomb_eigensystem(
+    Matz &vectors, Matz &scaled_vectors, const ArrayDesc &desc, double *eigenvalues)
+{
+    const int n = desc.m();
+    int invalid = !desc.is_initialized() || desc.n() != n || n <= 0 || !eigenvalues ||
+                  vectors.nr() != desc.m_loc() || vectors.nc() != desc.n_loc() ||
+                  scaled_vectors.nr() != desc.m_loc() || scaled_vectors.nc() != desc.n_loc();
+    if (!invalid)
+        for (int i = 0; i != n; ++i) invalid |= !std::isfinite(eigenvalues[i]);
+    MPI_Allreduce(MPI_IN_PLACE, &invalid, 1, MPI_INT, MPI_MAX, desc.comm());
+    if (invalid) throw LIBRPA_RUNTIME_ERROR("invalid optical Coulomb eigensystem");
+    std::vector<int> order(n);
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(),
+                     [&](const int i, const int j) { return eigenvalues[i] > eigenvalues[j]; });
+    bool changed = false;
+    for (int i = 0; i != n; ++i) changed |= order[i] != i;
+    if (!changed) return;
+    const auto original = vectors.copy();
+    const auto original_scaled = scaled_vectors.copy();
+    const std::vector<double> original_values(eigenvalues, eigenvalues + n);
+    for (int column = 0; column != n; ++column)
+    {
+        ScalapackConnector::pgemr2d_f(n, 1, original.ptr(), 1, order[column] + 1, desc.desc,
+                                      vectors.ptr(), 1, column + 1, desc.desc, desc.ictxt());
+        ScalapackConnector::pgemr2d_f(n, 1, original_scaled.ptr(), 1, order[column] + 1, desc.desc,
+                                      scaled_vectors.ptr(), 1, column + 1, desc.desc, desc.ictxt());
+        eigenvalues[column] = original_values[order[column]];
+    }
+}
 
 std::vector<double> compute_gamma_s_head_vector(
     const AtomicBasis &basis, const matrix_m<std::complex<double>> &coulomb,
@@ -170,65 +206,32 @@ static void dump_blacs_debug_matrix(const bool debug, const std::string &output_
                                   matrix_desc, comment, threshold);
 }
 
-static bool are_equivalent_symmetry_qpoints(const Vector3_Order<double>& lhs,
-                                            const Vector3_Order<double>& rhs,
-                                            const double tol = 1e-5)
-{
-    const auto same_component = [tol](const double lhs_component, const double rhs_component) {
-        return std::abs((lhs_component - rhs_component) - std::round(lhs_component - rhs_component))
-               < tol;
-    };
-    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y)
-           && same_component(lhs.z, rhs.z);
-}
-
 template <typename QMap>
 static typename QMap::const_iterator find_matching_symmetry_qpoint(
-    const QMap& q_map,
+    const QMap& q_map, const PeriodicBoundaryData& pbc,
     const Vector3_Order<double>& q_target)
 {
-    const auto exact_iter = q_map.find(q_target);
-    if (exact_iter != q_map.end())
-    {
-        return exact_iter;
-    }
-
-    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto& entry) {
-        return are_equivalent_symmetry_qpoints(entry.first, q_target);
-    });
+    return find_internal_qpoint(q_map, pbc, q_target);
 }
 
 template <typename QMap>
 static typename QMap::const_iterator find_matching_internal_qpoint(
-    const QMap& q_map,
-    const PeriodicBoundaryData& pbc,
+    const QMap& q_map, const PeriodicBoundaryData& pbc,
     const Vector3_Order<double>& q_target)
 {
-    const auto exact_iter = q_map.find(q_target);
-    if (exact_iter != q_map.end())
-    {
-        return exact_iter;
-    }
-    const Vector3_Order<double> q_target_frac{pbc.latvec * q_target};
-    return std::find_if(q_map.begin(), q_map.end(), [&pbc, &q_target_frac](const auto& entry) {
-        const Vector3_Order<double> q_current_frac{pbc.latvec * entry.first};
-        return are_equivalent_symmetry_qpoints(q_current_frac, q_target_frac);
-    });
+    return find_internal_qpoint(q_map, pbc, q_target);
 }
 
 template <typename QVector>
 static typename QVector::const_iterator find_matching_symmetry_qpoint_in_sequence(
-    const QVector& q_sequence,
+    const QVector& q_sequence, const PeriodicBoundaryData& pbc,
     const Vector3_Order<double>& q_target)
 {
-    const auto exact_iter = std::find(q_sequence.begin(), q_sequence.end(), q_target);
-    if (exact_iter != q_sequence.end())
-    {
-        return exact_iter;
-    }
-
-    return std::find_if(q_sequence.begin(), q_sequence.end(), [&q_target](const auto& q_current) {
-        return are_equivalent_symmetry_qpoints(q_current, q_target);
+    const auto direct = std::find(q_sequence.begin(), q_sequence.end(), q_target);
+    if (direct != q_sequence.end() && match_internal_qpoints(pbc, *direct, q_target, 1e-5))
+        return direct;
+    return std::find_if(q_sequence.begin(), q_sequence.end(), [&](const auto& current) {
+        return match_internal_qpoints(pbc, current, q_target, 1e-5);
     });
 }
 
@@ -276,22 +279,28 @@ static void add_scaled_complex_matrix(ComplexMatrix& matrix_dst,
 
 static librpa_int::symmetry_atom_block_matrix_map_t collect_symmetry_abf_ibz_blocks_for_q(
     const abf_qspace_complex_block_map_t& blocks_by_q,
-    const Vector3_Order<double>& q_ibz_internal)
+    const Vector3_Order<double>& q_ibz_internal, const PeriodicBoundaryData& pbc,
+    const SymmetryContext& context, const MpiCommHandler& comm, std::size_t atom_count)
 {
     librpa_int::symmetry_atom_block_matrix_map_t blocks_ibz;
-    for (const auto& atom_i_pair : blocks_by_q)
+    std::string frame_error;
+    try
     {
-        const auto atom_i = atom_i_pair.first;
-        for (const auto& atom_j_pair : atom_i_pair.second)
-        {
-            const auto atom_j = atom_j_pair.first;
-            const auto q_iter = find_matching_symmetry_qpoint(atom_j_pair.second, q_ibz_internal);
-            if (q_iter != atom_j_pair.second.end())
+        for (const auto& [left, rights] : blocks_by_q)
+            for (const auto& [right, samples] : rights)
             {
-                blocks_ibz[atom_i][atom_j] = to_complex_matrix(q_iter->second);
+                const auto found = find_matching_symmetry_qpoint(samples, pbc, q_ibz_internal);
+                if (found == samples.end()) continue;
+                const auto phases = internal_q_gauge_phases(
+                    context, pbc, found->first, q_ibz_internal, atom_count);
+                auto block = to_complex_matrix(found->second);
+                const auto factor = phases.at(left) * std::conj(phases.at(right));
+                if (factor != std::complex<double>{1., 0.}) block *= factor;
+                blocks_ibz[left][right] = std::move(block);
             }
-        }
     }
+    catch (const std::exception& error) { frame_error = error.what(); }
+    check_internal_q_error_collective(comm.comm, frame_error);
     return blocks_ibz;
 }
 
@@ -474,8 +483,41 @@ static librpa_int::symmetry_atom_block_matrix_map_t build_symmetry_blocks_from_d
 static librpa_int::symmetry_atom_block_matrix_map_t gather_symmetry_ibz_blocks_collective(
     const MpiCommHandler& comm_h,
     const librpa_int::symmetry_atom_block_matrix_map_t& blocks_ibz_local,
-    const std::map<atom_t, size_t>& atom_nabf)
+    const std::map<atom_t, size_t>& atom_nabf, const bool full_frequency = false)
 {
+    if (full_frequency)
+    {
+        const auto offsets = build_symmetry_atom_offsets(atom_nabf);
+        ComplexMatrix local(offsets.back(), offsets.back());
+        const std::size_t natom = atom_nabf.size();
+        std::vector<int> counts(natom * natom, 0), global_counts(counts.size(), 0);
+        for (const auto &[left, rights] : blocks_ibz_local)
+            for (const auto &[right, block] : rights)
+            {
+                if (block.nr != atom_nabf.at(left) || block.nc != atom_nabf.at(right))
+                    throw LIBRPA_RUNTIME_ERROR("Full W frequency block dimension mismatch");
+                counts.at(left * natom + right) += 1;
+                for (int row = 0; row < block.nr; ++row)
+                    for (int col = 0; col < block.nc; ++col)
+                        local(offsets.at(left) + row, offsets.at(right) + col) = block(row, col);
+            }
+        comm_h.allreduce(counts.data(), global_counts.data(), counts.size(), MPI_SUM);
+        if (std::any_of(global_counts.begin(), global_counts.end(), [](int n) { return n != 1; }))
+            throw LIBRPA_RUNTIME_ERROR("Full W frequency restore requires one owner per ordered block");
+        ComplexMatrix global_matrix(local.nr, local.nc);
+        allreduce_ComplexMatrix(local, global_matrix, comm_h.comm);
+        librpa_int::symmetry_atom_block_matrix_map_t result;
+        for (std::size_t left = 0; left < natom; ++left)
+            for (std::size_t right = 0; right < natom; ++right)
+            {
+                ComplexMatrix block(atom_nabf.at(left), atom_nabf.at(right));
+                for (int row = 0; row < block.nr; ++row)
+                    for (int col = 0; col < block.nc; ++col)
+                        block(row, col) = global_matrix(offsets.at(left) + row, offsets.at(right) + col);
+                result[left][right] = std::move(block);
+            }
+        return result;
+    }
     if (comm_h.nprocs <= 1)
     {
         return blocks_ibz_local;
@@ -590,7 +632,7 @@ static atom_mapping<ComplexMatrix>::pair_t_old symmetrize_symmetry_chi0_ibz_bloc
         return blocks_ibz;
     }
 
-    const auto q_iter = find_matching_symmetry_qpoint_in_sequence(pbc.klist, q_ibz_internal);
+    const auto q_iter = find_matching_symmetry_qpoint_in_sequence(pbc.klist, pbc, q_ibz_internal);
     if (q_iter == pbc.klist.end())
     {
         return blocks_ibz;
@@ -630,7 +672,8 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
     const abf_qspace_complex_block_map_t& Wc_q,
     const PeriodicBoundaryData& pbc,
     const std::vector<Vector3_Order<int>>& Rlist,
-    const std::map<atom_t, size_t>& atom_nabf)
+    const std::map<atom_t, size_t>& atom_nabf, const bool full_frequency,
+    const BlochEmbedding& embedding)
 {
     const auto local_target_pairs = collect_local_target_atom_pairs_from_qspace(Wc_q);
     if (ctx.kstar_grid_mapping.empty())
@@ -651,17 +694,27 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
         const auto q_ibz_internal = pbc.klist.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto q_ibz_frac = pbc.kfrac_list.at(static_cast<std::size_t>(star_mapping.iq_ibz));
         const auto blocks_ibz_local =
-            collect_symmetry_abf_ibz_blocks_for_q(Wc_q, q_ibz_internal);
+            collect_symmetry_abf_ibz_blocks_for_q(Wc_q, q_ibz_internal, pbc, ctx, comm_h, atom_nabf.size());
         auto blocks_ibz =
-            gather_symmetry_ibz_blocks_collective(comm_h, blocks_ibz_local, atom_nabf);
+            gather_symmetry_ibz_blocks_collective(comm_h, blocks_ibz_local, atom_nabf,
+                                                  full_frequency);
         if (local_target_pairs.empty() || blocks_ibz.empty())
         {
             continue;
         }
-        const auto rotation_atom_pairs =
-            librpa_int::build_symmetry_upper_atom_pair_closure(star, local_target_pairs);
-        blocks_ibz = librpa_int::symmetrize_symmetry_ibz_kspace_operator_blocks(
-            ctx, abf_layouts, q_ibz_frac, blocks_ibz, atom_nabf, &rotation_atom_pairs);
+        if (!full_frequency)
+        {
+            const auto rotation_atom_pairs =
+                librpa_int::build_symmetry_upper_atom_pair_closure(star, local_target_pairs);
+            blocks_ibz = librpa_int::symmetrize_symmetry_ibz_kspace_operator_blocks(
+                ctx, abf_layouts, q_ibz_frac, blocks_ibz, atom_nabf, &rotation_atom_pairs);
+        }
+        librpa_int::symmetry_atom_block_matrix_map_t adjoint_blocks;
+        if (full_frequency && std::any_of(star.members.begin(), star.members.end(),
+                                         [](const auto &member) { return member.time_reversal; }))
+            for (const auto &[left, rights] : blocks_ibz)
+                for (const auto &[right, block] : rights)
+                    adjoint_blocks[right][left] = transpose(block, true);
         if (star.members.size() != star_mapping.member_q_bz_keys.size())
         {
             throw std::runtime_error(
@@ -682,7 +735,9 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
             try
             {
                 rotated_blocks = librpa_int::rotate_symmetry_kspace_operator_blocks(
-                    ctx, abf_layouts, member, blocks_ibz, atom_nabf, star.k_ibz,
+                    ctx, abf_layouts, member,
+                    full_frequency && member.time_reversal ? adjoint_blocks : blocks_ibz,
+                    atom_nabf, star.k_ibz,
                     member.time_reversal, &local_target_pairs, &q_bz_target_frac);
             }
             catch (const std::exception& ex)
@@ -697,16 +752,20 @@ static abf_rspace_complex_block_map_t accumulate_symmetry_full_wr_from_ibz_q(
             }
 
             const Vector3_Order<double> q_internal{q_bz_target_frac * pbc.G};
+            const auto embedding_phases = embedding.atom_phases(q_bz_target_frac);
             for (const auto& atom_i_pair : rotated_blocks)
             {
                 for (const auto& atom_j_pair : atom_i_pair.second)
                 {
+                    const auto to_cell = embedding_phases.empty() ? cplxdb{1.0, 0.0}
+                        : std::conj(embedding_phases.at(atom_i_pair.first))
+                              * embedding_phases.at(atom_j_pair.first);
                     for (const auto& R : Rlist)
                     {
                         const auto phase = build_ft_wq_phase(pbc, q_internal, R);
                         add_scaled_complex_matrix(
                             blocks_by_R_full.at(atom_i_pair.first).at(atom_j_pair.first).at(R),
-                            atom_j_pair.second, phase);
+                            atom_j_pair.second, embedding_phases.empty() ? phase : phase * to_cell);
                     }
                 }
             }
@@ -721,6 +780,10 @@ CorrEnergy compute_RPA_correlation_blacs_2d_gamma_only(Chi0 &chi0, atpair_k_cplx
                                                        const std::vector<atpair_t> &local_atpair,
                                                        const BlacsCtxtHandler &blacs_h, bool use_gpu_replace_scalapack)
 {
+    if (chi0.full_frequency_matrix())
+        // A real AO basis at Gamma does not make a magnetic chi(iw)
+        // symmetric. Use the complete complex body route, also for nk=1.
+        return compute_RPA_correlation_blacs_2d(chi0, coulmat, local_atpair, blacs_h);
     using librpa_int::ArrayDesc;
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
@@ -1023,6 +1086,10 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                                             const RpaHeadwingSettings &headwing_settings,
                                             diele_func *df_headwing)
 {
+    const bool general_response = chi0.full_frequency_matrix();
+    if (general_response && headwing_settings.enabled)
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC RPA optical energy is not yet validated; the complex body route is available");
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
     using librpa_int::global::profiler;
@@ -1051,6 +1118,10 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
     const auto set_IJ_nabf_nabf = get_necessary_IJ_from_block_2D_sy('U', chi0.atbasis_abf, desc_nabf_nabf);
     const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
     auto temp_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
+    const auto chi_pairs = general_response
+        ? get_necessary_IJ_from_block_2D(chi0.atbasis_abf, chi0.atbasis_abf, desc_nabf_nabf)
+        : set_IJ_nabf_nabf;
+    const auto chi_s0_s1 = get_s0_s1_for_comm_map2_first(chi_pairs);
     auto chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf_opt, MAJOR::COL);
     auto coul_block = chi0_block.copy();
     auto coul_eigen_block = chi0_block.copy();
@@ -1142,14 +1213,17 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
             //     //        str(coul_block).c_str());
             // }
 
+            // Redistribution is collective even on ranks owning no Coulomb
+            // atom pairs or no matrix entries.
+            temp_block.zero_out();
             if (IJq_coul.size() > 0)
             {
                 collect_block_from_ALL_IJ_Tensor(temp_block, desc_nabf_nabf, chi0.atbasis_abf,
                                                 qa, true, C_ONE, IJq_coul, MAJOR::ROW);
-                ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                                              coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
-                                              blacs_h.ictxt);
             }
+            ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
+                                          coul_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                          blacs_h.ictxt);
             double block_end = omp_get_wtime();
             lib_printf("Vq Time  myid: %d  arr_time: %f  comm_time: %f   block_time: %f   pair_size: %d\n",comm_h.myid,arr_end-vq_begin, comm_end-comm_begin, block_end-block_begin,set_IJ_nabf_nabf.size());
             comm_h.barrier();
@@ -1248,17 +1322,24 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                 // ofs_myid << "chi0_libri" << endl << chi0_libri;
 
                 const auto IJq_chi0 =
-                    comm_map2_first(comm_h.comm, chi0_libri, s0_s1.first, s0_s1.second);
+                    comm_map2_first(comm_h.comm, chi0_libri, chi_s0_s1.first, chi_s0_s1.second);
                 // ofs_myid << "IJq_chi0" << endl << IJq_chi0;
                 double chi_end_comm = omp_get_wtime();
-                if (IJq_chi0.size() > 0)
+                temp_block.zero_out();
+                if (general_response)
+                {
+                    if (desc_nabf_nabf.m_loc() && desc_nabf_nabf.n_loc())
+                        collect_block_from_ordered_IJ_Tensor(
+                            temp_block, desc_nabf_nabf, chi0.atbasis_abf, qa, C_ONE, IJq_chi0);
+                }
+                else if (IJq_chi0.size() > 0)
                 {
                     collect_block_from_ALL_IJ_Tensor_sparse_zero_missing(temp_block, desc_nabf_nabf, chi0.atbasis_abf,
                                                     qa, true, C_ONE, IJq_chi0, MAJOR::ROW);
-                    ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
-                                                  chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
-                                                  blacs_h.ictxt);
                 }
+                ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1, desc_nabf_nabf.desc,
+                                              chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                              blacs_h.ictxt);
                 comm_h.barrier();
                 double chi_end_2d = omp_get_wtime();
 
@@ -1359,14 +1440,20 @@ CorrEnergy compute_RPA_correlation_blacs_2d(Chi0 &chi0, atpair_k_cplx_mat_t &cou
                 // if( ifreq== 0 && comm_h.is_root() )
                 //     print_whole_matrix("pi-2D-loc", coul_chi0_block);
 
-                int *ipiv = new int[desc_nabf_nabf_opt.m_loc() * 10];
+                std::vector<int> ipiv(desc_nabf_nabf_opt.m_loc() + desc_nabf_nabf_opt.mb());
                 int info;
                 complex<double> ln_det =
-                    compute_pi_det_blacs_2d(coul_chi0_block, desc_nabf_nabf_opt, ipiv, info);
+                    compute_pi_det_blacs_2d(coul_chi0_block, desc_nabf_nabf_opt, ipiv.data(), info);
+                if (info != 0)
+                    throw LIBRPA_RUNTIME_ERROR("RPA dielectric LU factorization failed, info=" +
+                                               std::to_string(info));
                 MPI_Allreduce(&trace_pi_loc,&trace_pi,1,MPI_DOUBLE_COMPLEX,MPI_SUM,comm_h.comm);
-                delete[] ipiv;
                 rpa_for_omega_q = trace_pi + ln_det;
             }
+            if (general_response)
+                // Hermitian analyticity pairs the +/-iw integrands as complex
+                // conjugates. Their half-line energy is Re[Tr(v chi)+log det E].
+                rpa_for_omega_q = {rpa_for_omega_q.real(), 0.0};
             double det_end = omp_get_wtime();
             comm_h.barrier();
             double pi_freq_end = omp_get_wtime();
@@ -1566,9 +1653,12 @@ cplxdb compute_rpa_response_trace_logdet_blacs_2d(
     }
 
     int info = 0;
-    std::vector<int> ipiv(std::max(1, response_desc.m_loc() * 10));
+    std::vector<int> ipiv(response_desc.m_loc() + response_desc.mb());
     const cplxdb ln_det = compute_pi_det_blacs_2d(
         identity_minus_response, response_desc, ipiv.data(), info);
+    if (info != 0)
+        throw LIBRPA_RUNTIME_ERROR("RPA dielectric LU factorization failed, info=" +
+                                   std::to_string(info));
     return trace + ln_det;
 }
 
@@ -1650,6 +1740,9 @@ CorrEnergy compute_RPA_correlation_blacs(const Chi0 &chi0, const atpair_k_cplx_m
                                          const vector<atpair_t> &local_atpair,
                                          const BlacsCtxtHandler &blacs_h)
 {
+    if (chi0.full_frequency_matrix())
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency response is not yet supported by the RPA energy consumers");
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
 
@@ -1862,6 +1955,9 @@ CorrEnergy compute_RPA_correlation_blacs(const Chi0 &chi0, const atpair_k_cplx_m
 
 CorrEnergy compute_RPA_correlation(LibrpaParallelRouting routing, const Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat)
 {
+    if (chi0.full_frequency_matrix())
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency response is not yet supported by the RPA energy consumers");
     using global::ofs_myid;
     using global::lib_printf;
 
@@ -2053,6 +2149,9 @@ CorrEnergy compute_MP2_correlation(const Chi0 &chi0, const atpair_k_cplx_mat_t &
 map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> compute_Pi_q(
     const Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat)
 {
+    if (chi0.full_frequency_matrix())
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency response cannot use the Hermitian Pi builder");
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
 
@@ -2178,6 +2277,9 @@ map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>>
 map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> compute_Pi_q_MPI(
     const Chi0 &chi0, const atpair_k_cplx_mat_t &coulmat)
 {
+    if (chi0.full_frequency_matrix())
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency response cannot use the Hermitian Pi builder");
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
 
@@ -2467,6 +2569,15 @@ compute_Wc_freq_q(
     const auto &qpts_active = chi0.active_qpoints();
 
     const auto &comm_h = chi0.comm_h;
+    const bool general_response = chi0.full_frequency_matrix();
+    // This dense route assumes complete local Coulomb input. The distributed
+    // general-response contract is implemented by the BLACS route below.
+    if (general_response && comm_h.nprocs != 1)
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC Wc with multiple MPI ranks requires use_scalapack_gw_wc=true");
+    if (general_response && !epsmac_LF_imagfreq.empty())
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency screening does not yet support optical head/wing replacement");
     const auto &abf = chi0.atbasis_abf;
     const auto validate_coulomb_block_shape = [&](const char *stage, const int mu,
                                                   const int nu,
@@ -2548,7 +2659,7 @@ compute_Wc_freq_q(
         }
 
         // truncated (cutoff) Coulomb
-        Matz Vqcut_all(range_all, range_all);
+        Matz Vqcut_all(range_all, range_all, MAJOR::COL);
         for (auto &Mu_NuqVq : coulmat_wc)
         {
             auto Mu = Mu_NuqVq.first;
@@ -2598,6 +2709,7 @@ compute_Wc_freq_q(
             auto freq = freq_qMuNuchi.first;
             auto ifreq = chi0.tfg.get_freq_index(freq);
             auto MuNuchi = freq_qMuNuchi.second.at(q);
+            if (general_response) chi0fq_all.zero_out();
             for (const auto &Mu_Nuchi : MuNuchi)
             {
                 auto Mu = Mu_Nuchi.first;
@@ -2611,8 +2723,9 @@ compute_Wc_freq_q(
                         {
                             chi0fq_all(part_range[Mu] + i_mu, part_range[Nu] + i_nu) =
                                 Nu_chi.second(i_mu, i_nu);
-                            chi0fq_all(part_range[Nu] + i_nu, part_range[Mu] + i_mu) =
-                                conj(Nu_chi.second(i_mu, i_nu));
+                            if (!general_response)
+                                chi0fq_all(part_range[Nu] + i_nu, part_range[Mu] + i_mu) =
+                                    conj(Nu_chi.second(i_mu, i_nu));
                         }
                 }
             }
@@ -2668,8 +2781,29 @@ compute_Wc_freq_q(
                 print_matrix_mm_file(eps_fq, path_as_directory(output_dir) + fn, "", 1e-10);
             }
 
-            // invert the epsilon matrix
-            power_hemat_onsite(eps_fq, -1.0);
+            // Hermitian Coulomb square roots do not make the general positive-
+            // frequency dielectric Hermitian. Preserve its odd-frequency part.
+            if (general_response)
+            {
+                eps_fq.swap_to_col_major();
+                const int n = eps_fq.nr();
+                std::vector<int> pivots(n);
+                std::vector<cplxdb> work(std::max(1, n));
+                int info = 0;
+                LapackConnector::getrf_f(n, n, eps_fq.ptr(), n, pivots.data(), info);
+                if (info != 0)
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "General dielectric LU factorization failed with info=" +
+                        std::to_string(info));
+                LapackConnector::getri_f(n, eps_fq.ptr(), n, pivots.data(), work.data(),
+                                          static_cast<int>(work.size()), info);
+                if (info != 0)
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "General dielectric LU inverse failed with info=" +
+                        std::to_string(info));
+            }
+            else
+                power_hemat_onsite(eps_fq, -1.0);
             for (int i = 0; i < eps_fq.nr(); i++) eps_fq(i, i) -= C_ONE;
             Wc_freq_q[freq][q] = sqrtVqcut_all * eps_fq * sqrtVqcut_all;
             // sprintf(fn, "inveps_q_%d_freq_%d.mtx", iq, ifreq);
@@ -2705,6 +2839,32 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     const auto part_range = chi0.atbasis_abf.get_part_range();
 
     const auto &comm_h = blacs_h.comm_h();
+    const auto is_exactly_real = [&](const Matz &matrix)
+    {
+        int local_complex = 0, global_complex = 0;
+        for (std::size_t i = 0; i != matrix.size(); ++i)
+            if (matrix.ptr()[i].imag() != 0.0) local_complex = 1;
+        comm_h.allreduce(&local_complex, &global_complex, 1, MPI_MAX);
+        return global_complex == 0;
+    };
+    const bool general_response = chi0.full_frequency_matrix();
+    if (general_response && use_cholesky_gw_wc)
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC frequency screening requires LU: set use_cholesky_gw_wc=false");
+    const bool general_optical_requested =
+        !epsmac_LF_imagfreq.empty() || (replace_w_head && df_headwing != nullptr);
+    const bool general_optical_analytic =
+        df_headwing != nullptr &&
+        ((!df_headwing->use_2d_dielectric &&
+          (option_dielect_func == 3 || option_dielect_func == 53)) ||
+         (option_dielect_func == 3 && df_headwing->use_2d_dielectric &&
+          replace_w_head && !epsmac_LF_imagfreq.empty() &&
+          df_headwing->strict_2d_coulomb_head_configured()));
+    if (general_response && general_optical_requested && !general_optical_analytic)
+        throw LIBRPA_RUNTIME_ERROR(
+            "General SOC optical screening requires analytic head/wing "
+            "(finite3D option_dielect_func=3/53); strict2D requires option3, "
+            "active complete-Wc and configured producer monopole normalization");
 
     if (comm_h.myid == 0)
     {
@@ -2725,6 +2885,13 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     // obtain the indices of atom-pair block necessary to build 2D block of a Hermitian/symmetric matrix
     const auto set_IJ_nabf_nabf = get_necessary_IJ_from_block_2D_sy('U', chi0.atbasis_abf, desc_nabf_nabf);
     const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
+    // Coulomb remains Hermitian; only the general response requests every
+    // ordered block. Neither opposite blocks nor atom-diagonal triangles can
+    // be inferred by conjugation at positive imaginary frequency.
+    const auto chi_pairs = general_response
+        ? get_necessary_IJ_from_block_2D(chi0.atbasis_abf, chi0.atbasis_abf, desc_nabf_nabf)
+        : set_IJ_nabf_nabf;
+    const auto chi_s0_s1 = get_s0_s1_for_comm_map2_first(chi_pairs);
     // temp_block is used to collect data from IJ-pair data structure with comm_map2_first
     auto temp_block = init_local_mat<complex<double>>(desc_nabf_nabf, MAJOR::COL);
     // Below are the working arrays for matrix operations
@@ -2802,7 +2969,8 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
     const auto abf_layouts =
         chi0.atbasis_abf.build_species_basis_layouts(chi0.symmetry_context.atom_to_type);
     const bool use_symmetry_dense_chi0_collect =
-        chi0.use_symmetry_context && !chi0.qstar_only_symmetry && comm_h.nprocs > 1 &&
+        !general_response && chi0.use_symmetry_context && !chi0.qstar_only_symmetry &&
+        comm_h.nprocs > 1 &&
         can_symmetrize_symmetry_chi0_ibz_blocks(chi0.symmetry_context, abf_layouts, atom_nabf,
                                                 chi0.pbc);
 
@@ -2864,6 +3032,9 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
             gamma_point && !epsmac_LF_imagfreq.empty() && !gamma_full_headwing;
         coul_block.zero_out();
         coulwc_block.zero_out();
+#if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)
+        bool coul_block_device_allocated = false;
+#endif
         // lib_printf("coul_block\n%s", str(coul_block).c_str());
 
         // q-array for LibRI object
@@ -2918,7 +3089,9 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                                           blacs_h.ictxt);
             global::profiler.stop("epsilon_prepare_coulwc_sqrt_3");
             global::profiler.start("epsilon_prepare_coulwc_sqrt_4", "Perform square root");
-            if (is_gamma_point(q))
+            // Gamma is real only in a real auxiliary gauge. A complex
+            // compressed basis may retain essential imaginary Coulomb entries.
+            if (is_gamma_point(q) && is_exactly_real(coulwc_block))
             {
                 LaConnector::power_hemat_la_real(
                     coulwc_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt,
@@ -2930,7 +3103,10 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
             {
 #if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)
                 if(use_gpu_replace_scalapack)
+                {
                     DEVICE_CHECK(deviceMallocAsync((void**)&coul_block_ptr, coul_block.size() * sizeof(std::complex<double>), blacs_h.ddla_handle->stream));
+                    coul_block_device_allocated = true;
+                }
 #endif
                 LaConnector::power_hemat_la(
                     coulwc_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt,
@@ -3017,7 +3193,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
         size_t n_singular;
         if (debug_output) ofs_myid << get_timestamp() << " Start power hemat couleps\n";
         matrix_m<std::complex<double>> sqrtveig_blacs;
-        if (is_gamma_point(q))
+        if (is_gamma_point(q) && is_exactly_real(coul_block))
         {
             // choice of power_hemat_blacs_real/power_hemat_blacs_desc
             // leads to sub-meV difference
@@ -3029,12 +3205,22 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
         }
         else
         {
+#if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)
+            if (use_gpu_replace_scalapack && !coul_block_device_allocated)
+            {
+                DEVICE_CHECK(deviceMallocAsync((void**)&coul_block_ptr, coul_block.size() * sizeof(std::complex<double>), blacs_h.ddla_handle->stream));
+                coul_block_device_allocated = true;
+            }
+#endif
             sqrtveig_blacs = LaConnector::power_hemat_la(
                 coul_block, desc_nabf_nabf_opt, coul_eigen_block, desc_nabf_nabf_opt,
                 n_singular, eigenvalues.c, 0.5, sqrt_coulomb_threshold, use_gpu_replace_scalapack,
                 use_elpa_sqrt_coulomb, coul_block_ptr, chi0_block_ptr, coul_chi0_block_ptr);
         }
         if (debug_output) ofs_myid << get_timestamp() << " Done power hemat couleps\n";
+        if (is_gamma_point(q) && (gamma_head_only || gamma_full_headwing))
+            order_optical_coulomb_eigensystem(
+                coul_eigen_block, sqrtveig_blacs, desc_nabf_nabf_opt, eigenvalues.c);
         const size_t n_nonsingular = n_abf - n_singular;
         if (gamma_full_headwing && n_singular != 0)
         {
@@ -3045,7 +3231,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                 option_dielect_func, n_nonsingular, n_abf, n_singular, sqrt_coulomb_threshold);
         }
 #if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)
-        if (is_gamma_point(q) && use_gpu_replace_scalapack)
+        if (use_gpu_replace_scalapack && !coul_block_device_allocated)
             DEVICE_CHECK(deviceMallocAsync((void**)&coul_block_ptr, coul_block.size() * sizeof(std::complex<double>), blacs_h.ddla_handle->stream));
 #endif
 #if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)
@@ -3209,7 +3395,8 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                 if (has_local_chi0_q)
                 {
                     chi0_wq = chi0.get_chi0_q().at(freq).at(q);
-                    if (chi0.use_symmetry_context && !chi0.qstar_only_symmetry)
+                    if (!general_response && chi0.use_symmetry_context &&
+                        !chi0.qstar_only_symmetry)
                     {
                         chi0_wq = symmetrize_symmetry_chi0_ibz_blocks_if_needed(
                             comm_h, chi0.symmetry_context, abf_layouts, chi0_wq, q,
@@ -3263,7 +3450,7 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                     global::profiler.start("epsilon_prepare_chi0_2d_comm_map2",
                                            LIBRPA_VERBOSE_DEBUG);
                     const auto IJq_chi0 = RI::Communicate_Tensors_Map_Judge::comm_map2_first(
-                        comm_h.comm, chi0_libri, s0_s1.first, s0_s1.second);
+                        comm_h.comm, chi0_libri, chi_s0_s1.first, chi_s0_s1.second);
                     global::profiler.stop("epsilon_prepare_chi0_2d_comm_map2");
                     // ofs_myid << "IJq_chi0" << endl << IJq_chi0;
                     // for (const auto &IJ: set_IJ_nabf_nabf)
@@ -3276,9 +3463,19 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                     // }
                     global::profiler.start("epsilon_prepare_chi0_2d_collect_block",
                                            LIBRPA_VERBOSE_DEBUG);
-                    collect_block_from_ALL_IJ_Tensor_sparse_zero_missing(
-                        temp_block, desc_nabf_nabf, chi0.atbasis_abf, qa, true, C_ONE,
-                        IJq_chi0, MAJOR::ROW);
+                    if (general_response)
+                    {
+                        // Empty compute tiles are valid and need no collector.
+                        temp_block.zero_out();
+                        if (desc_nabf_nabf.m_loc() && desc_nabf_nabf.n_loc())
+                            collect_block_from_ordered_IJ_Tensor(
+                                temp_block, desc_nabf_nabf, chi0.atbasis_abf, qa, C_ONE,
+                                IJq_chi0);
+                    }
+                    else
+                        collect_block_from_ALL_IJ_Tensor_sparse_zero_missing(
+                            temp_block, desc_nabf_nabf, chi0.atbasis_abf, qa, true, C_ONE,
+                            IJq_chi0, MAJOR::ROW);
                     ScalapackConnector::pgemr2d_f(n_abf, n_abf, temp_block.ptr(), 1, 1,
                                                   desc_nabf_nabf.desc, chi0_block.ptr(), 1, 1,
                                                   desc_nabf_nabf_opt.desc, blacs_h.ictxt);
@@ -3404,6 +3601,23 @@ std::map<double, std::map<Vector3_Order<double>, Matz>> compute_Wc_freq_q_blacs(
                         const int jlo = desc_nabf_nabf_opt.indx_g2l_c(i);
                         if (jlo < 0) continue;
                         chi0_block(ilo, jlo) -= 1.0;
+                    }
+                    if (!df_headwing->use_2d_dielectric)
+                    {
+                        // The inverse average retains s*P_head + T in vacuum,
+                        // where s is its actual angular-weight sum. Correlation
+                        // screening must subtract that same bare head moment.
+                        // Keep the averaged inverse and its unweighted body
+                        // baseline unchanged; apply the correction before the
+                        // external sqrt(V_wc) legs, in the V_eps head frame.
+                        const double bare_head_correction =
+                            1.0 - df_headwing->gamma_cell_weight_sum();
+                        ScalapackConnector::pgemm_f(
+                            'N', 'C', n_abf, n_abf, 1,
+                            std::complex<double>{bare_head_correction, 0.0},
+                            head_direction.ptr(), 1, 1, desc_head_direction.desc,
+                            head_direction.ptr(), 1, 1, desc_head_direction.desc,
+                            C_ONE, chi0_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
                     }
                 }
 
@@ -3776,11 +3990,13 @@ static Matz rotate_symmetry_blacs_wq(const Matz& Wq_rep,
     {
         auto transform_conj = transform.copy();
         transform_conj.conj();
-        auto Wq_conj = Wq_rep.copy();
-        Wq_conj.conj();
-        ScalapackConnector::pgemm_f('N', 'N', n, n, n, 1.0,
+        // At a fixed positive imaginary frequency an antiunitary operation
+        // transports F(q, -iw)* = F(q, +iw)^T, not F(q, +iw)*.
+        // transform_conj is the effective density representation for this
+        // member under the existing orbital-transform convention.
+        ScalapackConnector::pgemm_f('N', 'T', n, n, n, 1.0,
                                     transform_conj.ptr(), 1, 1, desc.desc,
-                                    Wq_conj.ptr(), 1, 1, desc.desc,
+                                    Wq_rep.ptr(), 1, 1, desc.desc,
                                     0.0, tmp.ptr(), 1, 1, desc.desc);
         ScalapackConnector::pgemm_f('N', 'T', n, n, n, 1.0,
                                     tmp.ptr(), 1, 1, desc.desc,
@@ -3816,15 +4032,11 @@ static Matz restore_symmetry_blacs_wq_to_star_source(const Matz& Wq_source,
     auto Wq_star = init_local_mat<cplxdb>(desc, MAJOR::COL);
     fill_blacs_local_from_dense(source_transform, desc, source_transform_dense);
 
-    auto Wq_effective = Wq_source.copy();
-    if (source_uses_time_reversal)
-    {
-        Wq_effective.conj();
-    }
-
-    ScalapackConnector::pgemm_f('C', 'N', n, n, n, 1.0,
+    // Invert F_member = T* F_star^T T^T for an antiunitary member:
+    // F_star = T^dagger F_member^T T. Unitary members use F_member itself.
+    ScalapackConnector::pgemm_f('C', source_uses_time_reversal ? 'T' : 'N', n, n, n, 1.0,
                                 source_transform.ptr(), 1, 1, desc.desc,
-                                Wq_effective.ptr(), 1, 1, desc.desc,
+                                Wq_source.ptr(), 1, 1, desc.desc,
                                 0.0, tmp.ptr(), 1, 1, desc.desc);
     ScalapackConnector::pgemm_f('N', 'N', n, n, n, 1.0,
                                 tmp.ptr(), 1, 1, desc.desc,
@@ -3847,10 +4059,32 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
         throw LIBRPA_RUNTIME_ERROR("Dense Wc symmetry restore ABF layout mismatch");
     }
 
+    // A locally owned alias may require metadata on only one BLACS rank.
+    // Validate all required source-to-representative frames collectively first.
+    std::string frame_error;
+    try
+    {
+        for (const auto& q : qpoint_view.representatives)
+        {
+            const auto found = find_matching_symmetry_qpoint(Wq_rep_map, pbc, q);
+            if (found == Wq_rep_map.end())
+                throw LIBRPA_RUNTIME_ERROR("Dense Wc symmetry restore is missing a representative q");
+            if (found->second.nr() != ad_Wc.m_loc()
+                || found->second.nc() != ad_Wc.n_loc()
+                || (found->second.major() != MAJOR::ROW
+                    && found->second.major() != MAJOR::COL))
+                throw LIBRPA_INVALID_ARGUMENT("Dense Wc symmetry restore has an inconsistent local matrix");
+            (void)internal_q_gauge_phases(symmetry_context, pbc, found->first, q,
+                                         atom_nabf.size());
+        }
+    }
+    catch (const std::exception& error) { frame_error = error.what(); }
+    check_internal_q_error_collective(ad_Wc.comm(), frame_error);
+
     std::map<Vector3_Order<double>, Matz> Wq_full_map;
     for (const auto& q_rep : qpoint_view.representatives)
     {
-        const auto Wq_iter = find_matching_symmetry_qpoint(Wq_rep_map, q_rep);
+        const auto Wq_iter = find_matching_symmetry_qpoint(Wq_rep_map, pbc, q_rep);
         if (Wq_iter == Wq_rep_map.end())
         {
             throw LIBRPA_RUNTIME_ERROR("Dense Wc symmetry restore is missing a representative q");
@@ -3881,8 +4115,18 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
         const auto source_transform = build_symmetry_kspace_operator_transform_matrix(
             symmetry_context, abf_layouts, source_member, atom_nabf, star.k_ibz,
             source_member.time_reversal, &q_rep_frac);
+        // ScaLAPACK interprets every local tile as column-major. Keep the raw
+        // input immutable, and convert only a row-major representative tile.
+        Matz Wq_source_col;
+        const Matz* Wq_source = &Wq_iter->second;
+        if (!Wq_source->is_col_major())
+        {
+            Wq_source_col = Wq_source->copy();
+            Wq_source_col.swap_to_col_major();
+            Wq_source = &Wq_source_col;
+        }
         const auto Wq_star_source = restore_symmetry_blacs_wq_to_star_source(
-            Wq_iter->second, ad_Wc, source_transform, source_member.time_reversal);
+            *Wq_source, ad_Wc, source_transform, source_member.time_reversal);
 
         for (std::size_t imember = 0; imember != members.size(); ++imember)
         {
@@ -3905,7 +4149,11 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
                 throw LIBRPA_RUNTIME_ERROR("Dense Wc symmetry restore could not match a q-star member");
             }
             const auto& member = star.members[star_member_index];
-            if (star_member_index == source_member_index)
+            Vector3_Order<int> source_to_target_G;
+            const bool same_frame = match_internal_qpoints(
+                pbc, Wq_iter->first, q_member_internal, 1e-5, &source_to_target_G)
+                && source_to_target_G == Vector3_Order<int>{0, 0, 0};
+            if (star_member_index == source_member_index && same_frame)
             {
                 Wq_full_map[q_member_internal] = Wq_iter->second.copy();
                 continue;
@@ -3914,9 +4162,12 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
             const auto transform = build_symmetry_kspace_operator_transform_matrix(
                 symmetry_context, abf_layouts, member, atom_nabf, star.k_ibz,
                 member.time_reversal, &q_member_frac);
-            Wq_full_map[q_member_internal] =
-                rotate_symmetry_blacs_wq(Wq_star_source, ad_Wc, transform,
-                                         member.time_reversal);
+            auto Wq_member = rotate_symmetry_blacs_wq(
+                Wq_star_source, ad_Wc, transform, member.time_reversal);
+            // The Fourier batches retain the input layout for their flat
+            // element ordering, including on ranks with empty local tiles.
+            Wq_member.swap_major(Wq_iter->second.major());
+            Wq_full_map[q_member_internal] = std::move(Wq_member);
         }
     }
     return Wq_full_map;
@@ -3994,6 +4245,36 @@ static void FT_Wc_freq_q_into(
     using librpa_int::global::ofs_myid;
     using librpa_int::global::lib_printf;
 
+    BlochEmbedding embedding;
+    std::vector<atom_t> row_atoms, col_atoms;
+    collective_all_stage(comm_h, "Dense W Fourier atomic embedding", [&]
+    {
+        if (!symmetry_context) return;
+        const auto eta = symmetry_context->basis_convention.bloch_ratom;
+        if (eta == 0 || eta == LIBRPA_UNSET) return;
+        if (!atbasis_Wc || !ad_Wc)
+            throw LIBRPA_INVALID_ARGUMENT("Embedded dense W Fourier transform needs its basis and descriptor");
+        embedding = BlochEmbedding(*symmetry_context, *atbasis_Wc);
+        if (!ad_Wc->is_initialized() || ad_Wc->m() != ad_Wc->n()
+            || ad_Wc->m() != static_cast<int>(atbasis_Wc->nb_total))
+            throw LIBRPA_INVALID_ARGUMENT("Embedded dense W Fourier transform has an inconsistent descriptor");
+        for (int row = 0; row != ad_Wc->m_loc(); ++row)
+            row_atoms.push_back(atbasis_Wc->get_i_atom(ad_Wc->indx_l2g_r(row)));
+        for (int col = 0; col != ad_Wc->n_loc(); ++col)
+            col_atoms.push_back(atbasis_Wc->get_i_atom(ad_Wc->indx_l2g_c(col)));
+        MAJOR major = MAJOR::AUTO;
+        for (const auto &[frequency, samples] : Wc_freq_q)
+            for (const auto &[q, matrix] : samples)
+            {
+                const auto qfrac = pbc.latvec * q;
+                if (major == MAJOR::AUTO) major = matrix.major();
+                if (!std::isfinite(qfrac.x) || !std::isfinite(qfrac.y) || !std::isfinite(qfrac.z)
+                    || matrix.nr() != ad_Wc->m_loc() || matrix.nc() != ad_Wc->n_loc()
+                    || matrix.major() != major)
+                    throw LIBRPA_INVALID_ARGUMENT("Embedded dense W Fourier transform has invalid q/matrix data");
+            }
+    });
+
     const bool use_real_output = Wc_freq_R_real != nullptr;
     if ((Wc_freq_R_complex == nullptr) == (Wc_freq_R_real == nullptr))
         throw LIBRPA_RUNTIME_ERROR("Dense Wc Fourier transform needs exactly one destination");
@@ -4024,9 +4305,17 @@ static void FT_Wc_freq_q_into(
             for (auto it_q = map_q_mat.begin(); it_q != map_q_mat.end(); )
             {
                 const Vector3_Order<int> center{0, 0, 0};
+                Matz cell;
+                const Matz *sample = &it_q->second;
+                if (embedding.active())
+                {
+                    cell = it_q->second.copy();
+                    embedding.apply_bilinear(cell, *ad_Wc, pbc.latvec * it_q->first);
+                    sample = &cell;
+                }
                 if (use_real_output)
                 {
-                    const auto &source = it_q->second;
+                    const auto &source = *sample;
                     Matd target(source.nr(), source.nc(), source.major());
                     for (std::size_t i = 0; i != source.size(); ++i)
                     {
@@ -4052,7 +4341,7 @@ static void FT_Wc_freq_q_into(
                 }
                 else
                 {
-                    (*Wc_freq_R_complex)[freq][center] = it_q->second;
+                    (*Wc_freq_R_complex)[freq][center] = *sample;
                 }
                 if (remove_freq_q)
                 {
@@ -4156,6 +4445,38 @@ static void FT_Wc_freq_q_into(
         }
         const auto& map_q_mat =
             use_full_crystal_restore_this_freq ? restored_map_q_mat : it_freq->second;
+        const bool has_full_q = map_q_mat.size() == static_cast<std::size_t>(n_k_points)
+            && std::all_of(klist_full.begin(), klist_full.end(), [&](const auto &q)
+               { return find_matching_internal_qpoint(map_q_mat, pbc, q) != map_q_mat.end(); });
+        // Dephase while packing the existing Fourier batch. Raw reciprocal
+        // matrices and symmetry actions retain their declared auxiliary frame.
+        const auto pack_sample = [&](cplxdb *destination, const Matz &matrix,
+                                     const Vector3_Order<double> &source_q,
+                                     const std::size_t displacement, const std::size_t count,
+                                     const bool conjugate)
+        {
+            if (!embedding.active())
+            {
+                if (!conjugate)
+                    std::memcpy(destination, matrix.ptr() + displacement, count * sizeof(cplxdb));
+                else
+                {
+                    Matz tmp(count, 1, matrix.ptr() + displacement);
+                    std::memcpy(destination, tmp.conj().ptr(), count * sizeof(cplxdb));
+                }
+                return;
+            }
+            const auto phases = embedding.atom_phases(pbc.latvec * source_q);
+            for (std::size_t index = 0; index != count; ++index)
+            {
+                const auto flat = displacement + index;
+                const auto row = matrix.is_row_major() ? flat / matrix.nc() : flat % matrix.nr();
+                const auto col = matrix.is_row_major() ? flat % matrix.nc() : flat / matrix.nr();
+                const auto value = matrix.ptr()[flat] * std::conj(phases[row_atoms[row]])
+                    * phases[col_atoms[col]];
+                destination[index] = conjugate ? std::conj(value) : value;
+            }
+        };
         // initialize
         for (const auto &R: Rlist)
         {
@@ -4176,7 +4497,7 @@ static void FT_Wc_freq_q_into(
                 // for (const auto &[q, mat] : map_q_mat)
                 // for (auto it = map_q_mat.begin(); it != map_q_mat.end(); it++)
                 std::fill(kmat.begin(), kmat.end(), cplxdb{0.0, 0.0});
-                if (use_full_crystal_restore_this_freq)
+                if (use_full_crystal_restore_this_freq || has_full_q)
                 {
                     #pragma omp parallel for schedule(dynamic)
                     for (int iq = 0; iq < n_k_points; iq++)
@@ -4188,8 +4509,8 @@ static void FT_Wc_freq_q_into(
                             continue;
                         }
                         const auto& mat = it->second;
-                        memcpy(kmat.data() + static_cast<std::size_t>(iq) * size_batch_max,
-                               mat.ptr() + displ_data, size_this_batch * sizeof(cplxdb));
+                        pack_sample(kmat.data() + static_cast<std::size_t>(iq) * size_batch_max,
+                                    mat, it->first, displ_data, size_this_batch, false);
                     }
                 }
                 else
@@ -4198,23 +4519,26 @@ static void FT_Wc_freq_q_into(
                     for (size_t iq = 0; iq < pbc.klist_coul.size(); iq++)
                     {
                         const auto &q = pbc.klist_coul[iq];
-                        auto it = map_q_mat.find(q);
+                        auto it = embedding.active()
+                            ? find_matching_internal_qpoint(map_q_mat, pbc, q)
+                            : map_q_mat.find(q);
                         if (it == map_q_mat.end()) continue;
                         const auto &mat = it->second;
                         for (const auto &q_fbz: pbc.map_irk_ks.at(q))
                         {
                             const auto iq = pbc.get_k_index_full(q_fbz);
-                            if (q_fbz == q)
+                            const bool source_member = embedding.active()
+                                ? match_internal_qpoints(pbc, q, q_fbz, 1e-5) : q_fbz == q;
+                            if (source_member)
                             {
-                                memcpy(kmat.data() + iq * size_batch_max,
-                                       mat.ptr() + displ_data, size_this_batch * sizeof(cplxdb));
+                                pack_sample(kmat.data() + iq * size_batch_max, mat,
+                                            it->first, displ_data, size_this_batch, false);
                             }
                             else // assume q_fbz = -q: mat(-q) = conjgate(mat(q))
                             {
-                                Matz tmp(size_this_batch, 1, mat.ptr() + displ_data);
-                                memcpy(kmat.data() + iq * size_batch_max,
-                                       tmp.conj().ptr(),
-                                       size_this_batch * sizeof(cplxdb));
+                                // Bare conjugation is valid after source de-embedding.
+                                pack_sample(kmat.data() + iq * size_batch_max, mat,
+                                            it->first, displ_data, size_this_batch, true);
                             }
                         }
                     }
@@ -4342,6 +4666,84 @@ static dense_wc_freq_r_real_t FT_Wc_freq_q_real(
     return Wc_freq_R;
 }
 
+// Hermitian analyticity implies F(R,-iw)=F(-R,+iw)^dagger.
+// Its positive-time inverse is Cinv*(F+ + F-)/2 - i Sinv*(F+ - F-)/2.
+// This is not elementwise Re/Im at fixed R and not a Hermitian completion.
+static std::map<double, std::map<Vector3_Order<int>, Matz>> inverse_signed_wc_rspace(
+    std::map<Vector3_Order<int>, std::map<double, Matz>> &input,
+    const PeriodicBoundaryData &pbc, const TFGrids &tfg, const ArrayDesc *descriptor)
+{
+    const auto &cosine = tfg.get_costrans_f2t();
+    const auto &sine = tfg.get_sintrans_f2t(); // Reject an ungenerated capability.
+    const auto frequencies = tfg.get_freq_nodes(), times = tfg.get_time_nodes();
+    std::map<double, std::map<Vector3_Order<int>, Matz>> output;
+    std::set<Vector3_Order<int>> completed;
+    for (const auto &r : pbc.Rlist)
+    {
+        if (completed.count(r)) continue;
+        const auto minus_residue = (-r) % pbc.period;
+        const auto partner = std::find_if(pbc.Rlist.begin(), pbc.Rlist.end(),
+            [&](const auto &candidate) { return candidate % pbc.period == minus_residue; });
+        if (partner == pbc.Rlist.end())
+            throw LIBRPA_RUNTIME_ERROR("Signed W inverse lacks the negative-R partner");
+        const std::vector<Vector3_Order<int>> pair =
+            *partner == r ? std::vector<Vector3_Order<int>>{r}
+                          : std::vector<Vector3_Order<int>>{r, *partner};
+        for (const auto &current : pair)
+        {
+            const auto other = current == r ? *partner : r;
+            const auto &prototype = input.at(current).at(frequencies.front());
+            for (const auto tau : times)
+                output[tau][current] = Matz(prototype.nr(), prototype.nc(), prototype.major());
+            for (std::size_t f = 0; f != frequencies.size(); ++f)
+            {
+                const auto &positive = input.at(current).at(frequencies[f]);
+                const auto &reverse = input.at(other).at(frequencies[f]);
+                Matz negative;
+                if (descriptor)
+                {
+                    if (descriptor->m() != descriptor->n() ||
+                        positive.nr() != descriptor->m_loc() ||
+                        positive.nc() != descriptor->n_loc() ||
+                        reverse.nr() != descriptor->m_loc() ||
+                        reverse.nc() != descriptor->n_loc())
+                        throw LIBRPA_RUNTIME_ERROR("Signed W inverse has incompatible BLACS shape");
+                    auto source = reverse.copy();
+                    if (source.is_row_major()) source.swap_to_col_major();
+                    negative = init_local_mat<cplxdb>(*descriptor, MAJOR::COL);
+                    // All BLACS ranks participate, including shaped empty tiles.
+                    ScalapackConnector::ptranc_f(descriptor->m(), descriptor->n(), C_ONE,
+                        source.ptr(), 1, 1, descriptor->desc, C_ZERO,
+                        negative.ptr(), 1, 1, descriptor->desc);
+                    if (positive.is_row_major()) negative.swap_to_row_major();
+                }
+                else
+                {
+                    negative = reverse.get_transpose(true);
+                    if (negative.major() != positive.major()) negative.swap_major(positive.major());
+                    if (negative.nr() != positive.nr() || negative.nc() != positive.nc())
+                        throw LIBRPA_RUNTIME_ERROR("Signed W inverse has incompatible dense shape");
+                }
+                for (std::size_t t = 0; t != times.size(); ++t)
+                {
+                    auto &result = output.at(times[t]).at(current);
+                    const cplxdb plus_weight(.5 * cosine(t, f), -.5 * sine(t, f));
+                    const cplxdb minus_weight(.5 * cosine(t, f), .5 * sine(t, f));
+                    for (std::size_t element = 0; element != positive.size(); ++element)
+                        result.ptr()[element] += plus_weight * positive.ptr()[element] +
+                                                 minus_weight * negative.ptr()[element];
+                }
+            }
+        }
+        for (const auto &entry : pair)
+        {
+            input.erase(entry);
+            completed.insert(entry);
+        }
+    }
+    return output;
+}
+
 std::map<double, std::map<Vector3_Order<int>, Matz>> CT_FT_Wc_freq_q(
     const MpiCommHandler &comm_h,
     std::map<double, std::map<Vector3_Order<double>, Matz>> &Wc_freq_q,
@@ -4350,7 +4752,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> CT_FT_Wc_freq_q(
     bool output_wc_rf_atom_pair, const std::string &output_dir,
     const ArrayDesc *ad_Wc, const AtomicBasis *atbasis_Wc,
     const SymmetryQPointView *qpoint_view,
-    const SymmetryContext *symmetry_context)
+    const SymmetryContext *symmetry_context, bool signed_frequency)
 {
     using std::endl;
 
@@ -4477,6 +4879,28 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> CT_FT_Wc_freq_q(
         }
     }
     Wc_freq_R.clear();
+
+    if (signed_frequency)
+    {
+        Wc_tau_R = inverse_signed_wc_rspace(Wc_R_freq, pbc, tfg, ad_Wc);
+        global::lib_printf_root("Done converting signed Wc q,w -> R,+t\n");
+        comm_h.barrier();
+        return Wc_tau_R;
+    }
+
+    // A BLACS rank can own zero rows or columns when the auxiliary basis is
+    // smaller than the process grid. Keep its shaped empty blocks and the
+    // common final barrier; the local cosine contraction has no entries.
+    if (size == 0)
+    {
+        for (const auto &tau : tfg.get_time_nodes())
+            for (const auto &R : Rlist)
+                Wc_tau_R[tau][R] = Matz(nr, nc, major_orig);
+        Wc_R_freq.clear();
+        global::lib_printf_root("Done converting Wc q,w -> R,t\n");
+        comm_h.barrier();
+        return Wc_tau_R;
+    }
 
     // initialize inverse consine tranform matrix.
     Matz coeff_f2t(n_freq, n_freq, MAJOR::COL);
@@ -4755,7 +5179,7 @@ CT_FT_Wc_q2R_freq2time(
     map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
         &Wc_freq_q,
     const TFGrids &tfg, const PeriodicBoundaryData &pbc, const vector<Vector3_Order<int>> &Rlist,
-    const std::string &output_dir)
+    const std::string &output_dir, const SymmetryContext *symmetry_context)
 {
     using std::pair;
     using global::profiler;
@@ -4774,6 +5198,28 @@ CT_FT_Wc_q2R_freq2time(
     std::set<std::pair<atom_t, atom_t>> atpairs_unique;
 
     global::lib_printf_root("Converting Wc(q,w) -> Wc(R,w) -> W(R,t)\n");
+
+    BlochEmbedding embedding;
+    collective_all_stage(comm_h, "Legacy W Fourier atomic embedding", [&]
+    {
+        if (!symmetry_context) return;
+        embedding = BlochEmbedding(*symmetry_context, atbasis_abf);
+        if (!embedding.active()) return;
+        for (const auto &[frequency, atoms] : Wc_freq_q)
+            for (const auto &[left, rights] : atoms)
+                for (const auto &[right, samples] : rights)
+                    for (const auto &[q, block] : samples)
+                    {
+                        const auto qfrac = pbc.latvec * q;
+                        if (left < 0 || right < 0 || left >= atbasis_abf.n_atoms
+                            || right >= atbasis_abf.n_atoms
+                            || block.nr() != static_cast<int>(atbasis_abf[left])
+                            || block.nc() != static_cast<int>(atbasis_abf[right])
+                            || !std::isfinite(qfrac.x) || !std::isfinite(qfrac.y) || !std::isfinite(qfrac.z)
+                            || find_matching_internal_qpoint(pbc.map_irk_ks, pbc, q) == pbc.map_irk_ks.end())
+                            throw LIBRPA_INVALID_ARGUMENT("Embedded legacy W has invalid atom/q/matrix data");
+                    }
+    });
 
     profiler.start("construct_Wc_lower_half", "Construct Lower Half of Wc(q,w)");
     // NOTE: only upper half of Wc is built now
@@ -4861,15 +5307,24 @@ CT_FT_Wc_q2R_freq2time(
         {
             const auto q = Wc_q.first;
             const auto &Wc = Wc_q.second;
-            for (auto q_bz : pbc.map_irk_ks.at(q))
+            const auto phases = embedding.atom_phases(pbc.latvec * q);
+            const auto to_cell = phases.empty() ? cplxdb{1.0, 0.0}
+                : std::conj(phases[Mu]) * phases[Nu];
+            const auto &source_star = embedding.active()
+                ? find_matching_internal_qpoint(pbc.map_irk_ks, pbc, q)->second
+                : pbc.map_irk_ks.at(q);
+            for (auto q_bz : source_star)
             {
                 const double ang = -q_bz * (R * pbc.latvec) * TWO_PI;
                 const complex<double> weight =
                     complex<double>(cos(ang), sin(ang)) / double(n_k_points);
-                if (q == q_bz)
-                    WfR_temp += Wc * weight;
+                Vector3_Order<int> source_shift;
+                const bool source_member = embedding.active()
+                    ? match_internal_qpoints(pbc, q, q_bz, 1e-5, &source_shift) : q == q_bz;
+                if (source_member)
+                    WfR_temp += Wc * (embedding.active() ? weight * to_cell : weight);
                 else
-                    WfR_temp += conj(Wc) * weight;
+                    WfR_temp += conj(Wc) * (embedding.active() ? weight * std::conj(to_cell) : weight);
             }
         }
         // omp_set_lock(&lock_Wc);
@@ -4962,7 +5417,7 @@ CT_Wc_freq2time_q(
               atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old>
         &Wc_freq_q,
     const TFGrids &tfg, const int &n_k_points, const vector<Vector3_Order<int>> &Rlist,
-    const vector<Vector3_Order<double>> &qlist)
+    const vector<Vector3_Order<double>> &qlist, bool signed_frequency)
 {
     using std::set;
     using std::pair;
@@ -4976,6 +5431,7 @@ CT_Wc_freq2time_q(
         Wc_tau_q;
     if (!tfg.has_time_grids()) throw LIBRPA_RUNTIME_ERROR("TFGrids object does not have time grids");
     const int ngrids = tfg.get_n_grids();
+    if (signed_frequency) (void)tfg.get_sintrans_f2t();
 
     lib_printf_root("Converting Wc(q,w) -> W(q,t)\n");
     comm_h.barrier();
@@ -4989,6 +5445,18 @@ CT_Wc_freq2time_q(
                         block.nr() != atbasis_abf[left] || block.nc() != atbasis_abf[right] ||
                         block.major() != major_Wc)
                         bad_local = 1;
+    if (signed_frequency)
+        for (const auto &[frequency, atoms] : Wc_freq_q)
+            for (const auto &[left, rights] : atoms)
+                for (const auto &[right, qs] : rights)
+                    for (const auto &[q, block] : qs)
+                    {
+                        const auto reverse_atom = atoms.find(right);
+                        if (reverse_atom == atoms.end() ||
+                            reverse_atom->second.count(left) == 0 ||
+                            reverse_atom->second.at(left).count(q) == 0)
+                            bad_local = 1;
+                    }
     comm_h.allreduce(&bad_local, &bad, 1, MPI_MAX);
     if (bad)
         throw LIBRPA_RUNTIME_ERROR(
@@ -5003,7 +5471,9 @@ CT_Wc_freq2time_q(
             for (const auto &Nu_qWc : Mu_NuqWc.second)
             {
                 const auto Nu = Nu_qWc.first;
-                atpairs_unique.insert({Mu, Nu});
+                // Each signed-time matrix at fixed q is Hermitian; keep the
+                // established upper-pair time contract for unfold/restore.
+                if (!signed_frequency || Mu <= Nu) atpairs_unique.insert({Mu, Nu});
                 for (const auto &q_Wc : Nu_qWc.second)
                 {
                     assert(q_Wc.second.major() == major_Wc);
@@ -5062,8 +5532,19 @@ CT_Wc_freq2time_q(
             {
                 const auto q = Wc_q.first;
                 const auto &Wc = Wc_q.second;
-                const double weight = f2t;
-                Wtq_temp = Wc * weight;
+                if (signed_frequency)
+                {
+                    const auto &reverse = Wc_freq_q.at(freq).at(Nu).at(Mu).at(q);
+                    const auto s2t = tfg.get_sintrans_f2t()(itau, ifreq);
+                    const cplxdb plus_weight(.5 * f2t, -.5 * s2t);
+                    const cplxdb minus_weight(.5 * f2t, .5 * s2t);
+                    for (int row = 0; row != n_mu; ++row)
+                        for (int col = 0; col != n_nu; ++col)
+                            Wtq_temp(row, col) = plus_weight * Wc(row, col) +
+                                minus_weight * std::conj(reverse(col, row));
+                }
+                else
+                    Wtq_temp = Wc * f2t;
                 // omp_set_lock(&lock_Wc);
                 Wc_tau_q[tau][Mu][Nu][q] += Wtq_temp;
                 // omp_unset_lock(&lock_Wc);
@@ -5084,10 +5565,24 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     const SymmetryContext &symmetry_context,
     const atom_mapping<std::map<Vector3_Order<double>, matrix_m<cplxdb>>>::pair_t_old
         &Wc_q,
-    const TFGrids &, const PeriodicBoundaryData &pbc, const vector<Vector3_Order<int>> &Rlist, const bool,
-    const std::string &,
+    const TFGrids &tfg, const PeriodicBoundaryData &pbc,
+    const vector<Vector3_Order<int>> &Rlist, const bool is_freq,
+    const std::string &output_dir,
     const bool use_symmetry_context)
 {
+    return FT_Wc_q2R(comm_h, atbasis_abf, symmetry_context, Wc_q, tfg, pbc, Rlist,
+                     is_freq, output_dir, use_symmetry_context, false);
+}
+
+atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old FT_Wc_q2R(
+    const MpiCommHandler &comm_h, const AtomicBasis &atbasis_abf,
+    const SymmetryContext &symmetry_context, const abf_qspace_complex_block_map_t &Wc_q,
+    const TFGrids &, const PeriodicBoundaryData &pbc,
+    const vector<Vector3_Order<int>> &Rlist, const bool is_freq, const std::string &,
+    const bool use_symmetry_context, const bool full_frequency)
+{
+    if (full_frequency && !is_freq)
+        throw LIBRPA_INVALID_ARGUMENT("Full frequency W transport requires frequency samples");
     using global::lib_printf_root;
     using global::lib_printf_coll;
     using std::set;
@@ -5098,6 +5593,25 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
     const auto n_k_points = pbc.get_n_cells_bvk();
 
     atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_old Wc_R;
+
+    BlochEmbedding embedding;
+    collective_all_stage(comm_h, "Atom-pair W Fourier atomic embedding", [&]
+    {
+        embedding = BlochEmbedding(symmetry_context, atbasis_abf);
+        if (!embedding.active()) return;
+        for (const auto &[left, rights] : Wc_q)
+            for (const auto &[right, samples] : rights)
+                for (const auto &[q, block] : samples)
+                {
+                    const auto qfrac = pbc.latvec * q;
+                    if (left < 0 || right < 0 || left >= atbasis_abf.n_atoms
+                        || right >= atbasis_abf.n_atoms
+                        || block.nr() != static_cast<int>(atbasis_abf[left])
+                        || block.nc() != static_cast<int>(atbasis_abf[right])
+                        || !std::isfinite(qfrac.x) || !std::isfinite(qfrac.y) || !std::isfinite(qfrac.z))
+                        throw LIBRPA_INVALID_ARGUMENT("Embedded atom-pair W has invalid atom/q/matrix data");
+                }
+    });
 
     lib_printf_root("Converting Wc(q) -> W(R)\n");
     comm_h.barrier();
@@ -5125,11 +5639,22 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
         lib_printf_root(
             "GW symmetry accumulates full `W(R)` directly from IBZ q-stars\n");
         Wc_R = accumulate_symmetry_full_wr_from_ibz_q(
-            comm_h, symmetry_context, abf_layouts, Wc_q, pbc, Rlist, atom_nabf);
+            comm_h, symmetry_context, abf_layouts, Wc_q, pbc, Rlist, atom_nabf,
+            full_frequency, embedding);
         comm_h.barrier();
         lib_printf_root("Done converting Wc q -> R\n");
         return Wc_R;
     }
+
+    collective_all_stage(comm_h, "Atom-pair W source q coverage", [&]
+    {
+        if (!embedding.active() || has_full_q) return;
+        for (const auto &[left, rights] : Wc_q)
+            for (const auto &[right, samples] : rights)
+                for (const auto &[q, block] : samples)
+                    if (find_matching_internal_qpoint(pbc.map_irk_ks, pbc, q) == pbc.map_irk_ks.end())
+                        throw LIBRPA_INVALID_ARGUMENT("Embedded atom-pair W source q has no producer star");
+    });
 
     set<pair<atom_t, atom_t>> atpairs_unique;
     for (const auto &MuNuqWc : Wc_q)
@@ -5185,22 +5710,34 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<complex<double>>>>::pair_t_ol
         {
             const auto q = Wc_q.first;
             const auto &Wc = Wc_q.second;
+            const auto phases = embedding.atom_phases(pbc.latvec * q);
+            const auto to_cell = phases.empty() ? cplxdb{1.0, 0.0}
+                : std::conj(phases[Mu]) * phases[Nu];
             if (has_full_q)
             {
                 const double angle = -q * (R * pbc.latvec) * TWO_PI;
-                WR_temp +=
-                    Wc * (complex<double>(std::cos(angle), std::sin(angle)) / double(n_k_points));
+                auto weight = complex<double>(std::cos(angle), std::sin(angle)) / double(n_k_points);
+                if (embedding.active()) weight *= to_cell;
+                WR_temp += Wc * weight;
                 continue;
             }
-            for (auto q_bz : pbc.map_irk_ks.at(q))
+            const auto &source_star = embedding.active()
+                ? find_matching_internal_qpoint(pbc.map_irk_ks, pbc, q)->second
+                : pbc.map_irk_ks.at(q);
+            for (auto q_bz : source_star)
             {
                 const double ang = -q_bz * (R * pbc.latvec) * TWO_PI;
                 const complex<double> weight =
                     complex<double>(cos(ang), sin(ang)) / double(n_k_points);
-                if (q == q_bz)
-                    WR_temp += Wc * weight;
+                Vector3_Order<int> source_shift;
+                const bool source_member = embedding.active()
+                    ? match_internal_qpoints(pbc, q, q_bz, 1e-5, &source_shift) : q == q_bz;
+                if (source_member)
+                    WR_temp += Wc * (embedding.active() ? weight * to_cell : weight);
                 else
-                    WR_temp += conj(Wc) * weight;
+                    // A real localized auxiliary basis permits conjugation only
+                    // after removing the source's atomic Bloch embedding.
+                    WR_temp += conj(Wc) * (embedding.active() ? weight * std::conj(to_cell) : weight);
             }
         }
         // omp_set_lock(&lock_Wc);

@@ -14,6 +14,7 @@
 #include "../math/matrix_m.h"
 #include "../math/scalapack_connector.h"
 #include "../math/utils_matrix_m_mpi.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/profiler.h"
 #include "atomic_basis.h"
@@ -737,7 +738,8 @@ static void pgemm_wfc_scaled_wfc_h(const int n_aos, const int n_cols,
 
 std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf, const std::vector<Vector3_Order<double>>& kfrac_list,
-    const std::vector<Vector3_Order<int>>& Rs, const MpiCommHandler &comm_h)
+    const std::vector<Vector3_Order<int>>& Rs, const MpiCommHandler &comm_h,
+    const BlochEmbedding* embedding)
 {
     global::profiler.start(__FUNCTION__);
     std::map<Vector3_Order<int>, ComplexMatrix> dmat_local;
@@ -770,7 +772,8 @@ std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
     //       Need division into batches for larger system, particularly for memory consideration
     for (int ik_local = 0; ik_local < nk_local; ik_local++)
     {
-        const auto dmat_k = mf.get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local]);
+        auto dmat_k = mf.get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local]);
+        if (embedding) embedding->apply_bilinear(dmat_k, kfrac_list[iks_local[ik_local]]);
         memcpy(kmat.ptr() + size * ik_local, dmat_k.c, size * sizeof(Matz::type));
     }
 
@@ -828,14 +831,16 @@ std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
 
 std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
     int ispin, const MeanField &mf, const std::vector<Vector3_Order<double>>& kfrac_list,
-    const std::vector<Vector3_Order<int>>& Rs, const MpiCommHandler &comm_h)
+    const std::vector<Vector3_Order<int>>& Rs, const MpiCommHandler &comm_h,
+    const BlochEmbedding* embedding)
 {
-    return get_dmat_cplx_Rs_kpara(ispin, 0, 0, mf, kfrac_list, Rs, comm_h);
+    return get_dmat_cplx_Rs_kpara(ispin, 0, 0, mf, kfrac_list, Rs, comm_h, embedding);
 }
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask)
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask, const bool zero_time_phase,
+    const BlochEmbedding* embedding)
 {
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> gf;
 
@@ -869,7 +874,8 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagti
         // TODO: this part is the same as denstiy matrix calculation, so it may be extracted to a common function
         for (int ik_local = 0; ik_local < nk_local; ik_local++)
         {
-            const auto dmat_k = mf.get_gf_cplx_imagtime(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local], tau, band_mask);
+            auto dmat_k = mf.get_gf_cplx_imagtime(ispin, ispinor_bra, ispinor_ket, iks_local[ik_local], tau, band_mask, zero_time_phase);
+            if (embedding) embedding->apply_bilinear(dmat_k, kfrac_list[iks_local[ik_local]]);
             memcpy(kmat.ptr() + size * ik_local, dmat_k.c, size * sizeof(Matz::type));
         }
 
@@ -925,15 +931,17 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagti
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, const MeanField &mf, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask)
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask,
+    const BlochEmbedding* embedding)
 {
-    return get_gf_cplx_imagtimes_Rs_kpara(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, comm_h, band_mask);
+    return get_gf_cplx_imagtimes_Rs_kpara(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, comm_h, band_mask, false, embedding);
 }
 
 std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm)
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const BlochEmbedding* embedding)
 {
     global::profiler.start(__FUNCTION__);
 
@@ -1009,13 +1017,13 @@ std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
             throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
         int nocc = 0;
-        std::vector<double> weights;
-        weights.reserve(n_states);
-        for (; nocc != n_states; ++nocc)
+        std::vector<double> weights(n_states, 0.0);
+        for (int band = 0; band != n_states; ++band)
         {
-            const double weight = mf.get_weight()[ispin](ik, nocc) * scale_spin;
-            if (weight < occ_thres) break;
-            weights.push_back(weight);
+            const double weight = mf.get_weight()[ispin](ik, band) * scale_spin;
+            if (weight < occ_thres) continue;
+            weights[band] = weight;
+            nocc = band + 1;
         }
 
         scaled_wfc_ket = C_ZERO;
@@ -1047,6 +1055,7 @@ std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
                                    desc_wfc, wfc_gemm_workspace, dmat_k, desc_dm,
                                    kblacs_ctxt.blacs_h);
         }
+        if (embedding) embedding->apply_bilinear(dmat_k, desc_dm, kfrac_list[ik]);
 #pragma omp parallel for schedule(static) if (n_elem > 4096)
         for (int i = 0; i != n_elem; ++i)
         {
@@ -1117,9 +1126,10 @@ std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
 std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm)
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const BlochEmbedding* embedding)
 {
-    return get_dmat_cplx_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, Rs, kblacs_ctxt, desc_wfc, desc_dm);
+    return get_dmat_cplx_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, Rs, kblacs_ctxt, desc_wfc, desc_dm, embedding);
 }
 
 std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
@@ -1131,6 +1141,10 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
 {
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
+
+    BlochEmbedding embedding;
+    collective_all_stage(kblacs_ctxt.comm_global_h, "k-star Bloch embedding",
+                         [&] { embedding = BlochEmbedding(symmetry_context, atbasis_wfc); });
 
     const int n_aos = mf.get_n_aos();
     const int n_states = mf.get_n_states();
@@ -1157,7 +1171,7 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
     {
         auto direct = get_dmat_cplx_Rs_kblacs_para(
             ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs,
-            kblacs_ctxt, desc_wfc, desc_dm);
+            kblacs_ctxt, desc_wfc, desc_dm, &embedding);
         return direct;
     }
 
@@ -1245,13 +1259,13 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
                 throw LIBRPA_RUNTIME_ERROR("wave-function ket block size is inconsistent with descriptor");
 
             int nocc = 0;
-            std::vector<double> weights;
-            weights.reserve(n_states);
-            for (; nocc != n_states; ++nocc)
+            std::vector<double> weights(n_states, 0.0);
+            for (int band = 0; band != n_states; ++band)
             {
-                const double weight = mf.get_weight()[ispin](ik, nocc) * scale_spin;
-                if (weight < occ_thres) break;
-                weights.push_back(weight);
+                const double weight = mf.get_weight()[ispin](ik, band) * scale_spin;
+                if (weight < occ_thres) continue;
+                weights[band] = weight;
+                nocc = band + 1;
             }
 
             scaled_wfc_ket = C_ZERO;
@@ -1301,6 +1315,7 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
                     k_bz_target = &member_kfrac_targets[static_cast<std::size_t>(ik)][imember];
                 }
                 const auto &k_for_phase = k_bz_target == nullptr ? member.k_bz : *k_bz_target;
+                const auto embedding_phases = embedding.atom_phases(k_for_phase);
                 const auto source_pair_requests = build_source_pair_requests(
                     target_pair_distribution, member, atbasis_wfc.n_atoms);
                 const auto source_pair_mats = get_ap_map_from_blacs_dist(
@@ -1334,7 +1349,10 @@ std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_par
                             if (offset_iter == target_pair_offsets.end()) continue;
                             const auto angle = -(k_for_phase * R) * TWO_PI;
                             const cplxdb phase{std::cos(angle), std::sin(angle)};
-                            const cplxdb factor = star_factor * phase;
+                            const cplxdb cell_phase = embedding_phases.empty() ? C_ONE
+                                : std::conj(embedding_phases[pair.first])
+                                      * embedding_phases[pair.second];
+                            const cplxdb factor = star_factor * phase * cell_phase;
                             const auto &block = atom_j_block.second;
                             const auto n_J = atbasis_wfc.get_atom_nb(pair.second);
                             const std::size_t block_offset = R_offset + offset_iter->second;
@@ -1402,7 +1420,8 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
-    const std::vector<bool> &band_mask)
+    const std::vector<bool> &band_mask, const bool zero_time_phase,
+    const BlochEmbedding* embedding)
 {
     if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
         throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
@@ -1509,7 +1528,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
                 double wg_empty = 1.0 / n_kpoints - wg_occ;
                 if (wg_empty < 0.0) wg_empty = 0.0;
                 const double prefac = tau > 0 ? wg_empty : wg_occ;
-                double scale = -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
+                double scale = zero_time_phase ? 0.0 : -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
                 if (scale > 0.0) scale = 0.0;
                 scales[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0 : std::exp(scale) * prefac;
             }
@@ -1538,6 +1557,7 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
             pgemm_wfc_scaled_wfc_h(n_aos, n_states, wfc_bra_ptr, scaled_wfc_ket.ptr(),
                                    desc_wfc, wfc_gemm_workspace, gf_k, desc_dm,
                                    kblacs_ctxt.blacs_h);
+            if (embedding) embedding->apply_bilinear(gf_k, desc_dm, kfrac_list[ik]);
             global::profiler.start("gf_pack_kmat", LIBRPA_VERBOSE_DEBUG);
 #pragma omp parallel for schedule(static) if (n_elem > 4096)
             for (int i = 0; i != n_elem; ++i)
@@ -1626,13 +1646,17 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask)
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask, const bool zero_time_phase)
 {
     if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(mf.get_n_bands()))
         throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
 
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
+
+    BlochEmbedding embedding;
+    collective_all_stage(kblacs_ctxt.comm_global_h, "k-star Bloch embedding",
+                         [&] { embedding = BlochEmbedding(symmetry_context, atbasis_wfc); });
 
     const int n_aos = mf.get_n_aos();
     const int n_states = mf.get_n_states();
@@ -1661,8 +1685,9 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     {
         return get_gf_cplx_imagtimes_Rs_kblacs_para(
             ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, imagtimes, Rs,
-            kblacs_ctxt, desc_wfc, desc_dm, band_mask);
+            kblacs_ctxt, desc_wfc, desc_dm, band_mask, zero_time_phase, &embedding);
     }
+    validate_kstar_band_cutoff_closure(symmetry_context, mf, band_mask);
 
     std::vector<int> n_Rs_all, Rs_all;
     int nR_max;
@@ -1771,7 +1796,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                     const double prefac = tau > 0.0
                         ? std::max(0.0, kpoint_weight - wg_occ)
                         : wg_occ;
-                    double scale = -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
+                    double scale = zero_time_phase ? 0.0 : -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
                     if (scale > 0.0) scale = 0.0;
                     scales[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0 : std::exp(scale) * prefac;
                 }
@@ -1812,6 +1837,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                         k_bz_target = &member_kfrac_targets[static_cast<std::size_t>(ik)][imember];
                     }
                     const auto &k_for_phase = k_bz_target == nullptr ? member.k_bz : *k_bz_target;
+                    const auto embedding_phases = embedding.atom_phases(k_for_phase);
                     const auto source_pair_requests = build_source_pair_requests(
                         target_pair_distribution, member, atbasis_wfc.n_atoms);
                     const auto source_pair_mats = get_ap_map_from_blacs_dist(
@@ -1844,6 +1870,9 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                             for (const auto &atom_j_block : atom_i_blocks.second)
                             {
                                 const atpair_t pair{atom_i, atom_j_block.first};
+                                const cplxdb cell_phase = embedding_phases.empty() ? C_ONE
+                                    : std::conj(embedding_phases[pair.first])
+                                          * embedding_phases[pair.second];
                                 const auto offset_iter = target_pair_offsets.find(pair);
                                 if (offset_iter == target_pair_offsets.end()) continue;
                                 const auto &block = atom_j_block.second;
@@ -1854,7 +1883,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
                                     for (int j = 0; j != block.nc; ++j)
                                     {
                                         buffer[block_offset + static_cast<std::size_t>(i) * n_J + j] +=
-                                            factor * block(i, j);
+                                            factor * cell_phase * block(i, j);
                                     }
                                 }
                             }
@@ -1914,9 +1943,9 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
-    const std::vector<bool> &band_mask)
+    const std::vector<bool> &band_mask, const BlochEmbedding* embedding)
 {
-    return get_gf_cplx_imagtimes_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, kblacs_ctxt, desc_wfc, desc_dm, band_mask);
+    return get_gf_cplx_imagtimes_Rs_kblacs_para(ispin, 0, 0, mf, kfrac_list, imagtimes, Rs, kblacs_ctxt, desc_wfc, desc_dm, band_mask, false, embedding);
 }
 
 //! Fetch one atom-pair block from a block map, zero-filled when absent.
@@ -1945,10 +1974,14 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc)
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask, const bool zero_time_phase)
 {
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
+
+    BlochEmbedding embedding;
+    collective_all_stage(kblacs_ctxt.comm_global_h, "k-star Bloch embedding",
+                         [&] { embedding = BlochEmbedding(symmetry_context, atbasis_wfc); });
 
     const int n_aos = mf.get_n_aos();
     const int n_states = mf.get_n_states();
@@ -1980,6 +2013,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
         throw LIBRPA_RUNTIME_ERROR(
             "spinor k-BLACS Green's-function restore requires a restorable k-star context");
     }
+    validate_kstar_band_cutoff_closure(symmetry_context, mf, band_mask);
 
     std::vector<int> n_Rs_all, Rs_all;
     int nR_max;
@@ -2091,12 +2125,12 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
                 for (int ib = 0; ib != n_states; ++ib)
                 {
                     const double wg_occ = mf.get_weight()[ispin](ik, ib) * scale_spin;
-                    const double prefac = tau > 0.0
-                        ? std::max(0.0, kpoint_weight - wg_occ)
-                        : wg_occ;
-                    double scale = -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
+                    const double prefac =
+                        tau > 0.0 ? std::max(0.0, kpoint_weight - wg_occ) : wg_occ;
+                    double scale = zero_time_phase ? 0.0 : -tau * (mf.get_eigenvals()[ispin](ik, ib) - mf.get_efermi());
                     if (scale > 0.0) scale = 0.0;
-                    scales[ib] = std::exp(scale) * prefac;
+                    scales[ib] =
+                        !band_mask.empty() && !band_mask[ib] ? 0.0 : std::exp(scale) * prefac;
                 }
 
                 // Four source blocks G^{ab}(k_ibz, tau), zero-filled when a
@@ -2160,6 +2194,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
                         k_bz_target = &member_kfrac_targets[static_cast<std::size_t>(ik)][imember];
                     }
                     const auto &k_for_phase = k_bz_target == nullptr ? member.k_bz : *k_bz_target;
+                    const auto embedding_phases = embedding.atom_phases(k_for_phase);
 
                     // Spatial part only: time reversal is suppressed here and
                     // applied by the kernel remap; gauge phases are excluded
@@ -2204,7 +2239,10 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
                                 op, pair_in, identity_orbit,
                                 BilinearConvention::SourceToTarget_DXDdag);
                             const auto gauge_factor =
-                                gauge_phases[atom_i] * std::conj(gauge_phases[atom_j]);
+                                gauge_phases[atom_i] * std::conj(gauge_phases[atom_j])
+                                * (embedding_phases.empty() ? C_ONE
+                                    : std::conj(embedding_phases[atom_i])
+                                          * embedding_phases[atom_j]);
                             pair_out.b00 *= gauge_factor;
                             pair_out.b01 *= gauge_factor;
                             pair_out.b10 *= gauge_factor;
@@ -2335,6 +2373,10 @@ get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
     if (!kblacs_ctxt.is_initialized())
         throw LIBRPA_RUNTIME_ERROR("KPointBlacsParallelContext is not initialized");
 
+    BlochEmbedding embedding;
+    collective_all_stage(kblacs_ctxt.comm_global_h, "k-star Bloch embedding",
+                         [&] { embedding = BlochEmbedding(symmetry_context, atbasis_wfc); });
+
     const int n_aos = mf.get_n_aos();
     const int n_states = mf.get_n_states();
     const int n_kpoints = mf.get_n_kpoints();
@@ -2458,13 +2500,13 @@ get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
             const auto star_factor = 1.0 / static_cast<double>(star.members.size());
 
             int nocc = 0;
-            std::vector<double> weights;
-            weights.reserve(n_states);
-            for (; nocc != n_states; ++nocc)
+            std::vector<double> weights(n_states, 0.0);
+            for (int band = 0; band != n_states; ++band)
             {
-                const double weight = mf.get_weight()[ispin](ik, nocc) * scale_spin;
-                if (weight < occ_thres) break;
-                weights.push_back(weight);
+                const double weight = mf.get_weight()[ispin](ik, band) * scale_spin;
+                if (weight < occ_thres) continue;
+                weights[band] = weight;
+                nocc = band + 1;
             }
 
             // Four source blocks D^{ab}(k_ibz), zero-filled when a (bra, ket)
@@ -2530,6 +2572,7 @@ get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
                     k_bz_target = &member_kfrac_targets[static_cast<std::size_t>(ik)][imember];
                 }
                 const auto &k_for_phase = k_bz_target == nullptr ? member.k_bz : *k_bz_target;
+                const auto embedding_phases = embedding.atom_phases(k_for_phase);
 
                 // Spatial part only: time reversal is suppressed here and
                 // applied by the kernel remap; gauge phases are excluded and
@@ -2576,7 +2619,10 @@ get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
                         auto pair_out = transform_spinor_bilinear(
                             op, pair_in, identity_orbit, BilinearConvention::SourceToTarget_DXDdag);
                         const auto gauge_factor =
-                            gauge_phases[atom_i] * std::conj(gauge_phases[atom_j]);
+                            gauge_phases[atom_i] * std::conj(gauge_phases[atom_j])
+                                * (embedding_phases.empty() ? C_ONE
+                                    : std::conj(embedding_phases[atom_i])
+                                          * embedding_phases[atom_j]);
                         pair_out.b00 *= gauge_factor;
                         pair_out.b01 *= gauge_factor;
                         pair_out.b10 *= gauge_factor;

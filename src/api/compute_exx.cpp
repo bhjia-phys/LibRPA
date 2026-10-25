@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -30,6 +31,20 @@ std::map<int, int> make_ik_pos_map(const std::vector<int> &iks)
         ik_pos.emplace(iks[i], i);
     }
     return ik_pos;
+}
+
+void refresh_exx_output_options(librpa_int::Dataset &ds, const LibrpaOptions &opts)
+{
+    auto &exchange = *ds.p_exx;
+    const bool output_ao = opts.output_exx_mat_k == LIBRPA_SWITCH_ON;
+    if (output_ao && (!exchange.output_exx_mat_k || exchange.output_dir != opts.output_dir))
+    {
+        exchange.reset_kspace();
+        ds.is_band_calc_done = false;
+    }
+    exchange.output_dir = opts.output_dir;
+    exchange.output_exx_mat_k = output_ao;
+    exchange.output_exx_mat_r = opts.output_exx_mat_r == LIBRPA_SWITCH_ON;
 }
 
 // Publish EXX diagonal values from the rank that owns each rotated k-block and
@@ -119,6 +134,7 @@ void librpa_build_exx(LibrpaHandler* h, const LibrpaOptions *p_opts)
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     // const bool debug = opts.output_level >= LIBRPA_VERBOSE_DEBUG;
     pds->is_band_calc_done = false;
     initialize_ds_global_ddla(*pds, opts);
@@ -140,6 +156,10 @@ void librpa_build_exx(LibrpaHandler* h, const LibrpaOptions *p_opts)
         else
             pds->redistribute_eigvecs_kpara();
     }
+    else
+    {
+        pds->replicate_eigvecs();
+    }
 
     // Determine the atom pairs that this process is responsible for
     initialize_ds_atpairs_local(*pds, routing);
@@ -147,6 +167,7 @@ void librpa_build_exx(LibrpaHandler* h, const LibrpaOptions *p_opts)
     pds->redistribute_coulomb_blacs2ap();
 
     initialize_ds_exx(*pds, opts);
+    auto candidate = std::move(pds->p_exx);
     const bool use_shrink_abfs = opts.use_shrink_abfs == LIBRPA_SWITCH_ON;
     const auto &basis_aux_exx = use_shrink_abfs ? pds->basis_aux_shrink : pds->basis_aux;
     const auto &cs_data_exx = use_shrink_abfs ? pds->cs_data_shrink : pds->cs_data;
@@ -159,7 +180,8 @@ void librpa_build_exx(LibrpaHandler* h, const LibrpaOptions *p_opts)
     profiler.stop("ft_vq_cut");
 
     profiler.start("exx_real_work");
-    pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
+    candidate->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
+    pds->p_exx = std::move(candidate);
     // pds->p_exx->build_KS_kgrid_blacs(pds->blacs_h);
     profiler.stop("exx_real_work");
     // global::ofs_myid << pds->p_exx->exx_IJR << std::endl;
@@ -179,7 +201,8 @@ void librpa_get_exx_pot_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, con
     using librpa_int::global::lib_printf;
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    const auto &opts = *p_opts; // TODO: add a flag to control whether to use blacs or lapack
+    const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
     i_state_low = std::max(0, i_state_low);
     i_state_high = std::min(pds->mf.get_n_states(), i_state_high);
@@ -193,10 +216,12 @@ void librpa_get_exx_pot_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, con
         return;
     }
 
-    if (!pds->p_exx)
+    if (!pds->p_exx || !pds->p_exx->is_rspace_built())
     {
         librpa_build_exx(h, p_opts);
     }
+
+    refresh_exx_output_options(*pds, opts);
 
     // const bool debug = opts.output_level >= LIBRPA_VERBOSE_DEBUG;
 
@@ -204,6 +229,7 @@ void librpa_get_exx_pot_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, con
     auto &pexx = pds->p_exx;
     // ofs_myid << pexx->exx_IJR << endl;
     // TODO: make choosing blacs/non-blacs method a run time option
+    if (opts.use_kpara_scf_eigvec != LIBRPA_SWITCH_ON) pds->replicate_eigvecs();
     pexx->build_KS_kgrid_blacs(pds->blacs_h, opts.use_gpu_replace_scalapack);
     pds->is_band_calc_done = false;
     if (opts.output_exx_ks_mat_k == LIBRPA_SWITCH_ON)
@@ -234,7 +260,8 @@ void librpa_get_exx_pot_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, co
     using librpa_int::global::lib_printf;
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    const auto &opts = *p_opts; // TODO: add a flag to control whether to use blacs or lapack
+    const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
 
     if (!pds->is_band_data_set || pds->mf_band.get_n_spins() == 0)
@@ -252,10 +279,12 @@ void librpa_get_exx_pot_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, co
         return;
     }
 
-    if (!pds->p_exx)
+    if (!pds->p_exx || !pds->p_exx->is_rspace_built())
     {
         librpa_build_exx(h, p_opts);
     }
+
+    refresh_exx_output_options(*pds, opts);
 
     // const bool debug = opts.output_level >= LIBRPA_VERBOSE_DEBUG;
 
@@ -263,6 +292,7 @@ void librpa_get_exx_pot_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, co
     auto &pexx = pds->p_exx;
     // ofs_myid << pexx->exx_IJR << endl;
     // TODO: make choosing blacs/non-blacs method a run time option
+    if (opts.use_kpara_scf_eigvec != LIBRPA_SWITCH_ON) pds->replicate_band_eigvecs();
     if (!pds->is_band_calc_done || pexx->Eexx.empty())
     {
         if (!pds->is_band_calc_done && pds->p_g0w0)

@@ -46,7 +46,7 @@ void TFGrids::set_time()
     costrans_t2f.create(n_grids, n_grids);
     sintrans_t2f.create(n_grids, n_grids);
     costrans_f2t.create(n_grids, n_grids);
-    sintrans_f2t.create(n_grids, n_grids);
+    sintrans_f2t.create(0, 0);
     // fourier_t2f.create(n_grids, n_grids);
 }
 
@@ -83,15 +83,14 @@ void TFGrids::show() const
         {
             print_matrix("Cosine transform matrix (row: time, col: freq)", costrans_f2t);
         }
+        if (has_inverse_sine_transform())
+            print_matrix("Sine transform matrix (row: time, col: freq)", sintrans_f2t);
     }
     lib_printf("\n");
 }
 
-void TFGrids::unset()
+void TFGrids::unset_time()
 {
-    n_grids = 0;
-    freq_nodes.clear();
-    freq_weights.clear();
     time_nodes.clear();
     time_weights.clear();
     costrans_t2f.create(0, 0);
@@ -99,6 +98,14 @@ void TFGrids::unset()
     costrans_f2t.create(0, 0);
     sintrans_f2t.create(0, 0);
     // fourier_t2f.create(0, 0);
+}
+
+void TFGrids::unset()
+{
+    n_grids = 0;
+    freq_nodes.clear();
+    freq_weights.clear();
+    unset_time();
 }
 
 TFGrids::TFGrids(const unsigned &N)
@@ -122,6 +129,14 @@ TFGrids::~TFGrids()
 double TFGrids::generate(LibrpaTimeFreqGrid gtype, double emin, double eintveral, double emax,
                          double tmin, double tinterval, double regulation)
 {
+    return generate(gtype, emin, eintveral, emax, tmin, tinterval, regulation, false);
+}
+
+double TFGrids::generate(LibrpaTimeFreqGrid gtype, double emin, double eintveral, double emax,
+                         double tmin, double tinterval, double regulation, bool with_inverse_sine)
+{
+    if (with_inverse_sine && gtype != LIBRPA_TFGRID_MINIMAX && gtype != LIBRPA_TFGRID_EVEN_SPACED_TF)
+        throw LIBRPA_RUNTIME_ERROR("Requested grid has no inverse sine transform");
     double retval = -1;
     switch (gtype)
     {
@@ -142,7 +157,7 @@ double TFGrids::generate(LibrpaTimeFreqGrid gtype, double emin, double eintveral
         }
         case (LIBRPA_TFGRID_MINIMAX):
         {
-            retval = this->generate_minimax(emin, emax, regulation);
+            retval = this->generate_minimax(emin, emax, regulation, with_inverse_sine);
             break;
         }
         case (LIBRPA_TFGRID_EVEN_SPACED):
@@ -172,6 +187,7 @@ void TFGrids::generate_evenspaced(double emin, double interval)
         throw LIBRPA_RUNTIME_ERROR("emin must be positive");
     if ( interval < 0 )
         throw LIBRPA_RUNTIME_ERROR("emin must be non-negative");
+    unset_time();
     double weight = 1.0 / n_grids;
     for (size_t i = 0; i != n_grids; i++)
     {
@@ -189,6 +205,7 @@ void TFGrids::generate_evenspaced_tf(double emin, double eintv, double tmin, dou
         throw LIBRPA_RUNTIME_ERROR("tmin must be positive");
     if ( tintv < 0 )
         throw LIBRPA_RUNTIME_ERROR("tintv must be non-negative");
+    sintrans_f2t.create(n_grids, n_grids); // Explicit debug transform only.
     double weight = 1.0 / n_grids;
     for (size_t i = 0; i != n_grids; i++)
     {
@@ -203,20 +220,41 @@ void TFGrids::generate_evenspaced_tf(double emin, double eintv, double tmin, dou
     grid_type = LIBRPA_TFGRID_EVEN_SPACED_TF;
 }
 
+const matrix &TFGrids::get_sintrans_f2t() const
+{
+    if (!has_inverse_sine_transform())
+        throw LIBRPA_RUNTIME_ERROR("Inverse sine transform was not generated for this grid");
+    return sintrans_f2t;
+}
+
 double TFGrids::generate_minimax(double emin, double emax, double regulation)
 {
+    return generate_minimax(emin, emax, regulation, false);
+}
+
+double TFGrids::generate_minimax(double emin, double emax, double regulation,
+                                 bool with_inverse_sine)
+{
+    if (!std::isfinite(emin) || !std::isfinite(emax) || emin <= 0.0 || emax < emin)
+        throw LIBRPA_RUNTIME_ERROR(
+            "Minimax transition bounds must be finite and satisfy 0 < emin <= emax");
     grid_type = LIBRPA_TFGRID_MINIMAX;
     set_time();
+    matrix inverse_sine(with_inverse_sine ? n_grids : 0, with_inverse_sine ? n_grids : 0);
 
     double max_errors[3];
     double cosft_duality_error = 1e8;
+    double sinft_duality_error = 0.0, sinft_fit_error = 0.0;
     int ierr = -1;
 
     // global::ofs_myid << "Before generate_minimax" << std::endl;
     auto n = as_int(n_grids);
     get_minimax_grid(n, emin, emax, time_nodes.data(), time_weights.data(), freq_nodes.data(),
                      freq_weights.data(), costrans_t2f.c, costrans_f2t.c, sintrans_t2f.c,
-                     max_errors, cosft_duality_error, ierr, false, regulation);
+                     max_errors, cosft_duality_error, ierr, false, regulation,
+                     with_inverse_sine ? inverse_sine.c : nullptr,
+                     with_inverse_sine ? &sinft_duality_error : nullptr,
+                     with_inverse_sine ? &sinft_fit_error : nullptr);
     // global::ofs_myid << "After generate_minimax" << std::endl;
     // global::ofs_myid << freq_nodes << std::endl;
 
@@ -251,6 +289,15 @@ double TFGrids::generate_minimax(double emin, double emax, double regulation)
     require_finite(sintrans_t2f.c, sintrans_t2f.size, "sine time-to-frequency transform");
     require_finite(max_errors, 3, "transform fit errors");
     require_finite(&cosft_duality_error, 1, "cosine duality error");
+    if (with_inverse_sine)
+    {
+        require_finite(inverse_sine.c, inverse_sine.size, "sine frequency-to-time transform");
+        require_finite(&sinft_fit_error, 1, "sine inverse fit error");
+        // Availability is not an accuracy certificate. The vendored GreenX
+        // reported sine duality uses the cosine inverse in its product; test
+        // the actual signed spectral kernels rather than trusting that scalar.
+        sintrans_f2t = std::move(inverse_sine);
+    }
 
     return cosft_duality_error;
 
@@ -271,6 +318,7 @@ double TFGrids::generate_minimax(double emin, double emax, double regulation)
 
 void TFGrids::generate_GaussChebyshevI()
 {
+    unset_time();
     grid_type = LIBRPA_TFGRID_GAUSS_CHEBYSHEV_I;
     std::vector<double> nodes(n_grids), weights(n_grids);
     GaussChebyshevI_unit(n_grids, nodes.data(), weights.data());
@@ -285,6 +333,7 @@ void TFGrids::generate_GaussChebyshevI()
 
 void TFGrids::generate_GaussChebyshevII()
 {
+    unset_time();
     grid_type = LIBRPA_TFGRID_GAUSS_CHEBYSHEV_II;
     std::vector<double> nodes(n_grids), weights(n_grids);
     GaussChebyshevII_unit(n_grids, nodes.data(), weights.data());
@@ -299,6 +348,7 @@ void TFGrids::generate_GaussChebyshevII()
 
 void TFGrids::generate_GaussLegendre()
 {
+    unset_time();
     grid_type = LIBRPA_TFGRID_GAUSS_LEGENDRE;
     std::vector<double> nodes(n_grids), weights(n_grids);
     GaussLegendre_unit(n_grids, nodes.data(), weights.data());
@@ -319,6 +369,7 @@ void TFGrids::generate_SplitGaussLegendre(double emax)
         throw LIBRPA_RUNTIME_ERROR("grid size must be even for split-GL grids");
     if (emax <= 0)
         throw LIBRPA_RUNTIME_ERROR("emax must be positive for split-GL grids");
+    unset_time();
 
     const size_t n_finite = n_grids / 2;
     const size_t n_tail_output = n_grids - n_finite + 1;
@@ -388,8 +439,7 @@ void TFGrids::write_cos_sin_trans_matrices(const std::string &filename) const
 
     if (n_grids > 0 && has_time_grids())
         std::fill(is_authentic.begin(), is_authentic.end(), 1);
-    // ST freq->time matrix is not extracted now, so use dummy
-    is_authentic[3] = 0;
+    is_authentic[3] = has_inverse_sine_transform() ? 1 : 0;
 
     auto write_if_authentic = [&](const int authentic, const matrix &mat)
     {
@@ -399,12 +449,13 @@ void TFGrids::write_cos_sin_trans_matrices(const std::string &filename) const
 
     ofs.open(filename, std::ios::out | std::ios::binary);
     ofs.write((char *) &n_grids_int, sizeof(int));
-    ofs.write((char *) &is_authentic, 4 * sizeof(int));
+    ofs.write(reinterpret_cast<const char *>(is_authentic.data()), 4 * sizeof(int));
     write_if_authentic(is_authentic[0], costrans_t2f);
     write_if_authentic(is_authentic[1], sintrans_t2f);
     write_if_authentic(is_authentic[2], costrans_f2t);
     write_if_authentic(is_authentic[3], sintrans_f2t);
     ofs.close();
+    if (!ofs) throw LIBRPA_RUNTIME_ERROR("Cannot write time-frequency transform matrices: " + filename);
 }
 
 }

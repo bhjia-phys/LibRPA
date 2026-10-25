@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 
 #include "symmetry_context.h"
@@ -297,23 +298,46 @@ void validate_kstar_band_cutoff_closure(
     {
         for (int ik = 0; ik != mf.get_n_kpoints(); ++ik)
         {
+            const auto energy = [&mf, ispin, ik](int ib) {
+                return mf.get_eigenvals()[ispin](ik, ib);
+            };
+            bool sorted = true;
+            for (int ib = 0; ib != mf.get_n_bands(); ++ib)
+            {
+                if (!std::isfinite(energy(ib)))
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "Green's-function band cutoff requires finite eigenvalues");
+                if (ib > 0 && energy(ib) < energy(ib - 1)) sorted = false;
+            }
+            // Only the inspection order changes. Never reorder E without C/f,
+            // or let an incidental input permutation hide a split multiplet.
+            std::vector<int> order;
+            if (!sorted)
+            {
+                order.resize(mf.get_n_bands());
+                std::iota(order.begin(), order.end(), 0);
+                std::sort(order.begin(), order.end(), [&energy](int a, int b) {
+                    return energy(a) < energy(b);
+                });
+            }
             for (int ib = 1; ib != mf.get_n_bands(); ++ib)
             {
-                if (band_mask[static_cast<std::size_t>(ib - 1)]
-                    == band_mask[static_cast<std::size_t>(ib)])
+                const int previous = sorted ? ib - 1 : order[ib - 1];
+                const int current = sorted ? ib : order[ib];
+                if (band_mask[static_cast<std::size_t>(previous)]
+                    == band_mask[static_cast<std::size_t>(current)])
                 {
                     continue;
                 }
-                const double gap = mf.get_eigenvals()[ispin](ik, ib)
-                                 - mf.get_eigenvals()[ispin](ik, ib - 1);
+                const double gap = energy(current) - energy(previous);
                 if (std::abs(gap) < degen_tol)
                 {
                     throw LIBRPA_RUNTIME_ERROR(
                         "Green's-function band mask slices through a degenerate band "
                         "multiplet: ispin " + std::to_string(ispin)
                         + ", k-point " + std::to_string(ik)
-                        + ", bands " + std::to_string(ib - 1) + "/"
-                        + std::to_string(ib)
+                        + ", bands " + std::to_string(previous) + "/"
+                        + std::to_string(current)
                         + " separated by " + std::to_string(gap)
                         + " Ha (< " + std::to_string(degen_tol)
                         + "). Symmetry restore is disabled for this truncation; "
@@ -434,6 +458,7 @@ ComplexMatrix get_symmetry_restored_dmat_cplx_R(
     const auto restore_entries = build_symmetry_kstar_restore_entries(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
+    const BlochEmbedding embedding(ctx, atom_nw);
     ComplexMatrix dmat_cplx(mf.get_n_aos(), mf.get_n_aos());
 
     for (std::size_t ientry = 0; ientry != restore_entries.size(); ++ientry)
@@ -447,9 +472,10 @@ ComplexMatrix get_symmetry_restored_dmat_cplx_R(
             const auto& member = star.members[imember];
             const auto& k_bz_target = get_symmetry_kstar_member_kfrac_target(
                 member, member_kfrac_targets, ientry, imember);
-            const auto dmat_member = librpa_int::rotate_symmetry_kspace_matrix(
+            auto dmat_member = librpa_int::rotate_symmetry_kspace_matrix(
                 ctx, wfc_layouts, member, dmat_ibz, atom_nw, entry.k_source,
                 member.time_reversal, &k_bz_target);
+            embedding.apply_bilinear(dmat_member, k_bz_target);
             const double angle = -(k_bz_target * R) * TWO_PI;
             const auto kphase = std::complex<double>(std::cos(angle), std::sin(angle));
             dmat_cplx += (entry.star_factor * kphase) * dmat_member;
@@ -474,6 +500,7 @@ SpinorBlocks4<ComplexMatrix> get_symmetry_restored_dmat_cplx_R_spinor(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
 
+    const BlochEmbedding embedding(ctx, atom_nw);
     const int n_aos = mf.get_n_aos();
     SpinorBlocks4<ComplexMatrix> dmat_R{ComplexMatrix(n_aos, n_aos), ComplexMatrix(n_aos, n_aos),
                                         ComplexMatrix(n_aos, n_aos), ComplexMatrix(n_aos, n_aos)};
@@ -523,6 +550,11 @@ SpinorBlocks4<ComplexMatrix> get_symmetry_restored_dmat_cplx_R_spinor(
                 apply_spinor_member_gauge_phases(dmat_member, atom_nw, phases);
             }
 
+            // Restore in the raw input frame before returning to localized cells.
+            embedding.apply_bilinear(dmat_member.b00, k_bz_target);
+            embedding.apply_bilinear(dmat_member.b01, k_bz_target);
+            embedding.apply_bilinear(dmat_member.b10, k_bz_target);
+            embedding.apply_bilinear(dmat_member.b11, k_bz_target);
             const double angle = -(k_bz_target * R) * TWO_PI;
             const auto kphase = std::complex<double>(std::cos(angle), std::sin(angle));
             const auto factor = entry.star_factor * kphase;
@@ -550,13 +582,14 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
     const std::map<atom_t, size_t>& atom_nw,
     const std::vector<bool> &band_mask,
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets,
-    const symmetry_kstar_representative_indices_t* representative_k_indices)
+    const symmetry_kstar_representative_indices_t* representative_k_indices, const bool zero_time_phase)
 {
     validate_kstar_band_cutoff_closure(ctx, mf, band_mask);
     const auto restore_entries = build_symmetry_kstar_restore_entries(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
 
+    const BlochEmbedding embedding(ctx, atom_nw);
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> gf_tau_R;
     for (const auto tau : imagtimes)
     {
@@ -587,16 +620,17 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
             }
 
             const auto gf_ibz = build_gf_cplx_imagtime_with_prefactor(
-                mf, ispin, ispinor_bra, ispinor_ket, entry.ik_mf, tau, prefactors, band_mask);
+                mf, ispin, ispinor_bra, ispinor_ket, entry.ik_mf, zero_time_phase ? 0.0 : tau, prefactors, band_mask);
 
             for (std::size_t imember = 0; imember != star.members.size(); ++imember)
             {
                 const auto& member = star.members[imember];
                 const auto& k_bz_target = get_symmetry_kstar_member_kfrac_target(
                     member, member_kfrac_targets, ientry, imember);
-                const auto gf_member = librpa_int::rotate_symmetry_kspace_matrix(
+                auto gf_member = librpa_int::rotate_symmetry_kspace_matrix(
                     ctx, wfc_layouts, member, gf_ibz, atom_nw, entry.k_source,
                     member.time_reversal, &k_bz_target);
+                embedding.apply_bilinear(gf_member, k_bz_target);
                 for (const auto& R : Rs)
                 {
                     const double angle = -(k_bz_target * R) * TWO_PI;
@@ -626,7 +660,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
     const std::map<atom_t, size_t>& atom_nw,
     const std::vector<bool>& band_mask,
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets,
-    const symmetry_kstar_representative_indices_t* representative_k_indices)
+    const symmetry_kstar_representative_indices_t* representative_k_indices, const bool zero_time_phase)
 {
     if (mf.get_n_spinor() != 2)
     {
@@ -638,6 +672,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
         ctx, wfc_layouts, mf, kfrac_list, atom_nw, representative_k_indices);
     validate_symmetry_kstar_member_kfrac_targets(restore_entries, member_kfrac_targets);
 
+    const BlochEmbedding embedding(ctx, atom_nw);
     std::map<double, std::map<Vector3_Order<int>, SpinorBlocks4<ComplexMatrix>>> gf_tau_R;
     for (const auto tau : imagtimes)
     {
@@ -672,13 +707,13 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
             // (bra, ket) wfc channel is missing.
             const SpinorBlocks4<ComplexMatrix> gf_ibz{
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 0, 0, entry.ik_mf, tau, prefactors, band_mask),
+                    mf, ispin, 0, 0, entry.ik_mf, zero_time_phase ? 0.0 : tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 0, 1, entry.ik_mf, tau, prefactors, band_mask),
+                    mf, ispin, 0, 1, entry.ik_mf, zero_time_phase ? 0.0 : tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 1, 0, entry.ik_mf, tau, prefactors, band_mask),
+                    mf, ispin, 1, 0, entry.ik_mf, zero_time_phase ? 0.0 : tau, prefactors, band_mask),
                 build_gf_cplx_imagtime_with_prefactor_zero_fill(
-                    mf, ispin, 1, 1, entry.ik_mf, tau, prefactors, band_mask),
+                    mf, ispin, 1, 1, entry.ik_mf, zero_time_phase ? 0.0 : tau, prefactors, band_mask),
             };
 
             for (std::size_t imember = 0; imember != star.members.size(); ++imember)
@@ -712,6 +747,10 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
                     apply_spinor_member_gauge_phases(gf_member, atom_nw, phases);
                 }
 
+                embedding.apply_bilinear(gf_member.b00, k_bz_target);
+                embedding.apply_bilinear(gf_member.b01, k_bz_target);
+                embedding.apply_bilinear(gf_member.b10, k_bz_target);
+                embedding.apply_bilinear(gf_member.b11, k_bz_target);
                 for (const auto& R : Rs)
                 {
                     const double angle = -(k_bz_target * R) * TWO_PI;
@@ -901,53 +940,55 @@ const ComplexMatrix *MeanField::find_wfc(int ispin, int ispinor, int ikpt) const
 //     efermi = mf.efermi;
 // }
 
-double MeanField::get_E_min_max(double &emin, double &emax) const
+double MeanField::get_E_min_max(double& emin, double& emax) const
 {
-    // double lb = eskb[0](0, 0);
-    // double ub = eskb[0](0, n_states - 1);
+    // The gap validates every energy and occupation, independently of band order.
+    emin = get_band_gap();
     double lb = std::numeric_limits<double>::max();
-    double ub = std::numeric_limits<double>::min();
+    double ub = std::numeric_limits<double>::lowest();
+    bool has_states = false;
     for (int is = 0; is != n_spins; is++)
         for (int ik = 0; ik != n_kpoints; ik++)
-        {
-            lb = (lb > eskb[is](ik, 0)) ? eskb[is](ik, 0) : lb;
-            ub = (ub < eskb[is](ik, n_states-1)) ? eskb[is](ik, n_states-1) : ub;
-        }
-    double gap = get_band_gap();
-    emax = ub - lb;
-    emin = gap;
+            for (int n = 0; n != n_states; n++)
+            {
+                const double energy = eskb[is](ik, n);
+                lb = std::min(lb, energy);
+                ub = std::max(ub, energy);
+                has_states = true;
+            }
+    emax = has_states ? ub - lb : 0.0;
     return emin;
 }
 
 double MeanField::get_band_gap() const
 {
     constexpr double occupation_tol = 1e-8;
-    double homo = -1e6, lumo = 1e6;
-    double gap = lumo - homo;
+    double homo = std::numeric_limits<double>::lowest();
+    double lumo = std::numeric_limits<double>::max();
+    bool has_occupied = false, has_empty = false;
     for (int is = 0; is != n_spins; is++)
-    {
-        //print_matrix("mf.eskb: ",this->eskb[is]);
         for (int ik = 0; ik != n_kpoints; ik++)
-        {
-            int homo_level = -1;
             for (int n = 0; n != n_states; n++)
             {
-                if (wg[is](ik, n) > occupation_tol)
+                const double energy = eskb[is](ik, n);
+                const double weight = wg[is](ik, n);
+                if (!std::isfinite(energy) || !std::isfinite(weight))
+                    throw LIBRPA_RUNTIME_ERROR(
+                        "Mean-field transition bounds require finite energies and occupations");
+                if (weight > occupation_tol)
                 {
-                    homo_level = n;
+                    homo = std::max(homo, energy);
+                    has_occupied = true;
+                }
+                else
+                {
+                    lumo = std::min(lumo, energy);
+                    has_empty = true;
                 }
             }
-            //cout<<"|is ik: "<<is<<" "<<ik<<"  homo_level: "<<homo_level<<"   eskb0: "<<eskb[is](ik, homo_level)<<"  eskb1: "<<eskb[is](ik, homo_level + 1)<<endl;
-            if(homo_level != -1)
-                homo = eskb[is](ik, homo_level) > homo ? eskb[is](ik, homo_level) : homo;
-            if (homo_level + 1 < n_states)
-                lumo = eskb[is](ik, homo_level + 1) < lumo ?  eskb[is](ik, homo_level + 1) : lumo;
-            
-            //cout<<"   homo: "<<homo<<"  lumo: "<<lumo<<endl;
-        }
-    }
-    gap = lumo - homo;
-    return gap;
+    // A full or empty finite subspace still defines a valid density/EXX input,
+    // but has no occupied-to-empty transition gap for automatic minimax GW.
+    return has_occupied && has_empty ? lumo - homo : 0.0;
 }
 
 std::pair<int, int> MeanField::find_highest_occupied_state(const int ispin, const int ikpt,
@@ -1045,13 +1086,17 @@ ComplexMatrix MeanField::get_dmat_cplx(int ispin, int ispinor_bra, int ispinor_k
 
     auto scaled_wfc_conj = conj(*wfc_ket);
     const double occ_thres = 1e-4 / n_kpoints;
-    int nocc;
-    for (nocc = 0; nocc != this->n_states; nocc++)
+    int nocc = 0;
+    for (int band = 0; band != this->n_states; ++band)
     {
-        // Renormalize to single spin channel. Need to adpat SOC case (n_spins = 1 but remove 0.5)
-        const auto weight = this->wg[ispin](ikpt, nocc) * 0.5 * n_spins * n_spinor;
-        if (weight < occ_thres) break;
-        LapackConnector::scal(this->n_aos, weight, scaled_wfc_conj.c + n_aos * nocc, 1);
+        // Scalar spin-degenerate occupations include both spin channels;
+        // explicit collinear channels and SOC spinors already have unit weight.
+        double weight = this->wg[ispin](ikpt, band) * 0.5 * n_spins * n_spinor;
+        if (weight < occ_thres) weight = 0.0;
+        else nocc = band + 1;
+        // Preserve the occupation threshold without assuming occupied columns
+        // form a prefix. The GEMM can still omit the trailing zero columns.
+        LapackConnector::scal(this->n_aos, weight, scaled_wfc_conj.c + n_aos * band, 1);
     }
     LapackConnector::gemm('T', 'N', n_aos, n_aos, nocc, 1.0,
                           wfc_bra->c, n_aos, scaled_wfc_conj.c, n_aos,
@@ -1062,7 +1107,8 @@ ComplexMatrix MeanField::get_dmat_cplx(int ispin, int ispinor_bra, int ispinor_k
 
 ComplexMatrix MeanField::get_dmat_cplx_R(int ispin, int ispinor_bra, int ispinor_ket,
                                          const std::vector<Vector3_Order<double>> &kfrac_list,
-                                         const Vector3_Order<int> &R) const
+                                         const Vector3_Order<int> &R,
+                                         const BlochEmbedding* embedding) const
 {
     ComplexMatrix dmat_cplx(this->n_aos, this->n_aos);
     for (int ik = 0; ik != this->n_kpoints; ik++)
@@ -1070,7 +1116,9 @@ ComplexMatrix MeanField::get_dmat_cplx_R(int ispin, int ispinor_bra, int ispinor
         auto ang = - (kfrac_list[ik] * R) * TWO_PI;
         complex<double> kphase = complex<double>(cos(ang), sin(ang));
         // global::ofs_myid << "R " << R << " ik " << ik << " kfrac " << kfrac_list[ik] << " phase " << kphase << std::endl;
-        dmat_cplx += kphase * this->get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, ik);
+        auto dmat_k = this->get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, ik);
+        if (embedding) embedding->apply_bilinear(dmat_k, kfrac_list[ik]);
+        dmat_cplx += kphase * dmat_k;
     }
     return dmat_cplx;
 }
@@ -1078,7 +1126,7 @@ ComplexMatrix MeanField::get_dmat_cplx_R(int ispin, int ispinor_bra, int ispinor
 std::map<Vector3_Order<int>, ComplexMatrix> MeanField::get_dmat_cplx_Rs(
     int ispin, int ispinor_bra, int ispinor_ket,
     const std::vector<Vector3_Order<double>> &kfrac_list,
-    const std::vector<Vector3_Order<int>> &Rs) const
+    const std::vector<Vector3_Order<int>> &Rs, const BlochEmbedding* embedding) const
 {
     std::map<Vector3_Order<int>, ComplexMatrix> dmat_cplx_all;
     if (Rs.size() == 0) return dmat_cplx_all;
@@ -1088,7 +1136,8 @@ std::map<Vector3_Order<int>, ComplexMatrix> MeanField::get_dmat_cplx_Rs(
     }
     for (int ik = 0; ik != this->n_kpoints; ik++)
     {
-        const auto &kmat = this->get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, ik);
+        auto kmat = this->get_dmat_cplx(ispin, ispinor_bra, ispinor_ket, ik);
+        if (embedding) embedding->apply_bilinear(kmat, kfrac_list[ik]);
         for (auto &[R, rmat]: dmat_cplx_all)
         {
             auto ang = - (kfrac_list[ik] * R) * TWO_PI;
@@ -1100,7 +1149,7 @@ std::map<Vector3_Order<int>, ComplexMatrix> MeanField::get_dmat_cplx_Rs(
 }
 
 ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int ispinor_ket, int ikpt, double tau,
-    const std::vector<bool> &band_mask) const
+    const std::vector<bool> &band_mask, const bool zero_time_phase) const
 {
     if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(n_states))
         throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
@@ -1123,7 +1172,7 @@ ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int is
     std::vector<double> scale(eskb[ispin].c + n_states * ikpt, eskb[ispin].c + n_states * (ikpt + 1));
     for (int ib = 0; ib < n_states; ib++)
     {
-        scale[ib] = -tau * (scale[ib] - efermi);
+        scale[ib] = zero_time_phase ? 0.0 : -tau * (scale[ib] - efermi);
         if (scale[ib] > 0) scale[ib] = 0.0;
         scale[ib] = !band_mask.empty() && !band_mask[ib] ? 0.0
             : std::exp(scale[ib]) * prefac_occ[ib];
@@ -1145,7 +1194,8 @@ ComplexMatrix MeanField::get_gf_cplx_imagtime(int ispin, int ispinor_bra, int is
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_cplx_imagtimes_Rs(
     int ispin, int ispinor_bra, int ispinor_ket, const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask) const
+    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask, const bool zero_time_phase,
+    const BlochEmbedding* embedding) const
 {
     if (!band_mask.empty() && band_mask.size() != static_cast<std::size_t>(n_states))
         throw LIBRPA_RUNTIME_ERROR("Green's-function band mask has inconsistent size");
@@ -1172,7 +1222,7 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
         if (Rs.size() == 0) continue;
         const auto &prefac_occ = tau > 0 ? wg_empty : wg_occ;
         // cout << "prefac_occ " << prefac_occ << endl;
-        const auto scale = -tau * (eskb[ispin] - efermi);
+        const auto scale = (zero_time_phase ? 0.0 : -tau) * (eskb[ispin] - efermi);
         for (size_t ie = 0; ie != scale.size; ie++)
         {
             if (scale.c[ie] > 0) scale.c[ie] = 0;
@@ -1193,7 +1243,8 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
             const auto wfc_bra = find_wfc(ispin, ispinor_bra, ik);
             if (wfc_bra == nullptr)
                 throw LIBRPA_RUNTIME_ERROR("wfc of ispinor_bra not found");
-            const auto gf_k = transpose(*wfc_bra, false) * scaled_wfc_conj;
+            auto gf_k = transpose(*wfc_bra, false) * scaled_wfc_conj;
+            if (embedding) embedding->apply_bilinear(gf_k, kfrac_list[ik]);
             for (const auto &R : Rs)
             {
                 double ang = -kfrac_list[ik] * R * TWO_PI;
@@ -1219,11 +1270,12 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> MeanField::get_gf_
 std::map<double, std::map<Vector3_Order<int>, matrix>> MeanField::get_gf_real_imagtimes_Rs(
     int ispin, int ispinor_bra, int ispinor_ket,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask) const
+    const std::vector<Vector3_Order<int>> &Rs, const std::vector<bool> &band_mask,
+    const BlochEmbedding* embedding) const
 {
     std::map<double, std::map<Vector3_Order<int>, matrix>> gf_tau_R;
     for (const auto &tau_gf_cplx_R :
-         this->get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, imagtimes, Rs, band_mask))
+         this->get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, imagtimes, Rs, band_mask, false, embedding))
     {
         const auto &tau = tau_gf_cplx_R.first;
         gf_tau_R[tau] = {};

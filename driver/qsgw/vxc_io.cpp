@@ -85,6 +85,7 @@ Matz read_abacus_vxc_ha(std::istream& input,
     int current_row = -1;
     bool saw_row_marker = false;
     bool legacy_dimension_header = false;
+    bool gamma_only_real = false;
     std::map<int, std::vector<cplxdb>> triangular_rows;
     std::vector<cplxdb> dense_values;
     std::string line;
@@ -93,6 +94,18 @@ Matz read_abacus_vxc_ha(std::istream& input,
         const std::string content = trim(line);
         if (content.empty()) continue;
         const std::string lowered = lowercase(content);
+        if (lowered.rfind("# gamma only ", 0) == 0)
+        {
+            std::istringstream fields(content);
+            std::string comment_marker, gamma, only;
+            int flag = -1;
+            if (!(fields >> comment_marker >> gamma >> only >> flag) ||
+                (flag != 0 && flag != 1) || !(fields >> std::ws).eof())
+                throw std::invalid_argument(
+                    "Malformed ABACUS Vxc gamma-only header in " + source_name);
+            gamma_only_real = flag == 1;
+            continue;
+        }
         if (lowered.rfind("# rows", 0) == 0)
         {
             if (legacy_dimension_header)
@@ -155,10 +168,25 @@ Matz read_abacus_vxc_ha(std::istream& input,
                     "Duplicate ABACUS Vxc row marker in " + source_name);
             }
             saw_row_marker = true;
+            if (gamma_only_real) continue;
         }
 
-        const std::vector<cplxdb> values =
-            parse_complex_values(content, source_name);
+        std::vector<cplxdb> values;
+        if (gamma_only_real)
+        {
+            // Native save_mat<double> uses real tokens only when its explicit
+            // Gamma-only header says so. Other producer layouts stay complex.
+            std::istringstream fields(content);
+            double value;
+            while (fields >> value) values.emplace_back(value, 0.0);
+            if (!fields.eof())
+                throw std::invalid_argument(
+                    "Invalid ABACUS real Gamma Vxc value in " + source_name);
+        }
+        else
+        {
+            values = parse_complex_values(content, source_name);
+        }
         if (values.empty()) continue;
         if (saw_row_marker)
         {

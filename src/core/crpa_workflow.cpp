@@ -399,7 +399,9 @@ CrpaScreenedResponse screen_crpa_response(CrpaContext &context, Chi0QMap respons
     const auto &qs = chi.pbc.klist;
     CrpaChi0State response_state(chi);
     chi.swap_chi0_q(response);
-    // The native Wc implementation owns the inverse dielectric calculation.
+    // The native Wc implementation owns the inverse dielectric calculation,
+    // including ordered, non-Hermitian SOC response at positive frequency.
+    // Keep the full kernel through q-star restoration and orbital contraction.
     // Raw v is supplied only once to its spectral filter. The local bare term
     // uses the identical threshold and never restores discarded directions.
     auto coulomb_wc = copy_coulomb(context.coulomb);

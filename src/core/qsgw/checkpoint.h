@@ -31,6 +31,7 @@ struct CheckpointContext
     // physical kernel and unwrapped fit, rather than input filenames.
     const Matz* hartree_coulomb_q0 = nullptr;
     const Cs_LRI* hartree_cs_raw = nullptr;
+    const std::vector<Vector3_Order<double>>* velocity_centers_fractional = nullptr;
 };
 
 IterationSummary read_qsgw_checkpoint(const std::string&, const CheckpointContext&, MeanField&,

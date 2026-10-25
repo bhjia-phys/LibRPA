@@ -137,15 +137,22 @@ const double *copy_optical_buffer(const std::vector<double> &values)
 LibrpaOpticalResult *librpa_get_optical_result(const LibrpaHandler *h)
 {
     const auto ds = librpa_int::api::get_dataset_instance(h);
-    if (!ds->p_headwing) throw LIBRPA_RUNTIME_ERROR("Analytic head/wing is not initialized");
+    // Rank-local snapshot: a preceding collective preparation establishes
+    // freshness. A remote owner's pending change cannot be detected here.
+    if (ds->has_pending_optical_input_changes())
+        throw LIBRPA_RUNTIME_ERROR("Optical inputs changed locally; prepare the optical state collectively");
+    if (!ds->p_headwing || !ds->p_headwing->has_head())
+        throw LIBRPA_RUNTIME_ERROR("Analytic head/wing is not complete");
     std::unique_ptr<LibrpaOpticalResult, decltype(&librpa_delete_optical_result)> result(
         new LibrpaOpticalResult{}, librpa_delete_optical_result);
     auto &view = *result;
     std::vector<double> velocity, head, wing;
-    view.n_spins = ds->mf.get_n_spins();
-    view.n_kpoints = ds->mf.get_n_kpoints();
-    view.n_states = ds->mf.get_n_states();
-    for (const auto &spin : ds->velocity_matrix)
+    const auto &committed = static_cast<const librpa_int::diele_func &>(*ds->p_headwing);
+    const auto &meanfield = committed.get_meanfield_df();
+    view.n_spins = meanfield.get_n_spins();
+    view.n_kpoints = meanfield.get_n_kpoints();
+    view.n_states = meanfield.get_n_states();
+    for (const auto &spin : committed.get_velocity_matrix())
         for (const auto &k : spin)
             for (const auto &axis : k)
                 for (int row = 0; row < axis.nr; ++row)
@@ -158,6 +165,8 @@ LibrpaOpticalResult *librpa_get_optical_result(const LibrpaHandler *h)
     view.n_frequencies = frequencies.size();
     const auto &heads = ds->p_headwing->get_head_tensors();
     const auto &wings = ds->p_headwing->get_wing_auxiliary();
+    if (!wings.empty() && !ds->p_headwing->has_auxiliary_wing())
+        throw LIBRPA_RUNTIME_ERROR("Auxiliary optical wings are incomplete");
     if (!heads.empty())
     {
         view.head_rows = heads.front().nr();
@@ -206,19 +215,30 @@ void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *p_opt
         {
             if (!p_opts)
                 throw LIBRPA_INVALID_ARGUMENT("Native velocity requires numerical options");
-            if (p_opts->option_dielect_func != 3 && p_opts->option_dielect_func != 4)
+            if (p_opts->option_dielect_func != 3 && p_opts->option_dielect_func != 4 &&
+                p_opts->option_dielect_func != 53)
                 throw LIBRPA_INVALID_ARGUMENT(
-                    "Native velocity API options must use numerical values 3/4");
+                    "Native velocity API options must use numerical values 3/4/53");
             if (prepare_optical && p_opts->replace_w_head != LIBRPA_SWITCH_ON)
                 throw LIBRPA_INVALID_ARGUMENT(
                     "Native optical preparation requires replace_w_head enabled");
-            if (prepare_optical && p_opts->option_dielect_func == 3 &&
+            if (prepare_optical &&
+                (p_opts->option_dielect_func == 3 || p_opts->option_dielect_func == 53) &&
                 p_opts->use_scalapack_gw_wc != LIBRPA_SWITCH_ON)
                 throw LIBRPA_INVALID_ARGUMENT(
-                    "Native head/wing preparation with option_dielect_func = 3 requires "
+                    "Native head/wing preparation with option_dielect_func = 3/53 requires "
                     "use_scalapack_gw_wc enabled to consume analytic wings");
+            if (prepare_optical && p_opts->option_dielect_func == 53 &&
+                p_opts->use_2d_dielectric == LIBRPA_SWITCH_ON)
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "Native option_dielect_func=53 optical preparation requires finite3D");
         });
     const auto &opts = *p_opts;
+    ds->synchronize_input_changes(&opts);
+    // Complete dense input already satisfies the native per-k transfer
+    // contract, including callers without a k-group context. Only permanent
+    // tiles need gathering to k roots; do not impose a layout on dense input.
+    if (ds->eigvecs_kpara_2d_ready()) ds->collect_eigvecs_kroots();
     const SymmetryContext *symmetry = nullptr;
     collective_all_stage(
         comm, "Native magnetic velocity frame",
@@ -227,19 +247,50 @@ void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *p_opt
             if (ds->mf.get_n_kpoints() == ds->pbc.get_n_cells_bvk()) return;
             const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON ||
                                       opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
-            if (ds->mf.get_n_spinor() != 2 || !use_symmetry ||
-                opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
+            if (ds->mf.get_n_spinor() != 2 || !use_symmetry)
                 throw LIBRPA_RUNTIME_ERROR(
-                    "IBZ native velocity requires SOC magnetic symmetry and undistributed "
-                    "AO/band WFC blocks");
+                    "IBZ native velocity requires SOC magnetic symmetry and complete "
+                    "collected AO/band WFC blocks");
             initialize_symmetry_context(*ds, true);
             require_symmetry_shell_layouts(*ds, "native SOC head/wing");
             symmetry = &ds->symmetry_context;
         });
-    auto result = build_native_velocity(ds->mf, ds->pbc, comm, root_input, symmetry);
+    refresh_ds_symmetry_frame(*ds);
+    // The physical Bloch frame is also required on a full grid with symmetry
+    // reduction disabled. Its presence does not enable reduction.
+    symmetry = &ds->symmetry_context;
+    auto result = build_native_velocity(ds->mf, ds->pbc, comm, root_input, symmetry,
+                                         &ds->basis_wfc);
+    auto &coulomb_normalization = result.coulomb_normalization;
+    comm.bcast(coulomb_normalization.data(), 2, 0);
+    collective_all_stage(comm, "Native physical Coulomb normalization", [&]
+    {
+        if (opts.use_2d_dielectric == LIBRPA_SWITCH_ON)
+        {
+            const auto normalization =
+                strict_2d_coulomb_head_normalization(ds->pbc, coulomb_normalization[1]);
+            const double area = coulomb_normalization[0];
+            if (!std::isfinite(area) || area <= 0.0 ||
+                std::abs(normalization.inplane_area_bohr2 - area) >
+                    1.0e-10 * std::max(normalization.inplane_area_bohr2, area))
+                throw LIBRPA_INVALID_ARGUMENT("Coulomb normalization area disagrees with the lattice");
+        }
+    });
     collective_all_stage(comm, "G0W0 native velocity setter",
                          [&]
                          {
+                             // This explicit native preparation selects current
+                             // H/S/r inputs, replacing any external optical frame.
+                             ds->retain_optical_input();
+                             ds->p_headwing.reset();
+                             ds->optical_meanfield_input.reset();
+                             ds->direct_full_bz_optical_input.reset();
+                             ds->optical_meanfield_layout = OpticalMeanFieldLayout{};
+                             ds->optical_input_frame_stale = false;
+                             ds->strict_2d_auxiliary_monopole_norm_squared =
+                                 opts.use_2d_dielectric == LIBRPA_SWITCH_ON
+                                     ? coulomb_normalization[1] : 0.0;
+                             ds->note_input_change(InputChange::DirectOptical);
                              librpa_set_velocity_matrix_packed(
                                  h, ds->mf.get_n_spins(), ds->mf.get_n_kpoints(),
                                  ds->mf.get_n_states(),
@@ -250,15 +301,13 @@ void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *p_opt
             "G0W0 native velocity: metric %.8e frame_Ha %.8e hermiticity_Ha %.8e "
             "diagonal_imag_HaBohr %.8e; SCF E/C/occupations retained\n",
             result.residuals[0], result.residuals[1], result.residuals[2], result.residuals[3]);
-    auto &coulomb_normalization = result.coulomb_normalization;
-
     if (!prepare_optical) return;
 
     // Preserve the numerical grid/head/wing lifecycle behind the public API.
     initialize_ds_global_ddla(*ds, opts);
     initialize_ds_tfgrids(*ds, opts);
-    initialize_ds_headwing(*ds, opts, opts.option_dielect_func == 3);
-    comm.bcast(coulomb_normalization.data(), 2, 0);
+    initialize_ds_headwing(*ds, opts,
+                           opts.option_dielect_func == 3 || opts.option_dielect_func == 53);
     collective_all_stage(
         comm, "Native head/wing Coulomb normalization",
         [&]

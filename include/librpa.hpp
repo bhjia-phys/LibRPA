@@ -292,8 +292,8 @@ public:
      * @brief Set wavefunction coefficients from separate real and imaginary arrays.
      * @param[in] ispin Spin index.
      * @param[in] ik K-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_real Real parts of the coefficients.
      * @param[in] wfc_imag Imaginary parts of the coefficients.
      */
@@ -303,8 +303,8 @@ public:
     /**
      * @brief Set spinor wavefunction coefficients from separate real and imaginary arrays.
      * @param[in] ik K-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_up_real Real parts of the spin-up coefficients.
      * @param[in] wfc_up_imag Imaginary parts of the spin-up coefficients.
      * @param[in] wfc_dn_real Real parts of the spin-down coefficients.
@@ -318,8 +318,8 @@ public:
      * @brief Set wavefunction coefficients from a packed complex array.
      * @param[in] ispin Spin index.
      * @param[in] ik K-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc Complex coefficients.
      */
     void set_wfc_packed(int ispin, int ik, int nstates_local, int nbasis_local,
@@ -328,8 +328,8 @@ public:
     /**
      * @brief Set spinor wavefunction coefficients from packed complex arrays.
      * @param[in] ik K-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_up Spin-up coefficients.
      * @param[in] wfc_dn Spin-down coefficients.
      */
@@ -634,8 +634,8 @@ public:
      * @brief Set band-k wavefunctions from separate real and imaginary arrays.
      * @param[in] ispin Spin index.
      * @param[in] ik_band Band k-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_real Real parts of the coefficients.
      * @param[in] wfc_imag Imaginary parts of the coefficients.
      */
@@ -645,8 +645,8 @@ public:
     /**
      * @brief Set spinor band-k wavefunctions from separate real and imaginary arrays.
      * @param[in] ik_band Band k-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_up_real Real parts of the spin-up coefficients.
      * @param[in] wfc_up_imag Imaginary parts of the spin-up coefficients.
      * @param[in] wfc_dn_real Real parts of the spin-down coefficients.
@@ -660,8 +660,8 @@ public:
      * @brief Set band-k wavefunctions from packed complex values.
      * @param[in] ispin Spin index.
      * @param[in] ik_band Band k-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc Complex coefficients.
      */
     void set_wfc_band_packed(int ispin, int ik_band, int nstates_local, int nbasis_local,
@@ -670,8 +670,8 @@ public:
     /**
      * @brief Set spinor band-k wavefunctions from packed complex values.
      * @param[in] ik_band Band k-point index.
-     * @param[in] nstates_local Local number of states.
-     * @param[in] nbasis_local Local number of basis functions.
+     * @param[in] nstates_local Complete state count for this owned k point; partial state tiles are unsupported.
+     * @param[in] nbasis_local Complete AO count for this owned k point; partial AO tiles are unsupported.
      * @param[in] wfc_up Spin-up coefficients.
      * @param[in] wfc_dn Spin-down coefficients.
      */

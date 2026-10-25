@@ -26,6 +26,7 @@ void librpa_get_imaginary_frequency_grids(LibrpaHandler *h, const LibrpaOptions 
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_tfgrids(*pds, opts);
     const auto v_freqs = pds->tfg.get_freq_nodes();
     const auto v_wegihts = pds->tfg.get_freq_weights();
@@ -49,6 +50,7 @@ double librpa_get_rpa_correlation_energy(LibrpaHandler *h, const LibrpaOptions *
     profiler.start("api_get_rpa_correlation_energy");
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     if (opts.option_dielect_func == 6)
         throw LIBRPA_RUNTIME_ERROR(
             "Native velocity preset 6 is a driver option; API callers use 3/4");
@@ -56,6 +58,7 @@ double librpa_get_rpa_correlation_energy(LibrpaHandler *h, const LibrpaOptions *
         throw LIBRPA_RUNTIME_ERROR("option_dielect_func=53 is not supported for RPA energy");
     initialize_ds_global_ddla(*pds, opts);
 
+    if (opts.use_kpara_scf_eigvec != LIBRPA_SWITCH_ON) pds->replicate_eigvecs();
     const auto ks_local = pds->mf.get_iks_local();
     const bool seems_k_para = as_int(ks_local.size()) < pds->mf.get_n_kpoints();
     if (seems_k_para)

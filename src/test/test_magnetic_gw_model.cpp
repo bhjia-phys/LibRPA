@@ -291,6 +291,7 @@ ResponseOperators capture_response_operators(Dataset &ds, const LibrpaOptions &o
     assert(ds.mf.get_n_kpoints() == ds.pbc.get_n_cells_bvk());
     initialize_ds_chi0(ds, options);
     auto &chi = *ds.p_chi0;
+    const bool full_frequency = chi.full_frequency_matrix();
     std::map<Vector3_Order<double>, ComplexMatrix> empty_sinvS;
     chi.build(LIBRPA_ROUTING_LIBRI, ds.cs_data, ds.atpairs_local, ds.basis_aux, empty_sinvS,
               ds.blacs_h);
@@ -312,14 +313,23 @@ ResponseOperators capture_response_operators(Dataset &ds, const LibrpaOptions &o
                     for (const auto &[i, js] : q_it->second)
                         for (const auto &[j, block] : js)
                         {
-                            assert(i <= j && block.nr == 1 && block.nc == 1);
+                            assert((full_frequency || i <= j) && block.nr == 1 && block.nc == 1);
                             local_blocks[i][j] = block;  // ComplexMatrix copies deeply
                             ++owners[3 * i + j];
-                            if (i != j) ++owners[3 * j + i];
+                            if (!full_frequency && i != j) ++owners[3 * j + i];
                         }
             }
-            const auto local_dense = build_dense_symmetry_hermitian_matrix_from_local_blocks(
-                local_blocks, atom_nabf, false);  // retain raw diagonal entries
+            ComplexMatrix local_dense(3, 3);
+            if (full_frequency)
+            {
+                // Positive-iw spinor response has independent ordered entries.
+                // Neither completion nor Hermitian averaging may alter this snapshot.
+                for (const auto &[i, js] : local_blocks)
+                    for (const auto &[j, block] : js) local_dense(i, j) = block(0, 0);
+            }
+            else
+                local_dense = build_dense_symmetry_hermitian_matrix_from_local_blocks(
+                    local_blocks, atom_nabf, false);  // retain raw diagonal entries
             ComplexMatrix dense(3, 3);
             allreduce_ComplexMatrix(local_dense, dense, ds.comm_h.comm);
             MPI_Allreduce(MPI_IN_PLACE, owners.data(), owners.size(), MPI_INT, MPI_SUM,
@@ -861,6 +871,119 @@ void check_dispersive_model(const bool rotated, const int source, const int mesh
         }
 }
 
+
+// A supplied screened interaction isolates the Sigma consumer from chi0. The
+// fully polarized gapped spinor has disjoint +tau/-tau supports. Its scalar Wc
+// can come from a separate screening sector; it is not claimed to be the RPA
+// response of this one-orbital reference. Both transforms use the same finite
+// quadrature, so the oracle tests contraction/support, not minimax accuracy.
+double sparse_signed_time_sigma_error(const bool symmetry)
+{
+    librpa::Handler handler(MPI_COMM_WORLD);
+    handler.set_scf_dimension(1, 3, 2, 1, 2);
+    handler.set_ao_basis_wfc({1}, {{0}});
+    handler.set_ao_basis_aux({1}, {{0}});
+    const double lattice[9]{6, 0, 0, 0, 6, 0, 0, 0, 6};
+    const double reciprocal[9]{TWO_PI / 6, 0, 0, 0, TWO_PI / 6, 0, 0, 0, TWO_PI / 6};
+    handler.set_latvec_and_G(lattice, reciprocal);
+    handler.set_atoms({0}, {0, 0, 0});
+    handler.set_basis_convention(-1, 0, LIBRPA_ANGULAR_ORDER_ABS_PM, LIBRPA_RSH_COEFF_1_M,
+                                 LIBRPA_RSH_COEFF_1_M);
+    // E, C2z, Theta Mx, Theta My all preserve a z-polarized reference.
+    const int operations[36]{1, 0, 0, 0, 1, 0, 0, 0, 1,
+                             -1, 0, 0, 0, -1, 0, 0, 0, 1,
+                             -1, 0, 0, 0, 1, 0, 0, 0, 1,
+                             1, 0, 0, 0, -1, 0, 0, 0, 1};
+    const int antiunitary[4]{0, 0, 1, 1};
+    handler.set_symmetry_spin_operations(4, 1, operations, nullptr, antiunitary, nullptr, 2, 0);
+    std::vector<double> kvecs;
+    for (int k = 0; k != 3; ++k)
+        kvecs.insert(kvecs.end(), {k * TWO_PI / 18.0, 0, 0});
+    handler.set_kgrids_kvec(3, 1, 1, kvecs);
+    const Complex up[2]{1, 0}, down[2]{0, 1};
+    const double energies[6]{-1, 1, -1, 1, -1, 1}, occupations[6]{1, 0, 1, 0, 1, 0};
+    for (int k = 0; k != 3; ++k) handler.set_wfc_spinor_packed(k, 2, 1, up, down);
+    handler.set_wg_ekb_efermi(1, 3, 2, occupations, energies, 0);
+    const auto ds = api::get_dataset_instance(handler);
+    initialize_ds_atpairs_local(*ds, LIBRPA_ROUTING_LIBRI);
+    const int origin[3]{0, 0, 0};
+    const double coefficient = 0.5;
+    if (ds->comm_h.is_root())
+        handler.set_lri_coeff(LIBRPA_ROUTING_LIBRI, 0, 0, 1, 1, 1, origin, &coefficient);
+    librpa::Options options;
+    options.parallel_routing = LIBRPA_ROUTING_LIBRI;
+    options.tfgrids_type = LIBRPA_TFGRID_MINIMAX;
+    options.nfreq = 6;
+    options.minimax_emin = 1;
+    options.minimax_emax = 4;
+    options.use_kpara_scf_eigvec = LIBRPA_SWITCH_OFF;
+    options.use_symmetry_gw = symmetry ? LIBRPA_SWITCH_ON : LIBRPA_SWITCH_OFF;
+    options.libri_g0w0_threshold_C = 1e-12;
+    options.libri_g0w0_threshold_G = 1e-12;
+    options.libri_g0w0_threshold_Wc = 1e-12;
+    initialize_ds_tfgrids(*ds, options);
+    initialize_ds_g0w0(*ds, options);
+    if (symmetry)
+        assert(ds->symmetry_context.count_irreducible_blocks() < ds->pbc.Rlist.size());
+    std::map<double, std::map<Vector3_Order<double>, Matz>> wc;
+    const auto &frequencies = ds->tfg.get_freq_nodes();
+    const auto w = [](const double nu) { return -4.0 / (nu * nu + 4.0); };
+    for (const auto nu : frequencies)
+        for (const auto &q : ds->p_g0w0->qpoint_view.representatives)
+        {
+            Matz tile(ds->desc_abf.m_loc(), ds->desc_abf.n_loc(), MAJOR::COL);
+            for (int i = 0; i != tile.nr(); ++i)
+                for (int j = 0; j != tile.nc(); ++j) tile(i, j) = w(nu);
+            wc[nu][q] = std::move(tile);
+        }
+    ds->p_g0w0->build_spacetime(LIBRPA_ROUTING_LIBRI, ds->basis_aux, ds->cs_data, wc,
+                               ds->desc_abf);
+    ds->p_g0w0->output_sigc_ks_mat_kf = true;
+    ds->p_g0w0->build_sigc_matrix_KS_kgrid_blacs(ds->blacs_h);
+    double error = 0, norm = 0;
+    const auto &desc = ds->p_g0w0->desc_sigc_is_ik_f_KS;
+    for (const auto &[spin, by_k] : ds->p_g0w0->sigc_is_ik_f_KS)
+        for (const auto &[k, by_frequency] : by_k)
+            for (const auto &[nu, actual] : by_frequency)
+            {
+                const int f = ds->tfg.get_freq_index(nu);
+                Complex expected[2]{};
+                for (int t = 0; t != options.nfreq; ++t)
+                {
+                    double wt = 0;
+                    for (int j = 0; j != options.nfreq; ++j)
+                        wt += ds->tfg.get_costrans_f2t()(t, j) * w(frequencies[j]);
+                    const double amplitude = 0.5 * wt * std::exp(-ds->tfg.get_time_nodes()[t]);
+                    const double cosine = ds->tfg.get_costrans_t2f()(f, t);
+                    const double sine = ds->tfg.get_sintrans_t2f()(f, t);
+                    expected[0] -= amplitude * Complex(cosine, -sine);
+                    expected[1] += amplitude * Complex(cosine, sine);
+                }
+                for (int i = 0; i != actual.nr(); ++i)
+                    for (int j = 0; j != actual.nc(); ++j)
+                    {
+                        const int row = desc.indx_l2g_r(i), column = desc.indx_l2g_c(j);
+                        const auto oracle = row == column ? expected[row] : Complex{};
+                        error = std::max(error, std::abs(actual(i, j) - oracle));
+                        norm = std::max(norm, std::abs(oracle));
+                    }
+            }
+    MPI_Allreduce(MPI_IN_PLACE, &error, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &norm, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    if (ds->comm_h.is_root())
+        std::cout << "Sparse signed-time Sigma symmetry=" << symmetry << " error=" << error
+                  << " oracle_norm=" << norm << std::endl;
+    assert(norm > 1e-3);
+    return error;
+}
+
+void check_sparse_signed_time_sigma()
+{
+    const double full_error = sparse_signed_time_sigma_error(false);
+    const double reduced_error = sparse_signed_time_sigma_error(true);
+    assert(full_error < 1e-12 && reduced_error < 1e-12);
+}
+
 }  // namespace
 
 int main(int argc, char **argv)
@@ -869,7 +992,11 @@ int main(int argc, char **argv)
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
     librpa::init_global(LIBRPA_SWITCH_OFF, "stdout", LIBRPA_SWITCH_OFF);
     {
-        if (argc > 1)
+        if (argc > 1 && std::string(argv[1]) == "--sparse-time")
+        {
+            check_sparse_signed_time_sigma();
+        }
+        else if (argc > 1)
         {
             const bool rotated = std::string(argv[1]) == "--provided-soc";
             const int source = argc > 2 ? std::stoi(argv[2]) : 2;
@@ -881,6 +1008,7 @@ int main(int argc, char **argv)
             // The odd grid exercises all stage combinations and IBZ input;
             // the even grid adds self-inverse cells, and the rotated frame
             // distinguishes supplied SOC actions from spatially derived ones.
+            check_sparse_signed_time_sigma();
             check_dispersive_model(false, 2, 3, 3);
             check_dispersive_model(false, 2, 4, 4);
             check_dispersive_model(true, 2, 3, 3);

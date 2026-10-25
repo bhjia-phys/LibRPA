@@ -31,14 +31,17 @@ struct HamiltonianReconstructionResult
 // D = S U0 (U0^dagger S U0)^-1 is the dual reference frame, then
 // reconstruct its complex H(R). With native DFT baselines, the result is
 // H_DFT(R) + IFT[H_current(k) - FT(H_DFT)(k)]; otherwise reconstruct whole H.
-// The finite-BvK part uses equally weighted even-direction boundary images.
+// The finite-BvK part uses equally weighted shortest atom-pair images in the
+// physical lattice metric. centers_fractional contains one center per AO row,
+// with repeated entries for spinor components; it must use the H/S cell gauge.
 // Requires a complete unshifted mesh and the immutable square reference;
 // neither live eigenpairs nor r(R) are needed. A supplied baseline must match
 // the original DFT reference within the existing 1e-4 eV eigenframe gate.
 HamiltonianReconstructionResult reconstruct_qsgw_hamiltonian(
     const MeanField& reference, const SpinKMatrixMap& current_hamiltonian,
     const HeadwingAoOperators& operators, const std::vector<Vector3_Order<double>>& kpoints,
-    const Vector3_Order<int>& period, const Matrix3& lattice_bohr);
+    const Vector3_Order<int>& period, const Matrix3& lattice_bohr,
+    const std::vector<Vector3_Order<double>>& centers_fractional);
 
 struct LiveVelocityResult
 {
@@ -51,16 +54,15 @@ struct LiveVelocityResult
     double native_dft_hermiticity_residual_ha = 0.0;
     double velocity_upper_diagonal_imaginary_ha_bohr = 0.0;
     // Complete reconstructed Hamiltonian, preserving an optional native DFT
-    // baseline. The correction uses equally weighted BvK boundary images.
+    // baseline. The correction uses equally weighted shortest atom-pair images.
     // The velocity differentiates this same final H(R).
     std::vector<LocalizedMatrix> hamiltonian;
 };
 
-LiveVelocityResult compute_live_headwing_velocity(const MeanField& reference, const MeanField& live,
-                                                  const SpinKMatrixMap& current_hamiltonian,
-                                                  const HeadwingAoOperators& operators,
-                                                  const std::vector<Vector3_Order<double>>& kpoints,
-                                                  const Vector3_Order<int>& period,
-                                                  const Matrix3& lattice_bohr);
+LiveVelocityResult compute_live_headwing_velocity(
+    const MeanField& reference, const MeanField& live, const SpinKMatrixMap& current_hamiltonian,
+    const HeadwingAoOperators& operators, const std::vector<Vector3_Order<double>>& kpoints,
+    const Vector3_Order<int>& period, const Matrix3& lattice_bohr,
+    const std::vector<Vector3_Order<double>>& centers_fractional);
 
 }  // namespace librpa_int::qsgw

@@ -11,6 +11,7 @@
 #include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/error.h"
+#include "bloch_embedding.h"
 #include "headwing_velocity.h"
 
 namespace
@@ -42,7 +43,8 @@ LocalizedMatrix decode_operator(const LibrpaLocalizedOperator &input, int dimens
 
 librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
     const MeanField &mf, const PeriodicBoundaryData &pbc, const MpiCommHandler &comm,
-    const LibrpaNativeVelocityInput *root_input, const SymmetryContext *symmetry)
+    const LibrpaNativeVelocityInput *root_input, const SymmetryContext *symmetry,
+    const AtomicBasis *basis_wfc)
 {
     const int n = mf.get_n_states(), nk = mf.get_n_kpoints(), ns = mf.get_n_spins();
     const int nao = mf.get_n_aos(), nspinor = mf.get_n_spinor();
@@ -52,6 +54,7 @@ librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
     HeadwingAoOperators operators;
     std::vector<LocalizedMatrix> hamiltonians;
     std::array<double, 2> coulomb_normalization{};
+    BlochEmbedding embedding;
 
     collective_all_stage(
         comm, "G0W0 native velocity input",
@@ -91,6 +94,15 @@ librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
             }
             if (count > static_cast<std::size_t>(std::numeric_limits<int>::max()))
                 throw LIBRPA_RUNTIME_ERROR("Native velocity exceeds the MPI buffer-count limit");
+            if (symmetry && basis_wfc)
+            {
+                embedding = BlochEmbedding(*symmetry, *basis_wfc);
+                if (embedding.active() && basis_wfc->nb_total != static_cast<size_t>(nao))
+                    throw LIBRPA_INVALID_ARGUMENT("Native velocity embedding AO partition is inconsistent");
+            }
+            else if (symmetry && symmetry->basis_convention.bloch_ratom != LIBRPA_UNSET
+                     && symmetry->basis_convention.bloch_ratom != 0)
+                throw LIBRPA_INVALID_ARGUMENT("Native embedded velocity requires the AO atom partition");
             velocity.resize(count);
             if (!comm.is_root()) return;
             if (!root_input || root_input->n_spins != ns || !root_input->hamiltonian ||
@@ -111,6 +123,7 @@ librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
     for (int spin = 0; spin < ns; ++spin)
         for (int ik = 0; ik < nk; ++ik)
         {
+            const auto phases = embedding.atom_phases(pbc.kfrac_list.at(ik));
             Matz ket, component;
             collective_all_stage(comm, "G0W0 native eigenframe shape",
                                  [&]
@@ -141,7 +154,15 @@ librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
                                          // H/S/r use AO-major, spinor-minor ket rows.
                                          for (int ao = 0; ao < nao; ++ao)
                                              for (int band = 0; band < n; ++band)
+                                             {
                                                  component(ao, band) = (*wfc)(band, ao);
+                                                 // H(R), S(R), r(R) are fixed localized
+                                                 // operators. Dephase only the existing
+                                                 // transfer buffer, preserving raw WFC.
+                                                 if (!phases.empty())
+                                                     component(ao, band) *= std::conj(
+                                                         phases[basis_wfc->get_i_atom(ao)]);
+                                             }
                                      });
                 comm.bcast(component.ptr(), nao * n, owner);
                 for (int ao = 0; ao < nao; ++ao)

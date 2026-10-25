@@ -298,9 +298,10 @@ void librpa_get_g0w0_spectral_function_band_k(
     double *sigc_band);
 
 /** Collective velocity computation and setter; optional analytic head/wing
- * preparation reuses the ordinary numerical API. Options use API values 3/4,
+ * preparation reuses the ordinary numerical API. Options use API values 3/4/53,
  * never driver preset 6. Optical preparation requires replace_w_head enabled.
- * Option 3 also requires use_scalapack_gw_wc to consume the analytic wing.
+ * Options 3/53 require use_scalapack_gw_wc to consume the analytic wings;
+ * option 53 optical preparation requires use_2d_dielectric=false.
  * Input is borrowed only for this call; input structures are in librpa_input.h.
  */
 void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *options,

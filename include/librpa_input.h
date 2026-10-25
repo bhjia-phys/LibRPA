@@ -83,8 +83,8 @@ void librpa_set_wg_ekb_efermi(LibrpaHandler* h, int nspins, int nkpts, int nstat
  * @param[in] h              Handler.
  * @param[in] ispin          Spin index (0-based).
  * @param[in] ik             K-point index (0-based).
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_real       Real part of wavefunction coefficients.
  * @param[in] wfc_imag       Imaginary part of wavefunction coefficients.
  */
@@ -95,8 +95,8 @@ void librpa_set_wfc(LibrpaHandler* h, int ispin, int ik, int nstates_local, int 
  * @brief Set wavefunction coefficients of spinor format (real/imag separate arrays).
  * @param[in] h              Handler.
  * @param[in] ik             K-point index (0-based).
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_up_real    Real part of wavefunction coefficients (spin-up component).
  * @param[in] wfc_up_imag    Imaginary part of wavefunction coefficients (spin-up component).
  * @param[in] wfc_dn_real    Real part of wavefunction coefficients (spin-down component).
@@ -111,8 +111,8 @@ void librpa_set_wfc_spinor(LibrpaHandler* h, int ik, int nstates_local, int nbas
  * @param[in] h              Handler.
  * @param[in] ispin          Spin index (0-based).
  * @param[in] ik             K-point index (0-based).
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_ri         Complex wavefunction coefficients (packed).
  */
 void librpa_set_wfc_packed(LibrpaHandler* h, int ispin, int ik, int nstates_local, int nbasis_local,
@@ -122,8 +122,8 @@ void librpa_set_wfc_packed(LibrpaHandler* h, int ispin, int ik, int nstates_loca
  * @brief Set wavefunction coefficients (packed complex array).
  * @param[in] h              Handler.
  * @param[in] ik             K-point index (0-based).
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_up_ri      Complex wavefunction coefficients of spin-up component (packed).
  * @param[in] wfc_dn_ri      Complex wavefunction coefficients of spin-down component (packed).
  */
@@ -169,7 +169,11 @@ void librpa_set_ao_basis_aux_shrink(LibrpaHandler* h, int natoms,
 /**
  * @brief Set basis convention metadata used by symmetry-based reductions.
  *
- * This metadata is optional for calculations that do not use symmetry.
+ * This metadata is optional for same-frame canonical q inputs without
+ * symmetry reduction. Transport between reciprocal-equivalent q labels
+ * requires a declared Bloch convention even without reduction; a nonzero
+ * bloch_ratom also requires atomic coordinates. This metadata alone does
+ * not canonicalize raw embedded wavefunctions for real-space contractions.
  *
  * @param[in] h       Handler.
  * @param[in] bloch_phase Bloch-sum phase sign; must be either +1 or -1.
@@ -504,8 +508,8 @@ void librpa_set_band_occ_eigval(LibrpaHandler* h, int n_spins, int n_kpts_band, 
  * @param[in] h              Handler.
  * @param[in] ispin          Spin index.
  * @param[in] ik_band        Band k-point index.
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_real       Real part of wavefunction.
  * @param[in] wfc_imag       Imaginary part of wavefunction.
  */
@@ -516,8 +520,8 @@ void librpa_set_wfc_band(LibrpaHandler* h, int ispin, int ik_band, int nstates_l
  * @brief Set wavefunction for band k-point (spinor format, separate real/imag).
  * @param[in] h              Handler.
  * @param[in] ik_band        Band k-point index.
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of atomic basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_up_real    Real part of wavefunction coefficients (spin-up component).
  * @param[in] wfc_up_imag    Imaginary part of wavefunction coefficients (spin-up component).
  * @param[in] wfc_dn_real    Real part of wavefunction coefficients (spin-down component).
@@ -533,8 +537,8 @@ void librpa_set_wfc_band_spinor(LibrpaHandler* h, int ik_band, int nstates_local
  * @param[in] h              Handler.
  * @param[in] ispin          Spin index.
  * @param[in] ik_band        Band k-point index.
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of atomic basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_ri         Complex wavefunction (packed).
  */
 void librpa_set_wfc_band_packed(LibrpaHandler* h, int ispin, int ik_band, int nstates_local,
@@ -545,8 +549,8 @@ void librpa_set_wfc_band_packed(LibrpaHandler* h, int ispin, int ik_band, int ns
  *
  * @param[in] h              Handler.
  * @param[in] ik_band        Band k-point index.
- * @param[in] nstates_local  Local number of states.
- * @param[in] nbasis_local   Local number of basis functions.
+ * @param[in] nstates_local  Complete state count for this owned k point; partial state tiles are unsupported.
+ * @param[in] nbasis_local   Complete AO count for this owned k point; partial AO tiles are unsupported.
  * @param[in] wfc_up_ri      Complex wavefunction of spin-up component (packed).
  * @param[in] wfc_dn_ri      Complex wavefunction of spin-down component (packed).
  */

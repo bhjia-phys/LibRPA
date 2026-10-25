@@ -53,5 +53,10 @@ struct TaskContext
     std::function<void(const LibrpaOptions&, bool)> initialize_headwing;
     std::function<void(bool)> initialize_symmetry;
     std::function<void(const LibrpaOptions&, const ResponseObserver&)> build_sigma;
+    // Native task updates do not pass through public dense input setters.
+    std::function<void()> note_meanfield_updated;
+    // The chosen QSGW velocity mode explicitly selects a live optical frame.
+    std::function<void()> select_live_optical_input;
+    std::function<void(const LibrpaOptions&)> synchronize_input_state;
 };
 }  // namespace librpa_int::qsgw

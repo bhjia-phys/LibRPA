@@ -1157,9 +1157,54 @@ void test_magnetic_qstar_screening()
                   << maximum << '\n';
 }
 
-void test_noncollinear_magnetic_crpa()
+void test_noncollinear_magnetic_crpa(double bz = 0.0)
 {
     MagneticModel model;
+    if (bz != 0.0)
+    {
+        for (int a = 0; a != 3; ++a)
+        {
+            model.hamiltonian(a, a) += bz;
+            model.hamiltonian(a + 3, a + 3) -= bz;
+        }
+        eigsh(model.hamiltonian, model.eigenvalues, model.eigenvectors);
+        // Bz breaks Theta Mz. The magnetic antiunitary Theta My instead
+        // acts as site reflection times bare conjugation and preserves Bz.
+        const int rotations[3][9]{{1, 0, 0, 0, 1, 0, 0, 0, 1},
+                                  {-1, 1, 0, -1, 0, 0, 0, 0, 1},
+                                  {0, -1, 0, 1, -1, 0, 0, 0, 1}};
+        const int mirror[9]{1, 0, 0, 1, -1, 0, 0, 0, 1};
+        model.operations.clear();
+        for (int anti = 0; anti != 2; ++anti)
+            for (int r = 0; r != 3; ++r)
+            {
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                    {
+                        int entry = rotations[r][3 * i + j];
+                        if (anti)
+                        {
+                            entry = 0;
+                            for (int k = 0; k != 3; ++k)
+                                entry += mirror[3 * i + k] * rotations[r][3 * k + j];
+                        }
+                        model.operations.push_back(entry);
+                    }
+                Matz action(6, 6, MAJOR::COL);
+                action.zero_out();
+                for (int atom = 0; atom != 3; ++atom)
+                    for (int spin = 0; spin != 2; ++spin)
+                        action(((anti ? -atom : atom) + r + 3) % 3 + 3 * spin,
+                               atom + 3 * spin) =
+                            std::polar(1.0, (spin == 0 ? -0.5 : 0.5) * TWO_PI * r / 3);
+                auto operand = model.hamiltonian.copy();
+                if (anti) operand.conj();
+                const auto transformed = action * operand * transpose(action, true);
+                for (int i = 0; i != 6; ++i)
+                    for (int j = 0; j != 6; ++j)
+                        close(transformed(i, j), model.hamiltonian(i, j), 1e-12);
+            }
+    }
     Dataset ds(MPI_COMM_WORLD);
     ds.basis_wfc.set(std::vector<std::size_t>{1, 1, 1});
     ds.basis_wfc.set_l_shells({{0}, {0}, {0}});
@@ -1195,6 +1240,17 @@ void test_noncollinear_magnetic_crpa()
         const Vector3_Order<double> cart{model.positions[3 * a], model.positions[3 * a + 1], 0};
         const Vector3_Order<double> frac{cart * ds.pbc.latvec.Inverse()};
         ds.atoms.coords_frac[a] = Vector3<double>{frac.x, frac.y, frac.z};
+    }
+    if (bz != 0.0)
+    {
+        // One six-orbital cluster frame retains intersite ordered densities.
+        // A complex unitary makes the complete four-index comparison sensitive
+        // to all vertex conjugations, not only diagonal density-density entries.
+        sites = {{"magnetic-cluster", 0, 6, 0, {}}};
+        trial.set_as_identity_matrix();
+        rotate_rows(trial, 0, 1, 0.31, 0.47);
+        rotate_rows(trial, 2, 4, 0.43, -0.29);
+        rotate_rows(trial, 1, 5, 0.37, 0.62);
     }
     CorrelatedSubspace frame(sites, ds.pbc.kfrac_list, ds.pbc.Rlist, 6, 6, 1);
     for (int k = 0; k < 9; ++k)
@@ -1238,6 +1294,137 @@ void test_noncollinear_magnetic_crpa()
     std::vector<atpair_t> pairs(assigned.begin(), assigned.end());
     std::map<Vector3_Order<double>, ComplexMatrix> transform;
     Chi0::BandSelection selection(1, std::vector<std::vector<double>>(9, {1, 1, 1, 1, 0, 0}));
+    if (bz != 0.0)
+        for (auto& weights : selection[0]) weights = {0.82, 0.74, 0.65, 0.57, 0.21, 0.13};
+    // Independent finite Lindhard sum. The R=0 model has identical spectra at
+    // every k, so the full normalized k sum is exactly this six-state sum.
+    const auto exact_response = [&](double frequency, bool excluded)
+    {
+        ComplexMatrix response(3, 3);
+        for (int n = 0; n != 6; ++n)
+            for (int m = 0; m != 6; ++m)
+            {
+                const int df = int(n < 3) - int(m < 3);
+                if (!df) continue;
+                const Z factor = double(df) /
+                    (Z(0, frequency) + model.eigenvalues[n] - model.eigenvalues[m]) *
+                    (excluded ? selection[0][0][n] * selection[0][0][m] : 1.0);
+                std::array<Z, 3> vertex{};
+                for (int mu = 0; mu != 3; ++mu)
+                    for (int spin = 0; spin != 2; ++spin)
+                        vertex[mu] += std::conj(model.eigenvectors(mu + 3 * spin, n)) *
+                                      model.eigenvectors(mu + 3 * spin, m);
+                for (int mu = 0; mu != 3; ++mu)
+                    for (int nu = 0; nu != 3; ++nu)
+                        response(mu, nu) += factor * vertex[mu] * std::conj(vertex[nu]);
+            }
+        return response;
+    };
+    ComplexMatrix bare(3, 3);
+    for (int i = 0; i != 3; ++i)
+        for (int j = 0; j != 3; ++j) bare(i, j) = i == j ? 1.2 : 0.08;
+    // Independent pivoted elimination of (I-vP) W=v, without the production
+    // dielectric eigensolver, sqrt(v), distributed inverse or contraction.
+    const auto exact_screen = [&](const ComplexMatrix& response)
+    {
+        ComplexMatrix lhs(3, 3), rhs(bare);
+        lhs.set_as_identity_matrix();
+        lhs -= bare * response;
+        for (int k = 0; k != 3; ++k)
+        {
+            int pivot = k;
+            for (int i = k + 1; i != 3; ++i)
+                if (std::abs(lhs(i, k)) > std::abs(lhs(pivot, k))) pivot = i;
+            if (std::abs(lhs(pivot, k)) < 1e-12)
+                throw std::runtime_error("singular independent cRPA dielectric");
+            for (int j = 0; j != 3; ++j)
+            {
+                std::swap(lhs(k, j), lhs(pivot, j));
+                std::swap(rhs(k, j), rhs(pivot, j));
+            }
+            const Z scale = lhs(k, k);
+            for (int j = 0; j != 3; ++j) { lhs(k, j) /= scale; rhs(k, j) /= scale; }
+            for (int i = 0; i != 3; ++i)
+                if (i != k)
+                {
+                    const Z factor = lhs(i, k);
+                    for (int j = 0; j != 3; ++j)
+                    {
+                        lhs(i, j) -= factor * lhs(k, j);
+                        rhs(i, j) -= factor * rhs(k, j);
+                    }
+                }
+        }
+        return rhs;
+    };
+    double response_error = 0.0, tensor_error = 0.0, response_odd = 0.0;
+    const auto check_response = [&](const Chi0QMap& map, const Chi0& chi, int family)
+    {
+        for (double frequency : ds.tfg.get_freq_nodes())
+            for (const auto& q : chi.active_qpoints())
+            {
+                ComplexMatrix local(3, 3), total(3, 3);
+                std::array<int, 9> owners{}, total_owners{};
+                if (map.count(frequency) && map.at(frequency).count(q))
+                    for (const auto& [i, js] : map.at(frequency).at(q))
+                        for (const auto& [j, block] : js)
+                        {
+                            local(i, j) = block(0, 0);
+                            owners[3 * i + j] += 1;
+                        }
+                ds.comm_h.allreduce(local.c, total.c, 9, MPI_SUM);
+                ds.comm_h.allreduce(owners.data(), total_owners.data(), 9, MPI_SUM);
+                const auto p0 = exact_response(frequency, false);
+                const auto pd = exact_response(frequency, true);
+                const auto expected = family == 0 ? p0 : (family == 1 ? pd : p0 - pd);
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                    {
+                        if (total_owners[3 * i + j] != 1)
+                            throw std::runtime_error("cRPA response has missing/duplicate ownership");
+                        response_error = std::max(response_error, std::abs(total(i, j) - expected(i, j)));
+                        response_odd = std::max(response_odd, std::abs(p0(i, j) - std::conj(p0(j, i))));
+                        close(total(i, j), expected(i, j), 5e-10);
+                    }
+            }
+    };
+    const auto check_tensors = [&](const CrpaResult& result)
+    {
+        for (std::size_t iw = 0; iw != result.frequencies.size(); ++iw)
+        {
+            const auto p0 = exact_response(result.frequencies[iw], false);
+            const auto pd = exact_response(result.frequencies[iw], true);
+            const std::array<ComplexMatrix, 3> kernels{bare, exact_screen(p0 - pd), exact_screen(p0)};
+            for (const auto& tensor : result.tensors)
+            {
+                const auto& site = sites.at(tensor.site_index);
+                const int n = site.n_orbitals;
+                const auto density = [&](int mu, int a, int b)
+                {
+                    Z value{};
+                    for (int spin = 0; spin != 2; ++spin)
+                        value += std::conj(trial(mu + 3 * spin, site.orb_start + a)) *
+                                 trial(mu + 3 * spin, site.orb_start + b);
+                    return value;
+                };
+                const std::array<const ComplexMatrix*, 3> actual{&tensor.bare, &tensor.u[iw], &tensor.w[iw]};
+                for (int a = 0; a != n; ++a)
+                    for (int b = 0; b != n; ++b)
+                        for (int c = 0; c != n; ++c)
+                            for (int d = 0; d != n; ++d)
+                                for (int family = 0; family != 3; ++family)
+                                {
+                                    Z expected{};
+                                    for (int mu = 0; mu != 3; ++mu)
+                                        for (int nu = 0; nu != 3; ++nu)
+                                            expected += std::conj(density(mu, b, a)) * kernels[family](mu, nu) * density(nu, c, d);
+                                    const auto value = (*actual[family])(a * n + b, c * n + d);
+                                    tensor_error = std::max(tensor_error, std::abs(value - expected));
+                                    close(value, expected, 5e-10);
+                                }
+            }
+        }
+    };
     const auto calculate = [&](bool symmetry, bool check_shared = false)
     {
         Chi0 chi(ds.mf, ds.basis_wfc, ds.basis_aux, ds.pbc, ds.symmetry_context, ds.tfg,
@@ -1247,10 +1434,16 @@ void test_noncollinear_magnetic_crpa()
         CrpaContext context{chi,       ds.cs_data, ds.basis_aux, pairs,
                             transform, ds.vq,      ds.blacs_h,   ds.desc_abf};
         const auto result = compute_crpa_onsite(context, selection, {&frame});
+        check_tensors(result);
         if (check_shared)
         {
             const auto original_mf = ds.mf;
             auto full_response = build_crpa_total_response(context);
+            check_response(full_response, chi, 0);
+            auto excluded = build_crpa_excluded_response(context, selection);
+            check_response(excluded, chi, 1);
+            auto constrained = form_crpa_constrained_response(context, full_response, std::move(excluded));
+            check_response(constrained, chi, 2);
             chi.swap_chi0_q(full_response);
             const auto resident = chi.get_chi0_q();
             auto incoming = selection;
@@ -1336,7 +1529,11 @@ void test_noncollinear_magnetic_crpa()
                 }
     if (ds.comm_h.is_root())
         std::cout << "Noncollinear magnetic cRPA: " << full.second << " -> " << reduced.second
-                  << " q; 3 unitary + 3 antiunitary; complete U/W max=" << maximum << '\n';
+                  << " q; Bz=" << bz << "; 3 unitary + 3 antiunitary; complete U/W max=" << maximum
+                  << "; Lindhard=" << response_error << "; independent tensor=" << tensor_error
+                  << "; anti-Hermitian response=" << response_odd << '\n';
+    if (bz != 0.0 && response_odd < 1e-6)
+        throw std::runtime_error("magnetic cRPA control lost its odd-frequency response");
 }
 
 void test_soc_and_spin_representation()
@@ -1617,6 +1814,7 @@ int main(int argc, char** argv)
         test_soc_bloch_phases();
         test_magnetic_qstar_screening();
         test_noncollinear_magnetic_crpa();
+        test_noncollinear_magnetic_crpa(0.21);
         test_constrained_soc_optical();
     }
     catch (const std::exception& failure)

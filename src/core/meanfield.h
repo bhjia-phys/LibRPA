@@ -10,6 +10,7 @@
 #include <map>
 #include <utility>
 #include "atom.h"
+#include "bloch_embedding.h"
 #include "pbc.h"
 #include "symmetry_context.h"
 #include "symmetry_spin_kernel.h"
@@ -82,6 +83,9 @@ public:
         set(ns, nk, nb, nao, 1, st_ib, nb_local, st_iao, nao_local);
     }
     MeanField(const MeanField&) = default;
+    MeanField& operator=(const MeanField&) = default;
+    MeanField(MeanField&&) = default;
+    MeanField& operator=(MeanField&&) = default;
     bool initialized() const { return n_spins > 0 && n_kpoints > 0 && n_states > 0 && n_aos > 0; }
     inline int get_n_bands() const { return n_states; }
     inline int get_n_states() const { return n_states; } // alias
@@ -117,30 +121,38 @@ public:
     // Extract local k-point indices, used for MPI parallelization
     std::vector<int> get_iks_local() const;
 
-    //! Get the density matrix of a particular spin and kpoint
+    //! Get the density matrix in the supplied coefficient frame at one k point.
     ComplexMatrix get_dmat_cplx(int ispin, int ispinor_bra, int ispinor_ket, int ikpt) const;
 
-    // Density matrix and green's function calculation, serial version
+    // Density matrix and green's function calculation, serial version.
+    // An optional embedding dephases each AO product into the localized-cell
+    // frame before Fourier accumulation; stored wavefunctions stay unchanged.
+    // zero_time_phase keeps the nonzero tau label (side/sign and map key), but
+    // sets only the energy exponential to one for exact one-sided endpoint Grams.
     ComplexMatrix get_dmat_cplx_R(int ispin, int ispinor_bra, int ispinor_ket,
                                   const std::vector<Vector3_Order<double>>& kfrac_list,
-                                  const Vector3_Order<int>& R) const;
+                                  const Vector3_Order<int>& R,
+                                  const BlochEmbedding* embedding = nullptr) const;
     std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs(
         int ispin, int ispinor_bra, int ispinor_ket,
         const std::vector<Vector3_Order<double>>& kfrac_list,
-        const std::vector<Vector3_Order<int>>& Rs) const;
+        const std::vector<Vector3_Order<int>>& Rs,
+        const BlochEmbedding* embedding = nullptr) const;
 
     //! Optional band mask: true includes a band; an empty mask includes all bands.
     //! A nonempty mask must have get_n_bands() entries, shared by all k-points and spins.
     ComplexMatrix get_gf_cplx_imagtime(int ispin, int ispinor_bra, int ispinor_ket, int ikpt,
-                                       double tau, const std::vector<bool> &band_mask = {}) const;
+                                       double tau, const std::vector<bool> &band_mask = {}, bool zero_time_phase = false) const;
     std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs(
         int ispin, int ispinor_bra, int ispinor_ket,
         const std::vector<Vector3_Order<double>>& kfrac_list, std::vector<double> imagtimes,
-        const std::vector<Vector3_Order<int>>& Rs, const std::vector<bool> &band_mask = {}) const;
+        const std::vector<Vector3_Order<int>>& Rs, const std::vector<bool> &band_mask = {}, bool zero_time_phase = false,
+        const BlochEmbedding* embedding = nullptr) const;
     std::map<double, std::map<Vector3_Order<int>, matrix>> get_gf_real_imagtimes_Rs(
         int ispin, int ispinor_bra, int ispinor_ket,
         const std::vector<Vector3_Order<double>>& kfrac_list, std::vector<double> imagtimes,
-        const std::vector<Vector3_Order<int>>& Rs, const std::vector<bool> &band_mask = {}) const;
+        const std::vector<Vector3_Order<int>>& Rs, const std::vector<bool> &band_mask = {},
+        const BlochEmbedding* embedding = nullptr) const;
 
     // void allredue_wfc_isk();
 };
@@ -156,6 +168,8 @@ symmetry_kstar_member_kfrac_targets_t build_symmetry_kstar_member_kfrac_targets(
     const SymmetryContext& ctx,
     const PeriodicBoundaryData& pbc);
 
+// Restorers apply the input-frame symmetry action, then dephase each exact
+// target k point into the localized-cell frame using ctx's Bloch convention.
 ComplexMatrix get_symmetry_restored_dmat_cplx_R(
     const SymmetryContext& ctx,
     const std::vector<SpeciesBasisLayout>& wfc_layouts,
@@ -207,7 +221,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs(
     const std::map<atom_t, size_t>& atom_nw,
     const std::vector<bool> &band_mask = {},
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets = nullptr,
-    const symmetry_kstar_representative_indices_t* representative_k_indices = nullptr);
+    const symmetry_kstar_representative_indices_t* representative_k_indices = nullptr, bool zero_time_phase = false);
 
 /*!
  * @brief Validate that a Green's-function band cutoff does not slice through a
@@ -260,7 +274,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
     const std::map<atom_t, size_t>& atom_nw,
     const std::vector<bool>& band_mask = {},
     const symmetry_kstar_member_kfrac_targets_t* member_kfrac_targets = nullptr,
-    const symmetry_kstar_representative_indices_t* representative_k_indices = nullptr);
+    const symmetry_kstar_representative_indices_t* representative_k_indices = nullptr, bool zero_time_phase = false);
 
 /*!
  * @brief Extract one (bra, ket) channel out of a four-channel spinor GF map,

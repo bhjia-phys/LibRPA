@@ -1,9 +1,13 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <map>
+#include <set>
 #include <memory>
 #include <unordered_map>
 
+#include "librpa_options.h"
 #include "../core/atom.h"
 #include "../core/atomic_basis.h"
 #include "../core/chi0.h"
@@ -25,6 +29,45 @@
 namespace librpa_int
 {
 
+// Physical input changes are recorded locally by setters.  Communication belongs
+// to an already collective compute/prepare entry, never an owner-local setter.
+enum class InputChange : std::uint32_t
+{
+    None = 0,
+    Spectrum = 1u << 0,
+    Occupations = 1u << 1,
+    ScfWavefunctions = 1u << 2,
+    Band = 1u << 3,
+    Ri = 1u << 4,
+    Coulomb = 1u << 5,
+    AuxProjection = 1u << 6,
+    Velocity = 1u << 7,
+    ExternalDielectric = 1u << 8,
+    Structure = 1u << 9,
+    DirectOptical = 1u << 10
+};
+
+inline InputChange operator|(InputChange left, InputChange right)
+{
+    return static_cast<InputChange>(static_cast<std::uint32_t>(left) |
+                                    static_cast<std::uint32_t>(right));
+}
+
+// Exactly the arguments of a successfully completed TFGrids::generate call.
+// A node match alone does not establish equality of transform weights.
+struct TFGridGenerationRecipe
+{
+    int nfreq = 0;
+    LibrpaTimeFreqGrid type = LIBRPA_TFGRID_UNSET;
+    std::array<double, 6> parameters{};
+    bool inverse_sine = false;
+    bool operator==(const TFGridGenerationRecipe &other) const
+    {
+        return nfreq == other.nfreq && type == other.type &&
+               parameters == other.parameters && inverse_sine == other.inverse_sine;
+    }
+};
+
 /*!
  * Core object to hold runtime environment, input and output data
  */
@@ -37,6 +80,31 @@ private:
     bool eigvecs_kpara_redistributed_;
     bool eigvecs_kpara_2d_redistributed_;
     bool band_eigvecs_kpara_2d_redistributed_;
+    bool band_eigvecs_kpara_redistributed_ = false;
+    bool eigvecs_replicated_ = false;
+    bool band_eigvecs_replicated_ = false;
+    // Small per-key progress facts make streaming layout conversion retryable
+    // without retaining a second whole mean field.
+    std::set<std::array<int, 3>> scf_root_dense_keys_, band_root_dense_keys_;
+    std::set<std::array<int, 3>> scf_replicated_keys_, band_replicated_keys_;
+    std::uint32_t pending_input_changes_ = 0;
+    using DenseWfcUpdates = std::map<std::array<int, 3>, ComplexMatrix>;
+    DenseWfcUpdates pending_scf_dense_updates_;
+    DenseWfcUpdates pending_band_dense_updates_;
+    std::set<std::pair<bool, int>> pending_coulomb_2d_updates_;
+    bool have_compute_options_ = false;
+    LibrpaOptions last_compute_options_{};
+
+    void apply_dense_wfc_updates(bool band);
+    void apply_coulomb_2d_updates();
+    void collect_wfc_to_kroots(bool band);
+    void replicate_dense_wfc(bool band);
+    void restore_root_dense_keys_to_tiles(bool band);
+    void invalidate_input_dependents(std::uint32_t changes,
+                                     bool exx_recipe_changed,
+                                     bool optical_recipe_changed,
+                                     bool response_recipe_changed,
+                                     bool target_recipe_changed);
 public:
     /* Member variables */
     // Environment control
@@ -123,6 +191,8 @@ public:
     bool is_band_calc_done;
     //! Time-frequency grids
     TFGrids tfg;
+    TFGridGenerationRecipe completed_tfgrid_recipe;
+    bool tfgrid_generation_complete = false;
     //! Real-space RI coefficient tensors (local RI)
     Cs_LRI cs_data;
     //! Real-space RI coefficient tensors (local RI) of shrinked auxiliary basis
@@ -144,6 +214,17 @@ public:
     std::vector<double> epsmacs_imagfreq;
     std::vector<double> omegas_imagfreq;
 
+    // Independently loaded optical data outlive an invalidated derived context.
+    std::vector<double> external_epsmacs_imagfreq;
+    std::vector<double> external_omegas_imagfreq;
+    std::shared_ptr<const DirectFullBzOpticalInput> direct_full_bz_optical_input;
+    std::shared_ptr<const MeanField> optical_meanfield_input;
+    OpticalMeanFieldLayout optical_meanfield_layout;
+    // Explicit physical readers/native preparation clear this only after a
+    // compatible selected input has replaced a structurally stale one.
+    bool optical_input_frame_stale = false;
+    double strict_2d_auxiliary_monopole_norm_squared = 0.0;
+
     std::unique_ptr<diele_func> p_headwing;
 
     // Output data, held by computation objects
@@ -161,6 +242,18 @@ public:
     void initialize_comm_blacs_coul();
     void redistribute_coulomb_blacs2ap();
     void finalize_comm_blacs_coul();
+    // Collective reset of incompatible loaded Coulomb input.  Destroy borrowed
+    // numerical consumers first, then reload V after basis/q-layout changes.
+    void reset_coulomb_input_layout();
+
+    // OFF-mode consumers require every dense k coefficient on every rank.
+    void collect_eigvecs_kroots();
+    void replicate_eigvecs();
+    void replicate_band_eigvecs();
+    bool eigvecs_replicated() const
+    { return eigvecs_replicated_ && scf_root_dense_keys_.empty() && scf_replicated_keys_.empty(); }
+    bool band_eigvecs_replicated() const
+    { return band_eigvecs_replicated_ && band_root_dense_keys_.empty() && band_replicated_keys_.empty(); }
 
     void redistribute_eigvecs_kpara();
     void redistribute_band_eigvecs_kpara();
@@ -169,19 +262,41 @@ public:
     void initialize_band_kblacs_wfc_layout();
     void mark_eigvecs_kpara_2d_ready()
     {
+        eigvecs_replicated_ = false;
+        scf_root_dense_keys_.clear();
+        scf_replicated_keys_.clear();
         eigvecs_kpara_redistributed_ = true;
         eigvecs_kpara_2d_redistributed_ = true;
     }
     void mark_band_eigvecs_kpara_2d_ready()
     {
+        band_eigvecs_replicated_ = false;
+        band_root_dense_keys_.clear();
+        band_replicated_keys_.clear();
+        band_eigvecs_kpara_redistributed_ = true;
         band_eigvecs_kpara_2d_redistributed_ = true;
     }
-    bool eigvecs_kpara_2d_ready() const { return eigvecs_kpara_2d_redistributed_; }
+    bool eigvecs_kpara_2d_ready() const
+    { return eigvecs_kpara_2d_redistributed_ && scf_root_dense_keys_.empty(); }
     bool band_eigvecs_kpara_2d_ready() const
     {
-        return band_eigvecs_kpara_2d_redistributed_;
+        return band_eigvecs_kpara_2d_redistributed_ && band_root_dense_keys_.empty();
     }
+    void reset_scf_eigvecs_kpara_state();
     void reset_band_eigvecs_kpara_state();
+    bool eigvecs_kpara_ready() const
+    { return eigvecs_kpara_redistributed_ && scf_root_dense_keys_.empty() && scf_replicated_keys_.empty(); }
+    bool band_eigvecs_kpara_ready() const
+    { return band_eigvecs_kpara_redistributed_ && band_root_dense_keys_.empty() && band_replicated_keys_.empty(); }
+
+    void note_input_change(InputChange change) noexcept;
+    bool has_pending_optical_input_changes() const noexcept;
+    void synchronize_input_changes(const LibrpaOptions *opts = nullptr);
+    // The supplied complete API matrix is staged if mf already contains tiles.
+    ComplexMatrix &dense_wfc_input(bool band, int spin, int component, int k);
+    void note_coulomb_2d_update(bool cut, int iq);
+    // Preserve physical direct input and normalization before dropping a result.
+    void retain_optical_input();
 
     void invalidate_compute_objects();
 

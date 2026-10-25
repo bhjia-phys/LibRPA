@@ -137,6 +137,16 @@ Input parsing APIs common to all tasks include (C/C++/Fortran):
 - {librpa}`librpa_set_wfc_band` / {librpa}`Handler::set_wfc_band` / {librpa}`handler%set_wfc_band <librpahandler::set_wfc_band>`
 - {librpa}`librpa_set_wfc_band_spinor` / {librpa}`Handler::set_wfc_band_spinor` / {librpa}`handler%set_wfc_band_spinor <librpahandler::set_wfc_band_spinor>`
 
+Wave-function setters store a **complete dense state-by-AO matrix for each owned
+k point**, with a separate matrix for each spinor component. The legacy argument
+names `nstates_local` and `nbasis_local` must equal the declared complete matrix
+dimensions. They do not describe a BLACS tile: the setters have no tile offsets,
+and partial or empty tiles are rejected before storage is changed. A rank that
+does not own a k point omits its wave-function setter call. When enabling native
+k-point/BLACS redistribution, each input matrix must initially have exactly one
+rank owner; LibRPA creates the distributed compute tiles itself. These setters
+are rank-local and introduce no collective to validate the shape.
+
 These functions parse information from the hosting DFT code to LibRPA, such as:
 - dimension of lattice vectors, orbital basis and auxiliary basis
 - k-mesh points, eigenvalues and occupation numbers
@@ -388,10 +398,12 @@ Only its rank zero supplies the borrowed operator views; other ranks pass a
 null input pointer. The operators remain valid until the call returns. The
 calculation preserves the loaded SCF energies, occupations and eigenvectors,
 sets the velocity through the existing public setter, and optionally prepares
-analytic head/wing. Pass numerical option 3 or 4, not driver preset 6. For
-option 3 with optical preparation, enable `use_scalapack_gw_wc` so that
-screening consumes the analytic wing. For strict 2D, also supply the area and
-auxiliary monopole normalization decoded from the matching producer export.
+analytic head/wing. Pass numerical option 3, 4 or 53; driver preset 6 is
+translated before this API. For option 3 or 53 with optical preparation, enable
+`use_scalapack_gw_wc` so that screening consumes both analytic wings. Option 53
+uses the prescribed s-auxiliary head and requires finite 3D plus auxiliary
+l-shell metadata. For strict 2D option 3, also supply the area and auxiliary
+monopole normalization decoded from the matching producer export.
 
 `librpa_get_optical_result` provides a noncollective, rank-local owning snapshot
 of the computed velocity, frequency nodes, head and auxiliary wing matrices.

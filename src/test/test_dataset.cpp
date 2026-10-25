@@ -644,6 +644,10 @@ static void test_disabled_component_symmetry_keeps_shared_context()
     ds.pbc.set_kgrids_kvec(1, 1, 1, {0.0, 0.0, 0.0});
     ds.scfk_blacs_ctxt.init(KPointBlacsProcessShape(1, 4, true), MPI_COMM_WORLD, 1);
     ds.desc_wfc_kb_full = ds.scfk_blacs_ctxt.create_array_desc(1, 1, 1, 1);
+    // Prepare a physically matching shared frame before installing the cache
+    // sentinel. Disabled components must preserve a valid existing context.
+    ds.symmetry_context.set_crystal_structure(
+        ds.pbc.latvec, ds.pbc.G, ds.atoms.types, ds.atoms.coords_frac);
     ds.symmetry_context.set_available();
     SymmetryKStar sentinel_star;
     sentinel_star.star_index = 17;
@@ -813,6 +817,89 @@ static void test_redistribute_band_eigvecs_kpara_2d_np4()
     ds.free();
 }
 
+// Public setters own complete spin/k matrices. Block-cyclic tiles are
+// created only by native redistribution, including legitimate empty ranks.
+static void test_dense_wfc_setter_packing_and_ownership_np4()
+{
+    using namespace librpa_int;
+    constexpr int n_states = 4, n_aos = 2, n_values = n_states * n_aos;
+    for (int mode = 0; mode != 8; ++mode)
+    {
+        const bool band = mode >= 4;
+        const bool spinor = mode % 4 >= 2;
+        LibrpaHandler* h = librpa_create_handler(MPI_COMM_WORLD);
+        librpa_set_scf_dimension(h, 1, 1, n_states, n_aos, spinor ? 2 : 1);
+        if (band)
+        {
+            const double kfrac[3] = {0, 0, 0};
+            const double occ[4] = {1, 1, 0, 0}, eig[4] = {-1, -1, 1, 1};
+            librpa_set_band_kvec(h, 1, kfrac);
+            librpa_set_band_occ_eigval(h, 1, 1, n_states, occ, eig);
+        }
+        auto ds = api::get_dataset_instance(h);
+        auto &mf = band ? ds->mf_band : ds->mf;
+        double re[2][n_values], im[2][n_values], packed[2][2 * n_values];
+        for (int sigma = 0; sigma != 2; ++sigma)
+            for (int i = 0; i != n_values; ++i)
+            {
+                re[sigma][i] = 2 * sigma + i * 0.125;
+                im[sigma][i] = -sigma - i * 0.0625;
+                packed[sigma][2 * i] = re[sigma][i];
+                packed[sigma][2 * i + 1] = im[sigma][i];
+            }
+        const auto set = [&](int rows, int cols) {
+            switch (mode)
+            {
+                case 0: librpa_set_wfc(h, 0, 0, rows, cols, re[0], im[0]); break;
+                case 1: librpa_set_wfc_packed(h, 0, 0, rows, cols, packed[0]); break;
+                case 2: librpa_set_wfc_spinor(h, 0, rows, cols, re[0], im[0], re[1], im[1]); break;
+                case 3: librpa_set_wfc_spinor_packed(h, 0, rows, cols, packed[0], packed[1]); break;
+                case 4: librpa_set_wfc_band(h, 0, 0, rows, cols, re[0], im[0]); break;
+                case 5: librpa_set_wfc_band_packed(h, 0, 0, rows, cols, packed[0]); break;
+                case 6: librpa_set_wfc_band_spinor(h, 0, rows, cols, re[0], im[0], re[1], im[1]); break;
+                case 7: librpa_set_wfc_band_spinor_packed(h, 0, rows, cols, packed[0], packed[1]); break;
+            }
+        };
+        // Start on rank 3, not on the eventual one-k BLACS root. The other
+        // ranks omit the setter rather than pretending to supply empty tiles.
+        if (ds->comm_h.myid == 3)
+        {
+            set(n_states, n_aos);
+            for (const auto shape : {std::pair<int, int>{1, 1}, {0, n_aos},
+                                     {n_states, 1}, {n_states + 1, n_aos}})
+            {
+                bool rejected = false;
+                try { set(shape.first, shape.second); }
+                catch (const std::runtime_error &) { rejected = true; }
+                assert(rejected);
+            }
+            // Rejection must leave the complete valid matrix intact.
+            for (int sigma = 0; sigma != (spinor ? 2 : 1); ++sigma)
+            {
+                const auto *wfc = mf.find_wfc(0, sigma, 0);
+                assert(wfc && wfc->nr == n_states && wfc->nc == n_aos);
+                for (int i = 0; i != n_values; ++i)
+                    assert(wfc->c[i] == std::complex<double>(re[sigma][i], im[sigma][i]));
+            }
+        }
+        if (band) ds->redistribute_band_eigvecs_kpara_2d();
+        else ds->redistribute_eigvecs_kpara_2d();
+        const auto &desc = band ? ds->desc_band_wfc_kb : ds->desc_wfc_kb;
+        for (int sigma = 0; sigma != (spinor ? 2 : 1); ++sigma)
+        {
+            const auto *wfc = mf.find_wfc(0, sigma, 0);
+            assert(wfc && wfc->nr == desc.n_loc() && wfc->nc == desc.m_loc());
+            for (int jloc = 0; jloc != desc.n_loc(); ++jloc)
+                for (int iloc = 0; iloc != desc.m_loc(); ++iloc)
+                {
+                    const int i = desc.indx_l2g_c(jloc) * n_aos + desc.indx_l2g_r(iloc);
+                    assert((*wfc)(jloc, iloc) == std::complex<double>(re[sigma][i], im[sigma][i]));
+                }
+        }
+        librpa_destroy_handler(h);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     using namespace librpa_int;
@@ -827,6 +914,7 @@ int main (int argc, char *argv[])
     init_global_io();
 
     test_set_comm_blacs_coul_np4();
+    test_dense_wfc_setter_packing_and_ownership_np4();
 
     test_redistribute_blacs2ap_np4({2, 3});
     test_redistribute_blacs2ap_np4({10, 4, 5});

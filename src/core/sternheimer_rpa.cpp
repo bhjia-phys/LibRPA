@@ -162,7 +162,7 @@ ComplexMatrix project_response_to_coulomb_eigenbasis(const CoulombEigenbasis &ba
                               std::sqrt(basis.eigenvalues[i] * basis.eigenvalues[j]);
         }
     }
-    return hermitize(projected);
+    return projected;
 }
 
 ComplexMatrix invert_general_matrix(ComplexMatrix matrix)
@@ -377,7 +377,7 @@ SternheimerRpaFrequencyResult compute_sternheimer_rpa_frequency_headwing(
     {
         throw std::logic_error("ST-RPA head/wing Coulomb subspace is empty");
     }
-    auto response = project_response_to_coulomb_eigenbasis(basis, hermitize(response_m));
+    auto response = project_response_to_coulomb_eigenbasis(basis, response_m);
 
     if (headwing.mode == "head_only")
     {
@@ -424,18 +424,24 @@ SternheimerRpaFrequencyResult compute_sternheimer_rpa_frequency_headwing(
     const auto trace_body = trace(body);
     const auto logdet_body = body_integrand - trace_body;
 
-    ComplexMatrix wing(nbody, 3);
+    const auto &left_input = headwing.wing_mu_left_adjoint.size == 0
+                                 ? headwing.wing_mu : headwing.wing_mu_left_adjoint;
+    if (left_input.nr != coulomb.nr || left_input.nc != 3)
+        throw std::logic_error("ST-RPA qavg left wing must match the auxiliary basis");
+    ComplexMatrix wing(nbody, 3), left_wing_adjoint(nbody, 3);
     for (int ibody = 0; ibody != nbody; ++ibody)
     {
         const int ilambda = ibody + body_start;
         for (int alpha = 0; alpha != 3; ++alpha)
         {
-            std::complex<double> value = 0.0;
+            std::complex<double> value = 0.0, left_value = 0.0;
             for (int mu = 0; mu != coulomb.nr; ++mu)
             {
                 value += std::conj(basis.eigenvectors(mu, ilambda)) * headwing.wing_mu(mu, alpha);
+                left_value += std::conj(basis.eigenvectors(mu, ilambda)) * left_input(mu, alpha);
             }
             wing(ibody, alpha) = std::sqrt(basis.eigenvalues[ilambda]) * value;
+            left_wing_adjoint(ibody, alpha) = std::sqrt(basis.eigenvalues[ilambda]) * left_value;
         }
     }
 
@@ -451,7 +457,7 @@ SternheimerRpaFrequencyResult compute_sternheimer_rpa_frequency_headwing(
             {
                 for (int j = 0; j != nbody; ++j)
                 {
-                    correction += std::conj(wing(i, alpha)) * body_inverse(i, j) * wing(j, beta);
+                    correction += std::conj(left_wing_adjoint(i, alpha)) * body_inverse(i, j) * wing(j, beta);
                 }
             }
             schur(alpha, beta) -= correction;

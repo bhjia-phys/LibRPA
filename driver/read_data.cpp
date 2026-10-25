@@ -485,6 +485,7 @@ void read_headwing_input(const string &dir_path, bool need_wing,
     auto &velocity_matrix = pds->velocity_matrix;
     velocity_matrix.clear();
     const int scf_nk = mf.get_n_kpoints();
+    bool selected_optical_kblacs_tiles = false;
     if (static_cast<int>(pds->pbc.kfrac_list.size()) != scf_nk)
     {
         throw std::runtime_error("SCF k-point list is inconsistent with meanfield");
@@ -585,6 +586,7 @@ void read_headwing_input(const string &dir_path, bool need_wing,
                                   target_to_source_ik, static_cast<int>(kfrac_pyatb.size()));
         const bool direct_headwing_kblacs_2d =
             use_kpara_eigvec && driver::opts.parallel_routing == LIBRPA_ROUTING_LIBRI;
+        selected_optical_kblacs_tiles = direct_headwing_kblacs_2d;
         std::vector<int> iks_headwing_eigvec_this;
         if (use_kpara_eigvec && !direct_headwing_kblacs_2d &&
             pds->scfk_blacs_ctxt.is_initialized())
@@ -699,11 +701,28 @@ void read_headwing_input(const string &dir_path, bool need_wing,
         initialize_symmetry_context(*pds, true);
         require_symmetry_shell_layouts(*pds, "analytic head/wing");
     }
-    pds->p_headwing = std::make_unique<diele_func>(
+    refresh_ds_symmetry_frame(*pds);
+    // Preserve physical direct input independently of the derived context.
+    if (!direct_full_bz_velocity.empty())
+    {
+        auto input = std::make_shared<DirectFullBzOpticalInput>();
+        input->velocity = std::move(direct_full_bz_velocity);
+        input->meanfield = std::move(direct_full_bz_wfc);
+        input->member_source_ik = std::move(direct_full_bz_velocity_member_source_ik);
+        input->source_kfrac = std::move(kfrac_pyatb);
+        pds->direct_full_bz_optical_input = std::move(input);
+    }
+    else
+        pds->direct_full_bz_optical_input.reset();
+    pds->p_headwing.reset();
+    pds->epsmacs_imagfreq.clear();
+    pds->omegas_imagfreq.clear();
+    auto candidate = std::make_unique<diele_func>(
         mf, velocity_matrix, pds->pbc.kfrac_list, pds->basis_wfc, headwing_basis_aux, freqs,
         n_basis, n_states, n_spin, headwing_basis_aux.nb_total, pds->pbc, pds->comm_h,
         pds->blacs_h, use_kpara_eigvec, &pds->scfk_blacs_ctxt,
-        &(pds->eigvecs_kpara_2d_ready() ? pds->desc_wfc_kb : pds->desc_wfc_kb_full));
+        &((restore_mf.active ? selected_optical_kblacs_tiles : pds->eigvecs_kpara_2d_ready())
+              ? pds->desc_wfc_kb : pds->desc_wfc_kb_full));
     const bool use_strict_2d = driver::get_bool(driver::opts.use_2d_dielectric);
     if (use_strict_2d)
     {
@@ -726,37 +745,32 @@ void read_headwing_input(const string &dir_path, bool need_wing,
             normalization.auxiliary_monopole_norm_squared,
             normalization.auxiliary_head_coefficient,
             normalization.pw_to_auxiliary_scale);
-        pds->p_headwing->configure_strict_2d_coulomb_head(
+        pds->strict_2d_auxiliary_monopole_norm_squared = metadata.auxiliary_monopole_norm_squared;
+        candidate->configure_strict_2d_coulomb_head(
             true, metadata.auxiliary_monopole_norm_squared);
     }
     else
     {
-        pds->p_headwing->configure_strict_2d_coulomb_head(false);
+        candidate->configure_strict_2d_coulomb_head(false);
     }
-    pds->p_headwing->use_soc = mf.get_n_spinor() > 1;
-    pds->p_headwing->debug = librpa_int::global::should_output(LIBRPA_VERBOSE_DEBUG);
+    candidate->use_soc = mf.get_n_spinor() > 1;
+    candidate->debug = librpa_int::global::should_output(LIBRPA_VERBOSE_DEBUG);
+    candidate->set_symmetry_context(pds->symmetry_context);
     // Symmetry-aware head/wing uses the same active k-list as the main LibRPA
     // path: full BZ without symmetry, IBZ with input k-star metadata.
     if (use_headwing_symmetry && pds->symmetry_context.available &&
         !pds->symmetry_context.kstars.empty())
     {
-        pds->p_headwing->set_symmetry_context(pds->symmetry_context);
-        pds->p_headwing->use_symmetry = true;
+        candidate->use_symmetry = true;
         for (atom_t atom = 0; atom != static_cast<atom_t>(pds->basis_wfc.n_atoms); ++atom)
-            pds->p_headwing->atom_nw[atom] = pds->basis_wfc.get_atom_nb(atom);
-        pds->p_headwing->coord_frac = pds->symmetry_context.input_coord_frac;
+            candidate->atom_nw[atom] = pds->basis_wfc.get_atom_nb(atom);
+        candidate->coord_frac = pds->symmetry_context.input_coord_frac;
     }
-    if (!direct_full_bz_velocity.empty())
-    {
-        pds->p_headwing->set_direct_full_bz_headwing_inputs(
-            std::move(direct_full_bz_velocity),
-            std::move(direct_full_bz_wfc),
-            std::move(direct_full_bz_velocity_member_source_ik));
-    }
+    candidate->set_direct_full_bz_headwing_inputs(pds->direct_full_bz_optical_input);
     if (restore_mf.active)
     {
         const int n_spinor = mf.get_n_spinor();
-        auto &hw_mf = pds->p_headwing->get_meanfield_df();
+        auto &hw_mf = candidate->get_meanfield_df();
         for (int ispin = 0; ispin != n_spin; ++ispin)
         {
             for (int ispinor = 0; ispinor != n_spinor; ++ispinor)
@@ -784,19 +798,32 @@ void read_headwing_input(const string &dir_path, bool need_wing,
             std::cout << "Using PyATB head/wing input on the active LibRPA k-list with "
                       << mf.get_n_kpoints() << " k-points" << std::endl;
     }
-    if (!restore_mf.active) pds->p_headwing->normalize_ibz_star_weighted_occupations();
-    pds->p_headwing->init(driver::opts.sqrt_coulomb_threshold, pds->vq);
-    pds->p_headwing->cal_head();
-    pds->epsmacs_imagfreq = pds->p_headwing->get_head_vec();
-    pds->omegas_imagfreq = freqs;
-    pds->p_headwing->test_head();
+    if (restore_mf.active)
+    {
+        pds->optical_meanfield_layout = candidate->get_meanfield_input_layout();
+        pds->optical_meanfield_input = candidate->promote_owned_meanfield_input();
+    }
+    else
+    {
+        pds->optical_meanfield_input.reset();
+        candidate->normalize_ibz_star_weighted_occupations();
+    }
+    candidate->init(driver::opts.sqrt_coulomb_threshold, pds->vq);
+    candidate->cal_head();
+    candidate->test_head();
     if (need_wing)
     {
         const auto &headwing_cs =
             driver::get_bool(driver::opts.use_shrink_abfs) ? pds->cs_data_shrink : pds->cs_data;
-        pds->p_headwing->cal_wing(headwing_cs, driver::opts.sqrt_coulomb_threshold, pds->vq);
-        pds->p_headwing->test_wing();
+        candidate->cal_wing(headwing_cs, driver::opts.sqrt_coulomb_threshold, pds->vq);
+        candidate->test_wing();
     }
+    auto generated_head = candidate->get_head_vec();
+    auto generated_frequencies = freqs;
+    pds->p_headwing = std::move(candidate);
+    pds->epsmacs_imagfreq = std::move(generated_head);
+    pds->omegas_imagfreq = std::move(generated_frequencies);
+    pds->optical_input_frame_stale = false;
 }
 
 void read_dielec_func(const string &file_path, std::vector<double> &omegas,
@@ -1446,6 +1473,7 @@ void read_ri_shrink(const string &dir_path)
     profiler.stop("read_Cs_shrink");
 
     profiler.start("read_shrink_sinvS_fold", "Load shrink transformation");
+    pds->note_input_change(librpa_int::InputChange::AuxProjection);
     pds->sinvS.clear();
     read_shrink_sinvS(driver_params.input_dir, driver_params.prefix_shrink_sinvS, pds->sinvS);
 

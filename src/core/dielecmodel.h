@@ -4,6 +4,7 @@
 #include <complex>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -52,6 +53,16 @@ using velocity_matrix_t = std::vector<std::vector<std::vector<ComplexMatrix>>>;
 //! Original-KS endpoint probabilities [spin][k][band], without changing occupations.
 using HeadwingBandSelection = std::vector<std::vector<std::vector<double>>>;
 
+// Exact ordered-transition endpoint probes, before dielectric unit factors.
+// Side0 is occupied->empty, side1 empty->occupied. The cross block is rho*d^dagger
+// with d_mn=v_mn/(epsilon_n-epsilon_m); it is not a frequency-domain wing.
+struct OpticalTransitionGrams
+{
+    std::array<Matz, 2> dipole;
+    std::array<Matz, 2> charge_dipole;
+    double velocity_hermiticity_error = 0.0;
+};
+
 void initialize_velocity_matrix(velocity_matrix_t &velocity, int n_spins, int n_kpoints,
                                 int n_states);
 
@@ -72,6 +83,17 @@ void accumulate_wing_mu_for_pair(const std::vector<double> &omega,
                                  const std::complex<double> &c_mn, double egap, double factor1,
                                  double factor2, std::complex<double> *wing_mu_for_mu,
                                  std::complex<double> *wing_mu_iomega0_for_mu = nullptr);
+// Complete interband Lehmann pair. Gap and occupation difference are signed,
+// so the result does not depend on the order of the two band labels.
+std::complex<double> headwing_lehmann_head_pair(
+    double omega, double gap, double occupation_difference,
+    std::complex<double> velocity_nm_alpha_times_velocity_mn_beta);
+void accumulate_lehmann_wing_mu_for_pair(
+    const std::vector<double> &omega,
+    const std::array<std::complex<double>, 3> &velocity_nm,
+    std::complex<double> charge_mn, double gap, double occupation_difference,
+    std::complex<double> *right, std::complex<double> *left_adjoint,
+    std::complex<double> *right_iomega0 = nullptr);
 std::vector<int> headwing_local_kpoints(int n_kpoints,
                                         const KPointBlacsParallelContext *kblacs_ctxt);
 ComplexMatrix rotate_headwing_wfc_to_kstar_member(
@@ -173,10 +195,9 @@ void invert_headwing_body_with_identity_solve(
 // are not read. The projector is applied through its low-rank factor
 // Y = [head_direction | trailing filtered columns] (n_abf x m with
 // m = 1 + n_singular), so no n_abf x n_abf projector is ever formed.
-// eps_block must be Hermitian: the routine contracts it only as E*Y rather than
-// forming both E*Y and E^H*Y, so the result is accurate to O(|E - E^H|). The
-// Cholesky branch of the in-place inverse (pposv with uplo='L') already requires
-// this, and E is Hermitian on the imaginary-frequency axis that reaches here.
+// The single-wing overload is retained for reciprocal callers. The general
+// overload takes the independent left wing in adjoint storage (n_abf x 3).
+// Only callers that establish Hermiticity may request the Cholesky solve.
 // Collective reductions run on the descriptor communicator. The read-only
 // matrix inputs are const; only eps_block is modified.
 void rewrite_eps_abf_space(
@@ -192,6 +213,48 @@ void rewrite_eps_abf_space(
     const ArrayDesc &desc_nabf_nabf_opt, const BlacsCtxtHandler &blacs_h,
     std::size_t n_nonsingular,
     double sqrt_coulomb_threshold, bool use_cholesky, bool use_device);
+void rewrite_eps_abf_space(
+    matrix_m<std::complex<double>> &eps_block,
+    const matrix_m<std::complex<double>> &sqrtv_block,
+    const matrix_m<std::complex<double>> &coul_eigen_block,
+    const matrix_m<std::complex<double>> &head_direction,
+    const ArrayDesc &desc_head_direction,
+    const matrix_m<std::complex<double>> &head,
+    const matrix_m<std::complex<double>> &wing_mu,
+    const matrix_m<std::complex<double>> &wing_mu_left_adjoint,
+    const std::vector<double> &qx, const std::vector<double> &qy,
+    const std::vector<double> &qz, const std::vector<double> &rho,
+    const ArrayDesc &desc_nabf_nabf_opt, const BlacsCtxtHandler &blacs_h,
+    std::size_t n_nonsingular,
+    double sqrt_coulomb_threshold, bool use_cholesky, bool use_device);
+
+// A selected optical mean field keeps its actual input representation.
+// These are small descriptor/ownership facts, not numerical cache readiness.
+struct OpticalMeanFieldLayout
+{
+    bool use_kpara_eigvec = false;
+    std::array<int, 9> descriptor{};
+    std::vector<int> owned_kpoints;
+};
+
+// Physical input survives the lifetime of any computed optical context.
+// The existing large WFC payload is moved here once, then shared read-only.
+struct DirectFullBzOpticalInput
+{
+    velocity_matrix_t velocity;
+    MeanField meanfield;
+    std::vector<std::vector<int>> member_source_ik;
+    // Actual source labels, in the common declared AO/Bloch convention.
+    // Empty retains the legacy cell-frame identity path, not an inferred label.
+    std::vector<Vector3_Order<double>> source_kfrac;
+};
+
+//! Return target-framed rows, borrowing raw input on the dense identity path.
+//! Scratch owns any phased copy or local AO-by-band descriptor tile.
+const ComplexMatrix &direct_full_bz_wfc_for_kstar_member(
+    const DirectFullBzOpticalInput &input, const SymmetryContext &ctx, const AtomicBasis &basis_wfc,
+    int ispin, int ispinor, int ik_ibz, std::size_t imember, const Vector3_Order<double> &k_target,
+    ComplexMatrix &scratch, const ArrayDesc *local_descriptor = nullptr);
 
 class diele_func
 {
@@ -200,8 +263,18 @@ private:
     std::vector<matrix_m<std::complex<double>>> head;
     // ( omega, mu:n_abfs * alpha )
     std::vector<matrix_m<std::complex<double>>> wing_mu;
+    // Adjoint storage of the independently calculated left dielectric wing.
+    std::vector<matrix_m<std::complex<double>>> wing_mu_left_adjoint;
+    bool projected_parent_wings_ = false;
+    bool head_completed_ = false;
+    bool auxiliary_wings_completed_ = false;
+    bool regular_wings_completed_ = false;
+    // Local descriptor of the completed regular-wing transform. A new
+    // Coulomb transform is always recomputed from a completed auxiliary wing.
+    std::array<int, 9> regular_wing_descriptor_{};
     // ( omega, lambda:n_lambda * alpha)
     std::vector<matrix_m<std::complex<double>>> wing;
+    std::vector<matrix_m<std::complex<double>>> wing_left_adjoint;
     // std::vector<std::vector<std::vector<std::complex<double>>>> wing;
 
     // ( i:n_lambda, j:n_lambda )
@@ -230,6 +303,14 @@ private:
     // Cs_LRI Cs_IJR;
 
     MeanField meanfield_df;
+    // Ordinary contexts retain their historical owned value/copy semantics.
+    // A diagnostic context borrows the current dataset without cloning WFC.
+    const MeanField *borrowed_meanfield_df_ = nullptr;
+    // Only an explicitly selected external optical mean field owns this
+    // immutable holder. Diagnostic contexts may still borrow a live Dataset.
+    std::shared_ptr<const MeanField> physical_meanfield_input_;
+    const MeanField &meanfield() const
+    { return borrowed_meanfield_df_ ? *borrowed_meanfield_df_ : meanfield_df; }
     std::vector<double> omega;
     std::vector<Vector3_Order<double>> kfrac_band;
     int n_basis, n_states, n_spin, n_abf, nk;
@@ -237,9 +318,7 @@ private:
     const AtomicBasis &atomic_basis_wfc_;
     const AtomicBasis &atomic_basis_abf_;
     const velocity_matrix_t &velocity_;
-    velocity_matrix_t direct_full_bz_velocity_;
-    MeanField direct_full_bz_wfc_;
-    std::vector<std::vector<int>> direct_full_bz_velocity_member_source_ik_;
+    std::shared_ptr<const DirectFullBzOpticalInput> direct_full_bz_inputs_;
     const MpiCommHandler &comm_h;
     const BlacsCtxtHandler &blacs_h;
     const SymmetryContext *symmetry_context_;
@@ -251,11 +330,14 @@ private:
     size_t n_nonsingular;
     // Lebedev-Laikov angular grid; qw has absorbed 4Pi.
     std::vector<double> qx_leb, qy_leb, qz_leb, qw_leb;
-    // gamma reciprocal lattice vector, (27-1)*3
+    // All reciprocal vectors needed to bound the Gamma-cell Voronoi region.
     std::vector<Vector3_Order<double>> g_enclosing_gamma;
     std::vector<double> q_gamma;
+    std::vector<double> gamma_cell_quadrature_weights() const;
     double vol_gamma = 0.0;
     double strict_2d_pw_to_auxiliary_scale_ = 0.0;
+    double strict_2d_auxiliary_monopole_norm_squared_ = 0.0;
+    void require_regular_wing_descriptor(const ArrayDesc &descriptor) const;
 
 public:
     bool use_2d_dielectric = false;
@@ -263,6 +345,8 @@ public:
     bool debug = false;
     //! Normalize only the angular Gamma-cell average, preserving its vacuum limit.
     bool normalize_gamma_cell_weights = false;
+    //! Sum of the same effective weights used by the ordinary averaged inverse.
+    double gamma_cell_weight_sum() const;
     //! Set before init/cal_head: omit pairs whose two original KS endpoints are selected.
     void set_excluded_band_pairs(const HeadwingBandSelection &selection);
 
@@ -271,6 +355,8 @@ public:
                                           double auxiliary_monopole_norm_squared);
     bool strict_2d_coulomb_head_configured() const noexcept;
     double get_strict_2d_pw_to_auxiliary_scale() const;
+    double get_strict_2d_auxiliary_monopole_norm_squared() const
+    { return strict_2d_auxiliary_monopole_norm_squared_; }
 
     // Symmetry-aware head/wing switches. When use_symmetry is true and the
     // input symmetry context can restore the BZ from the IBZ k-grid, cal_head
@@ -279,24 +365,52 @@ public:
     std::map<atom_t, size_t> atom_nw;
     std::map<atom_t, std::array<double, 3>> coord_frac;
     void set_symmetry_context(const SymmetryContext &ctx) { symmetry_context_ = &ctx; }
-    void set_direct_full_bz_headwing_inputs(
-        velocity_matrix_t velocity_full,
-        MeanField wfc_full,
-        std::vector<std::vector<int>> member_source_ik)
+    void set_direct_full_bz_headwing_inputs(velocity_matrix_t velocity_full, MeanField wfc_full,
+                                            std::vector<std::vector<int>> member_source_ik,
+                                            std::vector<Vector3_Order<double>> source_kfrac = {})
     {
-        direct_full_bz_velocity_ = std::move(velocity_full);
-        direct_full_bz_wfc_ = std::move(wfc_full);
-        direct_full_bz_velocity_member_source_ik_ = std::move(member_source_ik);
+        auto input = std::make_shared<DirectFullBzOpticalInput>();
+        input->velocity = std::move(velocity_full);
+        input->meanfield = std::move(wfc_full);
+        input->member_source_ik = std::move(member_source_ik);
+        input->source_kfrac = std::move(source_kfrac);
+        set_direct_full_bz_headwing_inputs(std::move(input));
     }
+    void set_direct_full_bz_headwing_inputs(
+        std::shared_ptr<const DirectFullBzOpticalInput> input)
+    {
+        direct_full_bz_inputs_ = std::move(input);
+        head_completed_ = false;
+        auxiliary_wings_completed_ = false;
+        regular_wings_completed_ = false;
+    }
+    const std::shared_ptr<const DirectFullBzOpticalInput> &
+    get_direct_full_bz_headwing_inputs() const { return direct_full_bz_inputs_; }
     bool has_direct_full_bz_headwing_inputs() const
     {
-        return !direct_full_bz_velocity_.empty() && direct_full_bz_wfc_.initialized();
+        // An explicitly selected but invalid payload must fail validation,
+        // rather than silently selecting representative restoration.
+        return static_cast<bool>(direct_full_bz_inputs_);
     }
 
     // Public access to the head/wing mean-field copy for driver-side validation
     // of producer eigenvector coverage. The driver must not expand or broadcast
     // eigenvectors here; k-parallel consumers use their kBLACS owner groups.
-    MeanField &get_meanfield_df() { return meanfield_df; }
+    MeanField &get_meanfield_df()
+    {
+        if (borrowed_meanfield_df_)
+            throw std::logic_error("borrowed optical context does not allow meanfield mutation");
+        head_completed_ = false;
+        auxiliary_wings_completed_ = false;
+        regular_wings_completed_ = false;
+        return meanfield_df;
+    }
+    const MeanField &get_meanfield_df() const { return meanfield(); }
+    void bind_meanfield_input(std::shared_ptr<const MeanField> input);
+    std::shared_ptr<const MeanField> promote_owned_meanfield_input();
+    OpticalMeanFieldLayout get_meanfield_input_layout() const;
+    const std::shared_ptr<const MeanField> &get_meanfield_input() const
+    { return physical_meanfield_input_; }
     // Main IBZ occupations carry geometric star weights. Convert this owned
     // copy to the head/wing f/N_IBZ convention; PyATB snapshots already use it.
     void normalize_ibz_star_weighted_occupations();
@@ -361,6 +475,17 @@ public:
         }
     };
     ~diele_func(){};
+    // Internal, read-only before-grid context; no head/wing/cache is initialized.
+    static std::unique_ptr<diele_func> make_borrowed_context(
+        const MeanField &mf, const velocity_matrix_t &velocity,
+        const std::vector<Vector3_Order<double>> &kfrac, const AtomicBasis &basis_wfc,
+        const AtomicBasis &basis_aux, const PeriodicBoundaryData &pbc,
+        const MpiCommHandler &comm, const BlacsCtxtHandler &blacs,
+        bool use_kpara_eigvec, const KPointBlacsParallelContext *kblacs,
+        const ArrayDesc *desc_wfc, const diele_func *direct_input_context = nullptr);
+    OpticalTransitionGrams build_optical_transition_grams(
+        const Cs_LRI &Cs_data, const AtomicBasis &source_basis,
+        const ComplexMatrix *projection_gamma = nullptr);
     void init(double coulomb_eigen_threshold, const atpair_k_cplx_mat_t &Vq);
     void init_wing(double coulomb_eigen_threshold, const atpair_k_cplx_mat_t &Vq);
 
@@ -379,25 +504,58 @@ public:
     double cal_factor(std::string name);
     void test_head();
     std::vector<double> get_head_vec();
-    bool has_wing() const { return !wing.empty() || !wing_mu.empty(); }
+    bool has_head() const { return head_completed_; }
+    bool has_auxiliary_wing() const { return auxiliary_wings_completed_; }
+    bool has_regular_wing() const { return regular_wings_completed_; }
+    bool has_wing() const { return has_auxiliary_wing() || has_regular_wing(); }
+    bool has_projected_parent_wings() const { return projected_parent_wings_; }
+    const velocity_matrix_t &get_velocity_matrix() const { return velocity_; }
     const std::vector<double> &get_frequency_nodes() const { return omega; }
     const std::vector<Matz> &get_head_tensors() const { return head; }
     const std::vector<Matz> &get_wing_auxiliary() const { return wing_mu; }
+    const std::vector<Matz> &get_left_wing_auxiliary_adjoint() const
+    { return wing_mu_left_adjoint; }
 
     void cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
                   const atpair_k_cplx_mat_t &Vq);  // atpair_k_cplx_mat_t &Vq, Cs_LRI &Cs_data
+    // Project both optical wings consistently with chi_s = U chi_parent U^dagger.
+    void cal_projected_wing(const Cs_LRI &parent_cs, const AtomicBasis &parent_basis,
+                            const ComplexMatrix &projection_gamma,
+                            double coulomb_eigen_threshold,
+                            const atpair_k_cplx_mat_t &Vq);
 
 private:
+    void cal_wing_with_basis(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
+                             const atpair_k_cplx_mat_t &Vq,
+                             const AtomicBasis &source_basis,
+                             const ComplexMatrix *projection_gamma,
+                             OpticalTransitionGrams *endpoint = nullptr);
+    void store_reduced_wings(const std::vector<std::complex<double>> &right,
+                             const std::vector<std::complex<double>> &left_adjoint,
+                             int source_size, const ComplexMatrix *projection_gamma);
     // Symmetry-aware wing: each kBLACS owner group loops over its local IBZ
     // k-points and contributes each k-star member to wing_mu. Full-BZ PyATB
     // velocity/WFC are selected directly when available. Otherwise one current
     // representative's spinor pair generates each member in a common KS gauge.
     void cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
-                            const atpair_k_cplx_mat_t &Vq);
+                            const atpair_k_cplx_mat_t &Vq,
+                            const AtomicBasis &source_basis,
+                            const ComplexMatrix *projection_gamma,
+                            OpticalTransitionGrams *endpoint);
     // The historical full-BZ wing summation, also used as the fallback when
     // symmetry restoration is unavailable.
     void cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
-                          const atpair_k_cplx_mat_t &Vq);
+                          const atpair_k_cplx_mat_t &Vq,
+                          const AtomicBasis &source_basis,
+                          const ComplexMatrix *projection_gamma,
+                          OpticalTransitionGrams *endpoint);
+
+    const velocity_matrix_t &direct_full_bz_velocity() const
+    { return direct_full_bz_inputs_->velocity; }
+    const MeanField &direct_full_bz_wfc() const
+    { return direct_full_bz_inputs_->meanfield; }
+    const std::vector<std::vector<int>> &direct_full_bz_member_source_ik() const
+    { return direct_full_bz_inputs_->member_source_ik; }
 
 public:
     // tranform Cs_ij(R) to Cs_ij(k)
@@ -423,18 +581,18 @@ public:
     std::pair<ArrayDesc, matrix_m<complex<double>>> transform_Cs2mnk(
         const int ik, const int mu,
         std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>> &Cs_IJ,
-        int spin_filter = -1);
+        int spin_filter = -1, const AtomicBasis *source_basis = nullptr);
     std::pair<ArrayDesc, matrix_m<complex<double>>> transform_Cs2mnk_kblacs(
         int ik, int mu,
         std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>> &Cs_IJ,
         const BlacsCtxtHandler &wing_blacs_h, const Vector3_Order<double> &kfrac,
         const std::vector<std::vector<const ComplexMatrix *>> *wfc_override = nullptr,
-        int spin_filter = -1);
+        int spin_filter = -1, const AtomicBasis *source_basis = nullptr);
     std::pair<ArrayDesc, matrix_m<complex<double>>> transform_Cs2mnk_kblacs(
         int source_ik, int target_id, int mu, const HeadwingCsIJKMap &Cs_IJ_k,
-        const BlacsCtxtHandler &wing_blacs_h,
+        const BlacsCtxtHandler &wing_blacs_h, const Vector3_Order<double> &kfrac,
         const std::vector<std::vector<const ComplexMatrix *>> *wfc_override = nullptr,
-        int spin_filter = -1);
+        int spin_filter = -1, const AtomicBasis *source_basis = nullptr);
     // void FT_R2k();
     // std::complex<double> compute_Cijk(Cs_LRI &Cs_in, int mu, int I, int i, int J, int j, int
     // ik); void Cs_ij2mn(); std::complex<double> compute_Cs_ij2mn(int mu, int m, int n, int
@@ -448,6 +606,7 @@ public:
 
     matrix_m<std::complex<double>> get_rpa_chi0v_head(const int ifreq) const;
     matrix_m<std::complex<double>> get_rpa_chi0v_wing(const int ifreq) const;
+    matrix_m<std::complex<double>> get_rpa_chi0v_left_wing_adjoint(const int ifreq) const;
     SternheimerRpaHeadwingInput get_sternheimer_rpa_headwing_input(
         int ifreq, const RpaHeadwingSettings &settings) const;
 
@@ -496,7 +655,7 @@ private:
         const ArrayDesc &desc_nao_nao, const BlacsCtxtHandler &wing_blacs_h,
         const ArrayDesc &desc_wfc_src,
         const std::vector<std::vector<const ComplexMatrix *>> *wfc_override,
-        int spin_filter);
+        int spin_filter, const AtomicBasis *source_basis);
 };
 
 int rpa_headwing_regular_body_start_channel(const RpaHeadwingSettings &settings);
@@ -504,6 +663,10 @@ bool use_strict_2d_rpa_trace_log_average(const RpaHeadwingSettings &settings);
 
 double rpa_headwing_reciprocal_cell_volume(const PeriodicBoundaryData &pbc, bool use_2d_dielectric);
 double rpa_headwing_gamma_cell_volume(const PeriodicBoundaryData &pbc, bool use_2d_dielectric);
+//! Relevant-vector superset from reciprocal ROW vectors, also for unreduced bases.
+//! Throws before enumeration if its rigorous bounds exceed the candidate budget.
+std::vector<Vector3_Order<double>> rpa_headwing_gamma_cell_neighbors(
+    const PeriodicBoundaryData &pbc, bool use_2d_dielectric);
 
 double strict_2d_head_prefactor(double inplane_cell_area);
 double strict_2d_wing_prefactor(double inplane_cell_area);
@@ -571,6 +734,11 @@ std::complex<double> compute_strict_2d_rpa_chi0v_trace_log_average(
 void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_block,
                                    const matrix_m<std::complex<double>> &head,
                                    const matrix_m<std::complex<double>> &wing,
+                                   const ArrayDesc &desc_response);
+void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_block,
+                                   const matrix_m<std::complex<double>> &head,
+                                   const matrix_m<std::complex<double>> &wing,
+                                   const matrix_m<std::complex<double>> &left_wing_adjoint,
                                    const ArrayDesc &desc_response);
 void replace_rpa_response_head_only(matrix_m<std::complex<double>> &response_block,
                                     const matrix_m<std::complex<double>> &head,

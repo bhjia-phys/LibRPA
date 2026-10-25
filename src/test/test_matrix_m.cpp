@@ -85,6 +85,64 @@ static void test_conjugate()
     assert(m == m_conj_ref);
 }
 
+template <typename T>
+static void check_inverse(const matrix_m<T> &m, const matrix_m<T> &expected,
+                          const char *label)
+{
+    const auto original = m.copy();
+    // Exercise resize as well as the preservation of the requested layout.
+    matrix_m<T> result(1, 1, m.major());
+    inverse(m, result);
+    assert(result.major() == m.major());
+    assert(result.nr() == m.nr() && result.nc() == m.nc());
+    double reference_error = 0.0, left_residual = 0.0, right_residual = 0.0;
+    for (int i = 0; i < m.nr(); ++i)
+        for (int j = 0; j < m.nc(); ++j)
+        {
+            assert(m(i, j) == original(i, j));
+            reference_error = std::max(reference_error, std::abs(result(i, j) - expected(i, j)));
+            T left = 0, right = 0;
+            // Independent scalar products: do not verify inverse via the
+            // library's matrix multiplication or a second LAPACK inverse.
+            for (int k = 0; k < m.nc(); ++k)
+            {
+                left += m(i, k) * result(k, j);
+                right += result(i, k) * m(k, j);
+            }
+            const T identity = (i == j) ? T(1) : T(0);
+            left_residual = std::max(left_residual, std::abs(left - identity));
+            right_residual = std::max(right_residual, std::abs(right - identity));
+        }
+    printf("inverse %s %s: reference=%.3e left=%.3e right=%.3e\n", label,
+           m.is_row_major() ? "row" : "column", reference_error,
+           left_residual, right_residual);
+    assert(reference_error < 1e-12);
+    assert(left_residual < 1e-12 && right_residual < 1e-12);
+}
+
+static void test_inverse()
+{
+    for (const auto major : {MAJOR::ROW, MAJOR::COL})
+    {
+        // A=P*U, where P exchanges rows 0 and 2. The analytic inverse is
+        // U^{-1}*P. These nonsymmetric matrices require an LU row pivot.
+        Matd real({{0.0, 0.0, 5.0}, {0.0, 4.0, 2.0}, {2.0, 1.0, 3.0}}, major);
+        Matd real_inverse({{-0.25, -0.125, 0.5}, {-0.1, 0.25, 0.0},
+                           {0.2, 0.0, 0.0}}, major);
+        check_inverse(real, real_inverse, "double-3x3-pivot");
+        // Non-Hermitian complex entries detect unintended conjugation.
+        Matz complex({{0.0, 0.0, {2.0, -1.0}}, {0.0, 2.0, {1.0, 1.0}},
+                      {{1.0, 1.0}, {2.0, -1.0}, {0.0, -1.0}}}, major);
+        Matz complex_inverse({{{0.6, 0.3}, {-0.25, 0.75}, {0.5, -0.5}},
+                              {{-0.1, -0.3}, 0.5, 0.0},
+                              {{0.4, 0.2}, 0.0, 0.0}}, major);
+        check_inverse(complex, complex_inverse, "complex-3x3-pivot");
+        check_inverse(Matd({{4.0}}, major), Matd({{0.25}}, major), "double-1x1");
+        check_inverse(Matz({{{1.0, 2.0}}}, major),
+                      Matz({{{0.2, -0.4}}}, major), "complex-1x1");
+    }
+}
+
 int main (int argc, char *argv[])
 {
     test_constuctor();
@@ -92,5 +150,6 @@ int main (int argc, char *argv[])
     test_minmax();
     test_power_hemat();
     test_conjugate();
+    test_inverse();
     return 0;
 }

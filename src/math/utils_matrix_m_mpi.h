@@ -8,6 +8,7 @@
 #include <cassert>
 #include <functional>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -159,12 +160,15 @@ void collect_block_from_IJ_storage_tensor(matrix_m<Tdst> &mat_lo, const ArrayDes
             atbasis_col.get_local_index(j_gl, J_loc, j_ab);
             //Tdst temp;
             // librpa_int::global::lib_printf("i_gl I_loc i_ab %d %d %d j_gl J_loc j_ab %d %d %d\n", i_gl, I_loc, i_ab, j_gl, J_loc, j_ab);
-            tmp_loc_row[jlo] = TMAP.at(I_loc).at({J_loc, cell})(i_ab, j_ab);
+            tmp_loc_row[jlo] = alpha * TMAP.at(I_loc).at({J_loc, cell})(i_ab, j_ab);
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -223,10 +227,13 @@ void collect_block_from_IJ_storage_matrix_transform(
                 }
             }
         }
-        Tdst *row_ptr=tmp_loc.ptr() + ilo* ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr,&tmp_loc_row[0],cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -278,10 +285,13 @@ void collect_block_from_IJ_storage_tensor_transform(
                 }
             }
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -334,10 +344,13 @@ void collect_block_from_IJ_storage_tensor_transform_triple(
                 }
             }
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
 #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -448,11 +461,15 @@ void collect_block_from_ALL_IJ_Tensor(matrix_m<Tdst> &mat_lo, const ArrayDesc &a
                 if (conjugate) tmp_ele = get_conj(tmp_ele);
                 tmp_loc_row[jlo] = tmp_ele;
             }
+            tmp_loc_row[jlo] *= alpha;
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -508,10 +525,13 @@ void collect_block_from_ALL_IJ_Tensor_sparse_zero_missing(
                 tmp_loc_row[jlo] = alpha * tmp_ele;
             }
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);
@@ -520,6 +540,41 @@ void collect_block_from_ALL_IJ_Tensor_sparse_zero_missing(
         tmp_loc.swap_to_col_major();
     }
     mat_lo = tmp_loc;
+}
+
+// Complete ordered storage: unlike the symmetric collectors above, the lower
+// block is independent and must be present. Validate before entering OpenMP.
+template <typename Tdst, typename TA, typename TC, typename TAC = std::pair<TA, TC>>
+void collect_block_from_ordered_IJ_Tensor(
+    matrix_m<Tdst> &mat_lo, const ArrayDesc &ad, const AtomicBasis &atbasis, const TC &cell,
+    Tdst alpha, const std::map<TA, std::map<TAC, RI::Tensor<Tdst>>> &TMAP,
+    MAJOR major_pv = MAJOR::ROW)
+{
+    (void)major_pv;  // RI tensors expose their own ordered element accessor.
+    assert(as_size(ad.m()) == atbasis.nb_total && as_size(ad.n()) == atbasis.nb_total);
+    assert(mat_lo.nr() == ad.m_loc() && mat_lo.nc() == ad.n_loc());
+    if (ad.m_loc() == 0 || ad.n_loc() == 0) return;
+    std::vector<int> row_atom(ad.m_loc()), row_index(ad.m_loc());
+    std::vector<int> col_atom(ad.n_loc()), col_index(ad.n_loc());
+    for (int i = 0; i != ad.m_loc(); ++i)
+        atbasis.get_local_index(ad.indx_l2g_r(i), row_atom[i], row_index[i]);
+    for (int j = 0; j != ad.n_loc(); ++j)
+        atbasis.get_local_index(ad.indx_l2g_c(j), col_atom[j], col_index[j]);
+    std::map<std::pair<int, int>, const RI::Tensor<Tdst>*> blocks;
+    for (const int i : std::set<int>(row_atom.begin(), row_atom.end()))
+        for (const int j : std::set<int>(col_atom.begin(), col_atom.end()))
+        {
+            const auto &block = TMAP.at(static_cast<TA>(i)).at({static_cast<TA>(j), cell});
+            if (block.shape.size() != 2 || block.shape[0] != atbasis[i] ||
+                block.shape[1] != atbasis[j])
+                throw std::runtime_error("Ordered tensor block shape differs from the auxiliary basis");
+            blocks.emplace(std::make_pair(i, j), &block);
+        }
+    const auto &validated = blocks;
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i != ad.m_loc(); ++i)
+        for (int j = 0; j != ad.n_loc(); ++j)
+            mat_lo(i, j) = alpha * (*validated.at({row_atom[i], col_atom[j]}))(row_index[i], col_index[j]);
 }
 
 template <typename Tdst, typename TA, typename TC, typename TAC = std::pair<TA, TC>>
@@ -554,10 +609,13 @@ void collect_block_from_ordered_IJ_Tensor_sparse_zero_missing(
                 tmp_loc_row[jlo] = alpha * it_JR->second(i_ab, j_ab);
             }
         }
-        Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
-        omp_set_lock(&mat_lock);
-        memcpy(row_ptr, &tmp_loc_row[0], cp_size);
-        omp_unset_lock(&mat_lock);
+        if (cp_size != 0)
+        {
+            Tdst *row_ptr = tmp_loc.ptr() + ilo * ad.n_loc();
+            omp_set_lock(&mat_lock);
+            memcpy(row_ptr, tmp_loc_row.data(), cp_size);
+            omp_unset_lock(&mat_lock);
+        }
     }
     #pragma omp barrier
     omp_destroy_lock(&mat_lock);

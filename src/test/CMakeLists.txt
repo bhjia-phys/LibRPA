@@ -68,6 +68,7 @@ foreach(target
     test_matrix
     test_matrix_m
     test_meanfield
+    test_optical_lehmann
     test_pbc
     test_profiler
     test_qpe_solver
@@ -93,6 +94,12 @@ target_compile_options(test_sternheimer_symmetry PRIVATE -UNDEBUG)
 # Numerical Coulomb collection and complete magnetic operators.
 add_test(NAME test_coulmat_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_coulmat>)
 if(LIBRPA_USE_LIBRI)
+  config_test(test_chi0_signed_frequency 1)
+  add_test(NAME test_chi0_signed_frequency_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_chi0_signed_frequency>)
+  config_test(test_strict2d_signed_frequency 1)
+  add_test(NAME test_strict2d_signed_frequency_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_strict2d_signed_frequency>)
+  config_test(test_rpa_signed_frequency 1)
+  add_test(NAME test_rpa_signed_frequency_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_rpa_signed_frequency>)
   config_test(test_magnetic_gw_model 1)
   add_test(NAME test_magnetic_gw_model_mpi COMMAND mpirun -np 4 $<TARGET_FILE:test_magnetic_gw_model>)
 endif()
@@ -150,6 +157,9 @@ add_test(NAME test_rpa_logdet_mpi
 add_test(NAME test_rpa_headwing_mpi
   COMMAND mpirun -np 4 $<TARGET_FILE:test_rpa_headwing>)
 set_tests_properties(test_rpa_headwing_mpi PROPERTIES TIMEOUT 120)
+add_test(NAME test_optical_lehmann_mpi
+  COMMAND mpirun -np 4 $<TARGET_FILE:test_optical_lehmann>)
+set_tests_properties(test_optical_lehmann_mpi PROPERTIES TIMEOUT 120)
 config_test(test_headwing_descriptor 2)
 set_tests_properties(test_headwing_descriptor PROPERTIES TIMEOUT 30)
 

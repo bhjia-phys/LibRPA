@@ -23,12 +23,14 @@
 #include "../math/utils_matrix_m_mpi.h"
 #include "../math/vec.h"
 #include "../mpi/base_blacs.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/error.h"
 #include "../utils/libri_utils.h"
 #include "../utils/profiler.h"
 #include "../utils/utils_mem.h"
 #include "atomic_basis.h"
+#include "bloch_embedding.h"
 #include "meanfield_mpi.h"
 #include "pbc.h"
 #include "ri.h"
@@ -390,6 +392,53 @@ void accumulate_wing_mu_for_pair(const std::vector<double> &omega,
     }
 }
 
+std::complex<double> headwing_lehmann_head_pair(
+    const double omega, const double gap, const double occupation_difference,
+    const std::complex<double> velocity_nm_alpha_times_velocity_mn_beta)
+{
+    if (std::abs(occupation_difference) <= 1e-8) return 0.0;
+    if (!std::isfinite(gap) || gap == 0.0)
+        throw LIBRPA_INVALID_ARGUMENT(
+            "interband optical response requires a nonzero gap for unequal occupations");
+    const std::complex<double> iw(0.0, omega);
+    const auto product = velocity_nm_alpha_times_velocity_mn_beta;
+    return occupation_difference / (gap * gap) *
+           (std::conj(product) / (gap - iw) + product / (gap + iw));
+}
+
+void accumulate_lehmann_wing_mu_for_pair(
+    const std::vector<double> &omega,
+    const std::array<std::complex<double>, 3> &velocity_nm,
+    const std::complex<double> charge_mn, const double gap,
+    const double occupation_difference, std::complex<double> *right,
+    std::complex<double> *left_adjoint, std::complex<double> *right_iomega0)
+{
+    if (std::abs(occupation_difference) <= 1e-8) return;
+    if (!std::isfinite(gap) || gap == 0.0)
+        throw LIBRPA_INVALID_ARGUMENT(
+            "interband optical wing requires a nonzero gap for unequal occupations");
+    // Native head vertex is -i*r. Before the common -2*sqrt(4*pi/Omega)
+    // multiplier, retain both Lehmann denominators and the independent left
+    // wing (in adjoint storage). The charge operator is Hermitian in the
+    // real auxiliary basis in which Cs_LRI is contracted here.
+    for (std::size_t iw_index = 0; iw_index < omega.size(); ++iw_index)
+    {
+        const std::complex<double> iw(0.0, omega[iw_index]);
+        for (int alpha = 0; alpha < 3; ++alpha)
+        {
+            const auto p = charge_mn * velocity_nm[alpha];
+            const auto right_value = -0.5 * occupation_difference / gap *
+                                     (p / (gap - iw) - std::conj(p) / (gap + iw));
+            const auto left_value = -0.5 * occupation_difference / gap *
+                                    (p / (gap + iw) - std::conj(p) / (gap - iw));
+            right[3 * iw_index + as_size(alpha)] += right_value;
+            left_adjoint[3 * iw_index + as_size(alpha)] += left_value;
+            if (iw_index == 0 && right_iomega0 != nullptr)
+                right_iomega0[alpha] += right_value;
+        }
+    }
+}
+
 static void print_wing_mu_k_contribution_gram(
     const char *route, const int ik, const Vector3_Order<double> &kfrac,
     const std::vector<std::complex<double>> &wing_mu_iomega0, const int n_abf,
@@ -551,21 +600,28 @@ ComplexMatrix rotate_headwing_wfc_to_kstar_member(
     const ComplexMatrix &wfc_ibz,
     const Vector3_Order<double> *k_bz_target)
 {
-    const auto rotation = build_symmetry_kspace_rotation_matrix(
-        ctx, wfc_layouts, member, atom_nw, k_ibz, member.time_reversal, k_bz_target);
-    if (wfc_ibz.nc != rotation.nr || rotation.nr != rotation.nc)
-    {
+    const auto orbital = build_symmetry_kspace_operator_transform_matrix(
+        ctx, wfc_layouts, member, atom_nw, k_ibz, false, nullptr);
+    if (wfc_ibz.nc != orbital.nr || orbital.nr != orbital.nc)
         throw std::runtime_error("headwing WFC rotation dimension mismatch");
-    }
 
-    // `rotation` is the coefficient-side matrix for the generated member.
-    // The non-TR route is C_bz = C_ibz M. This was checked directly against
-    // full-BZ PyATB WFCs for nondegenerate Si bands.
-    if (member.time_reversal)
+    // The scalar ket induces the same bilinear action as the spinor helper
+    // with identity spin rotation: X'=D O X or D conj(O X), X=C^T.
+    // Conjugating only C would leave a complex orbital phase unconjugated;
+    // the target reciprocal gauge must instead remain outside conjugation.
+    auto result = wfc_ibz * transpose(orbital, false);
+    if (member.time_reversal) result = conj(result);
+    const auto phases = build_symmetry_kstar_member_target_gauge_phases(
+        ctx, member, atom_nw.size(), k_bz_target);
+    int offset = 0;
+    for (const auto &atom : atom_nw)
     {
-        return conj(wfc_ibz) * rotation;
+        for (int band = 0; band != result.nr; ++band)
+            for (std::size_t ao = 0; ao != atom.second; ++ao)
+                result(band, offset + ao) *= phases.at(atom.first);
+        offset += static_cast<int>(atom.second);
     }
-    return wfc_ibz * rotation;
+    return result;
 }
 
 std::array<ComplexMatrix, 2> rotate_headwing_spinor_wfc_to_kstar_member(
@@ -782,6 +838,88 @@ ComplexMatrix localize_direct_full_bz_wfc(const ComplexMatrix &wfc_full,
     return wfc_local;
 }
 
+static Vector3_Order<double> direct_full_bz_member_coordinate_delta(
+    const DirectFullBzOpticalInput &input, const int ik_ibz, const std::size_t imember,
+    const Vector3_Order<double> &k_target, const bool embedding_active)
+{
+    if (ik_ibz < 0 || ik_ibz >= static_cast<int>(input.member_source_ik.size()) ||
+        imember >= input.member_source_ik[ik_ibz].size())
+        throw LIBRPA_INVALID_ARGUMENT("direct full-BZ coordinates have an invalid member index");
+    const int source_ik = input.member_source_ik[ik_ibz][imember];
+    if (source_ik < 0 || source_ik >= input.meanfield.get_n_kpoints())
+        throw LIBRPA_INVALID_ARGUMENT("direct full-BZ coordinates have an invalid source index");
+    for (const auto value : {k_target.x, k_target.y, k_target.z})
+        if (!std::isfinite(value))
+            throw LIBRPA_INVALID_ARGUMENT("direct full-BZ target coordinates must be finite");
+    if (input.source_kfrac.empty())
+    {
+        if (embedding_active)
+            throw LIBRPA_INVALID_ARGUMENT(
+                "embedded direct full-BZ coefficients require explicit source k coordinates");
+        // No source coordinate is inferred. Cell-frame coefficients need no
+        // AO alias conversion, preserving the old three-argument setter.
+        return {0.0, 0.0, 0.0};
+    }
+    if (input.source_kfrac.size() != static_cast<std::size_t>(input.meanfield.get_n_kpoints()))
+        throw LIBRPA_INVALID_ARGUMENT("direct full-BZ source coordinate count is inconsistent");
+    const auto &source = input.source_kfrac[source_ik];
+    for (const auto value : {source.x, source.y, source.z})
+        if (!std::isfinite(value))
+            throw LIBRPA_INVALID_ARGUMENT("direct full-BZ source coordinates must be finite");
+    const Vector3_Order<double> delta{k_target.x - source.x, k_target.y - source.y,
+                                      k_target.z - source.z};
+    // Match the existing core/driver coordinate contract. The actual delta,
+    // including its admitted residual, is retained for the AO phase below.
+    for (const auto value : {delta.x, delta.y, delta.z})
+        if (!std::isfinite(value) || std::abs(value - std::round(value)) > 1.0e-5)
+            throw LIBRPA_INVALID_ARGUMENT(
+                "direct full-BZ source and actual Fourier target are not reciprocal aliases");
+    return delta;
+}
+
+const ComplexMatrix &direct_full_bz_wfc_for_kstar_member(
+    const DirectFullBzOpticalInput &input, const SymmetryContext &ctx, const AtomicBasis &basis_wfc,
+    const int ispin, const int ispinor, const int ik_ibz, const std::size_t imember,
+    const Vector3_Order<double> &k_target, ComplexMatrix &scratch,
+    const ArrayDesc *local_descriptor)
+{
+    const auto &raw = direct_full_bz_wfc_for_kstar_member(input.meanfield, input.member_source_ik,
+                                                          ispin, ispinor, ik_ibz, imember);
+    if (basis_wfc.nb_total != static_cast<std::size_t>(input.meanfield.get_n_aos()))
+        throw LIBRPA_INVALID_ARGUMENT("direct full-BZ coefficient AO partition is inconsistent");
+    const BlochEmbedding embedding(ctx, basis_wfc);
+    const auto delta = direct_full_bz_member_coordinate_delta(input, ik_ibz, imember, k_target,
+                                                              embedding.active());
+    const bool exact_identity = delta.x == 0.0 && delta.y == 0.0 && delta.z == 0.0;
+    const auto phases = embedding.active() && !exact_identity ? embedding.atom_phases(delta)
+                                                              : std::vector<std::complex<double>>{};
+    if ((local_descriptor || !phases.empty()) && &scratch == &raw)
+        throw LIBRPA_INVALID_ARGUMENT(
+            "direct full-BZ coefficient scratch must not alias raw input");
+    if (local_descriptor)
+    {
+        scratch = localize_direct_full_bz_wfc(raw, *local_descriptor);
+        if (!phases.empty())
+            for (int local_ao = 0; local_ao != scratch.nc; ++local_ao)
+            {
+                const auto global_ao = local_descriptor->indx_l2g_r(local_ao);
+                const auto phase = phases.at(basis_wfc.get_i_atom(global_ao));
+                for (int band = 0; band != scratch.nr; ++band) scratch(band, local_ao) *= phase;
+            }
+        return scratch;
+    }
+    if (phases.empty()) return raw;
+    scratch = raw;
+    // Stored coefficients have band rows and AO columns. The same atom
+    // phase multiplies either SOC component, with no conjugation or spin action.
+    for (int ao = 0; ao != scratch.nc; ++ao)
+    {
+        const auto phase = phases.at(basis_wfc.get_i_atom(ao));
+        for (int band = 0; band != scratch.nr; ++band) scratch(band, ao) *= phase;
+    }
+    return scratch;
+}
+
 static std::vector<int> build_headwing_atom_offsets(const std::map<atom_t, size_t>& atom_nw)
 {
     std::vector<int> offsets(atom_nw.size() + 1, 0);
@@ -798,209 +936,140 @@ static std::vector<int> build_headwing_atom_offsets(const std::map<atom_t, size_
     return offsets;
 }
 
-static Vector3_Order<int> headwing_equivalent_kpoint_shift(
-    const Vector3_Order<double>& k_source, const Vector3_Order<double>& k_target)
-{
-    const Vector3_Order<double> k_shift{k_target.x - k_source.x,
-                                        k_target.y - k_source.y,
-                                        k_target.z - k_source.z};
-    if (!nearly_integer_vector(k_shift, 1.e-5))
-        throw std::runtime_error("headwing AO rotation got non-equivalent full-k targets");
-    return round_to_integer_vector(k_shift);
-}
-
-static std::complex<double> headwing_reciprocal_gauge_phase(
-    const SymmetryContext& ctx,
-    const Vector3_Order<int>& k_shift,
-    const atom_t atom)
-{
-    const auto coord_iter = ctx.input_coord_frac.find(atom);
-    if (coord_iter == ctx.input_coord_frac.end())
-        throw std::runtime_error("headwing AO rotation missing target-gauge coordinate");
-    const Vector3_Order<double> tau{coord_iter->second};
-    const double phase_arg =
-        TWO_PI * (static_cast<double>(k_shift.x) * tau.x
-                  + static_cast<double>(k_shift.y) * tau.y
-                  + static_cast<double>(k_shift.z) * tau.z);
-    return {std::cos(phase_arg), std::sin(phase_arg)};
-}
-
-struct HeadwingAoRotationBlocks
-{
-    std::vector<int> offsets;
-    std::vector<ComplexMatrix> blocks;
-};
-
-static HeadwingAoRotationBlocks build_symmetry_ao_bloch_rotation_blocks(
-    const SymmetryContext& ctx, const SymmetryKStarMember& member,
-    const std::vector<SpeciesBasisLayout>& wfc_layouts,
-    const std::map<atom_t, size_t>& atom_nw, const Vector3_Order<double>& k_ibz,
-    const Vector3_Order<double>* k_bz_target)
-{
-    HeadwingAoRotationBlocks result;
-    result.offsets = build_headwing_atom_offsets(atom_nw);
-
-    std::vector<const SymmetryKAtomRotation*> rotations_by_from(atom_nw.size(), nullptr);
-    std::vector<bool> visited_to(atom_nw.size(), false);
-    for (const auto& atom_rotation : member.atom_rotations)
-    {
-        if (atom_rotation.atom_from < 0 || atom_rotation.atom_from >= static_cast<int>(atom_nw.size())
-            || atom_rotation.atom_to < 0 || atom_rotation.atom_to >= static_cast<int>(atom_nw.size()))
-            throw std::runtime_error("headwing AO rotation atom mapping is out of range");
-        rotations_by_from[static_cast<std::size_t>(atom_rotation.atom_from)] = &atom_rotation;
-        visited_to[static_cast<std::size_t>(atom_rotation.atom_to)] = true;
-    }
-    for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-    {
-        if (rotations_by_from[atom] == nullptr)
-            throw std::runtime_error("headwing AO rotations do not cover every atom");
-        if (!visited_to[atom])
-            throw std::runtime_error("headwing AO atom mapping is not a full permutation");
-    }
-
-    if (member.spatial_isym < 0
-        || member.spatial_isym >= static_cast<int>(ctx.rspace_operations.size()))
-        throw std::runtime_error("headwing AO rotation uses an invalid symmetry index");
-
-    result.blocks.resize(atom_nw.size());
-    for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-    {
-        const auto* atom_rotation = rotations_by_from[atom];
-        const auto& layout =
-            get_symmetry_species_layout(wfc_layouts, atom_rotation->atom_type);
-        result.blocks[atom] =
-            build_symmetry_rotation_matrix(layout, atom_rotation->bloch_rsh_rotations);
-    }
-
-    const bool apply_target_gauge = (k_bz_target != nullptr);
-    std::vector<std::complex<double>> atom_target_phases(atom_nw.size(), {1.0, 0.0});
-    if (apply_target_gauge)
-    {
-        const auto k_shift = headwing_equivalent_kpoint_shift(member.k_bz, *k_bz_target);
-        for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-            atom_target_phases[atom] =
-                headwing_reciprocal_gauge_phase(ctx, k_shift, static_cast<atom_t>(atom));
-    }
-
-    for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-    {
-        if (apply_target_gauge) result.blocks[atom] *= atom_target_phases[atom];
-    }
-    (void)k_ibz;
-    return result;
-}
-
-static ComplexMatrix build_symmetry_ao_bloch_rotation_matrix_full(
-    const SymmetryContext& ctx, const SymmetryKStarMember& member,
-    const std::vector<SpeciesBasisLayout>& wfc_layouts,
-    const std::map<atom_t, size_t>& atom_nw, const Vector3_Order<double>& k_ibz,
-    const Vector3_Order<double>* k_bz_target)
-{
-    const auto rotation = build_symmetry_ao_bloch_rotation_blocks(
-        ctx, member, wfc_layouts, atom_nw, k_ibz, k_bz_target);
-    const int nao_total = rotation.offsets.back();
-    ComplexMatrix M_full(nao_total, nao_total);
-    for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-    {
-        const auto off = rotation.offsets[atom];
-        const auto n_ao = static_cast<int>(atom_nw.at(static_cast<atom_t>(atom)));
-        const auto &block = rotation.blocks[atom];
-        for (int row = 0; row < n_ao; ++row)
-            for (int col = 0; col < n_ao; ++col)
-                M_full(off + row, off + col) = block(row, col);
-    }
-    return M_full;
-}
-
-static void fill_symmetry_ao_bloch_rotation_matrix_local(
-    matrix_m<std::complex<double>> &M_local, const ArrayDesc &desc_M,
-    const SymmetryContext& ctx, const SymmetryKStarMember& member,
-    const std::vector<SpeciesBasisLayout>& wfc_layouts,
-    const std::map<atom_t, size_t>& atom_nw, const Vector3_Order<double>& k_ibz,
-    const Vector3_Order<double>* k_bz_target)
-{
-    const auto rotation = build_symmetry_ao_bloch_rotation_blocks(
-        ctx, member, wfc_layouts, atom_nw, k_ibz, k_bz_target);
-    if (desc_M.m() != rotation.offsets.back() || desc_M.n() != rotation.offsets.back())
-        throw std::runtime_error("headwing AO rotation descriptor has inconsistent dimensions");
-    M_local.zero_out();
-    for (std::size_t atom = 0; atom < atom_nw.size(); ++atom)
-    {
-        const int off = rotation.offsets[atom];
-        const int n_ao = static_cast<int>(atom_nw.at(static_cast<atom_t>(atom)));
-        const auto &block = rotation.blocks[atom];
-        for (int row = 0; row != n_ao; ++row)
-        {
-            const int iloc = desc_M.indx_g2l_r(off + row);
-            if (iloc < 0) continue;
-            for (int col = 0; col != n_ao; ++col)
-            {
-                const int jloc = desc_M.indx_g2l_c(off + col);
-                if (jloc >= 0) M_local(iloc, jloc) = block(row, col);
-            }
-        }
-    }
-}
-
+// Restore only local AO-by-band tiles. The dense AO rotation is temporary
+// on the owning k-group root; no complete representative or full-BZ WFC
+// cache is materialized. ComplexMatrix WFC storage is band-by-AO row-major,
+// which is the same flat storage as the descriptor's AO-by-band COL tile.
 static std::vector<std::vector<ComplexMatrix>> rotate_headwing_wfc_symmetry_kblacs(
     const MeanField &mf, const int source_ik, const ArrayDesc &desc_wfc_src,
-    const BlacsCtxtHandler &blacs_h, const SymmetryContext& ctx,
-    const SymmetryKStarMember& member,
-    const std::vector<SpeciesBasisLayout>& wfc_layouts,
-    const std::map<atom_t, size_t>& atom_nw, const Vector3_Order<double>& k_ibz,
-    const Vector3_Order<double>* k_bz_target)
+    const BlacsCtxtHandler &blacs_h, const SymmetryContext &ctx,
+    const SymmetryKStarMember &member,
+    const std::vector<SpeciesBasisLayout> &wfc_layouts,
+    const std::map<atom_t, size_t> &atom_nw, const Vector3_Order<double> &k_ibz,
+    const Vector3_Order<double> *k_bz_target)
 {
     const int n_aos = mf.get_n_aos();
     const int n_states = mf.get_n_states();
-    if (!desc_wfc_src.is_initialized() || desc_wfc_src.m() != n_aos ||
-        desc_wfc_src.n() != n_states || desc_wfc_src.ictxt() != blacs_h.ictxt)
-        throw std::runtime_error("symmetric headwing source wave-function descriptor is invalid");
+    const int n_spinor = mf.get_n_spinor();
+    const auto &group = blacs_h.comm_h();
+    std::array<std::complex<double>, 4> spin_u{1.0, 0.0, 0.0, 1.0};
+    bool antiunitary = member.time_reversal;
+    std::vector<std::complex<double>> row_phases;
+    collective_all_stage(group, "Optical symmetry WFC preflight", [&]
+    {
+        if (!desc_wfc_src.is_initialized() || desc_wfc_src.m() != n_aos ||
+            desc_wfc_src.n() != n_states || desc_wfc_src.ictxt() != blacs_h.ictxt ||
+            (n_spinor != 1 && n_spinor != 2))
+            throw LIBRPA_INVALID_ARGUMENT("symmetric optical WFC descriptor/spinor count is invalid");
+        const auto offsets = build_headwing_atom_offsets(atom_nw);
+        if (offsets.back() != n_aos)
+            throw LIBRPA_INVALID_ARGUMENT("symmetric optical AO partition has the wrong size");
+        const std::size_t expected =
+            std::size_t(desc_wfc_src.m_loc()) * desc_wfc_src.n_loc();
+        for (int spin = 0; spin != mf.get_n_spins(); ++spin)
+            for (int component = 0; component != n_spinor; ++component)
+            {
+                const auto *source = mf.find_wfc(spin, component, source_ik);
+                if ((source && static_cast<std::size_t>(source->size) != expected) ||
+                    (expected != 0 &&
+                     (!source || !source->c || source->nr != desc_wfc_src.n_loc() ||
+                      source->nc != desc_wfc_src.m_loc())) ||
+                    (expected == 0 && source && source->size != 0))
+                    throw LIBRPA_INVALID_ARGUMENT("symmetric optical local WFC tile is inconsistent");
+                if (source)
+                    for (std::size_t i = 0; i != expected; ++i)
+                        if (!std::isfinite(source->c[i].real()) ||
+                            !std::isfinite(source->c[i].imag()))
+                            throw LIBRPA_INVALID_ARGUMENT("symmetric optical WFC contains a nonfinite entry");
+            }
+        if (n_spinor == 2)
+        {
+            const auto action = resolve_symmetry_kstar_member_spin_operation(ctx, member);
+            spin_u = action.spin_u;
+            antiunitary = action.antiunitary;
+        }
+        const auto phases = build_symmetry_kstar_member_target_gauge_phases(
+            ctx, member, atom_nw.size(), k_bz_target);
+        row_phases.resize(desc_wfc_src.m_loc());
+        for (int local_ao = 0; local_ao != desc_wfc_src.m_loc(); ++local_ao)
+        {
+            const int ao = desc_wfc_src.indx_l2g_r(local_ao);
+            const auto atom = std::upper_bound(offsets.begin(), offsets.end(), ao)
+                              - offsets.begin() - 1;
+            row_phases[local_ao] = phases.at(static_cast<atom_t>(atom));
+        }
+    });
 
-    const int expected_block_ao =
-        get_capped_blacs_block_size(n_aos, wfc_gemm_block_size_opt, blacs_h);
-    const int expected_block_band =
-        get_capped_blacs_block_size(n_states, wfc_gemm_block_size_opt, blacs_h);
-    if (desc_wfc_src.mb() != expected_block_ao ||
-        desc_wfc_src.nb() != expected_block_band)
-        throw std::runtime_error(
-            "symmetric headwing wave functions do not use the permanent capped layout");
-    const int block_ao = desc_wfc_src.mb();
-    ArrayDesc desc_M_opt(blacs_h);
-    desc_M_opt.init(n_aos, n_aos, block_ao, block_ao, 0, 0);
-    auto M_opt = init_local_mat<std::complex<double>>(desc_M_opt, MAJOR::COL);
-    fill_symmetry_ao_bloch_rotation_matrix_local(
-        M_opt, desc_M_opt, ctx, member, wfc_layouts, atom_nw, k_ibz, k_bz_target);
+    ArrayDesc desc_rotation(blacs_h), desc_root(blacs_h);
+    desc_rotation.init(n_aos, n_aos, desc_wfc_src.mb(), desc_wfc_src.mb(), 0, 0);
+    desc_root.init(n_aos, n_aos, n_aos, n_aos, 0, 0);
+    Matz rotation_local, rotation_root;
+    collective_all_stage(group, "Optical symmetry AO workspaces", [&]
+    {
+        rotation_local = init_local_mat<std::complex<double>>(desc_rotation, MAJOR::COL);
+        rotation_root = init_local_mat<std::complex<double>>(desc_root, MAJOR::COL);
+    });
+    collective_all_stage(group, "Optical symmetry AO rotation", [&]
+    {
+        if (!group.is_root()) return;
+        const auto rotation = build_symmetry_kspace_operator_transform_matrix(
+            ctx, wfc_layouts, member, atom_nw, k_ibz, false, nullptr);
+        if (rotation.nr != n_aos || rotation.nc != n_aos)
+            throw LIBRPA_RUNTIME_ERROR("symmetric optical AO rotation has the wrong size");
+        // The builder is ROW; pack explicitly into the COL root descriptor.
+        for (int row = 0; row != n_aos; ++row)
+            for (int col = 0; col != n_aos; ++col)
+                rotation_root(row, col) = rotation(row, col);
+    });
+    ScalapackConnector::pgemr2d_f(
+        n_aos, n_aos, rotation_root.ptr(), 1, 1, desc_root.desc,
+        rotation_local.ptr(), 1, 1, desc_rotation.desc, blacs_h.ictxt);
+    rotation_root = Matz{};
 
     std::vector<std::vector<ComplexMatrix>> result(mf.get_n_spins());
-    std::vector<std::complex<double>> dummy(1, {0.0, 0.0});
-    const std::size_t source_size =
-        static_cast<std::size_t>(desc_wfc_src.m_loc()) * desc_wfc_src.n_loc();
-    for (int ispin = 0; ispin != mf.get_n_spins(); ++ispin)
+    std::complex<double> dummy{0.0, 0.0};
+    for (int spin = 0; spin != mf.get_n_spins(); ++spin)
     {
-        result[ispin].resize(mf.get_n_spinor());
-        for (int ispinor = 0; ispinor != mf.get_n_spinor(); ++ispinor)
+        collective_all_stage(group, "Optical symmetry local WFC workspaces", [&]
         {
-            const auto *wfc_ibz = mf.find_wfc(ispin, ispinor, source_ik);
-            const int bad_local =
-                (source_size > 0 && wfc_ibz == nullptr) ||
-                (wfc_ibz != nullptr &&
-                 static_cast<std::size_t>(wfc_ibz->size) != source_size);
-            int bad = 0;
-            MPI_Allreduce(&bad_local, &bad, 1, MPI_INT, MPI_MAX, blacs_h.comm());
-            if (bad)
-                throw std::runtime_error(
-                    "symmetric headwing local wave-function block is inconsistent");
-
-            const auto *wfc_ibz_ptr =
-                wfc_ibz == nullptr ? dummy.data() : wfc_ibz->c;
-            auto &wfc_bz = result[ispin][ispinor];
-            wfc_bz.create(desc_wfc_src.n_loc(), desc_wfc_src.m_loc(), false);
+            result[spin].resize(n_spinor);
+            for (auto &component : result[spin])
+                component.create(desc_wfc_src.n_loc(), desc_wfc_src.m_loc(), false);
+        });
+        for (int component = 0; component != n_spinor; ++component)
+        {
+            const auto *source = mf.find_wfc(spin, component, source_ik);
+            const auto *source_data = source && source->c ? source->c : &dummy;
+            auto &target = result[spin][component];
+            // X=C^T: both scalar and SOC spatial actions are O X. Apply
+            // antiunitary conjugation only after this complete product.
             ScalapackConnector::pgemm_f(
-                'C', 'N', n_aos, n_states, n_aos, 1.0, M_opt.ptr(), 1, 1,
-                desc_M_opt.desc, wfc_ibz_ptr, 1, 1, desc_wfc_src.desc, 0.0,
-                wfc_bz.c == nullptr ? dummy.data() : wfc_bz.c, 1, 1,
-                desc_wfc_src.desc);
+                'N', 'N', n_aos, n_states, n_aos,
+                1.0, rotation_local.ptr(), 1, 1, desc_rotation.desc,
+                source_data, 1, 1, desc_wfc_src.desc, 0.0,
+                target.c ? target.c : &dummy, 1, 1, desc_wfc_src.desc);
         }
+        if (n_spinor == 2)
+            for (int band = 0; band != desc_wfc_src.n_loc(); ++band)
+                for (int ao = 0; ao != desc_wfc_src.m_loc(); ++ao)
+                {
+                    const auto up = result[spin][0](band, ao);
+                    const auto down = result[spin][1](band, ao);
+                    const auto mixed_up = spin_u[0] * up + spin_u[1] * down;
+                    const auto mixed_down = spin_u[2] * up + spin_u[3] * down;
+                    result[spin][0](band, ao) = row_phases[ao] *
+                        (antiunitary ? std::conj(mixed_down) : mixed_up);
+                    result[spin][1](band, ao) = row_phases[ao] *
+                        (antiunitary ? -std::conj(mixed_up) : mixed_down);
+                }
+        else
+            for (int band = 0; band != desc_wfc_src.n_loc(); ++band)
+                for (int ao = 0; ao != desc_wfc_src.m_loc(); ++ao)
+                {
+                    const auto spatial = result[spin][0](band, ao);
+                    result[spin][0](band, ao) = row_phases[ao] *
+                        (antiunitary ? std::conj(spatial) : spatial);
+                }
     }
     return result;
 }
@@ -1109,7 +1178,26 @@ std::vector<double> interpolate_dielec_func(int option, const std::vector<double
         case 5: /* Direct input data, with an s-subspace head in Wc. */
         case 0: /* No extrapolation, copy the input data to target */
         {
-            assert(frequencies_in.size() == frequencies_target.size());
+            if (frequencies_in.size() != frequencies_target.size() ||
+                df_in.size() != frequencies_target.size())
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "Direct dielectric input requires equal sample and current-grid sizes; "
+                    "regenerate dielecfunc_out for this grid or select an interpolation mode");
+            for (std::size_t i = 0; i < frequencies_target.size(); ++i)
+            {
+                if (!std::isfinite(frequencies_in[i]) ||
+                    !std::isfinite(frequencies_target[i]) || !std::isfinite(df_in[i]))
+                    throw LIBRPA_INVALID_ARGUMENT(
+                        "Direct dielectric input requires finite frequencies and samples");
+                // Match the existing analytic head/body frequency contract.
+                // Direct input copies samples; it cannot relabel a changed grid.
+                if (std::abs(frequencies_in[i] - frequencies_target[i]) >
+                    1e-12 * std::max(1.0, std::abs(frequencies_target[i])))
+                    throw LIBRPA_INVALID_ARGUMENT(
+                        "Direct dielectric frequency differs from the current grid at index " +
+                        std::to_string(i) +
+                        "; regenerate dielecfunc_out for this grid or select an interpolation mode");
+            }
             df_target = df_in;
             break;
         }
@@ -1425,19 +1513,66 @@ matrix_m<std::complex<double>> strict_2d_transform_pw_wc_to_auxiliary_basis(
     return auxiliary_wc;
 }
 
+void diele_func::bind_meanfield_input(std::shared_ptr<const MeanField> input)
+{
+    if (!input || !input->initialized() || input->get_n_spins() != n_spin ||
+        input->get_n_kpoints() != static_cast<int>(kfrac_band.size()) ||
+        input->get_n_states() != n_states || input->get_n_aos() != n_basis)
+        throw LIBRPA_INVALID_ARGUMENT("external optical mean field has inconsistent dimensions");
+    head_completed_ = false;
+    auxiliary_wings_completed_ = false;
+    regular_wings_completed_ = false;
+    meanfield_df = MeanField{};
+    physical_meanfield_input_ = std::move(input);
+    borrowed_meanfield_df_ = physical_meanfield_input_.get();
+}
+
+OpticalMeanFieldLayout diele_func::get_meanfield_input_layout() const
+{
+    OpticalMeanFieldLayout layout;
+    layout.use_kpara_eigvec = use_kpara_eigvec_;
+    if (use_kpara_eigvec_)
+    {
+        if (!desc_wfc_kblacs_ || !desc_wfc_kblacs_->is_initialized() || !kblacs_ctxt_)
+            throw LIBRPA_RUNTIME_ERROR("optical input descriptor is no longer available");
+        std::copy(desc_wfc_kblacs_->desc, desc_wfc_kblacs_->desc + 9, layout.descriptor.begin());
+        layout.owned_kpoints = kblacs_ctxt_->kpoints_local();
+    }
+    return layout;
+}
+
+std::shared_ptr<const MeanField> diele_func::promote_owned_meanfield_input()
+{
+    if (physical_meanfield_input_) return physical_meanfield_input_;
+    if (borrowed_meanfield_df_)
+        throw LIBRPA_INVALID_ARGUMENT("cannot take ownership of a borrowed optical mean field");
+    auto input = std::make_shared<MeanField>(std::move(meanfield_df));
+    bind_meanfield_input(std::move(input));
+    return physical_meanfield_input_;
+}
+
 void diele_func::configure_strict_2d_coulomb_head(const bool enabled,
                                                   const double auxiliary_monopole_norm_squared)
 {
     configure_strict_2d_coulomb_head(enabled);
     if (enabled)
+    {
         strict_2d_pw_to_auxiliary_scale_ = strict_2d_coulomb_head_normalization(
             pbc_, auxiliary_monopole_norm_squared).pw_to_auxiliary_scale;
+        strict_2d_auxiliary_monopole_norm_squared_ = auxiliary_monopole_norm_squared;
+    }
 }
 
 void diele_func::configure_strict_2d_coulomb_head(const bool enabled)
 {
+    if (use_2d_dielectric != enabled)
+    {
+        auxiliary_wings_completed_ = false;
+        regular_wings_completed_ = false;
+    }
     use_2d_dielectric = enabled;
     strict_2d_pw_to_auxiliary_scale_ = 0.0;
+    strict_2d_auxiliary_monopole_norm_squared_ = 0.0;
 }
 
 bool diele_func::strict_2d_coulomb_head_configured() const noexcept
@@ -1456,7 +1591,9 @@ double diele_func::get_strict_2d_pw_to_auxiliary_scale() const
 
 void diele_func::normalize_ibz_star_weighted_occupations()
 {
-    const auto n_ibz = meanfield_df.get_n_kpoints();
+    if (borrowed_meanfield_df_)
+        throw LIBRPA_RUNTIME_ERROR("borrowed optical context cannot normalize occupations");
+    const auto n_ibz = meanfield().get_n_kpoints();
     if (!use_soc || n_ibz == pbc_.get_n_cells_bvk()) return;
     if (!use_symmetry || symmetry_context_ == nullptr || n_ibz <= 0 ||
         symmetry_context_->count_kstar_members() !=
@@ -1472,7 +1609,7 @@ void diele_func::normalize_ibz_star_weighted_occupations()
         const double scale = static_cast<double>(pbc_.get_n_cells_bvk()) /
                              (static_cast<double>(n_ibz) * star.members.size());
         for (auto &weights : meanfield_df.get_weight())
-            for (int band = 0; band != meanfield_df.get_n_states(); ++band)
+            for (int band = 0; band != meanfield().get_n_states(); ++band)
             {
                 const double occupation = weights(ik, band) * scale * n_ibz;
                 if (!std::isfinite(occupation) || occupation < -1e-8 || occupation > 1.0 + 1e-8)
@@ -1484,8 +1621,162 @@ void diele_func::normalize_ibz_star_weighted_occupations()
     }
 }
 
+std::unique_ptr<diele_func> diele_func::make_borrowed_context(
+    const MeanField &mf, const velocity_matrix_t &velocity,
+    const std::vector<Vector3_Order<double>> &kfrac, const AtomicBasis &basis_wfc,
+    const AtomicBasis &basis_aux, const PeriodicBoundaryData &pbc,
+    const MpiCommHandler &comm, const BlacsCtxtHandler &blacs, const bool use_kpara_eigvec,
+    const KPointBlacsParallelContext *kblacs, const ArrayDesc *desc_wfc,
+    const diele_func *direct_input_context)
+{
+    // The ordinary owned member remains empty. No loaded MF/WFC is copied.
+    auto context = std::make_unique<diele_func>(
+        MeanField{}, velocity, kfrac, basis_wfc, basis_aux, std::vector<double>{},
+        mf.get_n_aos(), mf.get_n_states(), mf.get_n_spins(), basis_aux.nb_total,
+        pbc, comm, blacs, use_kpara_eigvec, kblacs, desc_wfc);
+    context->borrowed_meanfield_df_ = &mf;
+    if (direct_input_context)
+        context->set_direct_full_bz_headwing_inputs(
+            direct_input_context->get_direct_full_bz_headwing_inputs());
+    return context;
+}
+
+namespace
+{
+void accumulate_optical_endpoint_pair(
+    OpticalTransitionGrams &grams, const int mu,
+    const std::array<std::complex<double>, 3> &velocity_nm,
+    const std::complex<double> rho_mn, const double gap, const double weight_difference,
+    const int n_spin, const bool use_soc)
+{
+    // Match the ordinary head/wing pair eligibility. A skipped optical pair
+    // has d=0 in the common enlarged column; its body rho remains in Chi0.
+    if (std::abs(headwing_transition_weight(weight_difference, 0.0, n_spin, use_soc)) <= 1e-8)
+        return;
+    if (!std::isfinite(gap) || gap == 0.0)
+        throw LIBRPA_INVALID_ARGUMENT("optical endpoint requires a finite interband gap");
+    const double weight = std::abs(weight_difference);
+    for (int ordered = 0; ordered != 2; ++ordered)
+    {
+        const int side = (weight_difference > 0.0) == (ordered == 0) ? 0 : 1;
+        const auto rho = ordered == 0 ? rho_mn : std::conj(rho_mn);
+        std::array<std::complex<double>, 3> d;
+        for (int a = 0; a != 3; ++a)
+            d[a] = ordered == 0 ? std::conj(velocity_nm[a]) / gap : -velocity_nm[a] / gap;
+        for (int a = 0; a != 3; ++a)
+        {
+            grams.charge_dipole[side](mu, a) += weight * rho * std::conj(d[a]);
+            // Every local band pair is owned once. Count the dipole Gram only
+            // for one auxiliary probe, not once for every charge coordinate.
+            if (mu == 0)
+                for (int b = 0; b != 3; ++b)
+                    grams.dipole[side](a, b) += weight * d[a] * std::conj(d[b]);
+        }
+    }
+}
+
+void reduce_optical_endpoint_grams(OpticalTransitionGrams &grams, const MPI_Comm comm)
+{
+    for (int side = 0; side != 2; ++side)
+        for (auto *matrix : {&grams.dipole[side], &grams.charge_dipole[side]})
+        {
+            if (matrix->size() > std::size_t(std::numeric_limits<int>::max()))
+                throw LIBRPA_RUNTIME_ERROR("optical endpoint Gram exceeds MPI count limit");
+            MPI_Allreduce(MPI_IN_PLACE, matrix->ptr(), static_cast<int>(matrix->size()),
+                          MPI_CXX_DOUBLE_COMPLEX, MPI_SUM, comm);
+        }
+}
+} // namespace
+
+OpticalTransitionGrams diele_func::build_optical_transition_grams(
+    const Cs_LRI &Cs_data, const AtomicBasis &source_basis,
+    const ComplexMatrix *projection_gamma)
+{
+    std::string failure;
+    double velocity_error = 0.0, velocity_norm = 0.0;
+    try
+    {
+        if (!borrowed_meanfield_df_ || use_2d_dielectric || !excluded_band_pairs_.empty())
+            throw LIBRPA_INVALID_ARGUMENT(
+                "optical endpoint requires an unpruned borrowed finite3D context");
+        // Empty omega: validation sets nk but creates no numerical grid or response.
+        init(0.0, {});
+        if (!source_basis.initialized() || source_basis.nb_total == 0)
+            throw LIBRPA_INVALID_ARGUMENT("optical endpoint requires a nonempty source basis");
+        if (projection_gamma &&
+            (projection_gamma->nr != n_abf ||
+             projection_gamma->nc != int(source_basis.nb_total)))
+            throw LIBRPA_INVALID_ARGUMENT("invalid optical endpoint Gamma projection shape");
+        if (projection_gamma)
+            for (int i = 0; i != projection_gamma->size; ++i)
+                if (!std::isfinite(projection_gamma->c[i].real()) ||
+                    !std::isfinite(projection_gamma->c[i].imag()))
+                    throw LIBRPA_INVALID_ARGUMENT("nonfinite optical endpoint Gamma projection");
+        const auto check_velocity = [&](const velocity_matrix_t &data)
+        {
+            for (const auto &spin : data)
+                for (const auto &kpoint : spin)
+                    for (const auto &matrix : kpoint)
+                        for (int m = 0; m != matrix.nr; ++m)
+                            for (int n = 0; n != matrix.nc; ++n)
+                            {
+                                const auto value = matrix(m, n);
+                                if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+                                    throw LIBRPA_INVALID_ARGUMENT("nonfinite optical velocity");
+                                velocity_error = std::max(
+                                    velocity_error, std::abs(value - std::conj(matrix(n, m))));
+                                velocity_norm = std::max(velocity_norm, std::abs(value));
+                            }
+        };
+        check_velocity(velocity_);
+        if (has_direct_full_bz_headwing_inputs()) check_velocity(direct_full_bz_velocity());
+        if (velocity_error > 1e-10 * std::max(1.0, velocity_norm))
+            throw LIBRPA_INVALID_ARGUMENT("optical endpoint requires Hermitian KS velocities");
+    }
+    catch (const std::exception &error)
+    {
+        failure = error.what();
+    }
+    int invalid = !failure.empty();
+    MPI_Allreduce(MPI_IN_PLACE, &invalid, 1, MPI_INT, MPI_MAX, comm_h.comm);
+    if (invalid)
+        throw LIBRPA_RUNTIME_ERROR((failure.empty()
+                                       ? "invalid optical endpoint context on another rank"
+                                       : failure));
+    MPI_Allreduce(MPI_IN_PLACE, &velocity_error, 1, MPI_DOUBLE, MPI_MAX, comm_h.comm);
+    OpticalTransitionGrams result;
+    result.velocity_hermiticity_error = velocity_error;
+    for (int side = 0; side != 2; ++side)
+    {
+        result.dipole[side].resize(3, 3, MAJOR::COL);
+        result.charge_dipole[side].resize(source_basis.nb_total, 3, MAJOR::COL);
+    }
+    cal_wing_with_basis(Cs_data, 0.0, {}, source_basis, nullptr, &result);
+    if (projection_gamma)
+    {
+        for (int side = 0; side != 2; ++side)
+        {
+            Matz projected(n_abf, 3, MAJOR::COL);
+            for (int i = 0; i != n_abf; ++i)
+                for (int a = 0; a != 3; ++a)
+                    for (int j = 0; j != int(source_basis.nb_total); ++j)
+                        projected(i, a) += (*projection_gamma)(i, j) *
+                                           result.charge_dipole[side](j, a);
+            result.charge_dipole[side] = std::move(projected);
+        }
+    }
+    return result;
+}
+
 void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k_cplx_mat_t &Vq)
 {
+    head_completed_ = false;
+    auxiliary_wings_completed_ = false;
+    regular_wings_completed_ = false;
+    wing_mu.clear();
+    wing_mu_left_adjoint.clear();
+    wing.clear();
+    wing_left_adjoint.clear();
     this->n_abf = atomic_basis_abf_.nb_total;
     this->nk = this->kfrac_band.size();
     if (use_soc && nk < pbc_.get_n_cells_bvk())
@@ -1499,13 +1790,19 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
                 "IBZ SOC head/wing requires complete magnetic k-stars and AO shell metadata");
         const auto layouts =
             atomic_basis_wfc_.build_species_basis_layouts(symmetry_context_->atom_to_type);
-        if (!can_restore_symmetry_kstar_meanfield(*symmetry_context_, layouts, meanfield_df,
+        if (!can_restore_symmetry_kstar_meanfield(*symmetry_context_, layouts, meanfield(),
                                                   kfrac_band, atom_nw))
             throw LIBRPA_RUNTIME_ERROR("IBZ SOC head/wing cannot restore the supplied eigenframe");
-        if (!has_direct_full_bz_headwing_inputs() && use_kpara_eigvec_)
-            throw LIBRPA_RUNTIME_ERROR(
-                "IBZ-only SOC head/wing requires undistributed AO/band wave-function blocks; "
-                "disable use_kpara_scf_eigvec or supply paired full-BZ inputs");
+        if (use_kpara_eigvec_)
+            collective_all_stage(comm_h, "Distributed IBZ optical descriptor", [&]
+            {
+                if (!use_matching_kpoint_blacs(nk, kblacs_ctxt_) ||
+                    !desc_wfc_kblacs_ || !desc_wfc_kblacs_->is_initialized() ||
+                    desc_wfc_kblacs_->ictxt() != kblacs_ctxt_->blacs_h.ictxt ||
+                    desc_wfc_kblacs_->m() != n_basis || desc_wfc_kblacs_->n() != n_states)
+                    throw LIBRPA_INVALID_ARGUMENT(
+                        "distributed IBZ optical input requires matching k-BLACS WFC descriptors");
+            });
     }
     if (static_cast<int>(velocity_.size()) != n_spin)
         throw LIBRPA_RUNTIME_ERROR(
@@ -1532,12 +1829,12 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
     if (has_direct_full_bz_headwing_inputs())
     {
         if (symmetry_context_ == nullptr ||
-            static_cast<int>(direct_full_bz_velocity_.size()) != n_spin ||
-            direct_full_bz_wfc_.get_n_spins() != n_spin ||
-            direct_full_bz_wfc_.get_n_spinor() != meanfield_df.get_n_spinor() ||
-            direct_full_bz_wfc_.get_n_states() != n_states ||
-            direct_full_bz_wfc_.get_n_aos() != n_basis ||
-            static_cast<int>(direct_full_bz_velocity_member_source_ik_.size()) != nk)
+            static_cast<int>(direct_full_bz_velocity().size()) != n_spin ||
+            direct_full_bz_wfc().get_n_spins() != n_spin ||
+            direct_full_bz_wfc().get_n_spinor() != meanfield().get_n_spinor() ||
+            direct_full_bz_wfc().get_n_states() != n_states ||
+            direct_full_bz_wfc().get_n_aos() != n_basis ||
+            static_cast<int>(direct_full_bz_member_source_ik().size()) != nk)
         {
             throw LIBRPA_RUNTIME_ERROR(
                 "direct full-BZ head/wing inputs are inconsistent with symmetric meanfield");
@@ -1546,25 +1843,25 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
         {
             const auto &star = librpa_int::find_symmetry_kstar_for_ibz_kpoint(
                 *symmetry_context_, kfrac_band[ik_ibz]);
-            if (direct_full_bz_velocity_member_source_ik_[ik_ibz].size() != star.members.size())
+            if (direct_full_bz_member_source_ik()[ik_ibz].size() != star.members.size())
             {
                 throw LIBRPA_RUNTIME_ERROR(
                     "direct full-BZ velocity k-star mapping has an inconsistent member count");
             }
-            for (const int ik_source : direct_full_bz_velocity_member_source_ik_[ik_ibz])
+            for (const int ik_source : direct_full_bz_member_source_ik()[ik_ibz])
             {
                 for (int ispin = 0; ispin != n_spin; ++ispin)
                 {
                     if (ik_source < 0 ||
-                        ik_source >= static_cast<int>(direct_full_bz_velocity_[ispin].size()) ||
-                        direct_full_bz_velocity_[ispin][ik_source].size() != 3)
+                        ik_source >= static_cast<int>(direct_full_bz_velocity()[ispin].size()) ||
+                        direct_full_bz_velocity()[ispin][ik_source].size() != 3)
                     {
                         throw LIBRPA_RUNTIME_ERROR(
                             "direct full-BZ head/wing velocity has an invalid PyATB k point");
                     }
                     for (int alpha = 0; alpha != 3; ++alpha)
                     {
-                        const auto &vmat = direct_full_bz_velocity_[ispin][ik_source][alpha];
+                        const auto &vmat = direct_full_bz_velocity()[ispin][ik_source][alpha];
                         if (vmat.nr != n_states || vmat.nc != n_states)
                         {
                             throw LIBRPA_RUNTIME_ERROR(
@@ -1572,9 +1869,9 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
                                 "with bands");
                         }
                     }
-                    for (int ispinor = 0; ispinor != meanfield_df.get_n_spinor(); ++ispinor)
+                    for (int ispinor = 0; ispinor != meanfield().get_n_spinor(); ++ispinor)
                     {
-                        const auto *wfc = direct_full_bz_wfc_.find_wfc(ispin, ispinor, ik_source);
+                        const auto *wfc = direct_full_bz_wfc().find_wfc(ispin, ispinor, ik_source);
                         if (wfc == nullptr || wfc->nr != n_states || wfc->nc != n_basis)
                         {
                             throw LIBRPA_RUNTIME_ERROR(
@@ -1597,16 +1894,23 @@ void diele_func::init(double coulomb_eigen_threshold, const librpa_int::atpair_k
 
 void diele_func::init_wing(double coulomb_eigen_threshold, const atpair_k_cplx_mat_t &Vq)
 {
+    auxiliary_wings_completed_ = false;
+    regular_wings_completed_ = false;
     int n_omega = this->omega.size();
     this->n_abf = atomic_basis_abf_.nb_total;
+    projected_parent_wings_ = false;
     this->wing_mu.clear();
     this->wing_mu.resize(n_omega);
+    this->wing_mu_left_adjoint.clear();
+    this->wing_mu_left_adjoint.resize(n_omega);
     this->wing.clear();
+    this->wing_left_adjoint.clear();
     this->n_nonsingular = n_abf;
     this->Lind.resize(3, 3, MAJOR::COL);
     for (int iomega = 0; iomega != n_omega; iomega++)
     {
         wing_mu[iomega].resize(n_abf, 3, MAJOR::COL);
+        wing_mu_left_adjoint[iomega].resize(n_abf, 3, MAJOR::COL);
     }
     get_Leb_points();
     if (use_2d_dielectric)
@@ -1658,6 +1962,8 @@ double diele_func::retained_band_pair_weight(int spin, int k, int n, int m) cons
 // intraband term is not considered
 void diele_func::cal_head()
 {
+    head_completed_ = false;
+    for (auto &matrix : head) matrix.zero_out();
     using global::profiler;
 
     if (!excluded_band_pairs_.empty() && (use_symmetry || use_2d_dielectric))
@@ -1673,7 +1979,7 @@ void diele_func::cal_head()
     const bool can_sym =
         can_try_sym &&
         (librpa_int::can_restore_symmetry_kstar_meanfield(
-             *symmetry_context_, wfc_layouts, meanfield_df, kfrac_band, atom_nw) ||
+             *symmetry_context_, wfc_layouts, meanfield(), kfrac_band, atom_nw) ||
          can_use_headwing_single_member_stars(
              *symmetry_context_, wfc_layouts, kfrac_band, atom_nw));
 
@@ -1690,7 +1996,7 @@ void diele_func::cal_head()
             reason = "symmetry context is not available";
         else if (symmetry_context_->kstars.empty())
             reason = "k-star table is empty";
-        else if (meanfield_df.get_n_kpoints() != static_cast<int>(kfrac_band.size()))
+        else if (meanfield().get_n_kpoints() != static_cast<int>(kfrac_band.size()))
             reason = "meanfield and active k-list sizes differ";
         else if (symmetry_context_->kstars.size() != kfrac_band.size())
             reason = "k-star count does not match active k-list";
@@ -1728,6 +2034,7 @@ void diele_func::cal_head()
     }
     global::ofs_myid << "* Success: calculate head term." << std::endl;
     profiler.stop("cal_head");
+    head_completed_ = true;
 };
 
 void diele_func::cal_head_full_bz()
@@ -1742,8 +2049,8 @@ void diele_func::cal_head_full_bz()
 
     for (int ispin = 0; ispin != n_spin; ispin++)
     {
-        auto &wg = this->meanfield_df.get_weight()[ispin];
-        auto &eigenvalues = this->meanfield_df.get_eigenvals()[ispin];
+        auto &wg = this->meanfield().get_weight()[ispin];
+        auto &eigenvalues = this->meanfield().get_eigenvals()[ispin];
         const auto &velocity = this->velocity_[ispin];
         for (const int ik : kpoints)
         {
@@ -1763,7 +2070,7 @@ void diele_func::cal_head_full_bz()
                         // no-op, but it is required for correctness on metals / IBZ input.
                         const double factor = headwing_transition_weight(
                             wg(ik, iocc), wg(ik, iunocc), n_spin, use_soc);
-                        if (factor > 1.e-8)
+                        if (std::abs(factor) > 1.e-8)
                         {
                             for (int alpha = 0; alpha != 3; alpha++)
                             {
@@ -1772,14 +2079,14 @@ void diele_func::cal_head_full_bz()
                                     for (size_t iomega = 0; iomega != this->omega.size(); iomega++)
                                     {
                                         double omega_ev = this->omega[iomega];  // * HA2EV;
-                                        tmp = 2.0 * factor * retained *
-                                              velocity[ik][alpha](iunocc, iocc) *
-                                              velocity[ik][beta](iocc, iunocc) /
-                                              (egap * egap + omega_ev * omega_ev) / egap;
-                                        this->head.at(iomega)(alpha, beta) -= tmp;
+                                        tmp = headwing_lehmann_head_pair(
+                                            omega_ev, -egap, factor * retained,
+                                            velocity[ik][alpha](iunocc, iocc) *
+                                                velocity[ik][beta](iocc, iunocc));
+                                        this->head.at(iomega)(alpha, beta) += tmp;
                                         if (iomega == 0)
                                             head_k_iomega0.at(as_size(ik)).at(
-                                                as_size(alpha * 3 + beta)) -= tmp;
+                                                as_size(alpha * 3 + beta)) += tmp;
                                     }
                                 }
                             }
@@ -1828,94 +2135,103 @@ void diele_func::cal_head_symmetric()
         for (auto &h : head_check)
             for (auto &row : h) row.fill({0.0, 0.0});
 
-    for (int ispin = 0; ispin != n_spin; ispin++)
+    std::vector<std::vector<int>> source_owners(n_spin, std::vector<int>(nk, -1));
+    if (!use_kblacs)
+        for (int spin = 0; spin != n_spin; ++spin)
+            for (int k = 0; k != nk; ++k)
+            {
+                const bool present = meanfield().find_wfc(spin, 0, k) != nullptr;
+                source_owners[spin][k] = find_mpi_owner_rank(present, comm_h.comm);
+                if (source_owners[spin][k] < 0)
+                    throw LIBRPA_RUNTIME_ERROR("cal_head_symmetric: no rank owns the IBZ eigenvectors");
+            }
+    collective_all_stage(comm_h, "Symmetric optical head accumulation", [&]
     {
-        auto &wg = this->meanfield_df.get_weight()[ispin];
-        auto &eigenvalues = this->meanfield_df.get_eigenvals()[ispin];
-        const auto &velocity = this->velocity_[ispin];
-
-        for (int ik_ibz = 0; ik_ibz != nk; ik_ibz++)
+        for (int ispin = 0; ispin != n_spin; ispin++)
         {
-            const auto& k_ibz = kfrac_band[ik_ibz];
-            const auto& star = librpa_int::find_symmetry_kstar_for_ibz_kpoint(ctx, k_ibz);
-            if (star.members.empty())
-                throw std::runtime_error("cal_head_symmetric: empty k-star");
+            auto &wg = this->meanfield().get_weight()[ispin];
+            auto &eigenvalues = this->meanfield().get_eigenvals()[ispin];
+            const auto &velocity = this->velocity_[ispin];
 
-            if (use_kblacs)
+            for (int ik_ibz = 0; ik_ibz != nk; ik_ibz++)
             {
-                if (!kblacs_ctxt_->owns_kpoint(ik_ibz) || kblacs_ctxt_->comm_blacs_h.myid != 0)
-                    continue;
-            }
-            else
-            {
-                const auto *C_ibz_ptr = meanfield_df.find_wfc(ispin, 0, ik_ibz);
-                const int owner_rank = find_mpi_owner_rank(C_ibz_ptr != nullptr, comm_h.comm);
-                if (owner_rank < 0)
-                    throw std::runtime_error(
-                        "cal_head_symmetric: no rank owns the IBZ eigenvectors");
-                if (comm_h.myid != owner_rank) continue;
-            }
+                const auto& k_ibz = kfrac_band[ik_ibz];
+                const auto& star = librpa_int::find_symmetry_kstar_for_ibz_kpoint(ctx, k_ibz);
+                if (star.members.empty())
+                    throw std::runtime_error("cal_head_symmetric: empty k-star");
 
-            for (std::size_t imember = 0; imember != star.members.size(); ++imember)
-            {
-                const auto &member = star.members[imember];
-                const auto &k_bz =
-                    member_targets.empty() ? member.k_bz : member_targets[ik_ibz][imember];
-                std::array<std::complex<double>, 9> head_k_iomega0{};
-
-                (void)k_bz;
-                const auto v_band_bz = has_direct_full_bz_headwing_inputs()
-                                          ? direct_full_bz_velocity_for_kstar_member(
-                                                direct_full_bz_velocity_,
-                                                direct_full_bz_velocity_member_source_ik_, ispin,
-                                                ik_ibz, imember)
-                                          : rotate_headwing_velocity_to_kstar_member(
-                                                ctx, member,
-                                                {velocity[ik_ibz][0], velocity[ik_ibz][1],
-                                                 velocity[ik_ibz][2]},
-                                                n_states, member.time_reversal);
-
-                // Sum over band pairs. Eigenvalues are symmetry-invariant, so the
-                // IBZ gap Delta_cv applies to every star member unchanged.
-                for (int iocc = 0; iocc != n_states; iocc++)
+                if (use_kblacs)
                 {
-                    for (int iunocc = 0; iunocc != n_states; iunocc++)
+                    if (!kblacs_ctxt_->owns_kpoint(ik_ibz) || kblacs_ctxt_->comm_blacs_h.myid != 0)
+                        continue;
+                }
+                else
+                {
+                    const int owner_rank = source_owners[ispin][ik_ibz];
+                    if (comm_h.myid != owner_rank) continue;
+                }
+
+                for (std::size_t imember = 0; imember != star.members.size(); ++imember)
+                {
+                    const auto &member = star.members[imember];
+                    const auto &k_bz =
+                        member_targets.empty() ? member.k_bz : member_targets[ik_ibz][imember];
+                    std::array<std::complex<double>, 9> head_k_iomega0{};
+
+                    (void)k_bz;
+                    const auto v_band_bz = has_direct_full_bz_headwing_inputs()
+                                              ? direct_full_bz_velocity_for_kstar_member(
+                                                    direct_full_bz_velocity(),
+                                                    direct_full_bz_member_source_ik(), ispin,
+                                                    ik_ibz, imember)
+                                              : rotate_headwing_velocity_to_kstar_member(
+                                                    ctx, member,
+                                                    {velocity[ik_ibz][0], velocity[ik_ibz][1],
+                                                     velocity[ik_ibz][2]},
+                                                    n_states, member.time_reversal);
+
+                    // Sum over band pairs. Eigenvalues are symmetry-invariant, so the
+                    // IBZ gap Delta_cv applies to every star member unchanged.
+                    for (int iocc = 0; iocc != n_states; iocc++)
                     {
-                        if (iocc >= iunocc) continue;
-                        const double factor =
-                            bz_weight_scale * headwing_transition_weight(wg(ik_ibz, iocc),
-                                                                         wg(ik_ibz, iunocc), n_spin,
-                                                                         use_soc);
-                        if (factor <= 1.e-8) continue;
-
-                        const double egap =
-                            (eigenvalues(ik_ibz, iocc) - eigenvalues(ik_ibz, iunocc));
-
-                        for (int alpha = 0; alpha != 3; ++alpha)
+                        for (int iunocc = 0; iunocc != n_states; iunocc++)
                         {
-                            for (int beta = 0; beta != 3; ++beta)
+                            if (iocc >= iunocc) continue;
+                            const double factor =
+                                bz_weight_scale * headwing_transition_weight(wg(ik_ibz, iocc),
+                                                                             wg(ik_ibz, iunocc), n_spin,
+                                                                             use_soc);
+                            if (std::abs(factor) <= 1.e-8) continue;
+
+                            const double egap =
+                                (eigenvalues(ik_ibz, iocc) - eigenvalues(ik_ibz, iunocc));
+
+                            for (int alpha = 0; alpha != 3; ++alpha)
                             {
-                                for (size_t iomega = 0; iomega != this->omega.size(); iomega++)
+                                for (int beta = 0; beta != 3; ++beta)
                                 {
-                                    const double omega_ev = this->omega[iomega];
-                                    const std::complex<double> tmp =
-                                        2.0 * factor * v_band_bz[alpha](iunocc, iocc) *
-                                        v_band_bz[beta](iocc, iunocc) /
-                                        (egap * egap + omega_ev * omega_ev) / egap;
-                                    this->head.at(iomega)(alpha, beta) -= tmp;
-                                    if (iomega == 0)
-                                        head_k_iomega0.at(as_size(alpha * 3 + beta)) -= tmp;
-                                    if (debug) head_check[iomega][alpha][beta] -= tmp;
+                                    for (size_t iomega = 0; iomega != this->omega.size(); iomega++)
+                                    {
+                                        const double omega_ev = this->omega[iomega];
+                                        const auto tmp = headwing_lehmann_head_pair(
+                                            omega_ev, -egap, factor,
+                                            v_band_bz[alpha](iunocc, iocc) *
+                                                v_band_bz[beta](iocc, iunocc));
+                                        this->head.at(iomega)(alpha, beta) += tmp;
+                                        if (iomega == 0)
+                                            head_k_iomega0.at(as_size(alpha * 3 + beta)) += tmp;
+                                        if (debug) head_check[iomega][alpha][beta] += tmp;
+                                    }
                                 }
                             }
                         }
                     }
+                    if (comm_h.is_root())
+                        print_head_k_contribution("sym_restored", ik_ibz, k_bz, head_k_iomega0);
                 }
-                if (comm_h.is_root())
-                    print_head_k_contribution("sym_restored", ik_ibz, k_bz, head_k_iomega0);
             }
         }
-    }
+    });
 
     allreduce_head_matrices(this->head, comm_h.comm);
     if (debug) allreduce_head_check(head_check, comm_h.comm);
@@ -1984,6 +2300,8 @@ double diele_func::cal_factor(std::string name)
 
 void diele_func::set_0_wing()
 {
+    auxiliary_wings_completed_ = false;
+    regular_wings_completed_ = false;
     int n_lambda = this->n_nonsingular - 1;
     for (int alpha = 0; alpha != 3; alpha++)
     {
@@ -1992,14 +2310,16 @@ void diele_func::set_0_wing()
             for (int mu = 0; mu != n_abf; mu++)
             {
                 this->wing_mu.at(iomega)(mu, alpha) = 0.0;
+                this->wing_mu_left_adjoint.at(iomega)(mu, alpha) = 0.0;
             }
         }
     }
+    auxiliary_wings_completed_ = true;
 };
 
 matrix_m<std::complex<double>> diele_func::get_rpa_chi0v_head(const int ifreq) const
 {
-    if (ifreq < 0 || static_cast<std::size_t>(ifreq) >= head.size())
+    if (!has_head() || ifreq < 0 || static_cast<std::size_t>(ifreq) >= head.size())
     {
         throw std::runtime_error("RPA chi0*v head requested before dielectric head is available");
     }
@@ -2015,7 +2335,7 @@ matrix_m<std::complex<double>> diele_func::get_rpa_chi0v_head(const int ifreq) c
 
 matrix_m<std::complex<double>> diele_func::get_rpa_chi0v_wing(const int ifreq) const
 {
-    if (ifreq < 0 || static_cast<std::size_t>(ifreq) >= wing.size())
+    if (!has_regular_wing() || ifreq < 0 || static_cast<std::size_t>(ifreq) >= wing.size())
     {
         throw std::runtime_error("RPA chi0*v wing requested before dielectric wing is available");
     }
@@ -2023,6 +2343,16 @@ matrix_m<std::complex<double>> diele_func::get_rpa_chi0v_wing(const int ifreq) c
     auto chi0v_wing = wing.at(ifreq).copy();
     chi0v_wing *= -1.0;
     return chi0v_wing;
+}
+
+matrix_m<std::complex<double>> diele_func::get_rpa_chi0v_left_wing_adjoint(const int ifreq) const
+{
+    if (!has_regular_wing() || ifreq < 0 ||
+        static_cast<std::size_t>(ifreq) >= wing_left_adjoint.size())
+        throw std::runtime_error("RPA chi0*v left wing requested before it is available");
+    auto result = wing_left_adjoint.at(ifreq).copy();
+    result *= -1.0;
+    return result;
 }
 
 SternheimerRpaHeadwingInput diele_func::get_sternheimer_rpa_headwing_input(
@@ -2050,7 +2380,8 @@ SternheimerRpaHeadwingInput diele_func::get_sternheimer_rpa_headwing_input(
     {
         return result;
     }
-    if (ifreq < 0 || static_cast<std::size_t>(ifreq) >= wing_mu.size())
+    if (!has_auxiliary_wing() || ifreq < 0 ||
+        static_cast<std::size_t>(ifreq) >= wing_mu.size())
     {
         throw std::runtime_error("ST-RPA qavg requested before analytic wing is available");
     }
@@ -2064,11 +2395,13 @@ SternheimerRpaHeadwingInput diele_func::get_sternheimer_rpa_headwing_input(
     // the chi0*v convention returned by get_rpa_chi0v_wing after the usual
     // sqrt(V) auxiliary-to-Coulomb transformation.
     result.wing_mu = ComplexMatrix(n_abf, 3);
+    result.wing_mu_left_adjoint = ComplexMatrix(n_abf, 3);
     for (int mu = 0; mu != n_abf; ++mu)
     {
         for (int alpha = 0; alpha != 3; ++alpha)
         {
             result.wing_mu(mu, alpha) = -wing_mu.at(ifreq)(mu, alpha);
+            result.wing_mu_left_adjoint(mu, alpha) = -wing_mu_left_adjoint.at(ifreq)(mu, alpha);
         }
     }
 
@@ -2103,11 +2436,101 @@ SternheimerRpaHeadwingInput diele_func::get_sternheimer_rpa_headwing_input(
 void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
                           const atpair_k_cplx_mat_t &Vq)
 {
+    cal_wing_with_basis(Cs_data, coulomb_eigen_threshold, Vq, atomic_basis_abf_, nullptr);
+}
+
+void diele_func::cal_projected_wing(const Cs_LRI &parent_cs, const AtomicBasis &parent_basis,
+                                    const ComplexMatrix &projection_gamma,
+                                    double coulomb_eigen_threshold,
+                                    const atpair_k_cplx_mat_t &Vq)
+{
+    auxiliary_wings_completed_ = false;
+    regular_wings_completed_ = false;
+    int invalid = projection_gamma.nr != atomic_basis_abf_.nb_total ||
+                  projection_gamma.nc != parent_basis.nb_total ||
+                  !parent_basis.initialized();
+    if (!invalid)
+        for (int i = 0; i != projection_gamma.nr; ++i)
+            for (int j = 0; j != projection_gamma.nc; ++j)
+                invalid |= !std::isfinite(projection_gamma(i, j).real()) ||
+                           !std::isfinite(projection_gamma(i, j).imag());
+    int any_invalid = 0;
+    comm_h.allreduce(&invalid, &any_invalid, 1, MPI_MAX);
+    if (any_invalid)
+        throw LIBRPA_INVALID_ARGUMENT("invalid parent-to-active Gamma optical projection");
+    cal_wing_with_basis(parent_cs, coulomb_eigen_threshold, Vq, parent_basis,
+                         &projection_gamma);
+}
+
+void diele_func::store_reduced_wings(
+    const std::vector<std::complex<double>> &right,
+    const std::vector<std::complex<double>> &left_adjoint,
+    const int source_size, const ComplexMatrix *projection_gamma)
+{
+    const double scale = -cal_factor("wing") * headwing_spin_prefactor(n_spin, use_soc);
+    for (std::size_t iw = 0; iw != omega.size(); ++iw)
+    {
+        if (projection_gamma == nullptr)
+        {
+            for (int mu = 0; mu != n_abf; ++mu)
+                for (int a = 0; a != 3; ++a)
+                {
+                    const auto index = as_size(mu) * omega.size() * 3 + iw * 3 + as_size(a);
+                    wing_mu[iw](mu, a) = right[index] * scale;
+                    wing_mu_left_adjoint[iw](mu, a) = left_adjoint[index] * scale;
+                }
+        }
+        else
+        {
+            // The left wing is stored in adjoint form, hence both buffers use U.
+            for (int mu = 0; mu != n_abf; ++mu)
+                for (int a = 0; a != 3; ++a)
+                {
+                    std::complex<double> r = 0.0, l = 0.0;
+                    for (int nu = 0; nu != source_size; ++nu)
+                    {
+                        const auto index = as_size(nu) * omega.size() * 3 + iw * 3 + as_size(a);
+                        r += (*projection_gamma)(mu, nu) * right[index];
+                        l += (*projection_gamma)(mu, nu) * left_adjoint[index];
+                    }
+                    wing_mu[iw](mu, a) = r * scale;
+                    wing_mu_left_adjoint[iw](mu, a) = l * scale;
+                }
+        }
+    }
+    projected_parent_wings_ = projection_gamma != nullptr;
+}
+
+void diele_func::cal_wing_with_basis(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
+                                     const atpair_k_cplx_mat_t &Vq,
+                                     const AtomicBasis &source_basis,
+                                     const ComplexMatrix *projection_gamma,
+                                     OpticalTransitionGrams *endpoint)
+{
+    if (!endpoint)
+    {
+        auxiliary_wings_completed_ = false;
+        regular_wings_completed_ = false;
+    }
 #ifndef LIBRPA_USE_LIBRI
     throw LIBRPA_RUNTIME_ERROR(
         "Analytic optical wing requires LibRI tensor communication; build with "
         "LIBRPA_USE_LIBRI=ON");
 #endif
+    // Every electronic transition contracts a localized RI vertex with raw
+    // input states. Validate its frame before task-dependent communication;
+    // the existing AO vertex work buffer is embedded at its actual target k.
+    collective_all_stage(comm_h, "Optical atomic Bloch frame", [&]
+    {
+        if (!symmetry_context_) return;
+        const BlochEmbedding embedding(*symmetry_context_, atomic_basis_wfc_);
+        if (!embedding.active()) return;
+        if (atomic_basis_wfc_.nb_total != static_cast<size_t>(n_basis))
+            throw LIBRPA_INVALID_ARGUMENT("Optical embedding AO partition is inconsistent");
+        for (const auto &k : kfrac_band)
+            if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                throw LIBRPA_INVALID_ARGUMENT("Optical embedding requires finite k points");
+    });
     if (!excluded_band_pairs_.empty() && (use_symmetry || use_2d_dielectric))
         throw LIBRPA_INVALID_ARGUMENT(
             "constrained optical wing requires full BZ and 3D dielectric");
@@ -2118,10 +2541,10 @@ void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
                     : std::vector<SpeciesBasisLayout>{};
     // Single-member stars already cover the complete BZ. Keep their native
     // k-BLACS WFC blocks on the full-BZ route; only reduced stars need WFC
-    // reconstruction, whose source-only input must remain undistributed.
+    // reconstruction, whose paired source components can stay k-BLACS distributed.
     const bool can_sym =
         can_try_sym && librpa_int::can_restore_symmetry_kstar_meanfield(
-                           *symmetry_context_, wfc_layouts, meanfield_df, kfrac_band, atom_nw);
+                           *symmetry_context_, wfc_layouts, meanfield(), kfrac_band, atom_nw);
 
     if (debug && use_symmetry && comm_h.is_root())
     {
@@ -2136,7 +2559,7 @@ void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
             reason = "symmetry context is not available";
         else if (symmetry_context_->kstars.empty())
             reason = "k-star table is empty";
-        else if (meanfield_df.get_n_kpoints() != static_cast<int>(kfrac_band.size()))
+        else if (meanfield().get_n_kpoints() != static_cast<int>(kfrac_band.size()))
             reason = "meanfield and active k-list sizes differ";
         else if (symmetry_context_->kstars.size() != kfrac_band.size())
             reason = "k-star count does not match active k-list";
@@ -2150,22 +2573,30 @@ void diele_func::cal_wing(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
     }
 
     if (can_sym)
-        cal_wing_symmetric(Cs_data, coulomb_eigen_threshold, Vq);
+        cal_wing_symmetric(Cs_data, coulomb_eigen_threshold, Vq, source_basis, projection_gamma,
+                            endpoint);
     else
-        cal_wing_full_bz(Cs_data, coulomb_eigen_threshold, Vq);
+        cal_wing_full_bz(Cs_data, coulomb_eigen_threshold, Vq, source_basis, projection_gamma,
+                          endpoint);
+    if (!endpoint) auxiliary_wings_completed_ = true;
 }
 
 void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
-                                  const atpair_k_cplx_mat_t &Vq)
+                                  const atpair_k_cplx_mat_t &Vq,
+                                  const AtomicBasis &source_basis,
+                                  const ComplexMatrix *projection_gamma,
+                                  OpticalTransitionGrams *endpoint)
 {
     using global::profiler;
 
     profiler.start("cal_wing_mu");
-    init_wing(coulomb_eigen_threshold, Vq);
+    if (!endpoint) init_wing(coulomb_eigen_threshold, Vq);
+    const int source_size = source_basis.nb_total;
     std::vector<std::complex<double>> local_wing_mu;
-    local_wing_mu.resize(this->omega.size() * 3 * n_abf, 0.0);
+    local_wing_mu.resize(this->omega.size() * 3 * source_size, 0.0);
+    std::vector<std::complex<double>> local_wing_mu_left_adjoint(local_wing_mu.size(), 0.0);
     std::vector<std::complex<double>> local_wing_mu_k_iomega0(
-        as_size(nk) * as_size(n_abf) * 3, 0.0);
+        endpoint ? 0 : as_size(nk) * as_size(source_size) * 3, 0.0);
     const bool use_kblacs = use_kpara_eigvec_;
     if (use_kblacs &&
         (!use_matching_kpoint_blacs(nk, kblacs_ctxt_) || desc_wfc_kblacs_ == nullptr ||
@@ -2187,7 +2618,7 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
         profiler.start("headwing_transform_Cs2mnk_kblacs_para");
         const auto targets = build_headwing_full_bz_fourier_targets(kfrac_band);
         Cs_IJ_k = redistribute_headwing_cs_ijk(
-            Cs_data, atomic_basis_wfc_, atomic_basis_abf_, targets, kpoints_local,
+            Cs_data, atomic_basis_wfc_, source_basis, targets, kpoints_local,
             desc_nao_nao, comm_h);
     }
     else
@@ -2199,7 +2630,7 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
     }
 
     // #pragma omp parallel for schedule(dynamic) collapse(2)
-    for (int mu = 0; mu < n_abf; ++mu)
+    for (int mu = 0; mu < source_size; ++mu)
     {
         for (const int ik : kpoints_local)
         {
@@ -2207,19 +2638,25 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
             {
                 auto desc_C_mnk =
                     use_kblacs
-                        ? transform_Cs2mnk_kblacs(ik, ik, mu, Cs_IJ_k, wing_blacs_h, nullptr,
-                                                  isp)
-                        : transform_Cs2mnk(ik, mu, Cs_IJ, isp);
+                        ? transform_Cs2mnk_kblacs(ik, ik, mu, Cs_IJ_k, wing_blacs_h,
+                                                  kfrac_band[ik], nullptr,
+                                                  isp, &source_basis)
+                        : transform_Cs2mnk(ik, mu, Cs_IJ, isp, &source_basis);
                 auto &desc_nband_nband = desc_C_mnk.first;
                 auto &C_mnk = desc_C_mnk.second;
-                print_wing_cmnk_probe("full_bz", mu, kfrac_band[ik], desc_nband_nband, C_mnk);
-                const bool use_soc_wing = meanfield_df.get_n_spinor() > 1;
-                const auto &eigenvalues = this->meanfield_df.get_eigenvals();
-                const auto &wg = this->meanfield_df.get_weight()[isp];
+                if (!endpoint)
+                    print_wing_cmnk_probe("full_bz", mu, kfrac_band[ik], desc_nband_nband, C_mnk);
+                const bool use_soc_wing = meanfield().get_n_spinor() > 1;
+                const auto &eigenvalues = this->meanfield().get_eigenvals();
+                const auto &wg = this->meanfield().get_weight()[isp];
                 const auto &velocity = this->velocity_[isp][ik];
-                auto *wing_mu_for_mu = local_wing_mu.data() + as_size(mu) * this->omega.size() * 3;
+                auto *wing_mu_for_mu = endpoint ? nullptr
+                    : local_wing_mu.data() + as_size(mu) * this->omega.size() * 3;
+                auto *left_for_mu = endpoint ? nullptr : local_wing_mu_left_adjoint.data() +
+                                    as_size(mu) * this->omega.size() * 3;
                 auto *wing_mu_k_iomega0_for_mu =
-                    local_wing_mu_k_iomega0.data() + as_size(ik * n_abf + mu) * 3;
+                    endpoint ? nullptr : local_wing_mu_k_iomega0.data() +
+                                             as_size(ik * source_size + mu) * 3;
 
                 for (int iocc = 0; iocc != n_states; iocc++)
                 {
@@ -2235,6 +2672,16 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
 
                         const double egap =
                             eigenvalues[isp](ik, iunocc) - eigenvalues[isp](ik, iocc);
+                        if (endpoint)
+                        {
+                            accumulate_optical_endpoint_pair(
+                                *endpoint, mu,
+                                {velocity[0](iunocc, iocc), velocity[1](iunocc, iocc),
+                                 velocity[2](iunocc, iocc)},
+                                C_mnk(loc_m, loc_n), egap,
+                                wg(ik, iocc) - wg(ik, iunocc), n_spin, use_soc_wing);
+                            continue;
+                        }
                         double factor1 = 0.0;
                         double factor2 = 0.0;
                         if (use_soc_wing)
@@ -2257,9 +2704,9 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
                         const std::array<std::complex<double>, 3> velocity_unocc_occ{
                             velocity[0](iunocc, iocc), velocity[1](iunocc, iocc),
                             velocity[2](iunocc, iocc)};
-                        accumulate_wing_mu_for_pair(this->omega, velocity_unocc_occ, c_mn, egap,
-                                                    factor1, factor2, wing_mu_for_mu,
-                                                    wing_mu_k_iomega0_for_mu);
+                        accumulate_lehmann_wing_mu_for_pair(
+                            this->omega, velocity_unocc_occ, c_mn, egap, factor1 - factor2,
+                            wing_mu_for_mu, left_for_mu, wing_mu_k_iomega0_for_mu);
                     }
                 }
             }
@@ -2267,14 +2714,14 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
         }
     }
 
-    if (comm_h.is_root())
+    if (!endpoint && comm_h.is_root())
     {
         for (int ik = 0; ik != nk; ++ik)
         {
-            const auto begin = local_wing_mu_k_iomega0.begin() + as_size(ik * n_abf) * 3;
-            const auto end = begin + as_size(n_abf) * 3;
+            const auto begin = local_wing_mu_k_iomega0.begin() + as_size(ik * source_size) * 3;
+            const auto end = begin + as_size(source_size) * 3;
             print_wing_mu_k_contribution_gram("full_bz", ik, kfrac_band[ik],
-                                              {begin, end}, n_abf);
+                                              {begin, end}, source_size);
         }
     }
     if (use_kblacs)
@@ -2283,27 +2730,22 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
         profiler.stop("headwing_transform_Cs2mnk_kblacs_para");
     }
 
+    if (endpoint)
+    {
+        reduce_optical_endpoint_grams(*endpoint, comm_h.comm);
+        profiler.stop("cal_wing_mu");
+        return;
+    }
+
     profiler.start("Comm_wing");
     MPI_Allreduce(MPI_IN_PLACE, local_wing_mu.data(), static_cast<int>(local_wing_mu.size()),
                   MPI_CXX_DOUBLE_COMPLEX, MPI_SUM, comm_h.comm);
+    MPI_Allreduce(MPI_IN_PLACE, local_wing_mu_left_adjoint.data(),
+                  static_cast<int>(local_wing_mu_left_adjoint.size()),
+                  MPI_CXX_DOUBLE_COMPLEX, MPI_SUM, comm_h.comm);
     profiler.stop("Comm_wing");
-    double dielectric_unit = cal_factor("wing");
-
-    for (int alpha = 0; alpha != 3; alpha++)
-    {
-        for (int mu = 0; mu != n_abf; mu++)
-        {
-            for (std::size_t iomega = 0; iomega != this->omega.size(); iomega++)
-            {
-                const std::size_t index =
-                    as_size(mu) * this->omega.size() * 3 + iomega * 3 + as_size(alpha);
-                this->wing_mu.at(iomega)(mu, alpha) = local_wing_mu[index];
-                this->wing_mu.at(iomega)(mu, alpha) *=
-                    -dielectric_unit * headwing_spin_prefactor(n_spin, use_soc);
-            }
-        }
-    }
-    // transform_mu_to_lambda();
+    store_reduced_wings(local_wing_mu, local_wing_mu_left_adjoint,
+                         source_size, projection_gamma);
     if (comm_h.is_root()) std::cout << "* Success: calculate wing term." << std::endl;
 
     // this->wing_mu.clear();
@@ -2312,14 +2754,19 @@ void diele_func::cal_wing_full_bz(const Cs_LRI &Cs_data, double coulomb_eigen_th
 };
 
 void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_threshold,
-                                    const atpair_k_cplx_mat_t &Vq)
+                                    const atpair_k_cplx_mat_t &Vq,
+                                  const AtomicBasis &source_basis,
+                                  const ComplexMatrix *projection_gamma,
+                                  OpticalTransitionGrams *endpoint)
 {
     using global::profiler;
     profiler.start("cal_wing_mu");
 
-    init_wing(coulomb_eigen_threshold, Vq);
+    if (!endpoint) init_wing(coulomb_eigen_threshold, Vq);
+    const int source_size = source_basis.nb_total;
     std::vector<std::complex<double>> local_wing_mu;
-    local_wing_mu.resize(this->omega.size() * 3 * n_abf, 0.0);
+    local_wing_mu.resize(this->omega.size() * 3 * source_size, 0.0);
+    std::vector<std::complex<double>> local_wing_mu_left_adjoint(local_wing_mu.size(), 0.0);
 
     const bool use_kblacs = use_kpara_eigvec_;
     if (use_kblacs &&
@@ -2340,6 +2787,38 @@ void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_
         librpa_int::build_symmetry_kstar_member_kfrac_targets(ctx, pbc_);
     const auto fourier_targets = build_headwing_symmetry_fourier_targets(ctx, pbc_, kfrac_band);
 
+    // Admit every global member before any owning group enters RI/BLACS
+    // contractions. Accessors inside unequal-star loops contain no collectives.
+    collective_all_stage(
+        comm_h, "Direct full-BZ optical source coordinates",
+        [&]
+        {
+            if (!has_direct_full_bz_headwing_inputs()) return;
+            const auto &input = *direct_full_bz_inputs_;
+            const BlochEmbedding embedding(ctx, atomic_basis_wfc_);
+            if (!input.source_kfrac.empty() &&
+                input.source_kfrac.size() !=
+                    static_cast<std::size_t>(input.meanfield.get_n_kpoints()))
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "direct full-BZ source coordinate count is inconsistent");
+            for (const auto &source : input.source_kfrac)
+                for (const auto value : {source.x, source.y, source.z})
+                    if (!std::isfinite(value))
+                        throw LIBRPA_INVALID_ARGUMENT(
+                            "direct full-BZ source coordinates must be finite");
+            if (atomic_basis_wfc_.nb_total != static_cast<std::size_t>(input.meanfield.get_n_aos()))
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "direct full-BZ coefficient AO partition is inconsistent");
+            for (int ik_ibz = 0; ik_ibz != nk; ++ik_ibz)
+            {
+                const auto &target_ids = fourier_targets.target_ids_by_ibz_member.at(ik_ibz);
+                for (std::size_t imember = 0; imember != target_ids.size(); ++imember)
+                    (void)direct_full_bz_member_coordinate_delta(
+                        input, ik_ibz, imember,
+                        fourier_targets.targets.at(target_ids[imember]).kfrac, embedding.active());
+            }
+        });
+
     ArrayDesc desc_nao_nao(wing_blacs_h);
     desc_nao_nao.init_1b1p(n_basis, n_basis, 0, 0);
     std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>> Cs_IJ;
@@ -2349,7 +2828,7 @@ void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_
         profiler.start("headwing_transform_Cs2mnk_kblacs_para");
         profiler.start("headwing_transform_Cs2mnk_sym_kblacs_para");
         Cs_IJ_k = redistribute_headwing_cs_ijk(
-            Cs_data, atomic_basis_wfc_, atomic_basis_abf_, fourier_targets.targets,
+            Cs_data, atomic_basis_wfc_, source_basis, fourier_targets.targets,
             kpoints_local, desc_nao_nao, comm_h);
     }
     else
@@ -2361,202 +2840,221 @@ void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_
     }
 
     const int n_kpoints_ibz = nk;
-    const int n_spinor = meanfield_df.get_n_spinor();
+    const int n_spinor = meanfield().get_n_spinor();
     const int n_kpoints_bz = static_cast<int>(ctx.count_kstar_members());
     const double bz_weight_scale_wing =
         static_cast<double>(n_kpoints_ibz) / static_cast<double>(n_kpoints_bz);
     const bool source_rank = wing_blacs_h.myprow == 0 && wing_blacs_h.mypcol == 0;
     const bool use_direct_inputs = has_direct_full_bz_headwing_inputs();
-    if (!use_direct_inputs && use_kblacs)
-        throw LIBRPA_RUNTIME_ERROR(
-            "IBZ-only head/wing reconstruction requires undistributed AO/band WFC blocks");
     const auto wfc_layouts = atomic_basis_wfc_.build_species_basis_layouts(ctx.atom_to_type);
 
-    for (const int ik_ibz : kpoints_local)
+    // Different k-groups own different star sizes. Their inner operations
+    // are group-local; report a failed group only at this common world stage.
+    collective_all_stage(comm_h, "Symmetric optical WFC/vertex restoration", [&]
     {
-        const auto &k_ibz = kfrac_band[ik_ibz];
-        const auto &star = librpa_int::find_symmetry_kstar_for_ibz_kpoint(ctx, k_ibz);
-        if (star.members.empty()) throw std::runtime_error("cal_wing_symmetric: empty k-star");
-
-        // Replicate only the current representative's paired components. The
-        // caller may own whole WFC blocks on different MPI ranks; no full-BZ
-        // coefficient cache is constructed by this route.
-        std::vector<std::vector<ComplexMatrix>> source_wfc(n_spin);
-        if (!use_direct_inputs)
-            for (int ispin = 0; ispin != n_spin; ++ispin)
-            {
-                source_wfc[ispin].resize(n_spinor);
-                for (int component = 0; component != n_spinor; ++component)
-                {
-                    const auto *local = meanfield_df.find_wfc(ispin, component, ik_ibz);
-                    const bool complete =
-                        local != nullptr && local->nr == n_states && local->nc == n_basis;
-                    const int owner = find_mpi_owner_rank(complete, comm_h.comm);
-                    if (owner < 0)
-                        throw LIBRPA_RUNTIME_ERROR(
-                            "IBZ head/wing is missing a complete source WFC component");
-                    auto &source = source_wfc[ispin][component];
-                    if (comm_h.myid == owner) source = *local;
-                    broadcast_ComplexMatrix(source, owner, comm_h.comm);
-                }
-            }
-
-        for (std::size_t imember = 0; imember != star.members.size(); ++imember)
+        for (const int ik_ibz : kpoints_local)
         {
-            const auto &member = star.members[imember];
-            const auto &k_bz =
-                member_targets.empty() ? member.k_bz : member_targets[ik_ibz][imember];
-            std::vector<std::complex<double>> member_wing_mu_iomega0(as_size(n_abf) * 3, 0.0);
-            const int target_id =
-                fourier_targets.target_ids_by_ibz_member.at(ik_ibz).at(imember);
+            const auto &k_ibz = kfrac_band[ik_ibz];
+            const auto &star = librpa_int::find_symmetry_kstar_for_ibz_kpoint(ctx, k_ibz);
+            if (star.members.empty()) throw std::runtime_error("cal_wing_symmetric: empty k-star");
 
-            std::vector<std::array<ComplexMatrix, 3>> velocity_bz(n_spin);
-            for (int ispin = 0; ispin != n_spin; ++ispin)
-            {
-                velocity_bz[ispin] =
-                    use_direct_inputs
-                        ? direct_full_bz_velocity_for_kstar_member(
-                              direct_full_bz_velocity_, direct_full_bz_velocity_member_source_ik_,
-                              ispin, ik_ibz, imember)
-                        : rotate_headwing_velocity_to_kstar_member(
-                              ctx, member,
-                              {velocity_[ispin][ik_ibz][0], velocity_[ispin][ik_ibz][1],
-                               velocity_[ispin][ik_ibz][2]},
-                              n_states, member.time_reversal);
-            }
-
-            std::vector<std::vector<ComplexMatrix>> wfc_bz_storage(n_spin);
-            std::vector<std::vector<const ComplexMatrix *>> wfc_bz_ptrs(n_spin);
-            for (int ispin = 0; ispin != n_spin; ++ispin)
-            {
-                wfc_bz_storage[ispin].resize(n_spinor);
-                wfc_bz_ptrs[ispin].resize(n_spinor, nullptr);
-                if (!use_direct_inputs)
+            // Replicate only the current representative's paired components. The
+            // caller may own whole WFC blocks on different MPI ranks; no full-BZ
+            // coefficient cache is constructed by this route.
+            std::vector<std::vector<ComplexMatrix>> source_wfc(n_spin);
+            if (!use_direct_inputs && !use_kblacs)
+                for (int ispin = 0; ispin != n_spin; ++ispin)
                 {
-                    std::exception_ptr restore_error;
-                    try
+                    source_wfc[ispin].resize(n_spinor);
+                    for (int component = 0; component != n_spinor; ++component)
                     {
-                        if (source_rank)
+                        const auto *local = meanfield().find_wfc(ispin, component, ik_ibz);
+                        const bool complete =
+                            local != nullptr && local->nr == n_states && local->nc == n_basis;
+                        const int owner = find_mpi_owner_rank(complete, comm_h.comm);
+                        if (owner < 0)
+                            throw LIBRPA_RUNTIME_ERROR(
+                                "IBZ head/wing is missing a complete source WFC component");
+                        auto &source = source_wfc[ispin][component];
+                        if (comm_h.myid == owner) source = *local;
+                        broadcast_ComplexMatrix(source, owner, comm_h.comm);
+                    }
+                }
+
+            for (std::size_t imember = 0; imember != star.members.size(); ++imember)
+            {
+                const auto &member = star.members[imember];
+                const auto &k_bz =
+                    member_targets.empty() ? member.k_bz : member_targets[ik_ibz][imember];
+                std::vector<std::complex<double>> member_wing_mu_iomega0(
+                    endpoint ? 0 : as_size(source_size) * 3, 0.0);
+                const int target_id =
+                    fourier_targets.target_ids_by_ibz_member.at(ik_ibz).at(imember);
+
+                std::vector<std::array<ComplexMatrix, 3>> velocity_bz(n_spin);
+                for (int ispin = 0; ispin != n_spin; ++ispin)
+                {
+                    velocity_bz[ispin] =
+                        use_direct_inputs
+                            ? direct_full_bz_velocity_for_kstar_member(
+                                  direct_full_bz_velocity(), direct_full_bz_member_source_ik(),
+                                  ispin, ik_ibz, imember)
+                            : rotate_headwing_velocity_to_kstar_member(
+                                  ctx, member,
+                                  {velocity_[ispin][ik_ibz][0], velocity_[ispin][ik_ibz][1],
+                                   velocity_[ispin][ik_ibz][2]},
+                                  n_states, member.time_reversal);
+                }
+
+                auto wfc_bz_storage = !use_direct_inputs && use_kblacs
+                    ? rotate_headwing_wfc_symmetry_kblacs(
+                          meanfield(), ik_ibz, *desc_wfc_kblacs_, wing_blacs_h,
+                          ctx, member, wfc_layouts, atom_nw, k_ibz, &k_bz)
+                    : std::vector<std::vector<ComplexMatrix>>(n_spin);
+                std::vector<std::vector<const ComplexMatrix *>> wfc_bz_ptrs(n_spin);
+                for (int ispin = 0; ispin != n_spin; ++ispin)
+                {
+                    wfc_bz_storage[ispin].resize(n_spinor);
+                    wfc_bz_ptrs[ispin].resize(n_spinor, nullptr);
+                    if (!use_direct_inputs && !use_kblacs)
+                    {
+                        std::exception_ptr restore_error;
+                        try
                         {
-                            if (n_spinor == 2)
+                            if (source_rank)
                             {
-                                const auto restored = rotate_headwing_spinor_wfc_to_kstar_member(
-                                    ctx, member, wfc_layouts, atom_nw, k_ibz,
-                                    {source_wfc[ispin][0], source_wfc[ispin][1]}, &k_bz);
-                                for (int component = 0; component != 2; ++component)
-                                    wfc_bz_storage[ispin][component] = restored[component];
+                                if (n_spinor == 2)
+                                {
+                                    const auto restored = rotate_headwing_spinor_wfc_to_kstar_member(
+                                        ctx, member, wfc_layouts, atom_nw, k_ibz,
+                                        {source_wfc[ispin][0], source_wfc[ispin][1]}, &k_bz);
+                                    for (int component = 0; component != 2; ++component)
+                                        wfc_bz_storage[ispin][component] = restored[component];
+                                }
+                                else
+                                    wfc_bz_storage[ispin][0] = rotate_headwing_wfc_to_kstar_member(
+                                        ctx, member, wfc_layouts, atom_nw, k_ibz, source_wfc[ispin][0],
+                                        &k_bz);
+                                for (int component = 0; component != n_spinor; ++component)
+                                    wfc_bz_ptrs[ispin][component] = &wfc_bz_storage[ispin][component];
                             }
-                            else
-                                wfc_bz_storage[ispin][0] = rotate_headwing_wfc_to_kstar_member(
-                                    ctx, member, wfc_layouts, atom_nw, k_ibz, source_wfc[ispin][0],
-                                    &k_bz);
-                            for (int component = 0; component != n_spinor; ++component)
-                                wfc_bz_ptrs[ispin][component] = &wfc_bz_storage[ispin][component];
+                        }
+                        catch (...)
+                        {
+                            restore_error = std::current_exception();
+                        }
+                        // All ranks must reject a failed root reconstruction before
+                        // entering the distributed RI charge-vertex transform.
+                        const int failed = restore_error ? 1 : 0;
+                        int any_failed = 0;
+                        comm_h.allreduce(&failed, &any_failed, 1, MPI_MAX);
+                        if (any_failed)
+                        {
+                            if (restore_error) std::rethrow_exception(restore_error);
+                            throw LIBRPA_RUNTIME_ERROR(
+                                "IBZ head/wing WFC reconstruction failed on another MPI rank");
                         }
                     }
-                    catch (...)
+                    if (!use_direct_inputs && use_kblacs)
+                        for (int component = 0; component != n_spinor; ++component)
+                            wfc_bz_ptrs[ispin][component] = &wfc_bz_storage[ispin][component];
+                    for (int ispinor = 0; ispinor != n_spinor; ++ispinor)
                     {
-                        restore_error = std::current_exception();
-                    }
-                    // All ranks must reject a failed root reconstruction before
-                    // entering the distributed RI charge-vertex transform.
-                    const int failed = restore_error ? 1 : 0;
-                    int any_failed = 0;
-                    comm_h.allreduce(&failed, &any_failed, 1, MPI_MAX);
-                    if (any_failed)
-                    {
-                        if (restore_error) std::rethrow_exception(restore_error);
-                        throw LIBRPA_RUNTIME_ERROR(
-                            "IBZ head/wing WFC reconstruction failed on another MPI rank");
+                        if (!use_direct_inputs || (!use_kblacs && !source_rank)) continue;
+                        wfc_bz_ptrs[ispin][ispinor] = &direct_full_bz_wfc_for_kstar_member(
+                            *direct_full_bz_inputs_, ctx, atomic_basis_wfc_, ispin, ispinor, ik_ibz,
+                            imember, k_bz, wfc_bz_storage[ispin][ispinor],
+                            use_kblacs ? desc_wfc_kblacs_ : nullptr);
                     }
                 }
-                for (int ispinor = 0; ispinor != n_spinor; ++ispinor)
+
+                for (int mu = 0; mu != source_size; ++mu)
                 {
-                    if (!use_direct_inputs || (!use_kblacs && !source_rank)) continue;
-                    const auto &wfc_full = direct_full_bz_wfc_for_kstar_member(
-                        direct_full_bz_wfc_, direct_full_bz_velocity_member_source_ik_,
-                        ispin, ispinor, ik_ibz, imember);
-                    if (use_kblacs)
+                    auto *wing_mu_for_mu = endpoint ? nullptr
+                        : local_wing_mu.data() + as_size(mu) * this->omega.size() * 3;
+                    auto *left_for_mu = endpoint ? nullptr : local_wing_mu_left_adjoint.data() +
+                                        as_size(mu) * this->omega.size() * 3;
+                    auto *member_wing_mu_iomega0_for_mu =
+                        endpoint ? nullptr : member_wing_mu_iomega0.data() + as_size(mu) * 3;
+
+                    for (int isp = 0; isp != n_spin; ++isp)
                     {
-                        wfc_bz_storage[ispin][ispinor] =
-                            localize_direct_full_bz_wfc(wfc_full, *desc_wfc_kblacs_);
-                        wfc_bz_ptrs[ispin][ispinor] = &wfc_bz_storage[ispin][ispinor];
-                    }
-                    else
-                    {
-                        wfc_bz_ptrs[ispin][ispinor] = &wfc_full;
-                    }
-                }
-            }
+                        auto desc_C_mnk =
+                            use_kblacs
+                                ? transform_Cs2mnk_kblacs(ik_ibz, target_id, mu, Cs_IJ_k,
+                                                          wing_blacs_h, k_bz, &wfc_bz_ptrs,
+                                                          isp, &source_basis)
+                                : transform_Cs2mnk_kblacs(ik_ibz, mu, Cs_IJ, wing_blacs_h,
+                                                          k_bz, &wfc_bz_ptrs, isp, &source_basis);
+                        auto &desc_nband_nband = desc_C_mnk.first;
+                        auto &C_mnk = desc_C_mnk.second;
+                        if (!endpoint)
+                            print_wing_cmnk_probe("sym_restored", mu, k_bz, desc_nband_nband, C_mnk);
+                        const bool use_soc_wing = meanfield().get_n_spinor() > 1;
+                        const auto &eigenvalues = this->meanfield().get_eigenvals();
+                        const auto &wg = this->meanfield().get_weight()[isp];
+                        const auto &velocity = velocity_bz[isp];
 
-            for (int mu = 0; mu != n_abf; ++mu)
-            {
-                auto *wing_mu_for_mu = local_wing_mu.data() + as_size(mu) * this->omega.size() * 3;
-                auto *member_wing_mu_iomega0_for_mu =
-                    member_wing_mu_iomega0.data() + as_size(mu) * 3;
-
-                for (int isp = 0; isp != n_spin; ++isp)
-                {
-                    auto desc_C_mnk =
-                        use_kblacs
-                            ? transform_Cs2mnk_kblacs(ik_ibz, target_id, mu, Cs_IJ_k,
-                                                      wing_blacs_h, &wfc_bz_ptrs, isp)
-                            : transform_Cs2mnk_kblacs(ik_ibz, mu, Cs_IJ, wing_blacs_h,
-                                                      k_bz, &wfc_bz_ptrs, isp);
-                    auto &desc_nband_nband = desc_C_mnk.first;
-                    auto &C_mnk = desc_C_mnk.second;
-                    print_wing_cmnk_probe("sym_restored", mu, k_bz, desc_nband_nband, C_mnk);
-                    const bool use_soc_wing = meanfield_df.get_n_spinor() > 1;
-                    const auto &eigenvalues = this->meanfield_df.get_eigenvals();
-                    const auto &wg = this->meanfield_df.get_weight()[isp];
-                    const auto &velocity = velocity_bz[isp];
-
-                    for (int iocc = 0; iocc != n_states; iocc++)
-                    {
-                        const int loc_m = desc_nband_nband.indx_g2l_r(iocc);
-                        if (loc_m < 0) continue;
-
-                        for (int iunocc = iocc + 1; iunocc != n_states; iunocc++)
+                        for (int iocc = 0; iocc != n_states; iocc++)
                         {
-                            const int loc_n = desc_nband_nband.indx_g2l_c(iunocc);
-                            if (loc_n < 0) continue;
+                            const int loc_m = desc_nband_nband.indx_g2l_r(iocc);
+                            if (loc_m < 0) continue;
 
-                            const double egap =
-                                eigenvalues[isp](ik_ibz, iunocc) - eigenvalues[isp](ik_ibz, iocc);
-                            const double wg_occ = wg(ik_ibz, iocc) * bz_weight_scale_wing;
-                            const double wg_unocc = wg(ik_ibz, iunocc) * bz_weight_scale_wing;
-                            double factor1 = 0.0;
-                            double factor2 = 0.0;
-                            if (use_soc_wing)
+                            for (int iunocc = iocc + 1; iunocc != n_states; iunocc++)
                             {
-                                factor1 = wg_occ * (1.0 - wg_unocc * n_kpoints_bz);
-                                factor2 = wg_unocc * (1.0 - wg_occ * n_kpoints_bz);
-                            }
-                            else
-                            {
-                                factor1 = wg_occ / 2 * n_spin *
-                                          (1.0 - wg_unocc / 2 * n_spin * n_kpoints_bz);
-                                factor2 = wg_unocc / 2 * n_spin *
-                                          (1.0 - wg_occ / 2 * n_spin * n_kpoints_bz);
-                            }
-                            if (factor1 <= 1.e-8 && factor2 <= 1.e-8) continue;
+                                const int loc_n = desc_nband_nband.indx_g2l_c(iunocc);
+                                if (loc_n < 0) continue;
 
-                            const auto c_mn = C_mnk(loc_m, loc_n);
-                            const std::array<std::complex<double>, 3> velocity_unocc_occ{
-                                velocity[0](iunocc, iocc), velocity[1](iunocc, iocc),
-                                velocity[2](iunocc, iocc)};
-                            accumulate_wing_mu_for_pair(this->omega, velocity_unocc_occ, c_mn, egap,
-                                                        factor1, factor2, wing_mu_for_mu,
-                                                        member_wing_mu_iomega0_for_mu);
+                                const double egap =
+                                    eigenvalues[isp](ik_ibz, iunocc) - eigenvalues[isp](ik_ibz, iocc);
+                                if (endpoint)
+                                {
+                                    // Raw dataset IBZ weights include the geometric
+                                    // star size. Each restored member gets 1/|star|.
+                                    accumulate_optical_endpoint_pair(
+                                        *endpoint, mu,
+                                        {velocity[0](iunocc, iocc), velocity[1](iunocc, iocc),
+                                         velocity[2](iunocc, iocc)},
+                                        C_mnk(loc_m, loc_n), egap,
+                                        (wg(ik_ibz, iocc) - wg(ik_ibz, iunocc)) /
+                                            double(star.members.size()), n_spin, use_soc_wing);
+                                    continue;
+                                }
+                                const double wg_occ = wg(ik_ibz, iocc) * bz_weight_scale_wing;
+                                const double wg_unocc = wg(ik_ibz, iunocc) * bz_weight_scale_wing;
+                                double factor1 = 0.0;
+                                double factor2 = 0.0;
+                                if (use_soc_wing)
+                                {
+                                    factor1 = wg_occ * (1.0 - wg_unocc * n_kpoints_bz);
+                                    factor2 = wg_unocc * (1.0 - wg_occ * n_kpoints_bz);
+                                }
+                                else
+                                {
+                                    factor1 = wg_occ / 2 * n_spin *
+                                              (1.0 - wg_unocc / 2 * n_spin * n_kpoints_bz);
+                                    factor2 = wg_unocc / 2 * n_spin *
+                                              (1.0 - wg_occ / 2 * n_spin * n_kpoints_bz);
+                                }
+                                if (factor1 <= 1.e-8 && factor2 <= 1.e-8) continue;
+
+                                const auto c_mn = C_mnk(loc_m, loc_n);
+                                const std::array<std::complex<double>, 3> velocity_unocc_occ{
+                                    velocity[0](iunocc, iocc), velocity[1](iunocc, iocc),
+                                    velocity[2](iunocc, iocc)};
+                                accumulate_lehmann_wing_mu_for_pair(
+                                    this->omega, velocity_unocc_occ, c_mn, egap, factor1 - factor2,
+                                    wing_mu_for_mu, left_for_mu, member_wing_mu_iomega0_for_mu);
+                            }
                         }
                     }
                 }
+                if (!endpoint && comm_h.is_root())
+                    print_wing_mu_k_contribution_gram("sym_restored", ik_ibz, k_bz,
+                                                      member_wing_mu_iomega0, source_size, &member);
             }
-            if (comm_h.is_root())
-                print_wing_mu_k_contribution_gram("sym_restored", ik_ibz, k_bz,
-                                                  member_wing_mu_iomega0, n_abf, &member);
         }
-    }
+    });
 
     if (use_kblacs)
     {
@@ -2565,26 +3063,22 @@ void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_
         profiler.stop("headwing_transform_Cs2mnk_kblacs_para");
     }
 
+    if (endpoint)
+    {
+        reduce_optical_endpoint_grams(*endpoint, comm_h.comm);
+        profiler.stop("cal_wing_mu");
+        return;
+    }
+
     profiler.start("Comm_wing");
     MPI_Allreduce(MPI_IN_PLACE, local_wing_mu.data(), static_cast<int>(local_wing_mu.size()),
                   MPI_CXX_DOUBLE_COMPLEX, MPI_SUM, comm_h.comm);
+    MPI_Allreduce(MPI_IN_PLACE, local_wing_mu_left_adjoint.data(),
+                  static_cast<int>(local_wing_mu_left_adjoint.size()),
+                  MPI_CXX_DOUBLE_COMPLEX, MPI_SUM, comm_h.comm);
     profiler.stop("Comm_wing");
-    double dielectric_unit = cal_factor("wing");
-
-    for (int alpha = 0; alpha != 3; alpha++)
-    {
-        for (int mu = 0; mu != n_abf; mu++)
-        {
-            for (std::size_t iomega = 0; iomega != this->omega.size(); iomega++)
-            {
-                const std::size_t index =
-                    as_size(mu) * this->omega.size() * 3 + iomega * 3 + as_size(alpha);
-                this->wing_mu.at(iomega)(mu, alpha) = local_wing_mu[index];
-                this->wing_mu.at(iomega)(mu, alpha) *=
-                    -dielectric_unit * headwing_spin_prefactor(n_spin, use_soc);
-            }
-        }
-    }
+    store_reduced_wings(local_wing_mu, local_wing_mu_left_adjoint,
+                         source_size, projection_gamma);
     if (comm_h.is_root()) std::cout << "* Success: calculate wing term." << std::endl;
     release_free_mem();
     profiler.stop("cal_wing_mu");
@@ -2593,15 +3087,16 @@ void diele_func::cal_wing_symmetric(const Cs_LRI &Cs_data, double coulomb_eigen_
 std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk(
     const int ik, const int mu,
     std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>> &Cs_IJ,
-    const int spin_filter)
+    const int spin_filter, const AtomicBasis *source_basis)
 {
     using global::profiler;
     if (spin_filter < -1 || spin_filter >= n_spin)
         throw std::logic_error("transform_Cs2mnk: invalid spin_filter");
 
-    const int n_soc = meanfield_df.get_n_spinor();
-    const int Mu = atomic_basis_abf_.get_i_atom(mu);
-    const int mu_local = atomic_basis_abf_.get_local_index(mu, Mu);
+    const int n_soc = meanfield().get_n_spinor();
+    const auto &auxiliary_basis = source_basis == nullptr ? atomic_basis_abf_ : *source_basis;
+    const int Mu = auxiliary_basis.get_i_atom(mu);
+    const int mu_local = auxiliary_basis.get_local_index(mu, Mu);
     const int n_ao_Mu = atomic_basis_wfc_.get_atom_nb(Mu);
 
     ArrayDesc desc_nband_nao(blacs_h);
@@ -2635,6 +3130,9 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk(
     collect_block_from_IJ_storage_tensor_transform_triple(C_nao_nao, desc_nao_nao,
                                                           atomic_basis_wfc_, atomic_basis_wfc_,
                                                           fourier, Cs_IJ, Mu, mu_local);
+    if (symmetry_context_)
+        BlochEmbedding(*symmetry_context_, atomic_basis_wfc_)
+            .apply_bilinear(C_nao_nao, desc_nao_nao, kfrac, false);
     print_wing_cnao_probe("full_bz", mu, kfrac, desc_nao_nao, C_nao_nao);
     // if (ik == 1 && mu == 4)
     // {
@@ -2670,8 +3168,8 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk(
             {
                 // The RI charge operator is diagonal in spinor space.
                 if (is1 != is2) continue;
-                const auto *wfc_isp1_k = meanfield_df.find_wfc(ispin, is1, ik);
-                const auto *wfc_isp2_k = meanfield_df.find_wfc(ispin, is2, ik);
+                const auto *wfc_isp1_k = meanfield().find_wfc(ispin, is1, ik);
+                const auto *wfc_isp2_k = meanfield().find_wfc(ispin, is2, ik);
                 const int bad_wfc_local =
                     wfc_isp1_k == nullptr || wfc_isp2_k == nullptr ||
                     wfc_isp1_k->nr != n_states || wfc_isp1_k->nc != n_basis ||
@@ -2721,13 +3219,14 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk_kbl
     const int ik, const int mu,
     std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<double>>> &Cs_IJ,
     const BlacsCtxtHandler &wing_blacs_h, const Vector3_Order<double> &kfrac,
-    const std::vector<std::vector<const ComplexMatrix *>> *wfc_override, const int spin_filter)
+    const std::vector<std::vector<const ComplexMatrix *>> *wfc_override, const int spin_filter, const AtomicBasis *source_basis)
 {
     if (spin_filter < -1 || spin_filter >= n_spin)
         throw std::logic_error("transform_Cs2mnk_kblacs: invalid spin_filter");
 
-    const int Mu = atomic_basis_abf_.get_i_atom(mu);
-    const int mu_local = atomic_basis_abf_.get_local_index(mu, Mu);
+    const auto &auxiliary_basis = source_basis == nullptr ? atomic_basis_abf_ : *source_basis;
+    const int Mu = auxiliary_basis.get_i_atom(mu);
+    const int mu_local = auxiliary_basis.get_local_index(mu, Mu);
     ArrayDesc desc_wfc_src(wing_blacs_h);
     desc_wfc_src.init(n_basis, n_states, n_basis, n_states, 0, 0);
     ArrayDesc desc_nao_nao(wing_blacs_h);
@@ -2747,17 +3246,21 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk_kbl
     collect_block_from_IJ_storage_tensor_transform_triple(C_nao_nao, desc_nao_nao,
                                                           atomic_basis_wfc_, atomic_basis_wfc_,
                                                           fourier, Cs_IJ, Mu, mu_local);
+    if (symmetry_context_)
+        BlochEmbedding(*symmetry_context_, atomic_basis_wfc_)
+            .apply_bilinear(C_nao_nao, desc_nao_nao, kfrac, false);
     print_wing_cnao_probe(wfc_override == nullptr ? "full_bz" : "sym_restored", mu, kfrac,
                           desc_nao_nao, C_nao_nao);
     return rotate_Cs_nao2mnk_kblacs(ik, mu, C_nao_nao, desc_nao_nao, wing_blacs_h,
-                                    desc_wfc_src, wfc_override, spin_filter);
+                                    desc_wfc_src, wfc_override, spin_filter, source_basis);
 }
 
 std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk_kblacs(
     const int source_ik, const int target_id, const int mu,
     const HeadwingCsIJKMap &Cs_IJ_k, const BlacsCtxtHandler &wing_blacs_h,
+    const Vector3_Order<double> &kfrac,
     const std::vector<std::vector<const ComplexMatrix *>> *wfc_override,
-    const int spin_filter)
+    const int spin_filter, const AtomicBasis *source_basis)
 {
     if (spin_filter < -1 || spin_filter >= n_spin)
         throw std::logic_error("transform_Cs2mnk_kblacs: invalid spin_filter");
@@ -2768,16 +3271,20 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::transform_Cs2mnk_kbl
     if (desc_wfc_kblacs_->ictxt() != wing_blacs_h.ictxt)
         throw LIBRPA_RUNTIME_ERROR("head/wing source descriptor uses the wrong BLACS context");
 
-    const int Mu = atomic_basis_abf_.get_i_atom(mu);
-    const int mu_local = atomic_basis_abf_.get_local_index(mu, Mu);
+    const auto &auxiliary_basis = source_basis == nullptr ? atomic_basis_abf_ : *source_basis;
+    const int Mu = auxiliary_basis.get_i_atom(mu);
+    const int mu_local = auxiliary_basis.get_local_index(mu, Mu);
     ArrayDesc desc_nao_nao(wing_blacs_h);
     desc_nao_nao.init_1b1p(n_basis, n_basis, 0, 0);
     auto C_nao_nao = init_local_mat<complex<double>>(desc_nao_nao, MAJOR::COL);
     collect_headwing_Cs_mu_from_ijk(C_nao_nao, desc_nao_nao, atomic_basis_wfc_, Mu,
                                     mu_local, target_id, Cs_IJ_k);
+    if (symmetry_context_)
+        BlochEmbedding(*symmetry_context_, atomic_basis_wfc_)
+            .apply_bilinear(C_nao_nao, desc_nao_nao, kfrac, false);
     return rotate_Cs_nao2mnk_kblacs(source_ik, mu, C_nao_nao, desc_nao_nao,
                                     wing_blacs_h, *desc_wfc_kblacs_, wfc_override,
-                                    spin_filter);
+                                    spin_filter, source_basis);
 }
 
 std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::rotate_Cs_nao2mnk_kblacs(
@@ -2785,7 +3292,7 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::rotate_Cs_nao2mnk_kb
     const ArrayDesc &desc_nao_nao, const BlacsCtxtHandler &wing_blacs_h,
     const ArrayDesc &desc_wfc_src,
     const std::vector<std::vector<const ComplexMatrix *>> *wfc_override,
-    const int spin_filter)
+    const int spin_filter, const AtomicBasis *source_basis)
 {
     if (spin_filter < -1 || spin_filter >= n_spin)
         throw std::logic_error("rotate_Cs_nao2mnk_kblacs: invalid spin_filter");
@@ -2794,8 +3301,9 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::rotate_Cs_nao2mnk_kb
         desc_nao_nao.ictxt() != wing_blacs_h.ictxt)
         throw LIBRPA_RUNTIME_ERROR("head/wing rotation descriptors are inconsistent");
 
-    const int n_soc = meanfield_df.get_n_spinor();
-    const int Mu = atomic_basis_abf_.get_i_atom(mu);
+    const int n_soc = meanfield().get_n_spinor();
+    const auto &auxiliary_basis = source_basis == nullptr ? atomic_basis_abf_ : *source_basis;
+    const int Mu = auxiliary_basis.get_i_atom(mu);
     const int n_ao_Mu = atomic_basis_wfc_.get_atom_nb(Mu);
     const int expected_block_nao =
         get_capped_blacs_block_size(n_basis, wfc_gemm_block_size_opt, wing_blacs_h);
@@ -2839,7 +3347,7 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::rotate_Cs_nao2mnk_kb
         {
             return (*wfc_override).at(ispin).at(ispinor);
         }
-        return meanfield_df.find_wfc(ispin, ispinor, source_ik);
+        return meanfield().find_wfc(ispin, ispinor, source_ik);
     };
 
     std::vector<complex<double>> dummy_wfc(1, {0.0, 0.0});
@@ -2923,85 +3431,35 @@ std::pair<ArrayDesc, matrix_m<complex<double>>> diele_func::rotate_Cs_nao2mnk_kb
     return std::make_pair(desc_nband_nband_opt, C_nband_nband_opt);
 }
 
-std::complex<double> diele_func::compute_wing(const int alpha, const int iomega, const int mu,
-                                              const int ik, const int ispin,
-                                              const ArrayDesc &desc_nband_nband,
-                                              const matrix_m<complex<double>> &C_nband_nband)
+std::complex<double> diele_func::compute_wing(
+    const int alpha, const int iomega, const int mu, const int ik, const int ispin,
+    const ArrayDesc &desc_nband_nband, const matrix_m<complex<double>> &C_nband_nband)
 {
-    const auto &velocity = this->velocity_;
-    auto &eigenvalues = this->meanfield_df.get_eigenvals();
-
-    double omega_ev = this->omega[iomega];  // * HA2EV;
-    std::complex<double> wing_term = 0.0;
-
-    bool use_soc = meanfield_df.get_n_spinor() > 1;
-
-    auto &wg = this->meanfield_df.get_weight()[ispin];
-    for (int iocc = 0; iocc != n_states; iocc++)
+    (void)mu;
+    const auto &eigenvalues = meanfield().get_eigenvals()[ispin];
+    const auto &wg = meanfield().get_weight()[ispin];
+    const auto &velocity = velocity_[ispin][ik];
+    const std::vector<double> frequency{omega.at(iomega)};
+    std::array<std::complex<double>, 3> right{}, left{};
+    for (int m = 0; m < n_states; ++m)
     {
-        for (int iunocc = 0; iunocc != n_states; iunocc++)
+        const int local_m = desc_nband_nband.indx_g2l_r(m);
+        if (local_m < 0) continue;
+        for (int n = m + 1; n < n_states; ++n)
         {
-            double egap =
-                (eigenvalues[ispin](ik, iunocc) - eigenvalues[ispin](ik, iocc));  // * HA2EV;
-            if (iocc < iunocc)
-            {
-                double factor1;
-                double factor2;
-                if (use_soc)
-                {
-                    // NOTE: wg is matrix(n_kpoints, n_states); use wg(ik, ib) so the
-                    // k-dependence of the occupation is honored. The factor `* nk` recovers
-                    // the occupation count (wg was divided by n_kpoints at read time).
-                    factor1 = wg(ik, iocc) * (1.0 - wg(ik, iunocc) * nk);
-                    factor2 = wg(ik, iunocc) * (1.0 - wg(ik, iocc) * nk);
-                }
-                else
-                {
-                    factor1 = wg(ik, iocc) / 2 * n_spin * (1.0 - wg(ik, iunocc) / 2 * n_spin * nk);
-                    factor2 = wg(ik, iunocc) / 2 * n_spin * (1.0 - wg(ik, iocc) / 2 * n_spin * nk);
-                }
-                if (factor1 > 1.e-8)
-                {
-                    auto loc_m = desc_nband_nband.indx_g2l_r(iocc);
-                    auto loc_n = desc_nband_nband.indx_g2l_c(iunocc);
-                    if (loc_m < 0 || loc_n < 0) continue;
-                    auto tmp = C_nband_nband(loc_m, loc_n);
-                    wing_term += factor1 * conj(tmp * velocity[ispin][ik][alpha](iunocc, iocc)) /
-                                 (omega_ev * omega_ev + egap * egap);
-                }
-                if (factor2 > 1.e-8)
-                {
-                    auto loc_m = desc_nband_nband.indx_g2l_r(iocc);
-                    auto loc_n = desc_nband_nband.indx_g2l_c(iunocc);
-                    if (loc_m < 0 || loc_n < 0) continue;
-                    auto tmp = C_nband_nband(loc_m, loc_n);
-                    // for metal
-                    wing_term += factor2 * tmp * velocity[ispin][ik][alpha](iunocc, iocc) /
-                                 (omega_ev * omega_ev + egap * egap);
-                }
-
-                /*if (Params::debug)
-                {
-                    if (alpha == 0 && iomega == 0 && mu == 0)
-                    {
-                        std::complex<double> test =
-                conj(Ctri_mn[mu][iocc][iunocc][kfrac_band[ik]] *
-                                                         velocity[ispin][ik][alpha](iunocc,
-                iocc)) / (omega_ev * omega_ev + egap * egap); if (iocc == 0 && iunocc == 10)
-                        {
-                            std::cout << "C,p: " << Ctri_mn[mu][iocc][iunocc][kfrac_band[ik]] <<
-                ","
-                                      << velocity[ispin][ik][alpha](iunocc, iocc) << std::endl;
-                        }
-                        test_tot += test;
-                    }
-                }*/
-            }
+            const int local_n = desc_nband_nband.indx_g2l_c(n);
+            if (local_n < 0) continue;
+            const double df = headwing_transition_weight(
+                wg(ik, m), wg(ik, n), n_spin, meanfield().get_n_spinor() > 1) *
+                retained_band_pair_weight(ispin, ik, m, n);
+            accumulate_lehmann_wing_mu_for_pair(
+                frequency, {velocity[0](n, m), velocity[1](n, m), velocity[2](n, m)},
+                C_nband_nband(local_m, local_n), eigenvalues(ik, n) - eigenvalues(ik, m),
+                df, right.data(), left.data());
         }
     }
-
-    return wing_term;
-};
+    return right.at(alpha);
+}
 
 bool rpa_headwing_matrix_matches_descriptor(
     const matrix_m<std::complex<double>> &matrix, const ArrayDesc &descriptor,
@@ -3014,14 +3472,27 @@ bool rpa_headwing_matrix_matches_descriptor(
            descriptor.l2g_c() == expected_descriptor.l2g_c();
 }
 
+void diele_func::require_regular_wing_descriptor(const ArrayDesc &descriptor) const
+{
+    const int local_valid = has_head() && has_regular_wing() &&
+        std::equal(regular_wing_descriptor_.begin(), regular_wing_descriptor_.end(),
+                   descriptor.desc);
+    int all_valid = 0;
+    comm_h.allreduce(&local_valid, &all_valid, 1, MPI_MIN);
+    if (!all_valid)
+        throw LIBRPA_RUNTIME_ERROR("regular optical wing is incomplete or has a different descriptor");
+}
+
 void diele_func::wing_mu_to_lambda(matrix_m<std::complex<double>> &sqrtveig_blacs,
                                    const ArrayDesc &desc_nabf_nabf_opt,
                                    const std::size_t n_nonsingular_in)
 {
+    regular_wings_completed_ = false;
     // GW and RPA can produce different valid blocks on rectangular process grids.
     // Check the supplied layout in our context, not an inferred RPA-only layout.
     int local_contract_ok = 0;
-    if (desc_nabf_nabf_opt.is_initialized() && desc_nabf_nabf_opt.mb() > 0 &&
+    if ((has_auxiliary_wing() || omega.empty()) &&
+        desc_nabf_nabf_opt.is_initialized() && desc_nabf_nabf_opt.mb() > 0 &&
         desc_nabf_nabf_opt.nb() > 0 && desc_nabf_nabf_opt.irsrc() >= 0 &&
         desc_nabf_nabf_opt.irsrc() < blacs_h.nprows && desc_nabf_nabf_opt.icsrc() >= 0 &&
         desc_nabf_nabf_opt.icsrc() < blacs_h.npcols)
@@ -3059,31 +3530,35 @@ void diele_func::wing_mu_to_lambda(matrix_m<std::complex<double>> &sqrtveig_blac
     const int n_omegas = this->omega.size();
     this->wing.clear();
     this->wing.resize(n_omegas);
+    this->wing_left_adjoint.clear();
+    this->wing_left_adjoint.resize(n_omegas);
 
     for (int iomega = 0; iomega != n_omegas; iomega++)
     {
-        auto &wing_tmp = this->wing.at(iomega);
-        wing_tmp = init_local_mat<complex<double>>(desc_wing_opt, MAJOR::COL);
-        // TODO: reconstruct wing_mu
-        auto wing_mu_tmp = init_local_mat<complex<double>>(desc_wing_mu, MAJOR::COL);
-        for (int alpha = 0; alpha != 3; alpha++)
+        // The two wings are independent. In adjoint storage both transform
+        // with the same sqrt(V) eigenbasis, including a complex basis gauge.
+        for (int side = 0; side < 2; ++side)
         {
-            auto loc_alpha = desc_wing_mu.indx_g2l_c(alpha);
-            if (loc_alpha < 0) continue;
-            for (int mu = 0; mu != n_abf; mu++)
+            const auto &source = side == 0 ? wing_mu.at(iomega)
+                                           : wing_mu_left_adjoint.at(iomega);
+            auto &target = side == 0 ? wing.at(iomega) : wing_left_adjoint.at(iomega);
+            target = init_local_mat<complex<double>>(desc_wing_opt, MAJOR::COL);
+            auto source_local = init_local_mat<complex<double>>(desc_wing_mu, MAJOR::COL);
+            for (int alpha = 0; alpha < 3; ++alpha)
             {
-                auto loc_mu = desc_wing_mu.indx_g2l_r(mu);
-                if (loc_mu < 0) continue;
-                wing_mu_tmp(loc_mu, loc_alpha) = this->wing_mu.at(iomega)(mu, alpha);
+                const int local_alpha = desc_wing_mu.indx_g2l_c(alpha);
+                if (local_alpha < 0) continue;
+                for (int mu = 0; mu < n_abf; ++mu)
+                {
+                    const int local_mu = desc_wing_mu.indx_g2l_r(mu);
+                    if (local_mu >= 0) source_local(local_mu, local_alpha) = source(mu, alpha);
+                }
             }
+            ScalapackConnector::pgemm_f(
+                'C', 'N', n_lambda, 3, n_abf, 1.0, sqrtveig_blacs.ptr(), 1, 2,
+                desc_nabf_nabf_opt.desc, source_local.ptr(), 1, 1, desc_wing_mu.desc,
+                0.0, target.ptr(), 1, 1, desc_wing_opt.desc);
         }
-        // this->wing.at(iomega)(lambda, alpha) +=
-        // conj(sqrtveig_blacs(mu, lambda)) * this->wing_mu.at(iomega)(mu, alpha);
-        // drop the first column of sqrtveig_blacs, the largest eigenvalue
-        ScalapackConnector::pgemm_f('C', 'N', n_lambda, 3, n_abf, 1.0, sqrtveig_blacs.ptr(), 1, 2,
-                                    desc_nabf_nabf_opt.desc, wing_mu_tmp.ptr(), 1, 1,
-                                    desc_wing_mu.desc, 0.0, wing_tmp.ptr(), 1, 1,
-                                    desc_wing_opt.desc);
     }
 
     if (!this->wing.empty())
@@ -3177,7 +3652,11 @@ void diele_func::wing_mu_to_lambda(matrix_m<std::complex<double>> &sqrtveig_blac
         }
     }
 
+    std::copy(desc_wing_opt.desc, desc_wing_opt.desc + 9, regular_wing_descriptor_.begin());
+    regular_wings_completed_ = true;
     this->wing_mu.clear();
+    this->wing_mu_left_adjoint.clear();
+    auxiliary_wings_completed_ = false;
     profiler.stop("cal_wing");
 };
 
@@ -3371,6 +3850,8 @@ void diele_func::get_Xv_cpl(double coulomb_eigen_threshold,
 
 std::vector<double> diele_func::get_head_vec()
 {
+    if (!has_head())
+        throw LIBRPA_RUNTIME_ERROR("dielectric head is incomplete");
     const int n_omegas = this->omega.size();
     std::vector<double> head_vec(n_omegas, 0.0);
     for (int iomega = 0; iomega != n_omegas; iomega++)
@@ -3685,6 +4166,7 @@ void diele_func::construct_rpa_trace_log_schur(const int ifreq, ArrayDesc &desc_
 
     const auto chi0v_head = get_rpa_chi0v_head(ifreq);
     const auto chi0v_wing = get_rpa_chi0v_wing(ifreq);
+    const auto left_wing_adjoint = get_rpa_chi0v_left_wing_adjoint(ifreq);
     const int n_body = desc_body.m();
 
     this->Lind.resize(3, 3, MAJOR::COL);
@@ -3693,6 +4175,7 @@ void diele_func::construct_rpa_trace_log_schur(const int ifreq, ArrayDesc &desc_
 
     const auto desc_wing_opt =
         make_rpa_chi0v_wing_desc(desc_body, wing_row_offset, chi0v_wing.nr(), chi0v_wing.nc());
+    require_regular_wing_descriptor(desc_wing_opt);
 
     ArrayDesc desc_lam_3(blacs_h);
     desc_lam_3.init_square_blk(n_body, 3, 0, 0);
@@ -3710,10 +4193,10 @@ void diele_func::construct_rpa_trace_log_schur(const int ifreq, ArrayDesc &desc_
     ScalapackConnector::pgemm_f('N', 'N', n_body, 3, n_body, 1.0, body_inv.ptr(), 1, 1,
                                 desc_body.desc, chi0v_wing.ptr(), 1 + wing_row_offset, 1,
                                 desc_wing_opt.desc, 0.0, lam_3.ptr(), 1, 1, desc_lam_3.desc);
-    ScalapackConnector::pgemm_f('C', 'N', 3, 3, n_body, 1.0, chi0v_wing.ptr(), 1 + wing_row_offset,
+    ScalapackConnector::pgemm_f('C', 'N', 3, 3, n_body, 1.0, left_wing_adjoint.ptr(), 1 + wing_row_offset,
                                 1, desc_wing_opt.desc, lam_3.ptr(), 1, 1, desc_lam_3.desc, 0.0,
                                 schur_correction.ptr(), 1, 1, desc_3_3.desc);
-    ScalapackConnector::pgemm_f('C', 'N', 3, n_body, n_body, 1.0, chi0v_wing.ptr(),
+    ScalapackConnector::pgemm_f('C', 'N', 3, n_body, n_body, 1.0, left_wing_adjoint.ptr(),
                                 1 + wing_row_offset, 1, desc_wing_opt.desc, body_inv.ptr(), 1, 1,
                                 desc_body.desc, 0.0, _3_lam.ptr(), 1, 1, desc_3_lam.desc);
 
@@ -3795,30 +4278,94 @@ void diele_func::get_Leb_points()
     }
 };
 
+std::vector<Vector3_Order<double>> rpa_headwing_gamma_cell_neighbors(
+    const PeriodicBoundaryData &pbc, const bool use_2d_dielectric)
+{
+    // Reciprocal basis vectors are ROWS of G. Fractional reciprocal
+    // coordinates multiply G from the left, just as in the k-point readers.
+    const int dimensions = use_2d_dielectric ? 2 : 3;
+    const auto &g = pbc.G;
+    std::array<Vector3_Order<double>, 3> basis{
+        {{g.e11 / pbc.period.x, g.e12 / pbc.period.x, g.e13 / pbc.period.x},
+         {g.e21 / pbc.period.y, g.e22 / pbc.period.y, g.e23 / pbc.period.y},
+         {g.e31 / pbc.period.z, g.e32 / pbc.period.z, g.e33 / pbc.period.z}}};
+    const auto norm = [](const Vector3_Order<double> &v) { return std::hypot(v.x, v.y, v.z); };
+    for (int i = 0; i < dimensions; ++i)
+        if (!std::isfinite(norm(basis[i])) || !(norm(basis[i]) > 0.0))
+            throw LIBRPA_INVALID_ARGUMENT("Gamma-cell reciprocal basis must be finite and nonzero");
+    if (use_2d_dielectric)
+    {
+        const double scale = std::max(norm(basis[0]), norm(basis[1]));
+        if (std::abs(basis[0].z) > 1e-12 * scale || std::abs(basis[1].z) > 1e-12 * scale)
+            throw LIBRPA_INVALID_ARGUMENT(
+                "2D Gamma-cell reciprocal basis must lie in the xy plane");
+        basis[0].z = basis[1].z = 0.0;
+        basis[2] = {0.0, 0.0, 1.0};
+    }
+    const Matrix3 b(basis[0].x, basis[0].y, basis[0].z, basis[1].x, basis[1].y, basis[1].z,
+                    basis[2].x, basis[2].y, basis[2].z);
+    if (!std::isfinite(b.Det()) || b.Det() == 0.0)
+        throw LIBRPA_INVALID_ARGUMENT("Gamma-cell reciprocal basis must be nonsingular");
+    const Matrix3 inverse = b.Inverse();
+    const std::array<Vector3_Order<double>, 3> dual_columns{
+        {{inverse.e11, inverse.e21, inverse.e31},
+         {inverse.e12, inverse.e22, inverse.e32},
+         {inverse.e13, inverse.e23, inverse.e33}}};
+
+    // The centered fundamental parallelepiped covers every point modulo the
+    // lattice. Its farthest corner bounds the lattice covering radius R.
+    // Any Voronoi-relevant vector satisfies |g| <= 2R; for g = n B,
+    // |n_i| <= 2R * |column_i(B^-1)|. This remains valid on unreduced bases.
+    double covering_bound = 0.0;
+    for (int corner = 0; corner < (1 << dimensions); ++corner)
+    {
+        Vector3_Order<double> vertex{0.0, 0.0, 0.0};
+        for (int i = 0; i < dimensions; ++i)
+            vertex = vertex + basis[i] * ((corner & (1 << i)) ? 0.5 : -0.5);
+        covering_bound = std::max(covering_bound, norm(vertex));
+    }
+    const double padding = 1.0 + 64.0 * std::numeric_limits<double>::epsilon();
+    const double cutoff = 2.0 * covering_bound * padding;
+    if (!std::isfinite(cutoff) || !(cutoff > 0.0))
+        throw LIBRPA_INVALID_ARGUMENT("Gamma-cell covering bound is not finite and positive");
+    constexpr std::size_t candidate_budget = 2000000;
+    std::size_t candidates = 1;
+    std::array<int, 3> bounds{{0, 0, 0}};
+    for (int i = 0; i < dimensions; ++i)
+    {
+        const double bound = std::ceil(cutoff * norm(dual_columns[i]) * padding);
+        if (!std::isfinite(bound) || bound >= std::numeric_limits<int>::max())
+            throw LIBRPA_INVALID_ARGUMENT("Gamma-cell reciprocal coefficient bound is too large");
+        bounds[i] = static_cast<int>(bound);
+        const std::size_t width = 2 * static_cast<std::size_t>(bounds[i]) + 1;
+        // Bound work and allocation before entering the integer loops. An
+        // extreme unreduced basis is rejected, never silently truncated.
+        if (width > candidate_budget / candidates)
+            throw LIBRPA_INVALID_ARGUMENT(
+                "Gamma-cell reciprocal search exceeds 2000000 candidates; "
+                "reduce the lattice basis before analytic head/wing evaluation");
+        candidates *= width;
+    }
+    std::vector<Vector3_Order<double>> neighbors;
+    for (int i = -bounds[0]; i <= bounds[0]; ++i)
+        for (int j = -bounds[1]; j <= bounds[1]; ++j)
+            for (int k = -bounds[2]; k <= bounds[2]; ++k)
+            {
+                if (i == 0 && j == 0 && k == 0) continue;
+                const auto vector = basis[0] * static_cast<double>(i) +
+                                    basis[1] * static_cast<double>(j) +
+                                    basis[2] * static_cast<double>(k);
+                if (norm(vector) <= cutoff) neighbors.push_back(vector);
+            }
+    if (neighbors.empty())
+        throw LIBRPA_RUNTIME_ERROR("Gamma-cell reciprocal search produced no neighbors");
+    return neighbors;
+}
+
 void diele_func::get_g_enclosing_gamma()
 {
-    g_enclosing_gamma.clear();
-    g_enclosing_gamma.resize(26);
-    const auto &kv_nmp = pbc_.period_array;
-    const auto &G = pbc_.G;
-    int ik = 0;
-    for (int a = -1; a != 2; a++)
-    {
-        for (int b = -1; b != 2; b++)
-        {
-            for (int c = -1; c != 2; c++)
-            {
-                if (a == 0 && b == 0 && c == 0) continue;
-                g_enclosing_gamma.at(ik) = {
-                    G.e11 * a / kv_nmp[0] + G.e12 * b / kv_nmp[1] + G.e13 * c / kv_nmp[2],
-                    G.e21 * a / kv_nmp[0] + G.e22 * b / kv_nmp[1] + G.e23 * c / kv_nmp[2],
-                    G.e31 * a / kv_nmp[0] + G.e32 * b / kv_nmp[1] + G.e33 * c / kv_nmp[2]};
-
-                ik++;
-            }
-        }
-    }
-};
+    g_enclosing_gamma = rpa_headwing_gamma_cell_neighbors(pbc_, false);
+}
 
 ArrayDesc diele_func::get_body_inv(matrix_m<std::complex<double>> &chi0_block,
                                    ArrayDesc &desc_nabf_nabf_opt)
@@ -3860,6 +4407,7 @@ void diele_func::construct_L(const int ifreq, ArrayDesc &desc_body)
 
     ArrayDesc desc_wing_opt(blacs_h);
     desc_wing_opt.init(n_lambda, 3, desc_body.mb(), 1, 0, 0);
+    require_regular_wing_descriptor(desc_wing_opt);
     ArrayDesc desc_lam_3(blacs_h);
     desc_lam_3.init_square_blk(n_lambda, 3, 0, 0);
     ArrayDesc desc_3_lam(blacs_h);
@@ -3874,10 +4422,10 @@ void diele_func::construct_L(const int ifreq, ArrayDesc &desc_body)
                                 body_inv.ptr(), 1, 1, desc_body.desc, wing.at(ifreq).ptr(), 1, 1,
                                 desc_wing_opt.desc, 0.0, lam_3.ptr(), 1, 1, desc_lam_3.desc);
     ScalapackConnector::pgemm_f('C', 'N', 3, 3, n_lambda, 1.0,
-                                wing.at(ifreq).ptr(), 1, 1, desc_wing_opt.desc, lam_3.ptr(), 1, 1,
+                                wing_left_adjoint.at(ifreq).ptr(), 1, 1, desc_wing_opt.desc, lam_3.ptr(), 1, 1,
                                 desc_lam_3.desc, 0.0, Lind_loc.ptr(), 1, 1, desc_3_3.desc);
     ScalapackConnector::pgemm_f('C', 'N', 3, n_lambda, n_lambda, 1.0,
-                                wing.at(ifreq).ptr(), 1, 1, desc_wing_opt.desc,
+                                wing_left_adjoint.at(ifreq).ptr(), 1, 1, desc_wing_opt.desc,
                                 body_inv.ptr(), 1, 1, desc_body.desc, 0.0, _3_lam.ptr(), 1, 1,
                                 desc_3_lam.desc);
 
@@ -3912,21 +4460,8 @@ void diele_func::construct_L(const int ifreq, ArrayDesc &desc_body)
 
 void diele_func::get_g_enclosing_gamma_2d()
 {
-    g_enclosing_gamma.clear();
-    g_enclosing_gamma.resize(8);
-    int ik = 0;
-    const auto G = pbc_.G;
-    for (int a = -1; a <= 1; a++)
-    {
-        for (int b = -1; b <= 1; b++)
-        {
-            if (a == 0 && b == 0) continue;
-            g_enclosing_gamma.at(ik) = {G.e11 * a / pbc_.period.x + G.e12 * b / pbc_.period.y,
-                                        G.e21 * a / pbc_.period.x + G.e22 * b / pbc_.period.y, 0.0};
-            ik++;
-        }
-    }
-};
+    g_enclosing_gamma = rpa_headwing_gamma_cell_neighbors(pbc_, true);
+}
 
 void diele_func::calculate_q_gamma()
 {
@@ -3938,7 +4473,7 @@ void diele_func::calculate_q_gamma()
     {
         double qmax = 1.0e10;
         Vector3_Order<double> q_quta = {qx_leb[ileb], qy_leb[ileb], qz_leb[ileb]};
-        for (int ik = 0; ik != 26; ik++)
+        for (std::size_t ik = 0; ik != g_enclosing_gamma.size(); ++ik)
         {
             double denominator = q_quta * g_enclosing_gamma[ik];
             if (denominator > 1.0e-10)
@@ -3965,7 +4500,7 @@ void diele_func::calculate_q_gamma_2d()
         Vector3_Order<double> q_quta = {qx_leb[ileb], qy_leb[ileb], qz_leb[ileb]};
         if (use_2d_dielectric)
         {
-            for (int ik = 0; ik != 8; ik++)
+            for (std::size_t ik = 0; ik != g_enclosing_gamma.size(); ++ik)
             {
                 double denominator =
                     q_quta.x * g_enclosing_gamma[ik].x + q_quta.y * g_enclosing_gamma[ik].y;
@@ -4328,11 +4863,21 @@ void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_bloc
                                    const matrix_m<std::complex<double>> &wing,
                                    const ArrayDesc &desc_response)
 {
+    replace_rpa_response_headwing(response_block, head, wing, wing, desc_response);
+}
+
+void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_block,
+                                   const matrix_m<std::complex<double>> &head,
+                                   const matrix_m<std::complex<double>> &wing,
+                                   const matrix_m<std::complex<double>> &left_wing_adjoint,
+                                   const ArrayDesc &desc_response)
+{
     if (head.nr() != 3 || head.nc() != 3)
     {
         throw std::logic_error("RPA head/wing replacement expects a 3x3 chi0*v head");
     }
-    if (wing.nc() != 3)
+    if (wing.nc() != 3 || left_wing_adjoint.nc() != 3 ||
+        wing.nr() != left_wing_adjoint.nr())
     {
         throw std::logic_error("RPA head/wing replacement expects wing columns for x/y/z");
     }
@@ -4363,11 +4908,14 @@ void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_bloc
     for (int ilambda = 0; ilambda != wing.nr(); ++ilambda)
     {
         std::complex<double> wing_average = 0.0;
+        std::complex<double> left_average = 0.0;
         for (int alpha = 0; alpha != 3; ++alpha)
         {
             wing_average += wing(ilambda, alpha);
+            left_average += std::conj(left_wing_adjoint(ilambda, alpha));
         }
         wing_average /= 3.0;
+        left_average /= 3.0;
 
         const int global_body = ilambda + 1;
         const int ilo_body = desc_response.indx_g2l_r(global_body);
@@ -4378,7 +4926,7 @@ void replace_rpa_response_headwing(matrix_m<std::complex<double>> &response_bloc
         }
         if (ilo_head >= 0 && jlo_body >= 0)
         {
-            response_block(ilo_head, jlo_body) = std::conj(wing_average);
+            response_block(ilo_head, jlo_body) = left_average;
         }
     }
 }
@@ -4419,6 +4967,27 @@ void rewrite_eps_abf_space(
     const ArrayDesc &desc_head_direction,
     const matrix_m<std::complex<double>> &head,
     const matrix_m<std::complex<double>> &wing_mu,
+    const std::vector<double> &qx, const std::vector<double> &qy,
+    const std::vector<double> &qz, const std::vector<double> &rho,
+    const ArrayDesc &desc_nabf_nabf_opt, const BlacsCtxtHandler &blacs_h,
+    const std::size_t n_nonsingular,
+    const double sqrt_coulomb_threshold, const bool use_cholesky, const bool use_device)
+{
+    rewrite_eps_abf_space(eps_block, sqrtv_block, coul_eigen_block, head_direction,
+                         desc_head_direction, head, wing_mu, wing_mu,
+                         qx, qy, qz, rho, desc_nabf_nabf_opt, blacs_h,
+                         n_nonsingular, sqrt_coulomb_threshold, use_cholesky, use_device);
+}
+
+void rewrite_eps_abf_space(
+    matrix_m<std::complex<double>> &eps_block,
+    const matrix_m<std::complex<double>> &sqrtv_block,
+    const matrix_m<std::complex<double>> &coul_eigen_block,
+    const matrix_m<std::complex<double>> &head_direction,
+    const ArrayDesc &desc_head_direction,
+    const matrix_m<std::complex<double>> &head,
+    const matrix_m<std::complex<double>> &wing_mu,
+    const matrix_m<std::complex<double>> &wing_mu_left_adjoint,
     const std::vector<double> &qx, const std::vector<double> &qy,
     const std::vector<double> &qz, const std::vector<double> &rho,
     const ArrayDesc &desc_nabf_nabf_opt, const BlacsCtxtHandler &blacs_h,
@@ -4485,7 +5054,8 @@ void rewrite_eps_abf_space(
     {
         throw LIBRPA_RUNTIME_ERROR("ABF-space wing rewrite expects a 3x3 head");
     }
-    if (wing_mu.nr() != n_abf || wing_mu.nc() != 3)
+    if (wing_mu.nr() != n_abf || wing_mu.nc() != 3 ||
+        wing_mu_left_adjoint.nr() != n_abf || wing_mu_left_adjoint.nc() != 3)
     {
         throw LIBRPA_RUNTIME_ERROR("ABF-space wing rewrite expects an n_abf x 3 wing_mu");
     }
@@ -4501,16 +5071,9 @@ void rewrite_eps_abf_space(
     // projector. Y = [u | X_s] therefore spans YY^H = P + F = I - T
     // with rank m = 1 + n_singular, and
     //     M = (I - YY^H) E (I - YY^H) + YY^H.
-    // Expanding with G = E*Y and S = Y^H*G keeps every operand thin
-    // (n_abf x m) and never materializes an n_abf x n_abf projector, so the cost
-    // tracks n_singular instead of n_abf. Only E*Y is contracted, which is exact
-    // because E is Hermitian here; see the note at the product below. The m == 1
-    // case (no filtered channels) reduces term for term to the same expression
-    // with Y = u.
-    // Above 2m > n_abf this low-rank form does more flops than forming T
-    // explicitly; that is not the production regime (n_nonsingular >> n_singular)
-    // and M = I still comes out by cancelling E against itself to O(|E|*eps_mach),
-    // far below the 1e-10 tolerance the rewrite is validated at.
+    // Use G_R=E*Y and G_L^H=E^H*Y independently. Then
+    // M=E-G_R*Y^H-Y*G_L+Y*(I+Y^H*E*Y)*Y^H without a dense projector.
+    // Imaginary frequency does not imply Hermiticity in a magnetic system.
     profiler.start("epsilon_headwing_abf_build_M");
     const int n_sing = n_abf - static_cast<int>(n_nonsingular);
     const int m = 1 + n_sing;
@@ -4537,16 +5100,19 @@ void rewrite_eps_abf_space(
     auto G = init_local_mat<complex<double>>(desc_nabf_m, MAJOR::COL);
     if (desc_nabf_m.m_loc() == 0 || desc_nabf_m.n_loc() == 0) G.resize(1, 1);
 
-    // G = E*Y. E is Hermitian on the imaginary-frequency axis (this path is only
-    // reached from the analytic head/wing branch), so E^H*Y == E*Y and one
-    // product suffices; the Cholesky inverse path taken below already reads only
-    // the lower triangle of M via pposv, so building M would otherwise refuse an
-    // assumption the inverse then makes. E is Hermitian to roundoff rather than
-    // bitwise, so results are accurate to O(|E - E^H|) ~ eps_mach*|E|.
+    // G = E*Y and G_left_adjoint = E^H*Y.
     ScalapackConnector::pgemm_f('N', 'N', n_abf, m, n_abf, 1.0,
                                 eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
                                 Y.ptr(), 1, 1, desc_nabf_m.desc,
                                 0.0, G.ptr(), 1, 1, desc_nabf_m.desc);
+
+    auto G_left_adjoint = init_local_mat<complex<double>>(desc_nabf_m, MAJOR::COL);
+    if (desc_nabf_m.m_loc() == 0 || desc_nabf_m.n_loc() == 0)
+        G_left_adjoint.resize(1, 1);
+    ScalapackConnector::pgemm_f('C', 'N', n_abf, m, n_abf, 1.0,
+                                eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                Y.ptr(), 1, 1, desc_nabf_m.desc,
+                                0.0, G_left_adjoint.ptr(), 1, 1, desc_nabf_m.desc);
 
     // S = Y^H*G + I_m
     auto S = init_local_mat<complex<double>>(desc_mm, MAJOR::COL);
@@ -4557,16 +5123,14 @@ void rewrite_eps_abf_space(
                                 0.0, S.ptr(), 1, 1, desc_mm.desc);
     LaConnector::pdam(1.0, S.ptr(), desc_mm);
 
-    // M = E - G*Y^H - Y*G^H + Y*(S)*Y^H, accumulated in place. The two rank-m
-    // updates are exact conjugate transposes of each other by construction, so
-    // the low-rank correction contributes no anti-Hermitian noise of its own.
+    // M = E - G_R*Y^H - Y*G_L + Y*S*Y^H.
     ScalapackConnector::pgemm_f('N', 'C', n_abf, n_abf, m, -1.0,
                                 G.ptr(), 1, 1, desc_nabf_m.desc,
                                 Y.ptr(), 1, 1, desc_nabf_m.desc,
                                 1.0, eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
     ScalapackConnector::pgemm_f('N', 'C', n_abf, n_abf, m, -1.0,
                                 Y.ptr(), 1, 1, desc_nabf_m.desc,
-                                G.ptr(), 1, 1, desc_nabf_m.desc,
+                                G_left_adjoint.ptr(), 1, 1, desc_nabf_m.desc,
                                 1.0, eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
 
     // W = Y*S, then M += W*Y^H.
@@ -4610,6 +5174,7 @@ void rewrite_eps_abf_space(
     ArrayDesc desc_wing_mu(blacs_h);
     desc_wing_mu.init(n_abf, 3, desc_nabf_nabf_opt.nb(), 1, 0, 0);
     auto wing_mu_dist = init_local_mat<complex<double>>(desc_wing_mu, MAJOR::COL);
+    auto left_mu_dist = init_local_mat<complex<double>>(desc_wing_mu, MAJOR::COL);
     for (int alpha = 0; alpha != 3; ++alpha)
     {
         const int loc_alpha = desc_wing_mu.indx_g2l_c(alpha);
@@ -4619,6 +5184,7 @@ void rewrite_eps_abf_space(
             const int loc_mu = desc_wing_mu.indx_g2l_r(mu);
             if (loc_mu < 0) continue;
             wing_mu_dist(loc_mu, loc_alpha) = wing_mu(mu, alpha);
+            left_mu_dist(loc_mu, loc_alpha) = wing_mu_left_adjoint(mu, alpha);
         }
     }
 
@@ -4630,6 +5196,11 @@ void rewrite_eps_abf_space(
                                 sqrtv_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
                                 wing_mu_dist.ptr(), 1, 1, desc_wing_mu.desc,
                                 0.0, Z.ptr(), 1, 1, desc_nabf_3.desc);
+    auto Z_left_adjoint = init_local_mat<complex<double>>(desc_nabf_3, MAJOR::COL);
+    ScalapackConnector::pgemm_f('N', 'N', n_abf, 3, n_abf, 1.0,
+                                sqrtv_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                left_mu_dist.ptr(), 1, 1, desc_wing_mu.desc,
+                                0.0, Z_left_adjoint.ptr(), 1, 1, desc_nabf_3.desc);
 
     // A = D * Z
     auto A = init_local_mat<complex<double>>(desc_nabf_3, MAJOR::COL);
@@ -4637,17 +5208,23 @@ void rewrite_eps_abf_space(
                                 eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
                                 Z.ptr(), 1, 1, desc_nabf_3.desc,
                                 0.0, A.ptr(), 1, 1, desc_nabf_3.desc);
+    // A_L^H = D^H * Z_L^H, not (D*Z_R) inferred by Hermiticity.
+    auto A_left_adjoint = init_local_mat<complex<double>>(desc_nabf_3, MAJOR::COL);
+    ScalapackConnector::pgemm_f('C', 'N', n_abf, 3, n_abf, 1.0,
+                                eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc,
+                                Z_left_adjoint.ptr(), 1, 1, desc_nabf_3.desc,
+                                0.0, A_left_adjoint.ptr(), 1, 1, desc_nabf_3.desc);
 
     profiler.stop("epsilon_headwing_abf_wing");
 
-    // L = H - Z^H*A and angular quadrature for a0, K.
+    // L = H - Z_L*A_R and unchanged angular quadrature for a0, K.
     profiler.start("epsilon_headwing_abf_angular");
 
     ArrayDesc desc_3x3(blacs_h);
     desc_3x3.init(3, 3, desc_wing_mu.nb(), desc_wing_mu.nb(), 0, 0);
     auto zha_dist = init_local_mat<complex<double>>(desc_3x3, MAJOR::COL);
     ScalapackConnector::pgemm_f('C', 'N', 3, 3, n_abf, 1.0,
-                                Z.ptr(), 1, 1, desc_nabf_3.desc,
+                                Z_left_adjoint.ptr(), 1, 1, desc_nabf_3.desc,
                                 A.ptr(), 1, 1, desc_nabf_3.desc,
                                 0.0, zha_dist.ptr(), 1, 1, desc_3x3.desc);
 
@@ -4691,7 +5268,7 @@ void rewrite_eps_abf_space(
 
     profiler.stop("epsilon_headwing_abf_angular");
 
-    // Assemble eps_inv = a0*P + D + A*K*A^H  (eps_block holds D).
+    // Assemble eps_inv = a0*P + D + A_R*K*A_L (eps_block holds D).
     profiler.start("epsilon_headwing_abf_assemble");
 
     ScalapackConnector::pgemm_f('N', 'C', n_abf, n_abf, 1, a0,
@@ -4717,10 +5294,34 @@ void rewrite_eps_abf_space(
                                 0.0, AK.ptr(), 1, 1, desc_nabf_3.desc);
     ScalapackConnector::pgemm_f('N', 'C', n_abf, n_abf, 3, 1.0,
                                 AK.ptr(), 1, 1, desc_nabf_3.desc,
-                                A.ptr(), 1, 1, desc_nabf_3.desc,
+                                A_left_adjoint.ptr(), 1, 1, desc_nabf_3.desc,
                                 1.0, eps_block.ptr(), 1, 1, desc_nabf_nabf_opt.desc);
 
     profiler.stop("epsilon_headwing_abf_assemble");
+}
+
+std::vector<double> diele_func::gamma_cell_quadrature_weights() const
+{
+    const double volume = rpa_headwing_gamma_cell_volume(pbc_, use_2d_dielectric);
+    std::vector<double> rho(qw_leb.size());
+    for (std::size_t i = 0; i != rho.size(); ++i)
+        rho[i] = use_2d_dielectric
+                     ? qw_leb[i] * std::pow(q_gamma[i], 2) / (2.0 * volume)
+                     : qw_leb[i] * std::pow(q_gamma[i], 3) / (3.0 * volume);
+    if (normalize_gamma_cell_weights)
+    {
+        const double weight = std::accumulate(rho.begin(), rho.end(), 0.0);
+        if (!std::isfinite(weight) || weight <= 0.0)
+            throw LIBRPA_RUNTIME_ERROR("invalid optical Gamma-cell quadrature weight");
+        for (auto &value : rho) value /= weight;
+    }
+    return rho;
+}
+
+double diele_func::gamma_cell_weight_sum() const
+{
+    const auto weights = gamma_cell_quadrature_weights();
+    return std::accumulate(weights.begin(), weights.end(), 0.0);
 }
 
 void diele_func::rewrite_eps_abf_space(matrix_m<std::complex<double>> &eps_block, const int ifreq,
@@ -4733,25 +5334,14 @@ void diele_func::rewrite_eps_abf_space(matrix_m<std::complex<double>> &eps_block
                                        const double sqrt_coulomb_threshold,
                                        const bool use_cholesky, const bool use_device)
 {
+    if (!has_head() || !has_auxiliary_wing())
+        throw LIBRPA_RUNTIME_ERROR("ABF optical rewrite requires completed head and both auxiliary wings");
     this->vol_gamma = rpa_headwing_gamma_cell_volume(pbc_, use_2d_dielectric);
-    const int nleb = static_cast<int>(qw_leb.size());
-    std::vector<double> rho(nleb);
-    for (int ileb = 0; ileb < nleb; ++ileb)
-    {
-        rho[ileb] = use_2d_dielectric
-                        ? qw_leb[ileb] * std::pow(q_gamma[ileb], 2) / (2.0 * vol_gamma)
-                        : qw_leb[ileb] * std::pow(q_gamma[ileb], 3) / (3.0 * vol_gamma);
-    }
-    if (normalize_gamma_cell_weights)
-    {
-        const double weight = std::accumulate(rho.begin(), rho.end(), 0.0);
-        if (!std::isfinite(weight) || weight <= 0.0)
-            throw LIBRPA_RUNTIME_ERROR("invalid optical Gamma-cell quadrature weight");
-        for (auto &value : rho) value /= weight;
-    }
+    const auto rho = gamma_cell_quadrature_weights();
     librpa_int::rewrite_eps_abf_space(eps_block, sqrtv_block, coul_eigen_block,
                                       head_direction, desc_head_direction, head.at(ifreq),
-                                      wing_mu.at(ifreq), qx_leb, qy_leb, qz_leb, rho,
+                                      wing_mu.at(ifreq), wing_mu_left_adjoint.at(ifreq),
+                                      qx_leb, qy_leb, qz_leb, rho,
                                       desc_nabf_nabf_opt, blacs_h, n_nonsingular_in,
                                       sqrt_coulomb_threshold, use_cholesky, use_device);
 }
@@ -4913,7 +5503,8 @@ void diele_func::rewrite_rpa_response(matrix_m<std::complex<double>> &eps_minus_
     }
 
     replace_rpa_response_headwing(eps_minus_identity_block, get_rpa_chi0v_head(ifreq),
-                                  get_rpa_chi0v_wing(ifreq), desc_nabf_nabf_opt);
+                                  get_rpa_chi0v_wing(ifreq),
+                                  get_rpa_chi0v_left_wing_adjoint(ifreq), desc_nabf_nabf_opt);
 }
 
 }  // namespace librpa_int

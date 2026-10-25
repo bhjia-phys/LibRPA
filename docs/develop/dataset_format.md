@@ -916,6 +916,17 @@ LibRPA reads the first two columns for the imaginary-frequency dielectric
 function; the third column is accepted for compatibility with exported data
 that writes complex values.
 
+Direct modes `option_dielect_func=0/5` require these samples on the current
+imaginary-frequency grid, in the same order. Frequencies use the internal
+Hartree energy unit. Sample and grid lengths must agree, every frequency and
+sample must be finite, and pointwise labels must satisfy
+`abs(omega_input-omega_current) <= 1e-12*max(1,abs(omega_current))`.
+This is the existing analytic head/body compatibility tolerance, not an
+interpolation or a quadrature-accuracy criterion. A changed grid with the same
+number of points is not compatible. Regenerate the samples for that grid or
+explicitly choose an interpolation/fitting mode; direct modes do not switch
+methods automatically.
+
 (vxc-out)=
 ## `vxc_out`
 

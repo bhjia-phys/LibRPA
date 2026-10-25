@@ -37,6 +37,15 @@ Matz fourier(const LocalizedMatrix& blocks, const Vector3_Order<double>& k, int 
 // Own the matrix before completing it when the input must remain unchanged:
 // Matz ordinary copies share their storage.
 Matz complete_hermitian_upper(Matz upper);
+
+// All lattice images congruent to residue modulo period that minimize the
+// physical distance |(R + center_to - center_from) lattice|. The search uses
+// reciprocal bounds, including skew cells and centers outside the home cell.
+std::vector<Vector3_Order<int>> shortest_periodic_images(const Vector3_Order<int>& residue,
+                                                         const Vector3_Order<int>& period,
+                                                         const Vector3_Order<double>& center_from,
+                                                         const Vector3_Order<double>& center_to,
+                                                         const Matrix3& lattice);
 }  // namespace localized_operator
 
 }  // namespace librpa_int

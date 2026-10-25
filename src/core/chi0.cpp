@@ -1,4 +1,5 @@
 #include "chi0.h"
+#include "qpoint_match.h"
 
 #include <omp.h>
 
@@ -24,6 +25,7 @@
 #include "../math/utils_matrix_mpi.h"
 #include "../math/utils_matrix_m_mpi.h"
 #include "../mpi/base_blacs.h"
+#include "../mpi/collective_stage.h"
 #include "../mpi/two_level_parallel_context.h"
 #include "../utils/base_utility.h"
 #include "../utils/constants.h"
@@ -56,6 +58,47 @@ using std::map;
 using std::pair;
 using std::vector;
 
+using Chi0EmbeddingPhases =
+    std::map<std::array<double, 3>, std::vector<std::complex<double>>>;
+
+// Phases are prepared collectively once per k/q, not once per real-space
+// cell or frequency. Each spinor bilinear has the same spatial AO phases.
+static void deembed_chi0_wfc_bilinear(
+    ComplexMatrix &matrix, const AtomicBasis &basis,
+    const std::vector<std::complex<double>> &phases)
+{
+    if (phases.empty()) return;
+    for (int row = 0; row != matrix.nr; ++row)
+        for (int col = 0; col != matrix.nc; ++col)
+            matrix(row, col) *= std::conj(phases[basis.get_i_atom(row)])
+                                * phases[basis.get_i_atom(col)];
+}
+
+static void embed_chi0_auxiliary_blocks(
+    std::map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old> &response,
+    const Chi0EmbeddingPhases &phases_by_q)
+{
+    if (phases_by_q.empty()) return;
+    for (auto &[q, rows] : response)
+    {
+        const auto &phases = phases_by_q.at({q.x, q.y, q.z});
+        for (auto &[I, columns] : rows)
+            for (auto &[J, block] : columns)
+                block *= phases[I] * std::conj(phases[J]);
+    }
+}
+
+static void embed_chi0_auxiliary_tile(
+    Matz &matrix, const ArrayDesc &descriptor, const AtomicBasis &basis,
+    const std::vector<std::complex<double>> &phases)
+{
+    if (phases.empty()) return;
+    for (int row = 0; row != descriptor.m_loc(); ++row)
+        for (int col = 0; col != descriptor.n_loc(); ++col)
+            matrix(row, col) *= phases[basis.get_i_atom(descriptor.indx_l2g_r(row))]
+                                * std::conj(phases[basis.get_i_atom(descriptor.indx_l2g_c(col))]);
+}
+
 constexpr int SHRINK_SCALAPACK_BLOCK_CAP = 2048;
 
 using Chi0CollectKey = std::pair<int, std::array<int, 3>>;
@@ -70,6 +113,17 @@ using Chi0ExactCollectRequest = std::pair<std::set<int>, std::set<Chi0CollectKey
 using Chi0QBlockKey = std::pair<int, std::array<double, 3>>;
 using Chi0QCollectMap = std::map<int, std::map<Chi0QBlockKey, RI::Tensor<std::complex<double>>>>;
 using Chi0QCollectRequest = std::pair<std::set<int>, std::set<int>>;
+
+// Preserve the upper-pair owner and put the independent reversed block on that
+// same rank. Scalar callers keep their original order and storage unchanged.
+static std::vector<atpair_t> chi0_response_pairs(
+    const std::vector<atpair_t> &pairs, const bool full_matrix)
+{
+    if (!full_matrix) return pairs;
+    std::set<atpair_t> ordered(pairs.begin(), pairs.end());
+    for (const auto &pair : pairs) ordered.emplace(pair.second, pair.first);
+    return {ordered.begin(), ordered.end()};
+}
 
 static void create_chi0_q_blocks(
     map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_q,
@@ -319,7 +373,8 @@ static Chi0CollectPlan make_chi0_collect_plan_by_bytes(
     const std::size_t n_atoms,
     const std::vector<Vector3_Order<int>> &Rlist_gf,
     const AtomicBasis &atbasis_abf,
-    const std::size_t max_bytes)
+    const std::size_t max_bytes,
+    const bool full_matrix = false)
 {
     Chi0CollectPlan plan;
     plan.n_atoms = n_atoms;
@@ -339,8 +394,11 @@ static Chi0CollectPlan make_chi0_collect_plan_by_bytes(
         for (std::size_t J = I; J != n_atoms; ++J)
         {
             plan.pair_offsets.push_back(total);
+            // The two directions share a chunk and, in the general response,
+            // both are requested. Account for their combined resident bytes.
             const auto block_bytes = estimate_chi0_block_bytes(
-                atbasis_abf, static_cast<int>(I), static_cast<int>(J), sizeof(Tdata));
+                atbasis_abf, static_cast<int>(I), static_cast<int>(J), sizeof(Tdata))
+                * (full_matrix && I != J ? 2 : 1);
             for (std::size_t iR = 0; iR != Rlist_gf.size(); ++iR)
             {
                 if (chunk_bytes > 0 && chunk_bytes + block_bytes > max_bytes)
@@ -651,8 +709,8 @@ static Chi0CollectMap<Tdata> restore_symmetry_abf_rspace_tensor_map_chi0(
                     symmetry_ctx, abf_layouts, restore_member.isym, ir_I, ir_J, chi0_ir);
                 // Charge-channel response under an antiunitary (g, U_s, eta=1)
                 // operation: the spin trace cancels U_s and the orbital-rotated
-                // block is complex conjugated (bosonic imaginary-time/frequency
-                // convention, same as the dense Wc q-star TR handling).
+                // positive-time block is complex conjugated. This is not the
+                // positive-frequency antiunitary law for a general response.
                 if (symmetry_rspace_restore_member_is_antiunitary(symmetry_ctx, restore_member))
                 {
                     chi0_full = conj(chi0_full);
@@ -935,7 +993,8 @@ void Chi0::replace_chi0_q_by_difference(const Chi0QMap &full)
                             if (!std::isfinite(omega) ||
                                 std::find(frequencies.begin(), frequencies.end(), omega) ==
                                     frequencies.end() ||
-                                qpoint_view_.weights.count(q) == 0 || i < 0 || j < 0 || i > j ||
+                                qpoint_view_.weights.count(q) == 0 || i < 0 || j < 0 ||
+                                (!full_frequency_matrix() && i > j) ||
                                 i >= atbasis_abf.n_atoms || j >= atbasis_abf.n_atoms ||
                                 block.nr != static_cast<int>(atbasis_abf[i]) ||
                                 block.nc != static_cast<int>(atbasis_abf[j]) ||
@@ -970,12 +1029,90 @@ void Chi0::replace_chi0_q_by_difference(const Chi0QMap &full)
     chi0_q.swap(difference);
 }
 
+Chi0TransitionGrams Chi0::build_transition_grams(
+    const Cs_LRI &Cs, const std::vector<atpair_t> &atpairs_ABF,
+    const AtomicBasis &abf_Cs,
+    std::map<Vector3_Order<double>, ComplexMatrix> &sinvS,
+    const BlacsCtxtHandler &blacs_ctxt_h)
+{
+    const auto saved_view = qpoint_view_;
+    transition_gram_mode_ = true;
+    transition_grams_ = {};
+    std::set<Vector3_Order<double>> full_q;
+    for (const auto &[representative, members] : saved_view.members)
+        full_q.insert(members.begin(), members.end());
+    qpoint_view_ = {};
+    qpoint_view_.representatives.assign(full_q.begin(), full_q.end());
+    transition_grams_.qpoints = qpoint_view_.representatives;
+    for (const auto &q : full_q)
+    {
+        transition_grams_.positive[q];
+        transition_grams_.negative[q];
+        qpoint_view_.members[q] = {q};
+        qpoint_view_.weights[q] = 1.0 / pbc.get_n_cells_bvk();
+    }
+    try
+    {
+        build(LIBRPA_ROUTING_LIBRI, Cs, atpairs_ABF, abf_Cs, sinvS, blacs_ctxt_h);
+    }
+    catch (...)
+    {
+        transition_gram_mode_ = false;
+        qpoint_view_ = saved_view;
+        throw;
+    }
+    transition_gram_mode_ = false;
+    qpoint_view_ = saved_view;
+    return std::move(transition_grams_);
+}
+
 void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
                  const std::vector<atpair_t> &atpairs_ABF, const AtomicBasis &abf_Cs,
                  std::map<Vector3_Order<double>, ComplexMatrix> &sinvS,
                  const BlacsCtxtHandler &blacs_ctxt_h)
 {
     using librpa_int::global::lib_printf;
+
+    collective_all_stage(comm_h, "Chi0 atomic embedding frames", [&]
+    {
+        wfc_embedding_ = BlochEmbedding(symmetry_context, atbasis_wfc);
+        const BlochEmbedding auxiliary_embedding(symmetry_context, abf_Cs);
+        wfc_embedding_phases_.clear();
+        auxiliary_embedding_phases_.clear();
+        if (wfc_embedding_.active())
+        {
+            if (atbasis_wfc.nb_total != static_cast<size_t>(mf.get_n_aos())
+                || pbc.kfrac_list.size() != static_cast<size_t>(mf.get_n_kpoints()))
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 embedding has inconsistent AO/k dimensions");
+            wfc_embedding_phases_.reserve(pbc.kfrac_list.size());
+            for (const auto &k : pbc.kfrac_list)
+            {
+                if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                    throw LIBRPA_INVALID_ARGUMENT("Chi0 embedding requires finite k points");
+                wfc_embedding_phases_.push_back(wfc_embedding_.atom_phases(k));
+            }
+        }
+        if (auxiliary_embedding.active())
+        {
+            if (abf_Cs.n_atoms != atbasis_abf.n_atoms)
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 embedding has inconsistent auxiliary atom partitions");
+            for (const auto &q : active_qpoints())
+            {
+                const auto qfrac = pbc.latvec * q;
+                if (!std::isfinite(qfrac.x) || !std::isfinite(qfrac.y) || !std::isfinite(qfrac.z))
+                    throw LIBRPA_INVALID_ARGUMENT("Chi0 embedding requires finite q points");
+                auxiliary_embedding_phases_.emplace(
+                    std::array<double, 3>{q.x, q.y, q.z}, auxiliary_embedding.atom_phases(qfrac));
+            }
+        }
+    });
+
+    check_chi0_collective_error(
+        comm_h, !full_frequency_matrix() ||
+                    (routing == LIBRPA_ROUTING_LIBRI && (transition_gram_mode_ || tfg.has_time_grids()))
+                    ? ""
+                    : "Complex spinor Chi0 requires the LIBRI space-time route");
+    const auto response_pairs = chi0_response_pairs(atpairs_ABF, full_frequency_matrix());
 
     // Selected responses use the same replicated scalar/spinor LIBRI kernel as P0.
     // Other routes must not silently ignore an attached selection.
@@ -992,8 +1129,10 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
                                 "replicated eigenvectors and time grids");
     }
 
-    if (nbands_G > mf.get_n_bands())
-        throw LIBRPA_RUNTIME_ERROR("n_bands_chi0 exceeds the number of input bands");
+    check_chi0_collective_error(
+        comm_h, nbands_G <= mf.get_n_bands() && n_bands_exclude >= 0 &&
+                    n_bands_exclude <= mf.get_n_bands()
+                    ? "" : "chi0 band mask exceeds the loaded band space");
     band_mask.clear();
     if (nbands_G >= 0 || n_bands_exclude > 0)
     {
@@ -1017,12 +1156,12 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
             throw LIBRPA_RUNTIME_ERROR("abf_Cs != atbasis_abf for non-shrinking chi0");
     }
     // Switch on space-time method when time grids and weights are available
-    if (tfg.has_time_grids())
+    if (transition_gram_mode_ || tfg.has_time_grids())
     {
         use_space_time = true;
     }
 
-    if (comm_h.is_root())
+    if (!transition_gram_mode_ && comm_h.is_root())
         tfg.show();
     comm_h.barrier();
 
@@ -1063,7 +1202,7 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
                 global::lib_printf("| Discarded Green's function: %zu\n\n", gf_discard);
             }
         }
-        build_chi0_q_space_time(routing, Cs, atpairs_ABF, abf_Cs, sinvS, blacs_ctxt_h);
+        build_chi0_q_space_time(routing, Cs, response_pairs, abf_Cs, sinvS, blacs_ctxt_h);
     }
     else
     {
@@ -1073,6 +1212,25 @@ void Chi0::build(LibrpaParallelRouting routing, const Cs_LRI &Cs,
 
     // Free the intermediate Green's functions to lower memory load
     this->free_gf_Rt();
+
+    // A projected LibRI response is already raw-active: its cell parent was
+    // embedded before U_raw chi_parent U_raw^dagger. Other routes still hold
+    // the cell response formed with localized real-space Cs.
+    if (!auxiliary_embedding_phases_.empty()
+        && (routing != LIBRPA_ROUTING_LIBRI || sinvS.empty()))
+    {
+        if (transition_gram_mode_)
+        {
+            embed_chi0_auxiliary_blocks(transition_grams_.positive, auxiliary_embedding_phases_);
+            embed_chi0_auxiliary_blocks(transition_grams_.negative, auxiliary_embedding_phases_);
+        }
+        else
+            for (auto &[frequency, response] : chi0_q)
+            {
+                (void)frequency;
+                embed_chi0_auxiliary_blocks(response, auxiliary_embedding_phases_);
+            }
+    }
 }
 
 void Chi0::build_gf_Rt(Vector3_Order<int> R, double tau)
@@ -1102,7 +1260,9 @@ void Chi0::build_gf_Rt(Vector3_Order<int> R, double tau)
                 gf_Rt_is_global.zero_out();
                 if (is_mf_eigvec_k_distributed_)
                 {
-                    const auto gf_tau_R = get_gf_cplx_imagtimes_Rs_kpara(is, isoc1, isoc2, this->mf, pbc.kfrac_list, {tau}, {R}, comm_h, band_mask);
+                    const auto gf_tau_R = get_gf_cplx_imagtimes_Rs_kpara(
+                        is, isoc1, isoc2, this->mf, pbc.kfrac_list, {tau}, {R}, comm_h,
+                        band_mask, false, &wfc_embedding_);
                     gf_Rt_is_global += gf_tau_R.at(tau).at(R).real();
                 }
                 else
@@ -1145,7 +1305,11 @@ void Chi0::build_gf_Rt(Vector3_Order<int> R, double tau)
                             const auto scale_ib = !band_mask.empty() && !band_mask[ib] ? 0.0 : scale(ik, ib);
                             LapackConnector::scal(naos, scale_ib, scaled_wfc_conj.c + naos * ib, 1);
                         }
-                        gf_Rt_is_global += (kphase * transpose(ev1, false) * scaled_wfc_conj).real();
+                        auto green = kphase * transpose(ev1, false) * scaled_wfc_conj;
+                        if (!wfc_embedding_phases_.empty())
+                            deembed_chi0_wfc_bilinear(green, atbasis_wfc,
+                                                    wfc_embedding_phases_[ik]);
+                        gf_Rt_is_global += green.real();
                     }
                     if (tau < 0) gf_Rt_is_global *= -1.;
                 }
@@ -1212,7 +1376,7 @@ void Chi0::build_chi0_q_space_time(const LibrpaParallelRouting routing,
         {
             std::cout << "Use LibRI for chi0" << std::endl;
         }
-        if (use_soc)
+        if (use_soc || transition_gram_mode_)
             build_chi0_q_space_time_LibRI_routing<std::complex<double>>(Cs, atpairs_ABF, abf_shrink,
                                                                         sinvS, blacs_ctxt_h);
         else
@@ -1239,9 +1403,11 @@ static void build_gf_Rt_libri_serial(
     const MeanField &mf, const std::vector<bool> &band_mask,
     const Chi0::BandSelection &band_selection, const AtomicBasis &atbasis_wfc, int ispin, int isoc1,
     int isoc2, const PeriodicBoundaryData &pbc, const SymmetryContext &symmetry_context,
-    const bool use_symmetry_context, const vector<Vector3_Order<double>> &kfrac_list,
+    const bool use_symmetry_context, const BlochEmbedding *embedding,
+    const std::vector<std::vector<std::complex<double>>> &embedding_phases,
+    const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs, double tau,
-    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri)
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri, const bool zero_time_phase)
 {
     global::profiler.start("build_gf_Rt_libri_serial");
 
@@ -1292,14 +1458,14 @@ static void build_gf_Rt_libri_serial(
                     get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
                         symmetry_context, wfc_layouts, mf, ispin, kfrac_list, {tau}, Rs_sel,
                         atom_nw, band_mask, &member_kfrac_targets,
-                        restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr),
+                        restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr, zero_time_phase),
                     isoc1, isoc2);
             }
             validate_kstar_band_cutoff_closure(symmetry_context, mf, band_mask);
             return get_symmetry_restored_gf_cplx_imagtimes_Rs(
                 symmetry_context, wfc_layouts, mf, ispin, isoc1, isoc2, kfrac_list, {tau}, Rs_sel,
                 atom_nw, band_mask, &member_kfrac_targets,
-                restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr);
+                restore_symmetry_kstars_from_full_grid ? &full_grid_kstar_representatives : nullptr, zero_time_phase);
         };
         std::vector<Vector3_Order<int>> Rs_this;
         Rs_this.reserve(map_R_IJs.size());
@@ -1316,7 +1482,8 @@ static void build_gf_Rt_libri_serial(
             const auto restored_check = restore_gf(R_check).at(tau).at(R_check.front());
             const auto direct_check =
                 mf.get_gf_cplx_imagtimes_Rs(
-                      ispin, isoc1, isoc2, kfrac_list, {tau}, R_check, band_mask).at(tau).at(R_check.front());
+                      ispin, isoc1, isoc2, kfrac_list, {tau}, R_check, band_mask,
+                      zero_time_phase, embedding).at(tau).at(R_check.front());
             const auto diff = restored_check - direct_check;
             if (diff.get_max_abs() > restore_check_tol)
             {
@@ -1384,7 +1551,7 @@ static void build_gf_Rt_libri_serial(
     {
         if (!use_soc) wg *= 0.5 * nspins;
     }
-    auto scale = - tau * (mf.get_eigenvals()[ispin] - mf.get_efermi());
+    auto scale = (zero_time_phase ? 0.0 : -tau) * (mf.get_eigenvals()[ispin] - mf.get_efermi());
     for (size_t ie = 0; ie != scale.size; ie++)
     {
         // NOTE: enforce non-positive phase
@@ -1418,6 +1585,8 @@ static void build_gf_Rt_libri_serial(
                 LapackConnector::scal(naos, scale_ib, scaled_wfc_conj.c + naos * ib, 1);
             }
             auto mat = (kphase * transpose(ev1, false) * scaled_wfc_conj);
+            if (!embedding_phases.empty())
+                deembed_chi0_wfc_bilinear(mat, atbasis_wfc, embedding_phases[ik]);
 #pragma omp critical
             {
                 gf_cplx += mat;
@@ -1469,7 +1638,8 @@ static void build_gf_Rt_libri_kpara(
     const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs, 
     double tau,
-    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri)
+    std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri,
+    const bool zero_time_phase, const BlochEmbedding *embedding)
 {
     using namespace global;
     profiler.start("build_gf_Rt_libri_kpara");
@@ -1488,7 +1658,8 @@ static void build_gf_Rt_libri_kpara(
     MPI_Allreduce(MPI_IN_PLACE, &n_Rs_max, 1, MPI_INT, MPI_MAX, comm_h.comm);
     // Compute the full G({R}, tau) matrices
     const auto gf_Rs_cplx = get_gf_cplx_imagtimes_Rs_kpara(ispin, ispinor_bra, ispinor_ket, mf,
-                                                           kfrac_list, {tau}, Rs_this, comm_h, band_mask)
+                                                           kfrac_list, {tau}, Rs_this, comm_h, band_mask,
+                                                           zero_time_phase, embedding)
                                 .at(tau);
 
     for (auto it = gf_Rs_cplx.cbegin(); it != gf_Rs_cplx.cend(); it++)
@@ -1551,7 +1722,8 @@ static void build_gf_Rt_libri_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     double tau,
     std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<Tdata>>> &gf_libri,
-    const std::vector<bool> &band_mask)
+    const std::vector<bool> &band_mask, const bool zero_time_phase,
+    const BlochEmbedding *embedding)
 {
     global::profiler.start("build_gf_Rt_libri_kblacs_para", LIBRPA_VERBOSE_DEBUG);
 
@@ -1572,20 +1744,20 @@ static void build_gf_Rt_libri_kblacs_para(
         gf_imagtimes_Rs_cplx = extract_spinor_gf_block_kblacs(
             get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
                 ispin, mf, kfrac_list, {tau}, Rs, kblacs_ctxt, desc_wfc, desc_gf,
-                symmetry_context, pbc, atbasis_wfc),
+                symmetry_context, pbc, atbasis_wfc, band_mask, zero_time_phase),
             ispinor_bra, ispinor_ket);
     }
     else if (restore_symmetry_kstars)
     {
         gf_imagtimes_Rs_cplx = get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
             ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, {tau}, Rs, kblacs_ctxt,
-            desc_wfc, desc_gf, symmetry_context, pbc, atbasis_wfc);
+            desc_wfc, desc_gf, symmetry_context, pbc, atbasis_wfc, band_mask, zero_time_phase);
     }
     else
     {
         gf_imagtimes_Rs_cplx = get_gf_cplx_imagtimes_Rs_kblacs_para(
             ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, {tau}, Rs, kblacs_ctxt,
-            desc_wfc, desc_gf, band_mask);
+            desc_wfc, desc_gf, band_mask, zero_time_phase, embedding);
     }
     auto &gf_Rs_cplx = gf_imagtimes_Rs_cplx.at(tau);
 
@@ -1720,7 +1892,6 @@ static void chi_libri_ct_accumulate_R(
     const vector<atpair_t> &atpairs_ABF,
     map<double, Chi0CollectMap<Tdata>> &chi0_freq_R)
 {
-    const bool use_soc = std::is_same<Tdata, std::complex<double>>::value;
     const auto tau = tfg.get_time_nodes()[it];
     const auto freqs = tfg.get_freq_nodes();
     // Keep frequency keys even when the band mask leaves no transitions.
@@ -1765,8 +1936,19 @@ static void chi_libri_ct_accumulate_R(
         for (std::size_t ifreq = 0; ifreq != freqs.size(); ++ifreq)
         {
             const double trans = tfg.get_costrans_t2f()(as_int(ifreq), it);
-            const Tdata scale = use_soc ? Tdata(trans) : Tdata(2.0 / nspins * trans);
-            *task.dst_by_freq[ifreq]->data += scale * *task.src->data;
+            if constexpr (std::is_same<Tdata, std::complex<double>>::value)
+            {
+                // Real localized charge probes obey P(R,-tau)=P(R,+tau)*.
+                // C(P+P*)/2+iS(P-P*)/2 = C Re(P)-S Im(P), entrywise real
+                // in R, but not a Hermitian matrix after the q transform.
+                const double sine = tfg.get_sintrans_t2f()(as_int(ifreq), it);
+                auto &dst = *task.dst_by_freq[ifreq]->data;
+                const auto &src = *task.src->data;
+                for (std::size_t i = 0; i != src.size(); ++i)
+                    dst[i] += trans * src[i].real() - sine * src[i].imag();
+            }
+            else
+                *task.dst_by_freq[ifreq]->data += Tdata(2.0 / nspins * trans) * *task.src->data;
         }
     }
 }
@@ -1861,15 +2043,14 @@ static void chi_libri_ft_Rq_from_freq_R(
 
 template <typename Tdata>
 static void chi_libri_ft_Rq(
-    const int &isp, const int &nspins, const int &it, const TFGrids &tfg,
+    const int &isp, const int &nspins, const double tau, const bool use_soc,
     const AtomicBasis &atbasis_abf,
     const Matrix3 &latvec,
     const std::map<int, std::map<libri_types<int, int>::TAC, RI::Tensor<Tdata>>> &chi0s_IJR,
     const vector<Vector3_Order<double>> &qlist, const vector<atpair_t> &atpairs_ABF,
-    map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_q)
+    map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_q,
+    const bool negative_time = false)
 {
-    const bool use_soc = std::is_same<Tdata, std::complex<double>>::value;
-    const auto tau = tfg.get_time_nodes()[it];
     // a simple vector container for OpenMP parallel
     vector<pair<std::array<int, 3>, std::vector<std::array<int, 3>>>> iq_mu_nu_to_Rs;
     map<int, vector<pair<int, std::array<int, 3>>>> Mu_NuRs;
@@ -1917,6 +2098,9 @@ static void chi_libri_ft_Rq(
             {
                 LapackConnector::copy(cm_chi0.size, chi_tensor.ptr(), 1,
                                       reinterpret_cast<std::complex<double> *>(cm_chi0.c), 1);
+                if (negative_time)
+                    for (int i = 0; i != cm_chi0.size; ++i)
+                        cm_chi0.c[i] = std::conj(cm_chi0.c[i]);
             }
             else
             {
@@ -1939,7 +2123,8 @@ static void chi_libri_ft_tw(
     const int &isp, const int &nspins, const int &it, const TFGrids &tfg,
     map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_tau_q,
     const vector<Vector3_Order<double>> &qlist, const vector<atpair_t> &atpairs_ABF,
-    map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_q)
+    map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>> &chi0_q,
+    const Chi0QMap *chi0_negative_tau_q = nullptr)
 {
     const auto tau = tfg.get_time_nodes()[it];
     // a simple vector container for OpenMP parallel
@@ -1972,7 +2157,16 @@ static void chi_libri_ft_tw(
         const double trans = tfg.get_costrans_t2f()(ifreq, it);
         auto &chi = chi0_q[freq][q][Mu][Nu];
         const auto &cm_chi0 = chi0_tau_q.at(tau).at(q).at(Mu).at(Nu);
-        LapackConnector::axpy(cm_chi0.size, trans, cm_chi0.c, 1, chi.c, 1);
+        if (chi0_negative_tau_q)
+        {
+            const auto &negative = chi0_negative_tau_q->at(tau).at(q).at(Mu).at(Nu);
+            const std::complex<double> positive_weight{
+                0.5 * trans, 0.5 * tfg.get_sintrans_t2f()(ifreq, it)};
+            LapackConnector::axpy(cm_chi0.size, positive_weight, cm_chi0.c, 1, chi.c, 1);
+            LapackConnector::axpy(negative.size, std::conj(positive_weight), negative.c, 1, chi.c, 1);
+        }
+        else
+            LapackConnector::axpy(cm_chi0.size, trans, cm_chi0.c, 1, chi.c, 1);
     }
 }
 
@@ -1980,13 +2174,53 @@ static void shrink_abfs_chi0(
     map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old> &chi0_q_in,
     map<Vector3_Order<double>, ComplexMatrix> &sinvS, const vector<Vector3_Order<double>> &qlist,
     const AtomicBasis &abf_large, const AtomicBasis &abf_small,
-    const BlacsCtxtHandler &blacs_ctxt_h)
+    const BlacsCtxtHandler &blacs_ctxt_h,
+    const bool full_matrix = false,
+    const Chi0EmbeddingPhases *embedding_phases = nullptr,
+    const PeriodicBoundaryData *pbc = nullptr,
+    const SymmetryContext *symmetry_context = nullptr)
 {
     // before reset atom_mu: large abfs
     int all_mu = abf_large.nb_total;
     bool debug = false;
 
     const auto &comm_h = blacs_ctxt_h.comm_h();
+
+    // Match and validate raw rectangular input frames before BLACS setup or
+    // tensor collectives. Reuse the established source->target q transport;
+    // only the already-required local U tile is phased below.
+    Chi0EmbeddingPhases projection_phases;
+    collective_all_stage(comm_h, "Chi0 shrink projection q frames", [&]
+    {
+        if (!pbc || !symmetry_context)
+            throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection requires its physical q frame");
+        if (abf_small.n_atoms != abf_large.n_atoms)
+            throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection has inconsistent auxiliary atom partitions");
+        for (const auto &[source, matrix] : sinvS)
+        {
+            (void)matrix;
+            const auto source_fractional = pbc->latvec * source;
+            if (!std::isfinite(source_fractional.x) || !std::isfinite(source_fractional.y)
+                || !std::isfinite(source_fractional.z))
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection requires finite source q points");
+        }
+        for (const auto &q : qlist)
+        {
+            const auto qfrac = pbc->latvec * q;
+            if (!std::isfinite(qfrac.x) || !std::isfinite(qfrac.y) || !std::isfinite(qfrac.z))
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection requires finite target q points");
+            const auto projection = find_internal_qpoint(sinvS, *pbc, q);
+            if (projection == sinvS.end())
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection is missing U(q)");
+            if (projection->second.nr != static_cast<int>(abf_small.nb_total)
+                || projection->second.nc != static_cast<int>(abf_large.nb_total))
+                throw LIBRPA_INVALID_ARGUMENT("Chi0 shrink projection has inconsistent parent/active dimensions");
+            projection_phases.emplace(
+                std::array<double, 3>{q.x, q.y, q.z},
+                internal_q_gauge_phases(*symmetry_context, *pbc, projection->first, q,
+                                       abf_large.n_atoms));
+        }
+    });
 
     // after reset atom_mu: small abfs
     int all_mu_s = abf_small.nb_total;
@@ -2000,9 +2234,12 @@ static void shrink_abfs_chi0(
     desc_nabf_nabf_ll.init_square_blk_capped(all_mu, all_mu, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
     desc_nabf_nabf_sl.init_square_blk_capped(all_mu_s, all_mu, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
     desc_nabf_nabf_ss.init_square_blk_capped(all_mu_s, all_mu_s, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
-    const auto set_IJ_nabf_nabf =
-        get_necessary_IJ_from_block_2D_sy('U', abf_large, desc_nabf_nabf_ll);
-    const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
+    const auto set_IJ_nabf_nabf = full_matrix
+        ? get_necessary_IJ_from_block_2D(abf_large, abf_large, desc_nabf_nabf_ll)
+        : get_necessary_IJ_from_block_2D_sy('U', abf_large, desc_nabf_nabf_ll);
+    auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
+    // Empty BLACS tiles must still enter the collective with a valid request.
+    if (s0_s1.first.empty() || s0_s1.second.empty()) s0_s1 = {{0}, {0}};
     auto chi0_block = init_local_mat<complex<double>>(desc_nabf_nabf_ll, MAJOR::COL);
     auto chi0ss_block = init_local_mat<complex<double>>(desc_nabf_nabf_ss, MAJOR::COL);
     auto u_block = init_local_mat<complex<double>>(desc_nabf_nabf_sl, MAJOR::COL);
@@ -2025,19 +2262,24 @@ static void shrink_abfs_chi0(
     }
     // IJ pair of shrinked chi0 to be returned
     std::pair<std::set<int>, std::set<int>> Iset_Jset_c;
-    const auto atpair_local = dispatch_upper_triangular_tasks(
+    const auto upper_atpair_local = dispatch_upper_triangular_tasks(
         natom, blacs_ctxt_h.myid, blacs_ctxt_h.nprows, blacs_ctxt_h.npcols,
         blacs_ctxt_h.myprow, blacs_ctxt_h.mypcol);
+    const auto atpair_local = chi0_response_pairs(
+        {upper_atpair_local.begin(), upper_atpair_local.end()}, full_matrix);
     for (const auto &ap : atpair_local)
     {
         Iset_Jset_c.first.insert(ap.first);
         Iset_Jset_c.second.insert(ap.second);
     }
+    if (Iset_Jset_c.first.empty() || Iset_Jset_c.second.empty()) Iset_Jset_c = {{0}, {0}};
     for (std::size_t iq = 0; iq < qlist.size(); iq++)
     {
         const auto &q = qlist[iq];
         std::array<double, 3> qa = {q.x, q.y, q.z};
-        const auto &U = sinvS.at(q);
+        const auto projection = find_internal_qpoint(sinvS, *pbc, q);
+        const auto &U = projection->second;
+        const auto &u_phases = projection_phases.at({q.x, q.y, q.z});
         // profiler.start("shrink_prepare_chi0_2d", "Prepare Chi0 2D block for shrink");
         chi0_block.zero_out();
         chi0ss_block.zero_out();
@@ -2075,12 +2317,20 @@ static void shrink_abfs_chi0(
                 comm_h.comm, chi0_libri, s0_s1.first, s0_s1.second);
             // profiler.stop("shrink_prepare_chi0_2d_comm_map2");
             // profiler.start("shrink_prepare_chi0_2d_collect_block");
-            collect_block_from_ALL_IJ_Tensor(chi0_block, desc_nabf_nabf_ll,
-                                             abf_large, qa, true, CONE, IJq_chi0,
-                                             MAJOR::ROW);
+            if (full_matrix)
+                collect_block_from_ordered_IJ_Tensor(chi0_block, desc_nabf_nabf_ll,
+                                                     abf_large, qa, CONE, IJq_chi0, MAJOR::ROW);
+            else
+                collect_block_from_ALL_IJ_Tensor(chi0_block, desc_nabf_nabf_ll,
+                                                 abf_large, qa, true, CONE, IJq_chi0, MAJOR::ROW);
             // profiler.stop("shrink_prepare_chi0_2d_collect_block");
         }
         // profiler.stop("shrink_prepare_chi0_2d");
+        // U is supplied in the raw parent/active auxiliary frames. Embed the
+        // physical cell parent tile exactly once before the existing congruence.
+        if (embedding_phases && !embedding_phases->empty())
+            embed_chi0_auxiliary_tile(chi0_block, desc_nabf_nabf_ll, abf_large,
+                                     embedding_phases->at({q.x, q.y, q.z}));
         for (int ir = 0; ir < U.nr; ir++)
         {
             const int ilo = desc_nabf_nabf_sl.indx_g2l_r(ir);
@@ -2089,7 +2339,10 @@ static void shrink_abfs_chi0(
             {
                 const int jlo = desc_nabf_nabf_sl.indx_g2l_c(ic);
                 if (jlo < 0) continue;
-                u_block(ilo, jlo) = U(ir, ic);
+                const auto phase = u_phases[abf_small.get_i_atom(ir)]
+                                   * std::conj(u_phases[abf_large.get_i_atom(ic)]);
+                u_block(ilo, jlo) = phase == complex<double>{1.0, 0.0}
+                    ? U(ir, ic) : phase * U(ir, ic);
             }
         }
         // Shape of u_block is N_small x N_large
@@ -2183,8 +2436,10 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
     global::mpi_comm_global_h.barrier();
     throw LIBRPA_RUNTIME_ERROR("compilation");
 #else
+    constexpr bool full_matrix = std::is_same<Tdata, std::complex<double>>::value;
     const bool use_shrink_chi = sinvS.size() > 0;
-    const bool use_delayed_ft_shrink = use_shrink_chi && global::dev_opts.use_delayed_ft_shrink;
+    const bool use_delayed_ft_shrink =
+        !transition_gram_mode_ && use_shrink_chi && global::dev_opts.use_delayed_ft_shrink;
     global::profiler.start("LibRI_routing", "Loop over LibRI");
     const auto &qlist = this->active_qpoints();
     const std::vector<Vector3_Order<double>> qlist_all(qlist.begin(), qlist.end());
@@ -2217,7 +2472,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             n_bands_used, this->mf.get_n_aos() * this->mf.get_n_spinor());
     }
     const bool use_q_uhap_split =
-        global::dev_opts.use_chi0_q_uhap_split && !use_shrink_chi &&
+        !transition_gram_mode_ && global::dev_opts.use_chi0_q_uhap_split && !use_shrink_chi &&
         !chi0_rspace_symmetry_available &&
         comm_h.nprocs > 1 && q_uhap_process_shape.nprocs_outer > 1;
     TwoLevelParallelContext q_uhap_ctxt;
@@ -2231,8 +2486,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             qlist_all, q_uhap_ctxt.outer_group_id(), q_uhap_process_shape.nprocs_outer, true);
         Rlist_chi0_collect = dispatch_vector(
             Rlist_gf, q_uhap_ctxt.outer_group_id(), q_uhap_process_shape.nprocs_outer, true);
-        atpairs_chi0 = dispatch_vector(
-            all_atpairs_ABF, q_uhap_ctxt.inner_rank(), q_uhap_process_shape.nprocs_inner, true);
+        atpairs_chi0 = chi0_response_pairs(dispatch_vector(
+            all_atpairs_ABF, q_uhap_ctxt.inner_rank(), q_uhap_process_shape.nprocs_inner, true),
+            full_matrix);
         global::ofs_myid << "chi0 q/uhap split enabled: "
                          << q_uhap_process_shape.info("qpoint", "uhap")
                          << ", qpoint_group = " << q_uhap_ctxt.outer_group_id()
@@ -2305,7 +2561,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                          << std::endl;
     }
 
-    if (use_shrink_chi && !use_delayed_ft_shrink)
+    if (!transition_gram_mode_ && use_shrink_chi && !use_delayed_ft_shrink)
     {
         // Prepare relevant ComplexMatrix objects for the FT work layout.
         create_chi0_q_blocks(chi0_q_work, freq_nodes, qlist_chi0, atpairs_chi0, atbasis_abf);
@@ -2429,7 +2685,8 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
         : 0;
     const auto byte_collect_plan = collect_max_bytes > 0
         ? make_chi0_collect_plan_by_bytes<Tdata>(
-              atbasis_abf.n_atoms, Rlist_gf, atbasis_abf, collect_max_bytes)
+              atbasis_abf.n_atoms, Rlist_gf, full_matrix ? abf_Cs : atbasis_abf,
+              collect_max_bytes, full_matrix)
         : Chi0CollectPlan{};
     // LibRI's map collectors gather a sparse nested map according to requested
     // atom or exact (atom, R) keys.  A full one-shot collect can briefly
@@ -2468,9 +2725,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
     // omp_init_lock(&lock_chi0_fourier_cosine);
     // int count_gf = 0;
     map<double, Chi0CollectMap<Tdata>> chi0_freq_R;
-    for (size_t it = 0; it != tfg.size(); it++)
+    for (size_t it = 0; it != (transition_gram_mode_ ? 1 : tfg.size()); it++)
     {
-        const double tau = tfg.get_time_nodes()[it];
+        const double tau = transition_gram_mode_ ? 1.0 : tfg.get_time_nodes()[it];
         // cout << tau << " ";
         for (auto isp = 0; isp < this->mf.get_n_spins(); isp++)
         {
@@ -2503,7 +2760,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                             this->mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, this->atbasis_wfc,
                             isp, is1, is2, this->pbc, this->symmetry_context,
                             this->use_symmetry_context, this->pbc.kfrac_list, Rs_gf, tau,
-                            gf_po_libri, this->band_mask);
+                            gf_po_libri, this->band_mask, transition_gram_mode_, &wfc_embedding_);
                         global::profiler.start("chi0_gf_neg_entry_wait", LIBRPA_VERBOSE_DEBUG);
                         comm_h.barrier();
                         global::profiler.stop("chi0_gf_neg_entry_wait");
@@ -2511,7 +2768,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                             this->mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, this->atbasis_wfc,
                             isp, is1, is2, this->pbc, this->symmetry_context,
                             this->use_symmetry_context, this->pbc.kfrac_list, Rs_gf, -tau,
-                            gf_ne_libri, this->band_mask);
+                            gf_ne_libri, this->band_mask, transition_gram_mode_, &wfc_embedding_);
                     }
                     else
                     {
@@ -2519,12 +2776,14 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                             this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc,
                             isp, is1, is2, this->pbc, this->symmetry_context,
                             this->use_symmetry_context && !this->qstar_only_symmetry,
-                            this->pbc.kfrac_list, this->IJRs_gf_local, tau, gf_po_libri);
+                            &wfc_embedding_, wfc_embedding_phases_,
+                            this->pbc.kfrac_list, this->IJRs_gf_local, tau, gf_po_libri, transition_gram_mode_);
                         build_gf_Rt_libri_serial(
                             this->mf, this->band_mask, this->band_selection_, this->atbasis_wfc,
                             isp, is1, is2, this->pbc, this->symmetry_context,
                             this->use_symmetry_context && !this->qstar_only_symmetry,
-                            this->pbc.kfrac_list, this->IJRs_gf_local, -tau, gf_ne_libri);
+                            &wfc_embedding_, wfc_embedding_phases_,
+                            this->pbc.kfrac_list, this->IJRs_gf_local, -tau, gf_ne_libri, transition_gram_mode_);
                     }
                     // LibRI contracts both Gs in the same AO/translation ordering.
                     // The bubble needs G_{s2,s1}(J,I,-R,-tau), which is the
@@ -2696,7 +2955,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
 
             std::clock_t cpu_clock_done_chi0s = clock();
 
-            if (use_chi0_rspace_symmetry && use_shrink_chi)
+            if (use_chi0_rspace_symmetry && (use_shrink_chi || full_matrix))
             {
                 profiler.start("chi0_libri_routing_symmetry_restore_R",
                                "Restore chi0 full real-space sector");
@@ -2708,31 +2967,60 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             }
 
             // parse back to chi0
-            if (use_shrink_chi && !use_delayed_ft_shrink)
+            if (transition_gram_mode_ || (use_shrink_chi && !use_delayed_ft_shrink))
             {
                 map<double, map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>>
                     chi0_tau_q;
-                for (auto q : qlist)
-                {
-                    for (auto atpair : atpairs_ABF)
-                    {
-                        auto Mu = atpair.first;
-                        auto Nu = atpair.second;
-                        chi0_tau_q[tau][q][Mu][Nu].create(abf_Cs[Mu], abf_Cs[Nu]);
-                    }
-                }
+                Chi0QMap chi0_negative_tau_q;
+                chi0_tau_q[tau];
+                chi0_negative_tau_q[tau];
+                create_chi0_q_blocks(chi0_tau_q, {tau}, qlist, atpairs_ABF, abf_Cs);
                 profiler.start("chi0_libri_routing_ft_Rq");
-                chi_libri_ft_Rq<Tdata>(isp, mf.get_n_spins(), it, tfg, abf_Cs, pbc.latvec, 
+                chi_libri_ft_Rq<Tdata>(isp, mf.get_n_spins(), tau, mf.get_n_spinor() > 1, abf_Cs, pbc.latvec,
                                        chi0s_IJR, qlist,
                                        atpairs_ABF, chi0_tau_q);
+                if constexpr (full_matrix)
+                {
+                    create_chi0_q_blocks(chi0_negative_tau_q, {tau}, qlist, atpairs_ABF, abf_Cs);
+                    // Construct the opposite sign before Fourier transform and
+                    // compression; neither operation commutes with bare * in a
+                    // general complex q-dependent auxiliary gauge.
+                    chi_libri_ft_Rq<Tdata>(isp, mf.get_n_spins(), tau, mf.get_n_spinor() > 1, abf_Cs, pbc.latvec,
+                                          chi0s_IJR, qlist, atpairs_ABF,
+                                          chi0_negative_tau_q, true);
+                }
                 profiler.stop("chi0_libri_routing_ft_Rq");
                 chi0s_IJR.clear();
                 profiler.start("shrink_chi0_abfs", "Do shrink transformation");
-                shrink_abfs_chi0(chi0_tau_q[tau], sinvS, qlist, abf_Cs, atbasis_abf, blacs_ctxt_h);
+                if (use_shrink_chi)
+                    shrink_abfs_chi0(chi0_tau_q[tau], sinvS, qlist, abf_Cs, atbasis_abf,
+                                 blacs_ctxt_h, full_matrix, &auxiliary_embedding_phases_,
+                                 &pbc, &symmetry_context);
+                if constexpr (full_matrix)
+                    if (use_shrink_chi) shrink_abfs_chi0(chi0_negative_tau_q[tau], sinvS, qlist, abf_Cs,
+                                     atbasis_abf, blacs_ctxt_h, true, &auxiliary_embedding_phases_,
+                                     &pbc, &symmetry_context);
                 profiler.stop("shrink_chi0_abfs");
                 profiler.start("chi0_libri_routing_ft_tw");
-                chi_libri_ft_tw(isp, mf.get_n_spins(), it, tfg, chi0_tau_q, qlist, atpairs_ABF,
-                                chi0_q);
+                if (transition_gram_mode_)
+                {
+                    // chi0(+/-0,q) = -S_+/-(q). Separate maps preserve both sides.
+                    const auto accumulate = [](auto &target, const auto &source) {
+                        for (const auto &[q, rows] : source)
+                            for (const auto &[I, columns] : rows)
+                                for (const auto &[J, block] : columns)
+                                {
+                                    auto &out = target[q][I][J];
+                                    if (!out.c) out.create(block.nr, block.nc);
+                                    for (int i = 0; i != block.size; ++i) out.c[i] -= block.c[i];
+                                }
+                    };
+                    accumulate(transition_grams_.positive, chi0_tau_q.at(tau));
+                    accumulate(transition_grams_.negative, chi0_negative_tau_q.at(tau));
+                }
+                else
+                    chi_libri_ft_tw(isp, mf.get_n_spins(), it, tfg, chi0_tau_q, qlist, atpairs_ABF,
+                                    chi0_q, full_matrix ? &chi0_negative_tau_q : nullptr);
                 profiler.stop("chi0_libri_routing_ft_tw");
                 chi0_tau_q.clear();
             }
@@ -2740,7 +3028,7 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             {
                 profiler.start("chi0_libri_routing_ct_R", "Cosine transform to R-space");
                 const auto &atpairs_ct =
-                    use_chi0_rspace_symmetry && !use_shrink_chi
+                    use_chi0_rspace_symmetry && !use_shrink_chi && !full_matrix
                         ? symmetry_irreducible_atpairs
                         : atpairs_chi0;
                 chi_libri_ct_accumulate_R<Tdata>(
@@ -2770,14 +3058,14 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
         } // ispin
     } // itau
 
-    if (!use_shrink_chi || use_delayed_ft_shrink)
+    if (!transition_gram_mode_ && (!use_shrink_chi || use_delayed_ft_shrink))
     {
         profiler.start("chi0_libri_routing_delayed_ft_Rq", "Delayed Fourier transform");
         for (auto it_freq_R = chi0_freq_R.begin(); it_freq_R != chi0_freq_R.end(); )
         {
             const double freq = it_freq_R->first;
             const std::vector<double> freq_one{freq};
-            if (use_chi0_rspace_symmetry && !use_shrink_chi)
+            if (use_chi0_rspace_symmetry && !use_shrink_chi && !full_matrix)
             {
                 profiler.start("chi0_libri_routing_symmetry_restore_R",
                                "Restore chi0 full real-space sector");
@@ -2798,7 +3086,9 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
                     atpairs_chi0, chi0_q_large);
                 profiler.start("shrink_chi0_abfs", "Do shrink transformation");
                 shrink_abfs_chi0(
-                    chi0_q_large[freq], sinvS, qlist_chi0, abf_Cs, atbasis_abf, blacs_ctxt_h);
+                    chi0_q_large[freq], sinvS, qlist_chi0, abf_Cs, atbasis_abf,
+                    blacs_ctxt_h, full_matrix, &auxiliary_embedding_phases_,
+                    &pbc, &symmetry_context);
                 profiler.stop("shrink_chi0_abfs");
                 chi0_q[freq] = std::move(chi0_q_large[freq]);
             }
@@ -2825,6 +3115,11 @@ void Chi0::build_chi0_q_space_time_LibRI_routing(const Cs_LRI &Cs,
             }
             else
             {
+                // Preserve sparse-zero ownership without overlapping the full
+                // q-frequency output with the whole delayed R-frequency cache.
+                if constexpr (full_matrix)
+                    create_chi0_q_blocks(
+                        chi0_q_work, freq_one, qlist_chi0, atpairs_chi0, atbasis_abf);
                 chi_libri_ft_Rq_from_freq_R<Tdata>(
                     freq, atbasis_abf, pbc.latvec, it_freq_R->second, qlist_chi0,
                     atpairs_chi0, chi0_q_work);
@@ -3611,50 +3906,6 @@ void Chi0::free_chi0_q(const double freq, const Vector3_Order<double> q)
     ap_n_map<ComplexMatrix>().swap(chi0_for_free);
 }
 
-static bool nearly_same_qpoint(const Vector3_Order<double> &lhs,
-                               const Vector3_Order<double> &rhs,
-                               const double tol = 1e-5)
-{
-    const auto same_component = [tol](const double lhs_component,
-                                      const double rhs_component) {
-        return std::abs((lhs_component - rhs_component) -
-                        std::round(lhs_component - rhs_component)) < tol;
-    };
-    return same_component(lhs.x, rhs.x) && same_component(lhs.y, rhs.y) &&
-           same_component(lhs.z, rhs.z);
-}
-
-template <typename QMap>
-static typename QMap::iterator find_matching_qpoint(QMap &q_map,
-                                                    const Vector3_Order<double> &q_target)
-{
-    const auto exact_iter = q_map.find(q_target);
-    if (exact_iter != q_map.end())
-    {
-        return exact_iter;
-    }
-
-    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto &entry) {
-        return nearly_same_qpoint(entry.first, q_target);
-    });
-}
-
-template <typename QMap>
-static typename QMap::const_iterator find_matching_qpoint(
-    const QMap &q_map,
-    const Vector3_Order<double> &q_target)
-{
-    const auto exact_iter = q_map.find(q_target);
-    if (exact_iter != q_map.end())
-    {
-        return exact_iter;
-    }
-
-    return std::find_if(q_map.begin(), q_map.end(), [&q_target](const auto &entry) {
-        return nearly_same_qpoint(entry.first, q_target);
-    });
-}
-
 void Chi0::unfold_abfs_Wc(
     map<Vector3_Order<double>, ComplexMatrix> &sinvS,
     map<double,
@@ -3677,6 +3928,16 @@ void Chi0::unfold_abfs_Wc_q(
     const AtomicBasis &abf_unfold,
     const BlacsCtxtHandler &blacs_ctxt_h)
 {
+    unfold_abfs_Wc_q(sinvS, Wc_q, qlist, abf_unfold, blacs_ctxt_h, false);
+}
+
+void Chi0::unfold_abfs_Wc_q(
+    map<Vector3_Order<double>, ComplexMatrix> &sinvS,
+    atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old &Wc_q,
+    const vector<Vector3_Order<double>> &qlist,
+    const AtomicBasis &abf_unfold,
+    const BlacsCtxtHandler &blacs_ctxt_h, const bool full_frequency)
+{
     using global::profiler;
     using global::ofs_myid;
 
@@ -3695,8 +3956,9 @@ void Chi0::unfold_abfs_Wc_q(
     desc_nabf_nabf_ll.init_square_blk_capped(all_mu, all_mu, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
     desc_nabf_nabf_ss.init_square_blk_capped(all_mu_s, all_mu_s, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
     desc_nabf_nabf_sl.init_square_blk_capped(all_mu_s, all_mu, SHRINK_SCALAPACK_BLOCK_CAP, 0, 0);
-    const auto set_IJ_nabf_nabf = get_necessary_IJ_from_block_2D_sy(
-        'U', this->atbasis_abf, desc_nabf_nabf_ss);
+    const auto set_IJ_nabf_nabf = full_frequency
+        ? get_necessary_IJ_from_block_2D(this->atbasis_abf, this->atbasis_abf, desc_nabf_nabf_ss)
+        : get_necessary_IJ_from_block_2D_sy('U', this->atbasis_abf, desc_nabf_nabf_ss);
     const auto s0_s1 = get_s0_s1_for_comm_map2_first(set_IJ_nabf_nabf);
     auto Wc_block = init_local_mat<complex<double>>(desc_nabf_nabf_ss, MAJOR::COL);
     auto Wcll_block = init_local_mat<complex<double>>(desc_nabf_nabf_ll, MAJOR::COL);
@@ -3728,17 +3990,49 @@ void Chi0::unfold_abfs_Wc_q(
         Iset_Jset_c.first.insert(ap.first);
         Iset_Jset_c.second.insert(ap.second);
     }
+    if (full_frequency)
+        for (const auto &[left, rights] : Wc_q)
+            for (const auto &[right, samples] : rights)
+            {
+                (void)samples;
+                Iset_Jset_c.first.insert(left);
+                Iset_Jset_c.second.insert(right);
+            }
+
+    // Projection and W blocks may use different reciprocal labels. Validate
+    // every locally required frame before any rank enters the matrix collectives.
+    std::string frame_error;
+    try
+    {
+        for (const auto& q : qlist)
+        {
+            const auto projection = find_internal_qpoint(sinvS, pbc, q);
+            if (projection == sinvS.end())
+                throw LIBRPA_RUNTIME_ERROR("Cannot unfold Wc: missing shrink sinvS for q point");
+            (void)internal_q_gauge_phases(symmetry_context, pbc, projection->first, q, natom);
+            for (const auto& [left, rights] : Wc_q)
+                for (const auto& [right, samples] : rights)
+                    for (const auto& [source, block] : samples)
+                        if (match_internal_qpoints(pbc, source, q, 1e-5))
+                            (void)internal_q_gauge_phases(
+                                symmetry_context, pbc, source, q, natom);
+        }
+    }
+    catch (const std::exception& error) { frame_error = error.what(); }
+    check_internal_q_error_collective(comm_h.comm, frame_error);
 
     for (std::size_t iq = 0; iq < qlist.size(); iq++)
     {
         const auto &q = qlist[iq];
         std::array<double, 3> qa = {q.x, q.y, q.z};
-        const auto sinv_iter = find_matching_qpoint(sinvS, q);
+        const auto sinv_iter = find_internal_qpoint(sinvS, pbc, q);
         if (sinv_iter == sinvS.end())
         {
             throw LIBRPA_RUNTIME_ERROR("Cannot unfold Wc: missing shrink sinvS for q point");
         }
-        const auto &U = sinv_iter->second;
+        const auto& U = sinv_iter->second;
+        const auto projection_phases = internal_q_gauge_phases(
+            symmetry_context, pbc, sinv_iter->first, q, natom);
 
         profiler.start("unfold_prepare_Wc_2d", "Prepare Wc 2D block for unfold");
         Wc_block.zero_out();
@@ -3762,14 +4056,19 @@ void Chi0::unfold_abfs_Wc_q(
                     }
                     for (const auto &qc : Jqc.second)
                     {
-                        if (nearly_same_qpoint(qc.first, q))
+                        if (match_internal_qpoints(pbc, qc.first, q, 1e-5))
                         {
                             const auto &c = qc.second;
+                            const auto phases = internal_q_gauge_phases(
+                                symmetry_context, pbc, qc.first, q, natom);
+                            const auto factor = phases.at(atom_i) * std::conj(phases.at(atom_j));
                             for (int ir = 0; ir < c.nr(); ir++)
                             {
                                 for (int ic = 0; ic < c.nc(); ic++)
                                 {
-                                    Wc_IJ[atom_i][atom_j](ir, ic) = c(ir, ic);
+                                    Wc_IJ[atom_i][atom_j](ir, ic) =
+                                        factor == std::complex<double>{1., 0.}
+                                            ? c(ir, ic) : factor * c(ir, ic);
                                 }
                             }
                         }
@@ -3798,9 +4097,20 @@ void Chi0::unfold_abfs_Wc_q(
                 comm_h.comm, wc_libri, s0_s1.first, s0_s1.second);
             profiler.stop("unfold_prepare_Wc_2d_comm_map2");
             profiler.start("unfold_prepare_Wc_2d_collect_block");
-            collect_block_from_ALL_IJ_Tensor(Wc_block, desc_nabf_nabf_ss,
-                                             atbasis_abf, qa, true, CONE, IJq_wc,
-                                             MAJOR::ROW);
+            if (full_frequency)
+            {
+#ifdef LIBRPA_USE_LIBRI
+                if (desc_nabf_nabf_ss.m_loc() && desc_nabf_nabf_ss.n_loc())
+                    collect_block_from_ordered_IJ_Tensor(
+                        Wc_block, desc_nabf_nabf_ss, atbasis_abf, qa, CONE, IJq_wc);
+#else
+                throw LIBRPA_RUNTIME_ERROR("Full frequency auxiliary unfolding requires LibRI");
+#endif
+            }
+            else
+                collect_block_from_ALL_IJ_Tensor(Wc_block, desc_nabf_nabf_ss,
+                                                 atbasis_abf, qa, true, CONE, IJq_wc,
+                                                 MAJOR::ROW);
             profiler.stop("unfold_prepare_Wc_2d_collect_block");
         }
         profiler.stop("unfold_prepare_Wc_2d");
@@ -3813,7 +4123,12 @@ void Chi0::unfold_abfs_Wc_q(
             {
                 const int jlo = desc_nabf_nabf_sl.indx_g2l_c(ic);
                 if (jlo < 0) continue;
-                u_block(ilo, jlo) = U(ir, ic);
+                // Sew only the already-required distributed scratch. Keep the
+                // replicated input U by reference, without another full copy.
+                const auto factor = projection_phases.at(atbasis_abf.get_i_atom(ir))
+                                    * std::conj(projection_phases.at(abf_unfold.get_i_atom(ic)));
+                u_block(ilo, jlo) = factor == std::complex<double>{1., 0.}
+                    ? U(ir, ic) : factor * U(ir, ic);
             }
         }
 
@@ -3869,7 +4184,7 @@ void Chi0::unfold_abfs_Wc_q(
                 const auto atom_j = Jqc.first;
                 for (auto &qc : Jqc.second)
                 {
-                    if (!nearly_same_qpoint(qc.first, q)) continue;
+                    if (!match_internal_qpoints(pbc, qc.first, q, 1e-5)) continue;
                     const auto I_iter = IJq_chi.find(atom_i);
                     if (I_iter == IJq_chi.end())
                     {
@@ -3881,6 +4196,12 @@ void Chi0::unfold_abfs_Wc_q(
                         throw LIBRPA_RUNTIME_ERROR("Cannot unfold Wc: missing output atom-pair block");
                     }
 
+                    // Retain the caller's original W key and return the parent
+                    // operator in that key's frame, not in the working q frame.
+                    const auto output_phases = internal_q_gauge_phases(
+                        symmetry_context, pbc, q, qc.first, natom);
+                    const auto output_factor = output_phases.at(atom_i)
+                                               * std::conj(output_phases.at(atom_j));
                     Matz matz_Wc(abf_unfold[atom_i], abf_unfold[atom_j]);
                     const int nr = as_int(abf_unfold[atom_i]);
                     const int nc = as_int(abf_unfold[atom_j]);
@@ -3888,7 +4209,9 @@ void Chi0::unfold_abfs_Wc_q(
                     {
                         for (int ic = 0; ic < nc; ic++)
                         {
-                            matz_Wc(ir, ic) = block_iter->second(ir, ic);
+                            matz_Wc(ir, ic) = output_factor == std::complex<double>{1., 0.}
+                                ? block_iter->second(ir, ic)
+                                : output_factor * block_iter->second(ir, ic);
                         }
                     }
                     qc.second = matz_Wc.copy();

@@ -132,6 +132,8 @@ public:
 
     //! Build the real-space correlation self-energy matrix on imaginary frequencies with space-time method using LibRI
     //!
+    //! Reciprocal W and unfolding maps retain their declared raw auxiliary frame;
+    //! localized Cs, G(R,tau), W(R,tau), and Sigma(R,iw) use the cell frame.
     //! Wc_freq_q is destroyed on exit.
     void build_spacetime(
         const LibrpaParallelRouting parallel_routing,
@@ -148,6 +150,7 @@ public:
         const BlacsCtxtHandler *blacs_ctxt_h = nullptr,
         const ArrayDesc *desc_wfc_in = nullptr);
 
+    //! Fourier cell Sigma(R), re-embed AO work matrices, then project with raw C.
     void build_sigc_matrix_KS_kgrid(const Atoms &geometry = Atoms());
     void build_sigc_matrix_KS_band(const std::map<int, std::map<int, std::map<int, ComplexMatrix>>> &wfc_band,
                                    const std::vector<Vector3_Order<double>> &kfrac_band,

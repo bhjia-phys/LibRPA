@@ -108,7 +108,7 @@ The writer currently selects versions as follows:
 | --- | --- | --- |
 | No live-velocity context, including legacy `reference` | 3 | 8 |
 | `rotate_reference` | 5 | 9 |
-| Native-baseline `current_hr` | 10 | 11 |
+| Native-baseline `current_hr`, shortest atom-pair images | 12 | 13 |
 
 With Hartree feedback enabled, the writer adds 100 to the version selected
 above (for example, 108 for the shifted-cut reference-velocity map). The
@@ -121,7 +121,10 @@ checkpoint density. See the [Hartree guide](../user_guide/hartree.md).
 Legacy versions 1--3 are readable only when their update context still agrees.
 Version 4 belongs to another equation/mixer branch; versions 6/7 use the
 historical cut convention and are rejected. Versions 5/9 that encode the old
-whole-H current-HR map cannot be continued as native-baseline versions 10/11.
+whole-H current-HR map and native-baseline versions 10/11 with rectangular
+images cannot continue as versions 12/13. The latter bind the shortest-image
+policy and fractional AO centers through the HWV3 velocity context. Output-only
+HR export does not change the feedback map or the non-current-HR format.
 Do not reinterpret a prior payload or silently change its physical map when
 extending the format. Update both reader and writer, select an explicit
 compatible version or reject the old convention, and document the boundary.

@@ -39,10 +39,47 @@
 namespace
 {
 
+// Public input stores a complete dense matrix for each owned k point. Native
+// redistribution installs BLACS tiles later; these setters carry no tile offsets.
+void validate_dense_wfc_shape(const librpa_int::MeanField& mf,
+                              const int states, const int aos)
+{
+    if (!mf.initialized() || states <= 0 || aos <= 0 ||
+        states != mf.get_n_bands() || aos != mf.get_n_aos())
+    {
+        throw LIBRPA_RUNTIME_ERROR(
+            "Wave-function input requires a complete n_states x n_aos matrix for each owned k point; "
+            "partial or empty tiles are unsupported. Omit the setter on ranks that do not own this k point");
+    }
+}
+
 void mark_band_data_set(const librpa_int::dataset_ptr_t &pds)
 {
+    pds->note_input_change(librpa_int::InputChange::Band);
     pds->is_band_data_set = true;
     pds->is_band_calc_done = false;
+}
+
+void prepare_structure_input_change(const librpa_int::dataset_ptr_t &ds)
+{
+    ds->retain_optical_input();
+    if (ds->optical_meanfield_input || ds->direct_full_bz_optical_input)
+        ds->optical_input_frame_stale = true;
+    // Physical selections survive for an explicit reload/eligibility decision;
+    // derived operators must die before the referenced basis/context changes.
+    ds->p_headwing.reset();
+    ds->invalidate_compute_objects();
+    ds->note_input_change(librpa_int::InputChange::Structure);
+}
+
+bool same_q_input_keys(const std::vector<librpa_int::Vector3_Order<double>> &left,
+                       const std::vector<librpa_int::Vector3_Order<double>> &right)
+{
+    if (left.size() != right.size()) return false;
+    for (std::size_t i = 0; i != left.size(); ++i)
+        if (left[i].x != right[i].x || left[i].y != right[i].y || left[i].z != right[i].z)
+            return false;
+    return true;
 }
 
 std::vector<std::vector<int>> parse_l_shells(const int natoms,
@@ -112,6 +149,7 @@ void set_lri_coeff_impl(LibrpaHandler* h, LibrpaParallelRouting routing, int I, 
     if (pds->basis_wfc[I] != as_size(nbasis_i) || pds->basis_wfc[J] != as_size(nbasis_j))
         throw LIBRPA_RUNTIME_ERROR("LRI coefficient wave-function dimension is inconsistent with target basis");
 
+    pds->note_input_change(InputChange::Ri);
     if (routing == LIBRPA_ROUTING_LIBRI)
     {
         const std::array<int, 3> Ra{R[0], R[1], R[2]};
@@ -158,6 +196,9 @@ void librpa_set_scf_dimension(LibrpaHandler* h, int nspins, int nkpts, int nstat
 
     auto pds = librpa_int::api::get_dataset_instance(h);
 
+    // Destroy derived objects before replacing the contexts they reference.
+    prepare_structure_input_change(pds);
+    pds->reset_scf_eigvecs_kpara_state();
     auto &meanfield = pds->mf;
     // Local dimensions, currently not used
     int st_ib = 0;
@@ -223,7 +264,30 @@ void librpa_set_wg_ekb_efermi(LibrpaHandler* h, int nspins, int nkpts, int nstat
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &meanfield = pds->mf;
 
+    librpa_int::collective_all_stage(pds->comm_h, "Mean-field scalar input shape", [&]
+    {
+        if (!meanfield.initialized() || nspins != meanfield.get_n_spins() ||
+            nkpts != meanfield.get_n_kpoints() || nstates != meanfield.get_n_states() ||
+            !wg || !ekb)
+            throw LIBRPA_INVALID_ARGUMENT("E/occupation input dimensions or buffers are invalid");
+    });
+    bool spectrum_changed = meanfield.get_efermi() != efermi;
+    bool occupations_changed = false;
+    for (int spin = 0; spin != nspins; ++spin)
+        for (int k = 0; k != nkpts; ++k)
+            for (int band = 0; band != nstates; ++band)
+            {
+                const auto i = (static_cast<std::size_t>(spin) * nkpts + k) * nstates + band;
+                spectrum_changed = spectrum_changed || meanfield.get_eigenvals()[spin](k, band) != ekb[i];
+                occupations_changed = occupations_changed ||
+                    meanfield.get_weight()[spin](k, band) != wg[i] * (1.0 / nkpts);
+            }
+    if (spectrum_changed) pds->note_input_change(librpa_int::InputChange::Spectrum);
+    if (occupations_changed) pds->note_input_change(librpa_int::InputChange::Occupations);
     meanfield.get_efermi() = efermi;
+    // Band QP/spectral energies share the SCF chemical-potential reference.
+    // A reused band dataset must advance with the SCF input, as a fresh one does.
+    if (pds->mf_band.initialized()) pds->mf_band.get_efermi() = efermi;
     auto& eskb = meanfield.get_eigenvals();
     auto& swg = meanfield.get_weight();
     int length_kb = nkpts * nstates;
@@ -236,7 +300,9 @@ void librpa_set_wg_ekb_efermi(LibrpaHandler* h, int nspins, int nkpts, int nstat
     }
 
     double emin, emax;
-    pds->mf.get_E_min_max(emin, emax);
+    librpa_int::collective_all_stage(
+        pds->comm_h, "Mean-field transition bounds",
+        [&] { pds->mf.get_E_min_max(emin, emax); });
 
     pds->comm_h.barrier();
     if (pds->comm_h.is_root())
@@ -261,8 +327,10 @@ void librpa_set_wfc(LibrpaHandler* h, int ispin, int ik, int nstates_local, int 
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &meanfield = pds->mf;
+    validate_dense_wfc_shape(meanfield, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::ScfWavefunctions);
 
-    auto& wfc = meanfield.get_eigenvectors()[ispin][0][ik];
+    auto& wfc = pds->dense_wfc_input(false, ispin, 0, ik);
     wfc.create(nstates_local, nbasis_local);
     const size_t n = meanfield.get_n_bands() * meanfield.get_n_aos();
     for (size_t i = 0; i < n; i++)
@@ -289,12 +357,14 @@ void librpa_set_wfc_spinor(LibrpaHandler* h, int ik, int nstates_local, int nbas
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &meanfield = pds->mf;
+    validate_dense_wfc_shape(meanfield, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::ScfWavefunctions);
 
     if (meanfield.get_n_spinor() != 2)
         throw LIBRPA_RUNTIME_ERROR("spinor wfc set requires n_spinor initialized to 2");
 
-    auto& wfcs_up = meanfield.get_eigenvectors()[0][0][ik];
-    auto& wfcs_dn = meanfield.get_eigenvectors()[0][1][ik];
+    auto& wfcs_up = pds->dense_wfc_input(false, 0, 0, ik);
+    auto& wfcs_dn = pds->dense_wfc_input(false, 0, 1, ik);
     wfcs_up.create(nstates_local, nbasis_local);
     wfcs_dn.create(nstates_local, nbasis_local);
     const size_t n = meanfield.get_n_bands() * meanfield.get_n_aos();
@@ -322,8 +392,10 @@ void librpa_set_wfc_packed(LibrpaHandler* h, int ispin, int ik, int nstates_loca
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &meanfield = pds->mf;
+    validate_dense_wfc_shape(meanfield, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::ScfWavefunctions);
 
-    auto& wfc = meanfield.get_eigenvectors()[ispin][0][ik];
+    auto& wfc = pds->dense_wfc_input(false, ispin, 0, ik);
     wfc.create(nstates_local, nbasis_local);
     const size_t n = meanfield.get_n_bands() * meanfield.get_n_aos();
     for (size_t i = 0; i < n; i++)
@@ -349,12 +421,14 @@ void librpa_set_wfc_spinor_packed(LibrpaHandler* h, int ik, int nstates_local, i
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     auto &meanfield = pds->mf;
+    validate_dense_wfc_shape(meanfield, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::ScfWavefunctions);
 
     if (meanfield.get_n_spinor() != 2)
         throw LIBRPA_RUNTIME_ERROR("spinor wfc set requires n_spinor initialized to 2");
 
-    auto& wfcs_up = meanfield.get_eigenvectors()[0][0][ik];
-    auto& wfcs_dn = meanfield.get_eigenvectors()[0][1][ik];
+    auto& wfcs_up = pds->dense_wfc_input(false, 0, 0, ik);
+    auto& wfcs_dn = pds->dense_wfc_input(false, 0, 1, ik);
     wfcs_up.create(nstates_local, nbasis_local);
     wfcs_dn.create(nstates_local, nbasis_local);
     const size_t n = meanfield.get_n_bands() * meanfield.get_n_aos();
@@ -398,6 +472,7 @@ void librpa_set_ao_basis_wfc(LibrpaHandler* h,
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     set_ao_basis(pds->basis_wfc, natoms, nbs_wfc, nshells, l_shells);
     pds->desc_wfc.reset_handler(pds->blacs_h);
     const auto n = pds->basis_wfc.nb_total;
@@ -428,7 +503,11 @@ void librpa_set_ao_basis_aux(LibrpaHandler* h,
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
+    const auto previous_auxiliary_partition = pds->basis_aux.get_atom_nb_map();
     set_ao_basis(pds->basis_aux, natoms, nbs_aux, nshells, l_shells);
+    if (previous_auxiliary_partition != pds->basis_aux.get_atom_nb_map())
+        pds->reset_coulomb_input_layout();
 
     // After auxiliary basis is set, we can initialize the global (continous) array descriptor for N_abf size basis.
     pds->desc_abf.reset_handler(pds->blacs_h);
@@ -459,7 +538,11 @@ void librpa_set_ao_basis_aux_shrink(LibrpaHandler* h,
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
+    const auto previous_auxiliary_partition = pds->basis_aux_shrink.get_atom_nb_map();
     set_ao_basis(pds->basis_aux_shrink, natoms, nbs_aux_shrink, nshells, l_shells);
+    if (previous_auxiliary_partition != pds->basis_aux_shrink.get_atom_nb_map())
+        pds->reset_coulomb_input_layout();
 
     pds->desc_abf_shrink.reset_handler(pds->blacs_h);
     const auto n = pds->basis_aux_shrink.nb_total;
@@ -549,6 +632,7 @@ void librpa_set_basis_convention(LibrpaHandler* h, int bloch_phase, int bloch_ra
     }
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     pds->basis_convention = {bloch_phase, bloch_ratom, order, nega_m, posi_m};
     pds->invalidate_compute_objects();
 
@@ -587,6 +671,7 @@ void librpa_set_symmetry_operations(LibrpaHandler* h, const int n_symops, const 
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     auto &ops = pds->spg_symops;
 
     ops.clear();
@@ -644,6 +729,7 @@ void librpa_set_symmetry_spin_operations(
 
     const auto source = static_cast<SymmetrySpinActionSource>(spin_action_source);
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     auto &ops = pds->spg_symops;
     auto &spin_ops = pds->spg_spin_ops;
 
@@ -704,6 +790,7 @@ void librpa_set_latvec_and_G(LibrpaHandler* h, const double lat_mat[9], const do
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     auto &pbc = pds->pbc;
 
     std::vector<double> latt(lat_mat, lat_mat + 9);
@@ -747,6 +834,7 @@ void librpa_set_atoms(LibrpaHandler* h, int natoms, const int *types, const doub
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
     auto &pbc = pds->pbc;
     auto &atoms = pds->atoms;
 
@@ -813,6 +901,8 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3, int nkp
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
+    const auto previous_coulomb_keys = pds->pbc.klist_coul;
     auto &pbc = pds->pbc;
 
     if (nkpts <= 0 || kvecs == nullptr)
@@ -827,6 +917,8 @@ void librpa_set_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int nk3, int nkp
     }
 
     pbc.set_kgrids_kvec(nk1, nk2, nk3, v_kvecs, v_kweights);
+    if (!same_q_input_keys(previous_coulomb_keys, pds->pbc.klist_coul))
+        pds->reset_coulomb_input_layout();
     pds->invalidate_compute_objects();
 
     pds->comm_h.barrier();
@@ -890,6 +982,8 @@ void librpa_set_irreducible_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int 
     if (expected != n_full)
         throw LIBRPA_INVALID_ARGUMENT("Explicit full-grid count differs from grid dimensions");
     auto ds = api::get_dataset_instance(h);
+    prepare_structure_input_change(ds);
+    const auto previous_coulomb_keys = ds->pbc.klist_coul;
     if (n_scf > n_full || ds->mf.get_n_kpoints() != n_scf)
         throw LIBRPA_INVALID_ARGUMENT("Explicit mapping SCF count differs from mean field");
     const auto finite = [](const double value) { return std::isfinite(value); };
@@ -969,6 +1063,8 @@ void librpa_set_irreducible_kgrids_kvec(LibrpaHandler* h, int nk1, int nk2, int 
         }
     }
     ds->pbc = std::move(candidate);
+    if (!same_q_input_keys(previous_coulomb_keys, ds->pbc.klist_coul))
+        ds->reset_coulomb_input_layout();
     ds->invalidate_compute_objects();
 }
 
@@ -984,11 +1080,15 @@ void librpa_set_kq_mapping(LibrpaHandler* h, int nkpts, const int* map_q_ks)
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    prepare_structure_input_change(pds);
+    const auto previous_coulomb_keys = pds->pbc.klist_coul;
     auto &pbc = pds->pbc;
     assert(nkpts == static_cast<int>(pbc.klist.size()));
 
     std::vector<int> map(map_q_ks, map_q_ks + nkpts);
     pbc.set_kq_mapping(map, {});
+    if (!same_q_input_keys(previous_coulomb_keys, pds->pbc.klist_coul))
+        pds->reset_coulomb_input_layout();
     pds->invalidate_compute_objects();
     // ofs_myid << map << std::endl;
     pds->comm_h.barrier();
@@ -1049,9 +1149,16 @@ static void _set_aux_coulomb_k_atom_pair(const librpa_int::Vector3_Order<double>
         }
     }
 
-    if ((*vq_ptr).real().absmax() >= vq_threshold)
+    if (vq_ptr->get_max_abs() >= vq_threshold)
+        coulomb_mat[I][J][qvec] = std::move(vq_ptr);
+    else
     {
-        coulomb_mat[I][J][qvec] = vq_ptr;
+        const auto i = coulomb_mat.find(I);
+        if (i != coulomb_mat.end())
+        {
+            const auto j = i->second.find(J);
+            if (j != i->second.end()) j->second.erase(qvec);
+        }
     }
 }
 
@@ -1075,9 +1182,16 @@ static void _set_aux_coulomb_k_atom_pair_packed(
         }
     }
 
-    if ((*vq_ptr).real().absmax() >= vq_threshold)
+    if (vq_ptr->get_max_abs() >= vq_threshold)
+        coulomb_mat[I][J][qvec] = std::move(vq_ptr);
+    else
     {
-        coulomb_mat[I][J][qvec] = vq_ptr;
+        const auto i = coulomb_mat.find(I);
+        if (i != coulomb_mat.end())
+        {
+            const auto j = i->second.find(J);
+            if (j != i->second.end()) j->second.erase(qvec);
+        }
     }
 }
 
@@ -1091,6 +1205,7 @@ void librpa_set_aux_bare_coulomb_k_atom_pair(LibrpaHandler* h, int ik, int I, in
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _set_aux_coulomb_k_atom_pair(qvec, I, J, naux_mu, naux_nu, Vq_real_in, Vq_imag_in, pds->vq, vq_threshold);
 
@@ -1108,6 +1223,7 @@ void librpa_set_aux_bare_coulomb_k_atom_pair_packed(LibrpaHandler* h, int ik, in
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _set_aux_coulomb_k_atom_pair_packed(qvec, I, J, naux_mu, naux_nu, Vq_ri_in,
                                         pds->vq, vq_threshold);
@@ -1125,6 +1241,7 @@ void librpa_set_aux_cut_coulomb_k_atom_pair(LibrpaHandler* h, int ik, int I, int
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _set_aux_coulomb_k_atom_pair(qvec, I, J, naux_mu, naux_nu, Vq_real_in, Vq_imag_in, pds->vq_cut, vq_threshold);
 
@@ -1142,6 +1259,7 @@ void librpa_set_aux_cut_coulomb_k_atom_pair_packed(LibrpaHandler* h, int ik, int
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _set_aux_coulomb_k_atom_pair_packed(qvec, I, J, naux_mu, naux_nu, Vq_ri_in,
                                         pds->vq_cut, vq_threshold);
@@ -1233,11 +1351,14 @@ void librpa_set_aux_bare_coulomb_k_2d_block(LibrpaHandler* h, int ik, int mu_beg
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _parse_vq_dims(pds->vq_lbrow, pds->vq_ubrow, pds->vq_lbcol, pds->vq_ubcol,
                    mu_begin, mu_end, nu_begin, nu_end);
     _set_aux_coulomb_k_2D_block(qvec, mu_begin, mu_end, nu_begin, nu_end, Vq_real_in,
                                 Vq_imag_in, pds->vq_block_loc);
+
+    pds->note_coulomb_2d_update(false, ik);
 
     profiler.stop(tname);
 }
@@ -1252,11 +1373,14 @@ void librpa_set_aux_bare_coulomb_k_2d_block_packed(LibrpaHandler* h, int ik, int
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _parse_vq_dims(pds->vq_lbrow, pds->vq_ubrow, pds->vq_lbcol, pds->vq_ubcol,
                    mu_begin, mu_end, nu_begin, nu_end);
     _set_aux_coulomb_k_2D_block_packed(qvec, mu_begin, mu_end, nu_begin, nu_end,
                                        Vq_ri_in, pds->vq_block_loc);
+
+    pds->note_coulomb_2d_update(false, ik);
 
     profiler.stop(tname);
 }
@@ -1271,11 +1395,14 @@ void librpa_set_aux_cut_coulomb_k_2d_block(LibrpaHandler* h, int ik, int mu_begi
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _parse_vq_dims(pds->vq_lbrow, pds->vq_ubrow, pds->vq_lbcol, pds->vq_ubcol,
                    mu_begin, mu_end, nu_begin, nu_end);
     _set_aux_coulomb_k_2D_block(qvec, mu_begin, mu_end, nu_begin, nu_end, Vq_real_in,
                                 Vq_imag_in, pds->vq_cut_block_loc);
+
+    pds->note_coulomb_2d_update(true, ik);
 
     profiler.stop(tname);
 }
@@ -1290,11 +1417,14 @@ void librpa_set_aux_cut_coulomb_k_2d_block_packed(LibrpaHandler* h, int ik, int 
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Coulomb);
     const auto &qvec = pds->pbc.klist[ik];
     _parse_vq_dims(pds->vq_lbrow, pds->vq_ubrow, pds->vq_lbcol, pds->vq_ubcol,
                    mu_begin, mu_end, nu_begin, nu_end);
     _set_aux_coulomb_k_2D_block_packed(qvec, mu_begin, mu_end, nu_begin, nu_end,
                                        Vq_ri_in, pds->vq_cut_block_loc);
+
+    pds->note_coulomb_2d_update(true, ik);
 
     profiler.stop(tname);
 }
@@ -1303,8 +1433,18 @@ void librpa_set_dielect_func_imagfreq(LibrpaHandler* h, int nfreq, const double 
 {
     using namespace librpa_int;
     auto pds = librpa_int::api::get_dataset_instance(h);
-    pds->omegas_imagfreq = std::vector<double>(omegas_imag, omegas_imag + nfreq);
-    pds->epsmacs_imagfreq = std::vector<double>(dielect_func, dielect_func + nfreq);
+    if (nfreq < 0 || (nfreq > 0 && (!omegas_imag || !dielect_func)))
+        throw LIBRPA_INVALID_ARGUMENT("Invalid external dielectric input buffers");
+    pds->note_input_change(InputChange::ExternalDielectric);
+    pds->external_omegas_imagfreq.clear();
+    pds->external_epsmacs_imagfreq.clear();
+    if (nfreq > 0)
+    {
+        pds->external_omegas_imagfreq.assign(omegas_imag, omegas_imag + nfreq);
+        pds->external_epsmacs_imagfreq.assign(dielect_func, dielect_func + nfreq);
+    }
+    pds->omegas_imagfreq = pds->external_omegas_imagfreq;
+    pds->epsmacs_imagfreq = pds->external_epsmacs_imagfreq;
 }
 
 static std::size_t _velocity_matrix_flat_index(const int ispin, const int ik,
@@ -1331,6 +1471,7 @@ void librpa_set_velocity_matrix(LibrpaHandler* h, int n_spins, int n_kpts,
         throw LIBRPA_RUNTIME_ERROR("velocity matrix real/imag arrays must not be null");
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Velocity);
     initialize_velocity_matrix(pds->velocity_matrix, n_spins, n_kpts, n_states);
     for (int ispin = 0; ispin != n_spins; ++ispin)
     {
@@ -1353,7 +1494,7 @@ void librpa_set_velocity_matrix(LibrpaHandler* h, int n_spins, int n_kpts,
             }
         }
     }
-    pds->p_headwing.reset();
+
 
     profiler.stop(tname);
 }
@@ -1372,6 +1513,7 @@ void librpa_set_velocity_matrix_packed(LibrpaHandler* h, int n_spins, int n_kpts
         throw LIBRPA_RUNTIME_ERROR("velocity matrix packed array must not be null");
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Velocity);
     initialize_velocity_matrix(pds->velocity_matrix, n_spins, n_kpts, n_states);
     for (int ispin = 0; ispin != n_spins; ++ispin)
     {
@@ -1394,7 +1536,7 @@ void librpa_set_velocity_matrix_packed(LibrpaHandler* h, int n_spins, int n_kpts
             }
         }
     }
-    pds->p_headwing.reset();
+
 
     profiler.stop(tname);
 }
@@ -1435,14 +1577,19 @@ void librpa_set_band_occ_eigval(LibrpaHandler* h, int n_spins, int n_kpts_band, 
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    pds->reset_band_eigvecs_kpara_state();
     const int n_basis = pds->mf.get_n_aos();
     const int n_spinor = pds->mf.get_n_spinor();
     const double efermi = pds->mf.get_efermi();
     mark_band_data_set(pds);
 
     auto &mfb = pds->mf_band;
-    mfb.set(n_spins, n_kpts_band, n_states, n_basis, n_spinor);
+    if (!mfb.initialized() || mfb.get_n_spins() != n_spins ||
+        mfb.get_n_kpoints() != n_kpts_band || mfb.get_n_states() != n_states ||
+        mfb.get_n_aos() != n_basis || mfb.get_n_spinor() != n_spinor)
+    {
+        pds->reset_band_eigvecs_kpara_state();
+        mfb.set(n_spins, n_kpts_band, n_states, n_basis, n_spinor);
+    }
     // Band-path QPE uses the same reference Fermi level as the SCF k-grid.
     mfb.get_efermi() = efermi;
     auto& eskb = mfb.get_eigenvals();
@@ -1468,10 +1615,12 @@ void librpa_set_wfc_band(LibrpaHandler* h, int ispin, int ik_band, int nstates_l
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    mark_band_data_set(pds);
     auto &mfb = pds->mf_band;
+    validate_dense_wfc_shape(mfb, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::Band);
+    mark_band_data_set(pds);
 
-    auto& wfc = mfb.get_eigenvectors()[ispin][0][ik_band];
+    auto& wfc = pds->dense_wfc_input(true, ispin, 0, ik_band);
     wfc.create(nstates_local, nbasis_local);
     const size_t n = mfb.get_n_bands() * mfb.get_n_aos();
     for (size_t i = 0; i < n; i++)
@@ -1497,11 +1646,13 @@ void librpa_set_wfc_band_spinor(LibrpaHandler* h, int ik_band, int nstates_local
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    mark_band_data_set(pds);
     auto &mfb = pds->mf_band;
+    validate_dense_wfc_shape(mfb, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::Band);
+    mark_band_data_set(pds);
 
-    auto& wfcs_up = mfb.get_eigenvectors()[0][0][ik_band];
-    auto& wfcs_dn = mfb.get_eigenvectors()[0][1][ik_band];
+    auto& wfcs_up = pds->dense_wfc_input(true, 0, 0, ik_band);
+    auto& wfcs_dn = pds->dense_wfc_input(true, 0, 1, ik_band);
     wfcs_up.create(nstates_local, nbasis_local);
     wfcs_dn.create(nstates_local, nbasis_local);
     const size_t n = mfb.get_n_bands() * mfb.get_n_aos();
@@ -1528,10 +1679,12 @@ void librpa_set_wfc_band_packed(LibrpaHandler* h, int ispin, int ik_band, int ns
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    mark_band_data_set(pds);
     auto &mfb = pds->mf_band;
+    validate_dense_wfc_shape(mfb, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::Band);
+    mark_band_data_set(pds);
 
-    auto& wfc = mfb.get_eigenvectors()[ispin][0][ik_band];
+    auto& wfc = pds->dense_wfc_input(true, ispin, 0, ik_band);
     wfc.create(nstates_local, nbasis_local);
     const size_t n = mfb.get_n_bands() * mfb.get_n_aos();
     for (size_t i = 0; i < n; i++)
@@ -1557,11 +1710,13 @@ void librpa_set_wfc_band_spinor_packed(LibrpaHandler* h, int ik_band, int nstate
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
-    mark_band_data_set(pds);
     auto &mfb = pds->mf_band;
+    validate_dense_wfc_shape(mfb, nstates_local, nbasis_local);
+    pds->note_input_change(librpa_int::InputChange::Band);
+    mark_band_data_set(pds);
 
-    auto& wfcs_up = mfb.get_eigenvectors()[0][0][ik_band];
-    auto& wfcs_dn = mfb.get_eigenvectors()[0][1][ik_band];
+    auto& wfcs_up = pds->dense_wfc_input(true, 0, 0, ik_band);
+    auto& wfcs_dn = pds->dense_wfc_input(true, 0, 1, ik_band);
     wfcs_up.create(nstates_local, nbasis_local);
     wfcs_dn.create(nstates_local, nbasis_local);
     const size_t n = mfb.get_n_bands() * mfb.get_n_aos();
@@ -1587,6 +1742,7 @@ void librpa_reset_band_data(LibrpaHandler* h)
     profiler.start(tname, LIBRPA_VERBOSE_DEBUG);
 
     auto pds = librpa_int::api::get_dataset_instance(h);
+    pds->note_input_change(librpa_int::InputChange::Band);
     ++pds->band_data_id;
     pds->is_band_data_set = false;
     pds->is_band_calc_done = false;

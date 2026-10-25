@@ -128,7 +128,8 @@ void test_qsgw_reconstruction_with_finite_reference_metric()
     SpinKMatrixMap target;
     target[0][0] = h.copy();
     const auto result = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
-                                                     Vector3_Order<int>(1, 1, 1), lattice);
+                                                     Vector3_Order<int>(1, 1, 1), lattice,
+                                                     std::vector<Vector3_Order<double>>(2));
     assert(result.reference_metric_residual > 1e-7);
     assert(result.reference_metric_residual < 1e-6);
     const Matz projected =
@@ -144,6 +145,124 @@ void test_qsgw_reconstruction_with_finite_reference_metric()
         transpose(coefficients, true) * su * h * transpose(su, true) * coefficients;
     assert(std::abs(old_projected(1, 1) - h(1, 1)) > 1e-4 / librpa_int::HA2EV);
     assert(target[0][0](1, 1) == h(1, 1));
+}
+
+void test_qsgw_pair_centered_images_preserve_soc_covariance()
+{
+    using librpa_int::cplxdb;
+    using namespace librpa_int::qsgw;
+    using namespace librpa_int::localized_operator;
+    const Matrix3 lattice = Matrix3::IDENTITY;
+    const Vector3_Order<int> origin(0, 0, 0), period(6, 1, 1);
+    // The second center is mapped to itself plus one cell under inversion.
+    const std::vector<Vector3_Order<double>> centers{
+        {0, 0, 0}, {0, 0, 0}, {-0.5, 0, 0}, {-0.5, 0, 0}};
+    std::vector<Vector3_Order<double>> kpoints;
+    MeanField reference(1, 6, 4, 2, 2);
+    HeadwingAoOperators operators;
+    operators.dimension = 4;
+    Matz overlap = zero_matrix(4), coefficients = zero_matrix(4), h0 = zero_matrix(4);
+    for (int a = 0; a < 4; ++a)
+    {
+        overlap(a, a) = a < 2 ? 1.2 : 0.8;
+        coefficients(a, a) = 1.0 / std::sqrt(overlap(a, a).real());
+        h0(a, a) = overlap(a, a) * (a < 2 ? -0.7 : 0.9);
+    }
+    operators.overlap.emplace(origin, overlap);
+    operators.native_dft_hamiltonian.resize(1);
+    operators.native_dft_hamiltonian[0].emplace(origin, h0);
+    Matz quaternion({{{0.3, 0}, {0.1, 0.2}}, {{-0.1, 0.2}, {0.3, 0}}}, MAJOR::ROW);
+    LocalizedMatrix exact = operators.native_dft_hamiltonian[0];
+    for (const int x : {3, -2})
+    {
+        Matz block = zero_matrix(4);
+        for (int s = 0; s < 2; ++s)
+            for (int t = 0; t < 2; ++t) block(s, t + 2) = quaternion(s, t);
+        exact.emplace(Vector3_Order<int>(x, 0, 0), block);
+        exact.emplace(Vector3_Order<int>(-x, 0, 0), transpose(block, true));
+    }
+    SpinKMatrixMap target;
+    for (int ik = 0; ik < 6; ++ik)
+    {
+        kpoints.emplace_back(ik / 6.0, 0, 0);
+        for (int component = 0; component < 2; ++component)
+        {
+            auto &wfc = reference.get_eigenvectors()[0][component][ik];
+            wfc.create(4, 2);
+            for (int band = 0; band < 4; ++band)
+                for (int ao = 0; ao < 2; ++ao)
+                    wfc(band, ao) = coefficients(2 * ao + component, band);
+        }
+        for (int band = 0; band < 4; ++band)
+            reference.get_eigenvals()[0](ik, band) = band < 2 ? -0.7 : 0.9;
+        target[0][ik] = transpose(coefficients, true) * fourier(exact, kpoints.back(), 4, lattice) *
+                        coefficients;
+    }
+    const auto rebuilt = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints, period,
+                                                      lattice, centers);
+    assert(rebuilt.fourier_roundtrip_residual_ha < 1e-12);
+    Matz j = zero_matrix(4);
+    for (int a = 0; a < 4; a += 2)
+    {
+        j(a, a + 1) = 1.;
+        j(a + 1, a) = -1.;
+    }
+    for (const double x : {0.1, 0.137, 0.333})
+    {
+        const Vector3_Order<double> k(x, 0, 0), minus(-x, 0, 0);
+        const Matz h = fourier(rebuilt.hamiltonian[0], k, 4, lattice);
+        const Matz hm = fourier(rebuilt.hamiltonian[0], minus, 4, lattice);
+        Matz p = zero_matrix(4);
+        for (int a = 0; a < 4; ++a)
+            p(a, a) = a < 2 ? cplxdb(1, 0) : std::polar(1., librpa_int::TWO_PI * x);
+        assert(maximum_entry(h - fourier(exact, k, 4, lattice)) < 1e-12);
+        assert(maximum_entry(h - transpose(h, true)) < 1e-12);
+        assert(maximum_entry(h - transpose(p, true) * hm * p) < 1e-12);
+        Matz hm_conjugate = hm.copy();
+        for (std::size_t a = 0; a < hm_conjugate.size(); ++a)
+            hm_conjugate.ptr()[a] = std::conj(hm_conjugate.ptr()[a]);
+        assert(maximum_entry(h - j * hm_conjugate * transpose(j, true)) < 1e-12);
+        assert(maximum_entry(fourier(rebuilt.hamiltonian[0], k, 4, lattice, 0) -
+                             fourier(exact, k, 4, lattice, 0)) < 1e-11);
+        // Independent old-rule witness: f=e^(3iq)+e^(-2iq) became cos(3q)+e^(-2iq).
+        const double q = librpa_int::TWO_PI * x;
+        const cplxdb old_f = std::cos(3 * q) + std::polar(1., -2 * q);
+        const cplxdb old_minus = std::cos(3 * q) + std::polar(1., 2 * q);
+        if (x == 0.1) assert(std::abs(old_f - std::polar(1., q) * old_minus) > 1.8);
+    }
+    // A magnetic onsite term must survive. The image rule is not a T projection.
+    for (int ik = 0; ik < 6; ++ik)
+    {
+        target[0][ik](0, 0) += 0.02 / overlap(0, 0).real();
+        target[0][ik](1, 1) -= 0.02 / overlap(1, 1).real();
+    }
+    const auto magnetic = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
+                                                       period, lattice, centers);
+    const auto change = fourier(magnetic.hamiltonian[0], {0.137, 0, 0}, 4, lattice) -
+                        fourier(rebuilt.hamiltonian[0], {0.137, 0, 0}, 4, lattice);
+    assert(std::abs(change(0, 0) - 0.02) < 1e-12);
+    assert(std::abs(change(1, 1) + 0.02) < 1e-12);
+
+    // A strongly skew cell needs an image outside the common [-1,1]^3 search.
+    const Matrix3 skew(1., 0., 0., 7.2, 0.3, 0., 0., 0., 2.);
+    const auto images =
+        shortest_periodic_images({0, 0, 0}, {1, 1, 1}, {0, 0, 0}, {0, 0.49, 0}, skew);
+    double exhaustive = std::numeric_limits<double>::max();
+    for (int x = -20; x <= 20; ++x)
+        for (int y = -20; y <= 20; ++y)
+            for (int z = -2; z <= 2; ++z)
+                exhaustive = std::min(exhaustive,
+                                      (librpa_int::Vector3<double>(x, y + 0.49, z) * skew).norm2());
+    bool beyond = false;
+    for (const auto &r : images)
+    {
+        assert(std::abs((librpa_int::Vector3<double>(r.x, r.y + 0.49, r.z) * skew).norm2() -
+                        exhaustive) < 1e-12);
+        beyond = beyond || std::abs(r.x) > 1 || std::abs(r.y) > 1;
+    }
+    assert(beyond);
+    const auto ties = shortest_periodic_images({3, 0, 0}, period, {0, 0, 0}, {0, 0, 0}, lattice);
+    assert(ties.size() == 2);
 }
 
 void test_qsgw_native_baseline_preserves_aliased_tail()
@@ -224,10 +343,12 @@ void test_qsgw_native_baseline_preserves_aliased_tail()
             }
         }
         const auto whole = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
-                                                        Vector3_Order<int>(4, 1, 1), lattice);
+                                                        Vector3_Order<int>(4, 1, 1), lattice,
+                                                        std::vector<Vector3_Order<double>>(2));
         operators.native_dft_hamiltonian = native;
         auto preserved = reconstruct_qsgw_hamiltonian(reference, target, operators, kpoints,
-                                                      Vector3_Order<int>(4, 1, 1), lattice);
+                                                      Vector3_Order<int>(4, 1, 1), lattice,
+                                                      std::vector<Vector3_Order<double>>(2));
         double off_grid_error = 0.0, whole_error = 0.0, derivative_error = 0.0;
         for (int spin = 0; spin < spins; ++spin)
         {
@@ -311,6 +432,47 @@ void require_condition(const bool condition, const char *message)
     {
         std::cerr << message << std::endl;
         std::abort();
+    }
+}
+
+void test_direct_dielectric_input_requires_matching_frequency_labels()
+{
+    const std::vector<double> nodes{0.01, 0.3, 2.0};
+    const std::vector<double> values{2.1, 1.5, 1.03};
+    for (const int option : {0, 5})
+    {
+        require_condition(
+            librpa_int::interpolate_dielec_func(option, nodes, values, nodes) == values,
+            "matching direct dielectric samples must remain unchanged");
+        auto rounded = nodes;
+        for (double &node : rounded)
+            node = std::nextafter(node, std::numeric_limits<double>::infinity());
+        require_condition(
+            librpa_int::interpolate_dielec_func(option, rounded, values, nodes) == values,
+            "roundoff in direct dielectric labels must not change copied samples");
+        const auto rejects = [&](const std::vector<double> &input_nodes,
+                                 const std::vector<double> &samples,
+                                 const std::vector<double> &target_nodes)
+        {
+            bool rejected = false;
+            try
+            {
+                (void)librpa_int::interpolate_dielec_func(
+                    option, input_nodes, samples, target_nodes);
+            }
+            catch (const std::exception &)
+            {
+                rejected = true;
+            }
+            require_condition(rejected, "incompatible direct dielectric input was accepted");
+        };
+        rejects({0.01, 0.4, 2.0}, values, nodes);
+        rejects({2.0, 0.3, 0.01}, values, nodes);
+        rejects({0.01, 0.3}, values, nodes);
+        rejects(nodes, {2.1, 1.5}, nodes);
+        rejects({0.01, std::numeric_limits<double>::quiet_NaN(), 2.0}, values, nodes);
+        rejects(nodes, {2.1, std::numeric_limits<double>::infinity(), 1.03}, nodes);
+        rejects(nodes, values, {0.01, 0.3, std::numeric_limits<double>::infinity()});
     }
 }
 
@@ -916,6 +1078,75 @@ void test_rpa_headwing_gamma_cell_volume_uses_reciprocal_lattice()
                          vol_3d / 64.0, 1e-14);
     require_double_close(librpa_int::rpa_headwing_gamma_cell_volume(pbc, true),
                          vol_2d / 64.0, 1e-14);
+}
+
+void test_gamma_cell_neighbors_follow_reciprocal_rows_and_unreduced_basis()
+{
+    using librpa_int::Matrix3;
+    using librpa_int::Vector3_Order;
+    const auto qmax = [](const auto &neighbors, const Vector3_Order<double> &direction)
+    {
+        double result = std::numeric_limits<double>::infinity();
+        for (const auto &g : neighbors)
+        {
+            const double denominator = direction * g;
+            if (denominator > 1e-13) result = std::min(result, 0.5 * (g * g) / denominator);
+        }
+        return result;
+    };
+    const std::vector<Vector3_Order<double>> directions{{1.0, 0.0, 0.0},
+                                                        {0.0, 1.0, 0.0},
+                                                        {0.31, 0.79, 0.23},
+                                                        {-0.43, 0.27, -0.61},
+                                                        {0.69, -0.37, 0.11}};
+    for (const bool two_dimensional : {false, true})
+    {
+        librpa_int::PeriodicBoundaryData pbc;
+        // This is exactly the rectangular reciprocal lattice with spacings
+        // (1, .2, 1), expressed in the unreduced basis b2 = 3*b1 + (0,.2,0).
+        // Its y face needs integer coefficients (-3,1,0), outside +/-1.
+        pbc.G = Matrix3(1.0, 0.0, 0.0, 3.0, 0.2, 0.0, 0.0, 0.0, 1.0);
+        pbc.latvec = pbc.G.Inverse().Transpose();
+        const auto neighbors = librpa_int::rpa_headwing_gamma_cell_neighbors(pbc, two_dimensional);
+        require_double_close(qmax(neighbors, {0.0, 1.0, 0.0}), 0.1, 1e-13);
+        for (auto direction : directions)
+        {
+            if (two_dimensional) direction.z = 0.0;
+            double exact = std::numeric_limits<double>::infinity();
+            if (direction.x != 0.0) exact = std::min(exact, 0.5 / std::abs(direction.x));
+            if (direction.y != 0.0) exact = std::min(exact, 0.1 / std::abs(direction.y));
+            if (!two_dimensional && direction.z != 0.0)
+                exact = std::min(exact, 0.5 / std::abs(direction.z));
+            require_double_close(qmax(neighbors, direction), exact, 1e-12);
+        }
+        // Rotation changes Cartesian rows, not fractional lattice coordinates.
+        const double angle = 0.37, c = std::cos(angle), s = std::sin(angle);
+        const Matrix3 rotation(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
+        auto rotated = pbc;
+        rotated.G = pbc.G * rotation.Transpose();
+        rotated.latvec = rotated.G.Inverse().Transpose();
+        const auto rotated_neighbors =
+            librpa_int::rpa_headwing_gamma_cell_neighbors(rotated, two_dimensional);
+        for (auto direction : directions)
+        {
+            if (two_dimensional) direction.z = 0.0;
+            const Vector3_Order<double> target{rotation * direction};
+            require_double_close(qmax(rotated_neighbors, target), qmax(neighbors, direction),
+                                 1e-12);
+        }
+    }
+    librpa_int::PeriodicBoundaryData extreme;
+    extreme.G = Matrix3(1.0, 0.0, 0.0, 100000.0, 0.2, 0.0, 0.0, 0.0, 1.0);
+    bool rejected = false;
+    try
+    {
+        (void)librpa_int::rpa_headwing_gamma_cell_neighbors(extreme, true);
+    }
+    catch (const std::exception &)
+    {
+        rejected = true;
+    }
+    assert(rejected);  // Never silently approximate an oversized search.
 }
 
 void test_strict_2d_headwing_prefactors_use_inplane_area()
@@ -2068,8 +2299,10 @@ void test_headwing_wfc_restore_applies_time_reversal()
     const auto wfc_bz = librpa_int::rotate_headwing_wfc_to_kstar_member(
         ctx, member, layouts, atom_nw, {0.0, 0.0, 0.0}, wfc_ibz, nullptr);
 
-    assert_complex_close(wfc_bz(0, 0), std::conj(wfc_ibz(0, 0)) * std::complex<double>{0.25, 0.75},
-                         1e-12);
+    // For O=M^T, the antiunitary ket is conj(O X). Its density then
+    // transforms as conj(O) conj(P) O^T, matching the operator contract.
+    assert_complex_close(wfc_bz(0, 0),
+                         std::conj(wfc_ibz(0, 0) * std::complex<double>{0.25, 0.75}), 1e-12);
 }
 
 void test_headwing_velocity_restore_uses_inverse_spatial_route()
@@ -2446,6 +2679,9 @@ void test_ibz_soc_headwing_matches_complete_complex_bz(const BlacsCtxtHandler &b
                         frequencies, 2, 4, 1, 2, full_pbc, librpa_int::global::mpi_comm_global_h,
                         blacs_h);
         full.use_soc = true;
+        // These complete-grid coefficients, including the k+G sewing,
+        // use the same atomic Bloch frame as the IBZ coefficients.
+        full.set_symmetry_context(ctx);
         full.init(0.0, empty_vq);
         full.cal_head();
         std::vector<Matz> full_wing;
@@ -2474,7 +2710,8 @@ void test_ibz_soc_headwing_matches_complete_complex_bz(const BlacsCtxtHandler &b
             if (route == InputRoute::StarWeighted)
                 reduced.normalize_ibz_star_weighted_occupations();
             if (route == InputRoute::FullCache)
-                reduced.set_direct_full_bz_headwing_inputs(full_velocity, full_mf, {{0}, {1, 2}});
+                reduced.set_direct_full_bz_headwing_inputs(full_velocity, full_mf, {{0}, {1, 2}},
+                                                           full_pbc.kfrac_list);
             assert(reduced.has_direct_full_bz_headwing_inputs() ==
                    (route == InputRoute::FullCache));
             for (int source_ik = 0; source_ik != 2; ++source_ik)
@@ -2855,7 +3092,8 @@ void test_kblacs_transform_matches_original_transform(const BlacsCtxtHandler &bl
 
     auto original = df.transform_Cs2mnk(0, 0, Cs_IJ);
     auto kblacs = df.transform_Cs2mnk_kblacs(0, 0, Cs_IJ, kctx.blacs_h, kfrac[0]);
-    auto prefourier = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    auto prefourier =
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, targets[0].kfrac);
 
     assert(original.first.m() == kblacs.first.m());
     assert(original.first.n() == kblacs.first.n());
@@ -2887,7 +3125,7 @@ void test_kblacs_transform_matches_original_transform(const BlacsCtxtHandler &bl
     const auto real_override = df.transform_Cs2mnk_kblacs(
         0, 0, Cs_IJ, kctx.blacs_h, kfrac[0], &override_ptrs);
     const auto prefourier_override = df.transform_Cs2mnk_kblacs(
-        0, 0, 0, Cs_IJ_k, kctx.blacs_h, &override_ptrs);
+        0, 0, 0, Cs_IJ_k, kctx.blacs_h, targets[0].kfrac, &override_ptrs);
     int override_changed_local = 0;
     for (int i = 0; i != real_override.first.m_loc(); ++i)
     {
@@ -2958,7 +3196,7 @@ void test_kblacs_transform_uses_rectangular_opt_128_blocks()
         tensor_data);
 
     const auto transformed =
-        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0]);
     const auto &desc = transformed.first;
     const auto &matrix = transformed.second;
     assert(desc.m() == n_states && desc.n() == n_states);
@@ -3028,9 +3266,12 @@ void test_transform_Cs2mnk_can_keep_spin_channels_separate(const BlacsCtxtHandle
     const auto all_spin = df.transform_Cs2mnk(0, 0, Cs_IJ);
     const auto spin_up = df.transform_Cs2mnk(0, 0, Cs_IJ, 0);
     const auto spin_dn = df.transform_Cs2mnk(0, 0, Cs_IJ, 1);
-    const auto all_spin_k = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
-    const auto spin_up_k = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, nullptr, 0);
-    const auto spin_dn_k = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, nullptr, 1);
+    const auto all_spin_k =
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0]);
+    const auto spin_up_k =
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0], nullptr, 0);
+    const auto spin_dn_k =
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0], nullptr, 1);
 
     int spin_channels_differ_local = 0;
     for (int i = 0; i != all_spin.first.m_loc(); ++i)
@@ -3245,8 +3486,10 @@ void test_soc_charge_vertex_is_spin_trace_and_rotation_invariant(const BlacsCtxt
     const Matz expected = transpose(coefficients, true) * charge * coefficients;
     const auto world = df.transform_Cs2mnk(0, 0, Cs_IJ);
     const auto world_rotated = df_rotated.transform_Cs2mnk(0, 0, Cs_IJ);
-    const auto kblacs = df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
-    const auto kblacs_rotated = df_rotated.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h);
+    const auto kblacs =
+        df.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0]);
+    const auto kblacs_rotated =
+        df_rotated.transform_Cs2mnk_kblacs(0, 0, 0, Cs_IJ_k, kctx.blacs_h, kfrac[0]);
     double local_error = 0.0;
     const std::array<const char *, 4> route_names{"world", "world_SU2", "kBLACS", "kBLACS_SU2"};
     int route = 0;
@@ -4785,14 +5028,22 @@ void test_native_optical_uses_handler_communicator()
         {
             const auto &frequencies = ds->p_headwing->get_frequency_nodes();
             const auto &wings = ds->p_headwing->get_wing_auxiliary();
+            const auto &left_wings = ds->p_headwing->get_left_wing_auxiliary_adjoint();
             for (std::size_t iw = 0; iw != frequencies.size(); ++iw)
                 for (int axis = 0; axis != 3; ++axis)
                 {
-                    const auto v01 = std::complex<double>{0.0, -1.0} * dipole[axis];
-                    const auto expected = -4.0 * std::sqrt(4.0 * librpa_int::PI) *
-                                          (0.375 * scale) * v01 /
-                                          (1.0 + frequencies[iw] * frequencies[iw]);
-                    check(wings[iw](0, axis), expected);
+                    // Full ordered Lehmann response, using the native -i*r
+                    // head probe. These complex dipoles need not be reciprocal.
+                    const std::complex<double> z{0.0, frequencies[iw]};
+                    const auto h01 = std::complex<double>{0.0, -1.0} * dipole[axis];
+                    const auto h10 = std::complex<double>{0.0, -1.0} * std::conj(dipole[axis]);
+                    const double charge = 0.375 * scale;
+                    const auto right_chi =
+                        2.0 * charge * (std::conj(h01) / (z - 1.0) - std::conj(h10) / (z + 1.0));
+                    const auto left_chi = 2.0 * charge * (h01 / (z - 1.0) - h10 / (z + 1.0));
+                    check(wings[iw](0, axis), -std::sqrt(4.0 * librpa_int::PI) * right_chi);
+                    check(std::conj(left_wings[iw](0, axis)),
+                          -std::sqrt(4.0 * librpa_int::PI) * left_chi);
                 }
         };
         check_wing();
@@ -4806,10 +5057,10 @@ void test_native_optical_uses_handler_communicator()
             for (std::size_t iw = 0; iw != frequencies.size(); ++iw)
                 for (int beta = 0; beta != 3; ++beta)
                 {
-                    const auto expected = (axis == beta ? 1.0 : 0.0) +
-                                          16.0 * librpa_int::PI * std::conj(dipole[axis]) *
-                                              dipole[beta] /
-                                              (1.0 + frequencies[iw] * frequencies[iw]);
+                    const std::complex<double> z{0.0, frequencies[iw]};
+                    const auto chi = 2.0 * (dipole[axis] * std::conj(dipole[beta]) / (z - 1.0) -
+                                            std::conj(dipole[axis]) * dipole[beta] / (z + 1.0));
+                    const auto expected = (axis == beta ? 1.0 : 0.0) - 4.0 * librpa_int::PI * chi;
                     check(heads[iw](axis, beta), expected);
                 }
         }
@@ -4853,14 +5104,18 @@ void test_native_optical_uses_handler_communicator()
             const auto v01 = std::complex<double>{0.0, -1.0} * dipole[axis];
             check(packed(view.velocity_ri, axis * 4 + 1), v01);
             check(packed(view.velocity_ri, axis * 4 + 2), std::conj(v01));
-            const auto expected_wing = -4.0 * std::sqrt(4.0 * librpa_int::PI) * (0.375 * scale) *
-                                       v01 / (1.0 + frequency * frequency);
+            const std::complex<double> z{0.0, frequency};
+            const auto h01 = std::complex<double>{0.0, -1.0} * dipole[axis];
+            const auto h10 = std::complex<double>{0.0, -1.0} * std::conj(dipole[axis]);
+            const auto right_chi = 2.0 * (0.375 * scale) *
+                                     (std::conj(h01) / (z - 1.0) - std::conj(h10) / (z + 1.0));
+            const auto expected_wing = -std::sqrt(4.0 * librpa_int::PI) * right_chi;
             check(packed(view.wing_ri, iw * 3 + axis), expected_wing);
             for (int beta = 0; beta != 3; ++beta)
             {
-                const auto expected_head =
-                    (axis == beta ? 1.0 : 0.0) + 16.0 * librpa_int::PI * std::conj(dipole[axis]) *
-                                                     dipole[beta] / (1.0 + frequency * frequency);
+                const auto chi = 2.0 * (dipole[axis] * std::conj(dipole[beta]) / (z - 1.0) -
+                                       std::conj(dipole[axis]) * dipole[beta] / (z + 1.0));
+                const auto expected_head = (axis == beta ? 1.0 : 0.0) - 4.0 * librpa_int::PI * chi;
                 check(packed(view.head_ri, iw * 9 + axis * 3 + beta), expected_head);
             }
         }
@@ -4895,14 +5150,17 @@ int main(int argc, char *argv[])
         test_gamma_head_rank_one_matches_coulomb_basis_overwrite(blacs_h);
         test_gamma_head_rank_one_handles_empty_local_blocks(blacs_h);
         test_rspace_symmetry_requires_complete_band_space();
+        test_direct_dielectric_input_requires_matching_frequency_labels();
         test_qsgw_reconstruction_with_finite_reference_metric();
         test_qsgw_native_baseline_preserves_aliased_tail();
+        test_qsgw_pair_centered_images_preserve_soc_covariance();
         test_kpoint_coordinate_mapping_selects_active_klist_from_full_source();
         test_kstar_velocity_mapping_preserves_member_order_and_periodic_gauge();
         test_replace_rpa_response_head_only_keeps_numeric_wings(blacs_h);
         test_rpa_trace_log_average_uses_directional_head_and_wing();
         test_rpa_headwing_regular_body_start_channel();
         test_rpa_headwing_gamma_cell_volume_uses_reciprocal_lattice();
+        test_gamma_cell_neighbors_follow_reciprocal_rows_and_unreduced_basis();
         test_strict_2d_headwing_prefactors_use_inplane_area();
         test_strict_2d_auxiliary_normalization_is_computed_from_basis_metadata();
         test_strict_2d_gamma_cell_uses_physical_reciprocal_measure();

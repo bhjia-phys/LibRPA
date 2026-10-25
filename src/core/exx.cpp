@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <iterator>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -21,6 +22,7 @@
 #include "../math/utils_matrix_mpi.h"
 #include "../math/vector3_order.h"
 #include "../mpi/global_mpi.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/base_utility.h"
 #include "../utils/constants.h"
 #include "../utils/libri_utils.h"
@@ -28,6 +30,7 @@
 #include "symmetry_context.h"
 #include "../utils/utils_mem.h"
 #include "atomic_basis.h"
+#include "bloch_embedding.h"
 #include "meanfield_mpi.h"
 #include "geometry.h"
 #include "librpa_enums.h"
@@ -307,6 +310,7 @@ static void build_dmat_libri_kserial(
     const PeriodicBoundaryData &pbc,
     const SymmetryContext &symmetry_context,
     const bool use_symmetry_context,
+    const BlochEmbedding *embedding,
     const std::vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs,
     const bool save_cplx,
@@ -381,7 +385,8 @@ static void build_dmat_libri_kserial(
         const auto restored_check =
             restore_dmat_channel(R_check, &member_kfrac_targets, &full_grid_kstar_representatives);
         const auto direct_check =
-            mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R_check);
+            mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R_check,
+                               embedding);
         const auto diff = restored_check - direct_check;
         if (diff.get_max_abs() > restore_check_tol)
         {
@@ -400,7 +405,8 @@ static void build_dmat_libri_kserial(
                                        restore_symmetry_kstars_from_full_grid
                                            ? &full_grid_kstar_representatives
                                            : nullptr)
-                : mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R);
+                : mf.get_dmat_cplx_R(ispin, ispinor_bra, ispinor_ket, kfrac_list, R,
+                                      embedding);
         // global::ofs_myid << R << std::endl;
         // print_complex_matrix("dmat_cplx[R]", dmat_cplx, global::ofs_myid, true);
         omp_lock_t dmat_lock;
@@ -442,6 +448,7 @@ static void build_dmat_libri_kpara(
     const MpiCommHandler &comm_h,
     const AtomicBasis &atbasis_wfc,
     int ispin, int ispinor_bra, int ispinor_ket,
+    const BlochEmbedding *embedding,
     const std::vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs,
     const bool save_cplx,
@@ -461,7 +468,8 @@ static void build_dmat_libri_kpara(
     const int n_Rs_this = map_R_IJs.size();
     int n_Rs_max = n_Rs_this;
     MPI_Allreduce(MPI_IN_PLACE, &n_Rs_max, 1, MPI_INT, MPI_MAX, comm_h.comm);
-    const auto dmat_Rs_cplx = get_dmat_cplx_Rs_kpara(ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs_this, comm_h);
+    const auto dmat_Rs_cplx = get_dmat_cplx_Rs_kpara(
+        ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, Rs_this, comm_h, embedding);
     // global::ofs_myid << kfrac_list << std::endl;
     for (const auto &R_dmat_cplx: dmat_Rs_cplx)
     {
@@ -515,6 +523,7 @@ static void build_dmat_libri_kblacs_para(
     const PeriodicBoundaryData &pbc,
     const SymmetryContext &symmetry_context,
     const bool use_symmetry_context,
+    const BlochEmbedding *embedding,
     const std::vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<Vector3_Order<int>> Rs,
     const bool save_cplx,
@@ -561,7 +570,8 @@ static void build_dmat_libri_kblacs_para(
     else
     {
         dmat_Rs_cplx = get_dmat_cplx_Rs_kblacs_para(ispin, ispinor_bra, ispinor_ket, mf, kfrac_list,
-                                                    Rs, kblacs_ctxt, desc_wfc, desc_dm);
+                                                    Rs, kblacs_ctxt, desc_wfc, desc_dm,
+                                                    embedding);
     }
     // global::ofs_myid << kfrac_list << std::endl;
     for (auto &R_dmat_cplx: dmat_Rs_cplx)
@@ -675,6 +685,20 @@ void Exx::build(const LibrpaParallelRouting routing,
     const auto &ab_wfc = this->atbasis_wfc;
     const int n_atoms = ab_wfc.n_atoms;
     const auto &Rlist = this->pbc.Rlist;
+
+    // Keep raw input coefficients and their symmetry frame intact. Only the
+    // density work matrices entering the localized RI contraction are cell-frame.
+    std::optional<BlochEmbedding> embedding;
+    collective_all_stage(comm_h, "EXX atomic embedding frame", [&]
+    {
+        embedding.emplace(this->symmetry_context, this->atbasis_wfc);
+        if (!embedding->active()) return;
+        if (this->atbasis_wfc.nb_total != static_cast<size_t>(mf.get_n_aos()))
+            throw LIBRPA_INVALID_ARGUMENT("EXX atomic embedding basis differs from the mean field");
+        for (const auto &k : this->pbc.kfrac_list)
+            if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                throw LIBRPA_INVALID_ARGUMENT("EXX atomic embedding requires finite k points");
+    });
 
     // Use complex LibRI objects when 2-component wave function is used
     const bool use_complex_exx_r = n_spinor > 1 ? true : false;
@@ -1052,6 +1076,7 @@ void Exx::build(const LibrpaParallelRouting routing,
                                                  atbasis_wfc, isp, ispn_bra, ispn_ket,
                                                  this->pbc, this->symmetry_context,
                                                  this->use_symmetry_context,
+                                                 &*embedding,
                                                  this->pbc.kfrac_list, Rs, use_complex_exx_r,
                                                  dmat_libri, dmat_libri_cplx);
                 }
@@ -1060,6 +1085,7 @@ void Exx::build(const LibrpaParallelRouting routing,
                     build_dmat_libri_kserial(mf, atbasis_wfc, isp, ispn_bra, ispn_ket,
                                              this->pbc, this->symmetry_context,
                                              this->use_symmetry_context,
+                                             &*embedding,
                                              this->pbc.kfrac_list, dmat_IJRs_local,
                                              use_complex_exx_r, dmat_libri, dmat_libri_cplx);
                 }
@@ -1330,6 +1356,21 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
     const auto n_spinor = this->mf.get_n_spinor();
     const bool use_complex_exx_r = n_spinor > 1 ? true : false;
     const int n_target_kpoints = static_cast<int>(kfrac_target.size());
+    std::vector<std::vector<std::complex<double>>> target_embedding_phases;
+    collective_all_stage(comm_h, "EXX target atomic embedding frame", [&]
+    {
+        const BlochEmbedding embedding(this->symmetry_context, this->atbasis_wfc);
+        if (!embedding.active()) return;
+        if (this->atbasis_wfc.nb_total != static_cast<size_t>(n_aos))
+            throw LIBRPA_INVALID_ARGUMENT("EXX target embedding basis differs from the mean field");
+        target_embedding_phases.reserve(kfrac_target.size());
+        for (const auto &k : kfrac_target)
+        {
+            if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                throw LIBRPA_INVALID_ARGUMENT("EXX target atomic embedding requires finite k points");
+            target_embedding_phases.push_back(embedding.atom_phases(k));
+        }
+    });
     const bool use_klocal_rotation = is_mf_eigvec_k_distributed_;
     const bool target_is_band_path = source.rfind("band_", 0) == 0;
     const KPointBlacsParallelContext &target_kblacs_ctxt =
@@ -1730,6 +1771,14 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
                                             R_bvk, kfrac_ik, weight, exx_cplx.copy(), exx_ijk);
                                 }
                             }
+                            // The localized Fourier sum is H_cell(k). Embed it
+                            // once into the raw target AO frame before either
+                            // redistribution, matrix output or KS projection.
+                            if (!target_embedding_phases.empty())
+                            {
+                                const auto &phases = target_embedding_phases[task.ik];
+                                exx_ijk *= phases[task.I] * std::conj(phases[task.J]);
+                            }
                             fourier_results[static_cast<std::size_t>(itask)] = std::move(exx_ijk);
                         }
 
@@ -1911,10 +1960,14 @@ void Exx::build_KS_blacs(const std::map<int, std::map<int, std::map<int, Complex
                         Hexx_nao_nao.zero_out();
                         const auto& kfrac = kfrac_target[ik];
                         const std::function<complex<double>(const atom_t, const atom_t, const Vector3_Order<int> &)>
-                            fourier = [kfrac](const atom_t I, const atom_t J, const Vector3_Order<int> &R)
+                            fourier = [kfrac, ik, &target_embedding_phases](
+                                const atom_t I, const atom_t J, const Vector3_Order<int> &R)
                             {
                                 const auto ang = (kfrac * R) * TWO_PI;
-                                return complex<double>{std::cos(ang), std::sin(ang)};
+                                const complex<double> cell_phase{std::cos(ang), std::sin(ang)};
+                                if (target_embedding_phases.empty()) return cell_phase;
+                                const auto &phases = target_embedding_phases[ik];
+                                return cell_phase * phases[I] * std::conj(phases[J]);
                             };
                         if (use_complex_exx_r)
                             collect_block_from_IJ_storage_matrix_transform(Hexx_nao_nao, desc_nao_nao,

@@ -45,7 +45,7 @@ class TFGrids
         matrix costrans_f2t;
         //! Sine transformation matrix from (imaginary) time to frequency, i.e. lambda in Eq.7 of LiuP16
         matrix sintrans_t2f;
-        /*! Inverse Cosine transform matrix.
+        /*! Inverse sine transform matrix; populated only on explicit request.
          */
         matrix sintrans_f2t;
         //! General Fourier transformation matrix. Not implemented, maybe needed to for non-minimax grid approach
@@ -54,6 +54,7 @@ class TFGrids
         //! allocate the pointers of array, e.g. nodes and weights
         void set_freq();
         void set_time();
+        void unset_time();
         //! delete the pointers
         void unset();
     public:
@@ -76,7 +77,8 @@ class TFGrids
         const matrix &get_costrans_t2f() const { return costrans_t2f; }
         const matrix &get_sintrans_t2f() const { return sintrans_t2f; }
         const matrix &get_costrans_f2t() const { return costrans_f2t; }
-        const matrix &get_sintrans_f2t() const { return sintrans_f2t; }
+        const matrix &get_sintrans_f2t() const;
+        bool has_inverse_sine_transform() const { return sintrans_f2t.size > 0; }
         int get_time_index(const double &time) const;
         int get_freq_index(const double &freq) const;
         const std::pair<int, int> get_tf_index(const std::pair<double, double> &tf) const;
@@ -91,6 +93,9 @@ class TFGrids
                         double emin = -1, double eintveral = -1,
                         double emax = -1, double tmin = -1, double tinterval = -1,
                         double regulation = 0.0);
+        double generate(LibrpaTimeFreqGrid gtype, double emin, double eintveral,
+                        double emax, double tmin, double tinterval,
+                        double regulation, bool with_inverse_sine);
 
         //! Generate the even-spaced frequency grid
         void generate_evenspaced(double emin, double interval);
@@ -98,6 +103,7 @@ class TFGrids
         void generate_evenspaced_tf(double emin, double eintv, double tmin, double tintv);
         //! Generate the minimax time-frequency grid
         double generate_minimax(double emin, double emax, double regulation = 0.0);
+        double generate_minimax(double emin, double emax, double regulation, bool with_inverse_sine);
         //! Generate Gauss-Chebyshev quadrature of first kind on [0, infty)
         void generate_GaussChebyshevI();
         //! Generate Gauss-Chebyshev quadrature of second kind on [0, infty)

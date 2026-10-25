@@ -32,6 +32,17 @@ complete supplied state dimension for scalar, magnetic and SOC inputs.
 Correctness of the upstream self-energy and symmetry conventions remains
 an independent requirement.
 
+This statement describes assumptions of the retained formula, not covariance
+under arbitrary changes of state frame. Independent scalar Padé fits are
+nonlinear and need not commute with a dense unitary/sewing transformation.
+In the production fixed-reference task, matrix indices belong to the immutable
+initial KS frame while the diagonal target energies are the live sorted energies.
+After a nontrivial state rotation this is the retained Scheme-A prescription;
+it is not current-eigenframe staticization followed by rotation back. Neither
+qualification is removed by fit reuse or Hermitian completion. The
+[spinor self-energy audit](../symmetry/soc-self-energy-signed-time.md#boundaries-not-repaired-by-the-support-change)
+separates these method boundaries from signed-time contraction repairs.
+
 ## Pairwise evaluation
 
 For a diagonal entry, fit $P_{ii}$ once and return

@@ -42,6 +42,9 @@ struct SternheimerRpaHeadwingInput
     ComplexMatrix head;
     ComplexMatrix wing_mu;
     std::vector<SternheimerRpaAngularPoint> directions;
+    // Independent left wing in adjoint storage. Empty preserves the legacy
+    // reciprocal single-wing input contract; general producers must set it.
+    ComplexMatrix wing_mu_left_adjoint;
 };
 
 int sternheimer_headwing_frequency_index(int response_ifreq, int nfreq);

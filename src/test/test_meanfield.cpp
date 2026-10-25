@@ -90,6 +90,128 @@ void test_state_index_energy_bounds()
     assert(mf.get_min_state_above_energy(-4.0) == 0);
 }
 
+void test_transition_window_preserves_joint_permutations_and_energy_zero()
+{
+    using namespace librpa_int;
+    const std::array<double, 4> energies{-2.0, -1.5, -1.0, -0.5};
+    const std::array<std::array<int, 4>, 3> permutations{
+        {{0, 1, 2, 3}, {2, 0, 3, 1}, {1, 3, 0, 2}}};
+    const double pi = std::acos(-1.0);
+    const auto coefficient = [pi](int a, int n)
+    { return std::polar(0.5, 2.0 * pi * a * n / 4.0 + 0.17 * a); };
+    for (int mode : {1, 2, 4})
+    {
+        const int ns = mode == 2 ? 2 : 1, nspinor = mode == 4 ? 2 : 1;
+        const int nao = 4 / nspinor;
+        const double gamma = 0.5 * ns * nspinor;
+        for (const auto &permutation : permutations)
+            for (double shift : {0.0, 3.0, -1048576.0, 1048576.0})
+            {
+                MeanField mf(ns, 2, 4, nao, nspinor);
+                mf.get_efermi() = shift - 1.125;
+                for (int s = 0; s < ns; ++s)
+                    for (int k = 0; k < 2; ++k)
+                    {
+                        const double wk = k == 0 ? 0.25 : 0.75;
+                        for (int n = 0; n < 4; ++n)
+                        {
+                            const int p = permutation[n];
+                            mf.get_eigenvals()[s](k, n) =
+                                energies[p] + k * 0.0625 + s * 0.125 + shift;
+                            mf.get_weight()[s](k, n) = p < 2 ? wk * (mode == 1 ? 2.0 : 1.0) : 0.0;
+                        }
+                        for (int t = 0; t < nspinor; ++t)
+                        {
+                            auto &wfc = mf.get_eigenvectors()[s][t][k];
+                            wfc.create(4, nao);
+                            for (int n = 0; n < 4; ++n)
+                                for (int a = 0; a < nao; ++a)
+                                    wfc(n, a) = coefficient(a * nspinor + t, permutation[n]);
+                        }
+                    }
+                double emin, emax;
+                mf.get_E_min_max(emin, emax);
+                assert(std::abs(emin - (0.4375 - 0.125 * (ns - 1))) < 1e-13);
+                assert(std::abs(emax - (1.5625 + 0.125 * (ns - 1))) < 1e-13);
+                for (int s = 0; s < ns; ++s)
+                    for (int k = 0; k < 2; ++k)
+                        for (int t = 0; t < nspinor; ++t)
+                            for (int u = 0; u < nspinor; ++u)
+                            {
+                                const auto d = mf.get_dmat_cplx(s, t, u, k);
+                                const auto g = mf.get_gf_cplx_imagtime(s, t, u, k, -0.375);
+                                const double wk = k == 0 ? 0.25 : 0.75;
+                                for (int a = 0; a < nao; ++a)
+                                    for (int b = 0; b < nao; ++b)
+                                    {
+                                        std::complex<double> dref{}, gref{};
+                                        for (int p = 0; p < 2; ++p)
+                                        {
+                                            const auto projector =
+                                                coefficient(a * nspinor + t, p) *
+                                                std::conj(coefficient(b * nspinor + u, p));
+                                            const double weight =
+                                                gamma * wk * (mode == 1 ? 2.0 : 1.0);
+                                            dref += weight * projector;
+                                            gref -= weight *
+                                                    std::exp(0.375 * (energies[p] + k * 0.0625 +
+                                                                      s * 0.125 + 1.125)) *
+                                                    projector;
+                                        }
+                                        assert(std::abs(d(a, b) - dref) < 2e-13);
+                                        assert(std::abs(g(a, b) - gref) < 2e-13);
+                                    }
+                            }
+            }
+    }
+}
+
+void test_no_transition_sector_keeps_density_and_negative_gap_is_not_hidden()
+{
+    using namespace librpa_int;
+    for (int mode : {1, 2, 4})
+    {
+        const int ns = mode == 2 ? 2 : 1, nspinor = mode == 4 ? 2 : 1;
+        const int nao = 4 / nspinor;
+        for (bool occupied : {false, true})
+        {
+            MeanField mf(ns, 1, 4, nao, nspinor);
+            for (int s = 0; s < ns; ++s)
+                for (int n = 0; n < 4; ++n)
+                {
+                    mf.get_eigenvals()[s](0, n) = -2.0 + n * 0.5;
+                    mf.get_weight()[s](0, n) = occupied ? (mode == 1 ? 2.0 : 1.0) : 0.0;
+                }
+            for (int s = 0; s < ns; ++s)
+                for (int t = 0; t < nspinor; ++t)
+                {
+                    auto &wfc = mf.get_eigenvectors()[s][t][0];
+                    wfc.create(4, nao);
+                    for (int n = 0; n < 4; ++n)
+                        for (int a = 0; a < nao; ++a) wfc(n, a) = n == a * nspinor + t ? 1.0 : 0.0;
+                }
+            double emin, emax;
+            mf.get_E_min_max(emin, emax);
+            assert(emin == 0.0 && emax == 1.5);
+            double count = 0.0;
+            for (int s = 0; s < ns; ++s)
+                for (int t = 0; t < nspinor; ++t)
+                {
+                    const auto d = mf.get_dmat_cplx(s, t, t, 0);
+                    for (int a = 0; a < nao; ++a) count += d(a, a).real();
+                }
+            count *= mode == 1 ? 2.0 : 1.0;
+            assert(std::abs(count - (occupied ? 4.0 * ns * (mode == 1 ? 2.0 : 1.0) : 0.0)) < 1e-13);
+            if (!occupied)
+            {
+                for (int s = 0; s < ns; ++s)
+                    mf.get_weight()[s](0, 0) = mf.get_weight()[s](0, 2) = mode == 1 ? 2.0 : 1.0;
+                assert(mf.get_band_gap() == -0.5);
+            }
+        }
+    }
+}
+
 void test_find_highest_occupied_state()
 {
     using namespace librpa_int;
@@ -394,9 +516,14 @@ void test_symmetry_context_kstar_restored_dmat_uses_target_kpoint_gauge()
     const auto restored = get_symmetry_restored_dmat_cplx_R(
         ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, R, atom_nw, &target_kfrac_list);
 
-    const std::complex<double> expected_offdiag{0.25, -0.25};
+    // The second raw member has D01=1/2 at k=1/2. Sewing it to
+    // k=3/2 multiplies it by exp(-i*pi/2), while returning to cells
+    // multiplies it by exp(+i*3*pi/4). Their product is exp(+i*pi/4):
+    // D01(R=0) = (1 + exp(+i*pi/4))/4, independent of the chosen alias.
+    const auto expected_offdiag =
+        0.25 * (std::complex<double>{1.0, 0.0} + std::polar(1.0, std::acos(-1.0) / 4.0));
     if (std::abs(restored(0, 1) - expected_offdiag) > 1e-12)
-        throw std::runtime_error("ABACUS k-star restored density matrix ignored target k-point gauge");
+        throw std::runtime_error("k-star density did not sew the target alias into the cell frame");
 }
 
 //! Lock the spinor storage layout (Phase 0 convention C8):
@@ -650,15 +777,22 @@ void test_spinor_kstar_gf_restore_unitary_matches_scalar_with_gauge()
     star.members[1].k_bz = {0.5, 0.0, 0.0};
     ctx.kstars.push_back(star);
 
-    MeanField mf(1, 1, 1, 2, 2);
+    MeanField mf(1, 1, 2, 2, 2);
+    mf.get_efermi() = 0.0;
     mf.get_eigenvals()[0](0, 0) = -1.0;
+    mf.get_eigenvals()[0](0, 1) = 1.0;
+    mf.get_weight()[0](0, 1) = 0.0;
     mf.get_weight()[0](0, 0) = 1.0;
-    mf.get_eigenvectors()[0][0][0].create(1, 2);
-    mf.get_eigenvectors()[0][1][0].create(1, 2);
+    mf.get_eigenvectors()[0][0][0].create(2, 2);
+    mf.get_eigenvectors()[0][1][0].create(2, 2);
     mf.get_eigenvectors()[0][0][0](0, 0) = {std::sqrt(0.5), 0.0};
     mf.get_eigenvectors()[0][0][0](0, 1) = {std::sqrt(0.5), 0.0};
     mf.get_eigenvectors()[0][1][0](0, 0) = {0.0, 0.6};
     mf.get_eigenvectors()[0][1][0](0, 1) = {0.8, 0.0};
+    mf.get_eigenvectors()[0][0][0](1, 0) = {0.3, -0.4};
+    mf.get_eigenvectors()[0][0][0](1, 1) = {-0.2, 0.5};
+    mf.get_eigenvectors()[0][1][0](1, 0) = {0.6, 0.1};
+    mf.get_eigenvectors()[0][1][0](1, 1) = {0.2, -0.3};
 
     const std::vector<Vector3_Order<double>> kfrac_list{{0.0, 0.0, 0.0}};
     const std::vector<double> taus{0.25, -0.25};
@@ -680,6 +814,21 @@ void test_spinor_kstar_gf_restore_unitary_matches_scalar_with_gauge()
                 &blocks.b00, &blocks.b01, &blocks.b10, &blocks.b11};
             for (int s = 0; s != 4; ++s)
             {
+                // Independent cell-frame oracle: each raw member repeats the
+                // Gamma coefficients. The k=1/2 contribution has the Fourier
+                // phase exp(-i*pi*R_x) and pair dephasing exp(i*pi*(tau_j-tau_i)).
+                // Sewing k=1/2 to the requested 3/2 cancels out of this result.
+                const auto source = mf.get_gf_cplx_imagtime(0, s / 2, s % 2, 0, tau);
+                ComplexMatrix expected(2, 2);
+                const double centers[2] = {0.0, 0.25};
+                for (int i = 0; i != 2; ++i)
+                    for (int j = 0; j != 2; ++j)
+                    {
+                        const double angle = std::acos(-1.0) * (centers[j] - centers[i] - R.x);
+                        expected(i, j) = 0.5 * (1.0 + std::polar(1.0, angle)) * source(i, j);
+                    }
+                assert_complex_matrix_near(*channel_blocks[s], expected, 1e-12,
+                                           "spinor unitary GF vs independent cell-frame reference");
                 const auto scalar = get_symmetry_restored_gf_cplx_imagtimes_Rs(
                     ctx, wfc_layouts, mf, 0, s / 2, s % 2, kfrac_list, {tau}, {R},
                     atom_nw, std::vector<bool>{}, &member_kfrac_targets);
@@ -688,11 +837,10 @@ void test_spinor_kstar_gf_restore_unitary_matches_scalar_with_gauge()
             }
         }
     }
-    // off-diagonal channels must be genuinely non-zero, otherwise the
-    // comparison above is vacuous (tau > 0 is identically zero here because
-    // the single band is fully occupied; check the tau < 0 leg)
-    if (restored_spinor.at(taus[1]).at(Rs[0]).b01.get_max_abs() < 1e-3)
-        throw std::runtime_error("spinor unitary restore: off-diagonal block unexpectedly zero");
+    // Both time signs and the off-diagonal channels must remain nonzero.
+    for (const auto tau : taus)
+        if (restored_spinor.at(tau).at(Rs[0]).b01.get_max_abs() < 1e-3)
+            throw std::runtime_error("spinor unitary restore: off-diagonal block unexpectedly zero");
 }
 
 //! Phase 4: a pure-spin operation (U_s = sigma_x, identity spatial part) must
@@ -861,6 +1009,93 @@ void test_validate_kstar_band_cutoff_closure_rejects_degenerate_cut()
     validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{true, true, false});
     validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{});
     validate_kstar_band_cutoff_closure(ctx, mf, std::vector<bool>{true, true, true});
+}
+
+//! Joint E/C/f/mask permutations preserve density, G and the multiplet decision. Complex
+//! Kramers frames make a split-pair selection physically distinguishable from
+//! a closed pair; this is not merely a test of an exception string.
+void test_spinor_density_and_cutoff_are_independent_of_band_order()
+{
+    using namespace librpa_int;
+    MeanField sorted(1, 1, 4, 2, 2), permuted(1, 1, 4, 2, 2);
+    const std::array<int, 4> order{{0, 2, 1, 3}};
+    std::array<std::array<std::complex<double>, 4>, 4> c{};
+    for (int a = 0; a != 2; ++a)
+    {
+        const double angle = a ? .46 : .31, phase = a ? -.29 : .47;
+        c[2 * a][2 * a] = c[2 * a + 1][2 * a + 1] = std::cos(angle);
+        c[2 * a + 1][2 * a] = std::polar(std::sin(angle), phase);
+        c[2 * a][2 * a + 1] = -std::polar(std::sin(angle), -phase);
+    }
+    for (int variant = 0; variant != 2; ++variant)
+    {
+        auto &mf = variant ? permuted : sorted;
+        mf.get_efermi() = 0.;
+        for (int s = 0; s != 2; ++s)
+            mf.get_eigenvectors()[0][s][0].create(4, 2);
+        for (int n = 0; n != 4; ++n)
+        {
+            const int source = variant ? order[n] : n;
+            mf.get_eigenvals()[0](0, n) = source < 2 ? -1. : 1.;
+            mf.get_weight()[0](0, n) = source < 2 ? 1. : 0.;
+            for (int a = 0; a != 2; ++a)
+                for (int s = 0; s != 2; ++s)
+                    mf.get_eigenvectors()[0][s][0](n, a) = c[2 * a + s][source];
+        }
+    }
+    for (int s = 0; s != 2; ++s)
+        for (int t = 0; t != 2; ++t)
+        {
+            ComplexMatrix expected(2, 2);
+            for (int i = 0; i != 2; ++i)
+                for (int j = 0; j != 2; ++j)
+                    for (int n = 0; n != 2; ++n)
+                        expected(i, j) += c[2 * i + s][n] * std::conj(c[2 * j + t][n]);
+            assert_complex_matrix_near(sorted.get_dmat_cplx(0, s, t, 0), expected, 1e-14,
+                                       "sorted spinor density");
+            assert_complex_matrix_near(permuted.get_dmat_cplx(0, s, t, 0), expected, 1e-14,
+                                       "permuted spinor density");
+        }
+    SymmetryContext ctx;
+    for (const auto &selection : {std::vector<bool>{true, true, true, true},
+                                  std::vector<bool>{true, true, false, false},
+                                  std::vector<bool>{true, false, true, false}})
+    {
+        std::vector<bool> permuted_selection(4);
+        for (int n = 0; n != 4; ++n) permuted_selection[n] = selection[order[n]];
+        const bool closed = selection[0] == selection[1] && selection[2] == selection[3];
+        for (int variant = 0; variant != 2; ++variant)
+        {
+            bool rejected = false;
+            try
+            {
+                validate_kstar_band_cutoff_closure(ctx, variant ? permuted : sorted,
+                                                  variant ? permuted_selection : selection);
+            }
+            catch (const std::runtime_error &) { rejected = true; }
+            assert(rejected == !closed);
+        }
+        for (double tau : {-.7, .7})
+        {
+            ComplexMatrix g(4, 4);
+            for (int s = 0; s != 2; ++s)
+                for (int t = 0; t != 2; ++t)
+                {
+                    const auto a = sorted.get_gf_cplx_imagtime(0, s, t, 0, tau, selection);
+                    const auto b = permuted.get_gf_cplx_imagtime(0, s, t, 0, tau, permuted_selection);
+                    assert_complex_matrix_near(a, b, 1e-14, "joint band permutation");
+                    for (int i = 0; i != 2; ++i)
+                        for (int j = 0; j != 2; ++j) g(2 * i + s, 2 * j + t) = a(i, j);
+                }
+            double tr_error = 0.;
+            for (int i = 0; i != 4; ++i)
+                for (int j = 0; j != 4; ++j)
+                    tr_error = std::max(tr_error, std::abs(g(i, j)
+                        - (i % 2 ? -1. : 1.) * (j % 2 ? -1. : 1.)
+                        * std::conj(g(i ^ 1, j ^ 1))));
+            assert(closed ? tr_error < 1e-14 : tr_error > .1);
+        }
+    }
 }
 
 //! Phase 4: missing (bra, ket) wfc channels are zero-filled; with only the
@@ -1089,6 +1324,34 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     const auto member_kfrac_targets =
         build_symmetry_full_grid_kstar_member_kfrac_targets(ctx, kfrac_list);
 
+    // Independent reference: de-embed the explicitly supplied full-grid
+    // coefficients at their literal k=1/4 and 3/4 labels. For s=-1, eta=1,
+    // C_cell(k,I)=exp(-2*pi*i*k*tau_I) C_raw(k,I). This does not call the
+    // production embedding helper or a symmetry-restored density/G kernel.
+    MeanField cell_mf(1, 2, 2, 2, 2);
+    cell_mf.get_efermi() = mf.get_efermi();
+    const double centers[2] = {0.0, 0.2};
+    for (int ik = 0; ik != 2; ++ik)
+    {
+        for (int ib = 0; ib != 2; ++ib)
+        {
+            cell_mf.get_eigenvals()[0](ik, ib) = mf.get_eigenvals()[0](ik, ib);
+            cell_mf.get_weight()[0](ik, ib) = mf.get_weight()[0](ik, ib);
+        }
+        for (int spinor = 0; spinor != 2; ++spinor)
+        {
+            auto &coefficients = cell_mf.get_eigenvectors()[0][spinor][ik];
+            coefficients.create(2, 2);
+            for (int ib = 0; ib != 2; ++ib)
+                for (int ao = 0; ao != 2; ++ao)
+                {
+                    const double angle = -2.0 * std::acos(-1.0) * kfrac_list[ik].x * centers[ao];
+                    coefficients(ib, ao) = std::polar(1.0, angle)
+                        * mf.get_eigenvectors()[0][spinor][ik](ib, ao);
+                }
+        }
+    }
+
     for (const auto &R : Rs)
     {
         const auto restored = get_symmetry_restored_dmat_cplx_R_spinor(
@@ -1098,15 +1361,35 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
                                                   &restored.b11};
         for (int s = 0; s != 4; ++s)
         {
-            const auto direct = mf.get_dmat_cplx_R(0, s / 2, s % 2, kfrac_list, R);
+            const auto direct = cell_mf.get_dmat_cplx_R(0, s / 2, s % 2, kfrac_list, R);
             assert_complex_matrix_near(*channel_blocks[s], direct, 1e-12,
-                                       "spinor complex-U_s TR round trip vs direct full grid");
+                                       "spinor complex-U_s TR density vs full-grid cell reference");
         }
     }
 
+    // The same independently de-embedded coefficients fix both signs of G
+    // in all four channels, including the antiunitary spin mixing and alias.
+    const std::vector<double> taus{-0.3, 0.3};
+    const auto restored_gf = get_symmetry_restored_gf_cplx_imagtimes_Rs_spinor(
+        ctx, wfc_layouts, mf, 0, kfrac_list, taus, Rs, atom_nw, {},
+        &member_kfrac_targets, &representative_indices);
+    for (const auto tau : taus)
+        for (const auto &R : Rs)
+        {
+            const auto &blocks = restored_gf.at(tau).at(R);
+            const ComplexMatrix *channels[4] = {&blocks.b00, &blocks.b01, &blocks.b10, &blocks.b11};
+            for (int channel = 0; channel != 4; ++channel)
+            {
+                const auto expected = cell_mf.get_gf_cplx_imagtimes_Rs(
+                    0, channel / 2, channel % 2, kfrac_list, {tau}, {R});
+                assert_complex_matrix_near(*channels[channel], expected.at(tau).at(R), 1e-12,
+                                           "spinor complex-U_s TR GF vs full-grid cell reference");
+            }
+        }
+
     // off-diagonal channels must be genuinely non-zero, otherwise the
     // four-channel comparison above is vacuous
-    const auto direct01 = mf.get_dmat_cplx_R(0, 0, 1, kfrac_list, Rs.front());
+    const auto direct01 = cell_mf.get_dmat_cplx_R(0, 0, 1, kfrac_list, Rs.front());
     if (direct01.get_max_abs() < 1e-3)
         throw std::runtime_error("spinor dmat round trip: off-diagonal channel unexpectedly zero");
 
@@ -1116,7 +1399,7 @@ void test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip(
     const auto scalar00 =
         get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, 0, 0, kfrac_list, Rs.front(),
                                           atom_nw, &member_kfrac_targets, &representative_indices);
-    const auto direct00 = mf.get_dmat_cplx_R(0, 0, 0, kfrac_list, Rs.front());
+    const auto direct00 = cell_mf.get_dmat_cplx_R(0, 0, 0, kfrac_list, Rs.front());
     const auto scalar_diff = scalar00 - direct00;
     if (scalar_diff.get_max_abs() < 1e-8)
         throw std::runtime_error(
@@ -1351,6 +1634,17 @@ void test_spinor_kstar_dmat_restore_unitary_matches_scalar_with_gauge()
                                                   &restored_spinor.b10, &restored_spinor.b11};
         for (int s = 0; s != 4; ++s)
         {
+            const auto source = mf.get_dmat_cplx(0, s / 2, s % 2, 0);
+            ComplexMatrix expected(2, 2);
+            const double centers[2] = {0.0, 0.25};
+            for (int i = 0; i != 2; ++i)
+                for (int j = 0; j != 2; ++j)
+                {
+                    const double angle = std::acos(-1.0) * (centers[j] - centers[i] - R.x);
+                    expected(i, j) = 0.5 * (1.0 + std::polar(1.0, angle)) * source(i, j);
+                }
+            assert_complex_matrix_near(*channel_blocks[s], expected, 1e-12,
+                                       "spinor unitary density vs independent cell-frame reference");
             const auto scalar =
                 get_symmetry_restored_dmat_cplx_R(ctx, wfc_layouts, mf, 0, s / 2, s % 2, kfrac_list,
                                                   R, atom_nw, &member_kfrac_targets);
@@ -1372,6 +1666,8 @@ int main(int argc, char *argv[])
     test_BCC_He_gamma_minimal_basis_aims();
     test_gf_band_mask();
     test_state_index_energy_bounds();
+    test_transition_window_preserves_joint_permutations_and_energy_zero();
+    test_no_transition_sector_keeps_density_and_negative_gap_is_not_hidden();
     test_find_highest_occupied_state();
     test_dmat_cplx_Rs_matches_single_R_accumulation();
     test_symmetry_context_kstar_restored_dmat_uses_full_star_phases();
@@ -1384,6 +1680,7 @@ int main(int argc, char *argv[])
     test_spinor_kstar_gf_restore_pure_spin_average();
     test_spinor_kstar_gf_restore_tr_remap_at_gamma();
     test_validate_kstar_band_cutoff_closure_rejects_degenerate_cut();
+    test_spinor_density_and_cutoff_are_independent_of_band_order();
     test_spinor_kstar_gf_restore_zero_fills_missing_channels();
     test_spinor_kstar_dmat_restore_complex_us_antiunitary_full_grid_round_trip();
     test_spinor_kstar_dmat_restore_antiunitary_matches_kronecker_reference();

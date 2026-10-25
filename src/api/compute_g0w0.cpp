@@ -9,6 +9,7 @@
 #include <ostream>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Headers for API
@@ -29,6 +30,7 @@
 #include "../io/global_io.h"
 #include "../math/complexmatrix.h"
 #include "../math/utils_matrix_m_mpi.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/error.h"
 // #include "../utils/libri_utils.h"
@@ -382,12 +384,41 @@ void evaluate_spectral_function_diagonal(
     }
 }
 
+void refresh_sigc_projection_options(librpa_int::Dataset &ds, const LibrpaOptions &opts)
+{
+    auto &sigma = *ds.p_g0w0;
+    const bool retain_matrix = opts.output_gw_sigc_ks_mat_kf == LIBRPA_SWITCH_ON;
+    const bool output_ao = opts.output_gw_sigc_mat_kf == LIBRPA_SWITCH_ON;
+    if (sigma.output_sigc_ks_mat_kf != retain_matrix ||
+        sigma.istate_output_mat_start != opts.istate_output_mat_start ||
+        sigma.istate_output_mat_end != opts.istate_output_mat_end ||
+        (output_ao && (!sigma.output_sigc_mat_kf || sigma.output_dir != opts.output_dir)))
+    {
+        sigma.reset_kspace();
+        ds.is_band_calc_done = false;
+    }
+    sigma.output_dir = opts.output_dir;
+    sigma.output_sigc_mat_kf = output_ao;
+    sigma.output_sigc_ks_mat_kf = retain_matrix;
+    sigma.output_sigc_ks_kf = opts.output_gw_sigc_ks_kf == LIBRPA_SWITCH_ON;
+    sigma.output_sigc_mat_rt = opts.output_gw_sigc_mat_rt == LIBRPA_SWITCH_ON;
+    sigma.output_sigc_mat_rf = opts.output_gw_sigc_mat_rf == LIBRPA_SWITCH_ON;
+    sigma.output_wc_rf = opts.output_wc_rf == LIBRPA_SWITCH_ON;
+    sigma.output_wc_rf_atom_pair = opts.output_wc_rf_atom_pair == LIBRPA_SWITCH_ON;
+    sigma.istate_output_mat_start = opts.istate_output_mat_start;
+    sigma.istate_output_mat_end = opts.istate_output_mat_end;
+}
+
 void ensure_band_sigc_ks_blacs(librpa_int::Dataset &ds, const LibrpaOptions &opts,
                                const std::vector<int> &iks_output)
 {
+    // The existing projection wrapper emits requested band files. A numerical
+    // cache hit may skip it only when neither projection-time format is wanted;
+    // rebuilding the KS projection never rebuilds the real-space self-energy.
     if (ds.is_band_calc_done && ds.p_g0w0
         && ds.p_g0w0->sigc_kspace_source().rfind("band_", 0) == 0
-        && !ds.p_g0w0->sigc_diag_is_ik_f_KS.empty())
+        && !ds.p_g0w0->sigc_diag_is_ik_f_KS.empty()
+        && !ds.p_g0w0->output_sigc_ks_kf && !ds.p_g0w0->output_sigc_mat_kf)
     {
         return;
     }
@@ -403,6 +434,10 @@ void ensure_band_sigc_ks_blacs(librpa_int::Dataset &ds, const LibrpaOptions &opt
     if (use_band_kblacs_wfc)
     {
         ds.redistribute_band_eigvecs_kpara_2d();
+    }
+    else
+    {
+        ds.replicate_band_eigvecs();
     }
     ds.p_g0w0->build_sigc_matrix_KS_band_blacs(ds.mf_band.get_eigenvectors(),
                                                ds.kfrac_band_list,
@@ -427,16 +462,25 @@ collect_w_blacs_to_atom_pairs(
         &Wc_freq_q,
     const librpa_int::AtomicBasis &basis_aux,
     const librpa_int::ArrayDesc &desc_abf,
-    const librpa_int::MpiCommHandler &comm_h)
+    const librpa_int::MpiCommHandler &comm_h, const bool full_frequency_matrix)
 {
     using namespace librpa_int;
 
     if (!desc_abf.initialized())
         throw LIBRPA_RUNTIME_ERROR("Cannot collect Wc to atom pairs: ABF descriptor is not initialized");
 
-    const auto atpairs_local = dispatch_upper_triangular_tasks(
+    auto atpairs_local = dispatch_upper_triangular_tasks(
         basis_aux.n_atoms, desc_abf.myid(), desc_abf.nprows(), desc_abf.npcols(),
         desc_abf.myprow(), desc_abf.mypcol());
+
+    if (full_frequency_matrix)
+    {
+        // Co-own each ordered frequency block and its reverse so the later
+        // signed time inverse can use W(q,-iw)=W(q,+iw)^dagger locally.
+        const auto upper_pairs = atpairs_local;
+        for (const auto &pair : upper_pairs)
+            if (pair.first != pair.second) atpairs_local.emplace_back(pair.second, pair.first);
+    }
 
     std::pair<std::set<int>, std::set<int>> target_atoms;
     for (const auto &atom_pair : atpairs_local)
@@ -680,6 +724,7 @@ void librpa_int::api::build_gw_sigma_for_task(
     using librpa_int::global::lib_printf;
 
     auto* pds = &dataset;
+    pds->synchronize_input_changes(&opts);
     if (opts.option_dielect_func == 6)
         throw LIBRPA_RUNTIME_ERROR(
             "option_dielect_func = 6 is a standalone G0W0 driver preset; "
@@ -702,17 +747,27 @@ void librpa_int::api::build_gw_sigma_for_task(
 
     // Prepare time-frequency grids
     initialize_ds_tfgrids(*pds, opts);
-    if (opts.replace_w_head == LIBRPA_SWITCH_ON
-        && (opts.option_dielect_func == 0 || opts.option_dielect_func == 5)
-        && !pds->epsmacs_imagfreq.empty()
-        && pds->epsmacs_imagfreq.size() != pds->tfg.get_freq_nodes().size())
+    // Grid regeneration clears generated analytic output, not these supplied
+    // samples. Rebind the selected external input after the grid handoff.
+    if (opts.option_dielect_func != 3 && opts.option_dielect_func != 4 &&
+        opts.option_dielect_func != 53)
     {
-        throw LIBRPA_RUNTIME_ERROR(
-            "option_dielect_func=0 or 5 requires dielectric function data on the current "
-            "frequency grid: got " + std::to_string(pds->epsmacs_imagfreq.size()) +
-            " input points for " + std::to_string(pds->tfg.get_freq_nodes().size()) +
-            " target points. Regenerate dielecfunc_out for this grid or set "
-            "option_dielect_func to an interpolation/fitting mode.");
+        pds->omegas_imagfreq = pds->external_omegas_imagfreq;
+        pds->epsmacs_imagfreq = pds->external_epsmacs_imagfreq;
+    }
+
+    if (opts.replace_w_head == LIBRPA_SWITCH_ON &&
+        (opts.option_dielect_func == 0 || opts.option_dielect_func == 5))
+    {
+        // Reject incompatible supplied data collectively before expensive
+        // response/EXX work. Empty input retains the existing body-only route.
+        collective_all_stage(pds->comm_h, "Direct external dielectric grid", [&]
+        {
+            if (!pds->epsmacs_imagfreq.empty())
+                (void)interpolate_dielec_func(opts.option_dielect_func,
+                    pds->omegas_imagfreq, pds->epsmacs_imagfreq,
+                    pds->tfg.get_freq_nodes());
+        });
     }
 
     // Decide actual routing
@@ -732,13 +787,24 @@ void librpa_int::api::build_gw_sigma_for_task(
         else
             pds->redistribute_eigvecs_kpara();
     }
+    else
+    {
+        pds->replicate_eigvecs();
+    }
 
     auto ensure_exx = [&]()
     {
-        if (pds->p_exx) return;
+        if (pds->p_exx && pds->p_exx->is_rspace_built())
+        {
+            pds->p_exx->output_dir = opts.output_dir;
+            pds->p_exx->output_exx_mat_k = opts.output_exx_mat_k == LIBRPA_SWITCH_ON;
+            pds->p_exx->output_exx_mat_r = opts.output_exx_mat_r == LIBRPA_SWITCH_ON;
+            return;
+        }
 
         profiler.start("g0w0_exx", "Build exchange self-energy");
         initialize_ds_exx(*pds, opts);
+        auto candidate = std::move(pds->p_exx);
         const bool use_shrink_abfs = opts.use_shrink_abfs == LIBRPA_SWITCH_ON;
         const auto &basis_aux_exx = use_shrink_abfs ? pds->basis_aux_shrink : pds->basis_aux;
         const auto &cs_data_exx = use_shrink_abfs ? pds->cs_data_shrink : pds->cs_data;
@@ -751,7 +817,8 @@ void librpa_int::api::build_gw_sigma_for_task(
         profiler.stop("ft_vq_cut");
 
         profiler.start("g0w0_exx_real_work");
-        pds->p_exx->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
+        candidate->build(routing, basis_aux_exx, cs_data_exx, VR, coul_mat_is_replicated);
+        pds->p_exx = std::move(candidate);
         // pds->p_exx->build_KS_kgrid_blacs(pds->blacs_h);
         profiler.stop("g0w0_exx_real_work");
         profiler.stop("g0w0_exx");
@@ -778,7 +845,9 @@ void librpa_int::api::build_gw_sigma_for_task(
         ensure_exx();
         initialize_ds_g0w0(*pds, opts);
         const char *restart_from_dir = opts.restart_from_dir[0] ? opts.restart_from_dir : opts.output_dir;
-        pds->p_g0w0->read_sigc(restart_from_dir);
+        auto candidate = std::move(pds->p_g0w0);
+        candidate->read_sigc(restart_from_dir);
+        pds->p_g0w0 = std::move(candidate);
         profiler.stop("api_build_g0w0_sigma");
         return;
     }
@@ -925,7 +994,8 @@ void librpa_int::api::build_gw_sigma_for_task(
                        "Collect compressed Wc from BLACS to atom pairs");
         Wc_freq_q_atom_pair =
             collect_w_blacs_to_atom_pairs(Wc_freq_q, pds->basis_aux_shrink,
-                                          pds->desc_abf_shrink, pds->comm_h);
+                                          pds->desc_abf_shrink, pds->comm_h,
+                                          chi0.full_frequency_matrix());
         profiler.stop("collect_Wc_blacs_to_atom_pairs");
 
         Wc_freq_q.clear();
@@ -951,7 +1021,8 @@ void librpa_int::api::build_gw_sigma_for_task(
     initialize_ds_g0w0(*pds, opts);
     profiler.start("g0w0_sigc_IJ", "Build real-space correlation self-energy");
     // HACK: choice of space-time is hard-coded. May need to change when more approaches are implemented
-    pds->p_g0w0->build_spacetime(
+    auto candidate = std::move(pds->p_g0w0);
+    candidate->build_spacetime(
         routing, pds->basis_aux, pds->cs_data, Wc_freq_q, pds->desc_abf,
         use_shrink_abfs ? &Wc_freq_q_atom_pair : nullptr,
         use_shrink_abfs ? &pds->sinvS : nullptr,
@@ -962,6 +1033,7 @@ void librpa_int::api::build_gw_sigma_for_task(
             ? &(pds->eigvecs_kpara_2d_ready() ? pds->desc_wfc_kb
                                               : pds->desc_wfc_kb_full)
             : nullptr);
+    pds->p_g0w0 = std::move(candidate);
     profiler.stop("g0w0_sigc_IJ");
     release_free_mem();
 
@@ -977,6 +1049,7 @@ void librpa_get_g0w0_qpe_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, co
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
     i_state_low = std::max(0, i_state_low);
     i_state_high = std::min(pds->mf.get_n_states(), i_state_high);
@@ -988,7 +1061,8 @@ void librpa_get_g0w0_qpe_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, co
     if (i_state_high <= i_state_low) return;
     const int n_states_calc = i_state_high - i_state_low;
 
-    if (!pds->p_g0w0) librpa_build_g0w0_sigma(h, p_opts);
+    if (!pds->p_g0w0 || !pds->p_g0w0->is_rspace_built()) librpa_build_g0w0_sigma(h, p_opts);
+    refresh_sigc_projection_options(*pds, opts);
 
     profiler.start("api_get_g0w0_sigc_kgrid");
 
@@ -1001,6 +1075,7 @@ void librpa_get_g0w0_qpe_kgrid(LibrpaHandler *h, const LibrpaOptions *p_opts, co
     }
 
     profiler.start("g0w0_sigc_rotate_KS", "Correlation self-energy in K-S space");
+    if (opts.use_kpara_scf_eigvec != LIBRPA_SWITCH_ON) pds->replicate_eigvecs();
     pds->p_g0w0->build_sigc_matrix_KS_kgrid_blacs(pds->blacs_h, opts.use_gpu_replace_scalapack);
     pds->is_band_calc_done = false;
     profiler.stop("g0w0_sigc_rotate_KS");
@@ -1124,6 +1199,7 @@ void librpa_get_g0w0_spectral_function_kgrid(
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
     if (n_omegas < 0)
     {
@@ -1142,11 +1218,13 @@ void librpa_get_g0w0_spectral_function_kgrid(
     const int n_states_calc = i_state_high - i_state_low;
     validate_spectral_function_inputs(n_omegas, omegas, vxc, vexx, spectral_function);
 
-    if (!pds->p_g0w0) librpa_build_g0w0_sigma(h, p_opts);
+    if (!pds->p_g0w0 || !pds->p_g0w0->is_rspace_built()) librpa_build_g0w0_sigma(h, p_opts);
+    refresh_sigc_projection_options(*pds, opts);
 
     profiler.start("api_get_g0w0_spectral_function_kgrid");
 
     profiler.start("g0w0_sigc_rotate_KS", "Correlation self-energy in K-S space");
+    if (opts.use_kpara_scf_eigvec != LIBRPA_SWITCH_ON) pds->replicate_eigvecs();
     pds->p_g0w0->build_sigc_matrix_KS_kgrid_blacs(pds->blacs_h,
                                                   opts.use_gpu_replace_scalapack);
     pds->is_band_calc_done = false;
@@ -1187,6 +1265,7 @@ void librpa_get_g0w0_qpe_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, c
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
     if (!pds->is_band_data_set || pds->mf_band.get_n_spins() == 0)
         throw LIBRPA_RUNTIME_ERROR("Meanfield data for band calculation is not set");
@@ -1201,7 +1280,8 @@ void librpa_get_g0w0_qpe_band_k(LibrpaHandler *h, const LibrpaOptions *p_opts, c
     if (i_state_high <= i_state_low) return;
     const int n_states_calc = i_state_high - i_state_low;
 
-    if (!pds->p_g0w0) librpa_build_g0w0_sigma(h, p_opts);
+    if (!pds->p_g0w0 || !pds->p_g0w0->is_rspace_built()) librpa_build_g0w0_sigma(h, p_opts);
+    refresh_sigc_projection_options(*pds, opts);
 
     profiler.start("api_get_g0w0_sigc_band_k");
 
@@ -1344,6 +1424,7 @@ void librpa_get_g0w0_spectral_function_band_k(
 
     auto pds = librpa_int::api::get_dataset_instance(h);
     const auto &opts = *p_opts;
+    pds->synchronize_input_changes(&opts);
     initialize_ds_global_ddla(*pds, opts);
     if (n_omegas < 0)
     {
@@ -1366,7 +1447,8 @@ void librpa_get_g0w0_spectral_function_band_k(
     validate_spectral_function_inputs(n_omegas, omegas, vxc_band, vexx_band,
                                       spectral_function_band);
 
-    if (!pds->p_g0w0) librpa_build_g0w0_sigma(h, p_opts);
+    if (!pds->p_g0w0 || !pds->p_g0w0->is_rspace_built()) librpa_build_g0w0_sigma(h, p_opts);
+    refresh_sigc_projection_options(*pds, opts);
 
     profiler.start("api_get_g0w0_spectral_function_band_k");
 

@@ -27,6 +27,7 @@
 #include "../math/utils_matrix_m_mpi.h"
 #include "../math/utils_matrix_mpi.h"
 #include "../mpi/global_mpi.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/dev_options.h"
 #include "../utils/error.h"
@@ -41,6 +42,7 @@ using namespace ddla;
 #include "symmetry_context.h"
 #include "atom.h"
 #include "atomic_basis.h"
+#include "bloch_embedding.h"
 #include "chi0.h"
 #include "epsilon.h"
 #include "geometry.h"
@@ -993,7 +995,7 @@ static void build_gf_libri_kpara(
     const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<double> &taus,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs,
-    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri)
+    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri, const BlochEmbedding* embedding)
 {
     global::profiler.start("g0w0_build_gf_libri_kpara");
     std::map<Vector3_Order<int>, std::vector<atpair_t>> map_R_IJs;
@@ -1007,7 +1009,7 @@ static void build_gf_libri_kpara(
     const int n_Rs_this = map_R_IJs.size();
     int n_Rs_max = n_Rs_this;
     comm_h.allreduce(MPI_IN_PLACE, &n_Rs_max, 1, MPI_MAX);
-    auto gf_taus_Rs_cplx = get_gf_cplx_imagtimes_Rs_kpara(ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs_this, comm_h);
+    auto gf_taus_Rs_cplx = get_gf_cplx_imagtimes_Rs_kpara(ispin, ispinor_bra, ispinor_ket, mf, kfrac_list, taus, Rs_this, comm_h, {}, false, embedding);
     // global::ofs_myid << "gf_taus_Rs_cplx " << gf_taus_Rs_cplx << std::endl;
     for (const auto &tau_gf_R_cplx: gf_taus_Rs_cplx)
     {
@@ -1063,7 +1065,7 @@ static void build_gf_libri_kserial(
     const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<double> &taus,
     const std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs,
-    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri)
+    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri, const BlochEmbedding* embedding)
 {
     global::profiler.start("g0w0_build_gf_libri_kserial");
     std::set<Vector3_Order<int>> Rs_local;
@@ -1129,7 +1131,7 @@ static void build_gf_libri_kserial(
             restore_gf(tau_check, R_check).at(tau_check.front()).at(R_check.front());
         const auto direct_check =
             mf.get_gf_cplx_imagtimes_Rs(
-                  ispin, ispinor_bra, ispinor_ket, kfrac_list, tau_check, R_check)
+                  ispin, ispinor_bra, ispinor_ket, kfrac_list, tau_check, R_check, {}, false, embedding)
                 .at(tau_check.front()).at(R_check.front());
         const auto diff = restored_check - direct_check;
         if (diff.get_max_abs() > restore_check_tol)
@@ -1141,7 +1143,7 @@ static void build_gf_libri_kserial(
     auto gf = (restore_symmetry_kstars || restore_symmetry_kstars_from_full_grid)
                   ? restore_gf(taus, Rs_vec)
                   : mf.get_gf_cplx_imagtimes_Rs(ispin, ispinor_bra, ispinor_ket, kfrac_list, taus,
-                                                Rs_vec);
+                                                Rs_vec, {}, false, embedding);
     // global::ofs_myid << "gf " << gf << std::endl;
     tau_gf_libri.clear();
     // TODO: enable threading below
@@ -1202,7 +1204,7 @@ static void build_gf_libri_kblacs_para(
     const vector<Vector3_Order<double>> &kfrac_list,
     const std::vector<double> &taus,
     const std::vector<Vector3_Order<int>> &Rs,
-    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri)
+    std::map<double, std::map<int, std::map<std::pair<int,std::array<int,3>>,RI::Tensor<Tdata>>>> &tau_gf_libri, const BlochEmbedding* embedding)
 {
     global::profiler.start("g0w0_build_gf_libri_kblacs_para", LIBRPA_VERBOSE_DEBUG);
 
@@ -1241,7 +1243,7 @@ static void build_gf_libri_kblacs_para(
     {
         gf_taus_Rs_cplx =
             get_gf_cplx_imagtimes_Rs_kblacs_para(ispin, ispinor_bra, ispinor_ket, mf, kfrac_list,
-                                                 taus, Rs, kblacs_ctxt, desc_wfc, desc_gf);
+                                                 taus, Rs, kblacs_ctxt, desc_wfc, desc_gf, {}, false, embedding);
     }
 
     for (auto &tau_gf_R_cplx: gf_taus_Rs_cplx)
@@ -1394,6 +1396,27 @@ void G0W0::build_spacetime(
     using global::lib_printf_root;
     using global::ofs_myid;
 
+    BlochEmbedding wfc_embedding;
+    collective_all_stage(comm_h, "GW wavefunction atomic embedding", [&]
+    {
+        wfc_embedding = BlochEmbedding(symmetry_context, atbasis_wfc);
+        if (!wfc_embedding.active()) return;
+        if (atbasis_wfc.nb_total != static_cast<std::size_t>(mf.get_n_aos())
+            || pbc.kfrac_list.size() != static_cast<std::size_t>(mf.get_n_kpoints()))
+            throw LIBRPA_INVALID_ARGUMENT("GW atomic embedding has inconsistent AO/k dimensions");
+        for (const auto &k : pbc.kfrac_list)
+            if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                throw LIBRPA_INVALID_ARGUMENT("GW atomic embedding requires finite k points");
+        const int rows = is_eigvec_k_distributed_ ? desc_wfc.n_loc() : mf.get_n_bands();
+        const int cols = is_eigvec_k_distributed_ ? desc_wfc.m_loc() : mf.get_n_aos();
+        for (const auto &[spin, components] : mf.get_eigenvectors())
+            for (const auto &[component, samples] : components)
+                for (const auto &[ik, coefficients] : samples)
+                    if (ik < 0 || ik >= mf.get_n_kpoints()
+                        || coefficients.nr != rows || coefficients.nc != cols)
+                        throw LIBRPA_INVALID_ARGUMENT("GW atomic embedding has an inconsistent WFC block");
+    });
+
     if (parallel_routing != LIBRPA_ROUTING_LIBRI)
     {
         comm_h.barrier();
@@ -1433,6 +1456,8 @@ void G0W0::build_spacetime(
     throw LIBRPA_RUNTIME_ERROR("compilation");
 #else
     const bool use_atom_pair_Wc = Wc_freq_q_atom_pair != nullptr;
+    if (use_complex_tensor && !tfg.has_inverse_sine_transform())
+        throw LIBRPA_RUNTIME_ERROR("General SOC GW requires inverse-sine time grids");
 
     typedef std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>> dtensor_map;
     typedef std::map<int, std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<cplxdb>>> ztensor_map;
@@ -1486,15 +1511,16 @@ void G0W0::build_spacetime(
 
                 profiler.start("unfold_Wc_abfs", "Do shrink transformation");
                 unfold_helper.unfold_abfs_Wc_q(*sinvS, Wc_q, wc_qlist, *basis_aux_unfold,
-                                               *blacs_ctxt_h);
+                                               *blacs_ctxt_h, use_complex_tensor);
                 profiler.stop("unfold_Wc_abfs");
 
                 profiler.start("construct_Wc_freq_lower_half", "Construct Lower Half of Wc(q,w)");
-                complete_hermitian_Wc_q_blocks(Wc_q);
+                if (!use_complex_tensor) complete_hermitian_Wc_q_blocks(Wc_q);
                 profiler.stop("construct_Wc_freq_lower_half");
 
                 auto Wc_R = FT_Wc_q2R(comm_h, *basis_aux_unfold, symmetry_context, Wc_q, tfg, pbc,
-                                      pbc.Rlist, true, output_dir, restore_wc_symmetry);
+                                      pbc.Rlist, true, output_dir, restore_wc_symmetry,
+                                      use_complex_tensor);
                 if (output_wc_rf_atom_pair)
                     write_wc_rf_atom_blocks(Wc_R, pbc, output_dir, ifreq, freq);
                 else
@@ -1506,7 +1532,8 @@ void G0W0::build_spacetime(
 
         profiler.start("g0w0_build_spacetime_wt_ft_wc", "Tranform Wc (q,w) -> (q,t)");
         auto Wc_tau_q = CT_Wc_freq2time_q(comm_h, *basis_aux_compressed, *Wc_freq_q_atom_pair, tfg,
-                                          pbc.get_n_cells_bvk(), pbc.Rlist, wc_qlist);
+                                          pbc.get_n_cells_bvk(), pbc.Rlist, wc_qlist,
+                                          use_complex_tensor);
         Wc_freq_q_atom_pair->clear();
         release_free_mem();
         profiler.stop("g0w0_build_spacetime_wt_ft_wc");
@@ -1618,7 +1645,8 @@ void G0W0::build_spacetime(
             auto Wc_tau_R_blacs = CT_FT_Wc_freq_q(
                 comm_h, Wc_freq_q, pbc, tfg, true, output_wc_rf,
                 ifreq_output_wc_start, ifreq_output_wc_end, output_wc_rf_atom_pair,
-                output_dir, &ad_Wc, &atbasis_abf, &qpoint_view, &symmetry_context);
+                output_dir, &ad_Wc, &atbasis_abf, &qpoint_view, &symmetry_context,
+                use_complex_tensor);
             release_free_mem();
             profiler.stop("g0w0_build_spacetime_ct_ft_real_work");
             if (use_complex_tensor)
@@ -1793,7 +1821,21 @@ void G0W0::build_spacetime(
             {
                 n_obj_wc_libri += w.second.size();
             }
-            gw_libri_cplx.set_Ws(Wc_libri, this->libri_threshold_Wc);
+            gw_libri_cplx.set_Ws(Wc_libri, this->libri_threshold_Wc, "positive_tau");
+            // Unfolding and q->R conversion above have already returned W to
+            // the real parent-cell basis, where W(R,-tau)=W(R,+tau)*.
+            // Keep two named LibRI caches, prepared once per time point, rather
+            // than recommunicating W for every spinor Green-function channel.
+            ztensor_map negative_Wc;
+            for (const auto &[left, pairs] : Wc_libri)
+                for (const auto &[right_R, block] : pairs)
+                {
+                    RI::Tensor<cplxdb> conjugated(block.shape);
+                    for (std::size_t index = 0; index != block.get_shape_all(); ++index)
+                        conjugated.ptr()[index] = std::conj(block.ptr()[index]);
+                    negative_Wc[left][right_R] = std::move(conjugated);
+                }
+            gw_libri_cplx.set_Ws(negative_Wc, this->libri_threshold_Wc, "negative_tau");
             if (it != tau_Wc_libri_cplx.end()) tau_Wc_libri_cplx.erase(it);
         }
         else
@@ -1872,23 +1914,41 @@ void G0W0::build_spacetime(
                                                        auto block_scale_factor_,
                                                        auto make_freq_value_, size_t elem_size_)
                 {
-                    for (const auto &[I, J_R_sigc_posi] : sigc_posi_tau_in_)
+                    // The two signed-time contractions have independent sparse
+                    // supports. An absent block is zero, not a reason to discard
+                    // the other sign from the cosine/sine Fourier transform.
+                    using TensorMap = std::decay_t<decltype(sigc_posi_tau_in_)>;
+                    using PairMap = typename TensorMap::mapped_type;
+                    using Tensor = typename PairMap::mapped_type;
+                    std::map<typename TensorMap::key_type,
+                             std::set<typename PairMap::key_type>> block_keys;
+                    for (const auto *blocks : {&sigc_posi_tau_in_, &sigc_nega_tau_in_})
+                        for (const auto &[I, pairs] : *blocks)
+                            for (const auto &[JR, block] : pairs)
+                                block_keys[I].insert(JR);
+                    const auto find_block = [](const TensorMap &blocks, const auto I,
+                                               const auto &JR) -> const Tensor *
+                    {
+                        const auto atom = blocks.find(I);
+                        if (atom == blocks.end()) return nullptr;
+                        const auto pair = atom->second.find(JR);
+                        return pair == atom->second.end() ? nullptr : &pair->second;
+                    };
+                    for (const auto &[I, pairs] : block_keys)
                     {
                         const auto n_I = this->atbasis_wfc.get_atom_nb(I);
-
-                        auto it_nega_I = sigc_nega_tau_in_.find(I);
-                        if (it_nega_I == sigc_nega_tau_in_.cend()) continue;
-
-                        for (const auto &[JR, sigc_posi_block] : J_R_sigc_posi)
+                        for (const auto &JR : pairs)
                         {
                             const auto J = JR.first;
                             const auto n_J = this->atbasis_wfc.get_atom_nb(J);
                             const auto &Ra = JR.second;
-
-                            auto it_nega_JR = it_nega_I->second.find(JR);
-                            if (it_nega_JR == it_nega_I->second.cend()) continue;
-
-                            const auto &sigc_nega_block = it_nega_JR->second;
+                            const Tensor *positive = find_block(sigc_posi_tau_in_, I, JR);
+                            const Tensor *negative = find_block(sigc_nega_tau_in_, I, JR);
+                            Tensor zero;
+                            if (positive == nullptr || negative == nullptr)
+                                zero = Tensor((positive ? positive : negative)->shape);
+                            const auto &sigc_posi_block = positive ? *positive : zero;
+                            const auto &sigc_nega_block = negative ? *negative : zero;
 
                             const Vector3_Order<int> R{Ra[0], Ra[1], Ra[2]};
 
@@ -1995,7 +2055,7 @@ void G0W0::build_spacetime(
                                 mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, atbasis_wfc,
                                 ispin, ispinor_bra, ispinor_ket, this->pbc,
                                 this->symmetry_context, this->use_symmetry_context,
-                                this->pbc.kfrac_list, taus, Rs_gf, tau_gf_libri_cplx);
+                                this->pbc.kfrac_list, taus, Rs_gf, tau_gf_libri_cplx, &wfc_embedding);
                         }
                         else
                         {
@@ -2003,7 +2063,7 @@ void G0W0::build_spacetime(
                                                 this->symmetry_context,
                                                 this->use_symmetry_context,
                                                 this->pbc.kfrac_list,
-                                                taus, IJR_local_gf, tau_gf_libri_cplx);
+                                                taus, IJR_local_gf, tau_gf_libri_cplx, &wfc_embedding);
                         }
                     }
                     else
@@ -2013,13 +2073,13 @@ void G0W0::build_spacetime(
                                 mf, kblacs_ctxt, desc_wfc, desc_gf, sched_gf, atbasis_wfc,
                                 ispin, ispinor_bra, ispinor_ket, this->pbc,
                                 this->symmetry_context, this->use_symmetry_context,
-                                this->pbc.kfrac_list, taus, Rs_gf, tau_gf_libri);
+                                this->pbc.kfrac_list, taus, Rs_gf, tau_gf_libri, &wfc_embedding);
                         else
                             build_gf_libri_kserial(mf, atbasis_wfc, ispin, ispinor_bra, ispinor_ket, this->pbc,
                                                 this->symmetry_context,
                                                 this->use_symmetry_context,
                                                 this->pbc.kfrac_list,
-                                                taus, IJR_local_gf, tau_gf_libri);
+                                                taus, IJR_local_gf, tau_gf_libri, &wfc_embedding);
                     }
                     // if (itau == 0 && ispin == 0)  // debug
                     // {
@@ -2060,7 +2120,8 @@ void G0W0::build_spacetime(
                             comm_h.barrier();
                             global::profiler.stop("g0w0_cal_sigc_entry_wait");
                             global::profiler.start("g0w0_build_spacetime_5", "Call libRI cal_Sigc");
-                            gw_libri_cplx.cal_Sigmas();
+                            gw_libri_cplx.cal_Sigmas(
+                                {"", t > 0 ? "positive_tau" : "negative_tau", ""});
                             if (restore_input_sigc_output && !defer_spinor_sigc_restore)
                             {
                                 gw_libri_cplx.Sigmas =
@@ -2271,7 +2332,13 @@ void G0W0::build_spacetime(
             }
         }
         global::profiler.start("g0w0_build_spacetime_free_Ws");
-        gw_libri.free_Ws();
+        if (use_complex_tensor)
+        {
+            gw_libri_cplx.free_Ws("positive_tau");
+            gw_libri_cplx.free_Ws("negative_tau");
+        }
+        else
+            gw_libri.free_Ws();
         global::profiler.stop("g0w0_build_spacetime_free_Ws");
         // Release freed memory to OS, to resolve memory fragments in LibRI
         release_free_mem();
@@ -2309,6 +2376,18 @@ void G0W0::build_sigc_matrix_KS_blacs(const std::map<int, std::map<int, std::map
         global::lib_printf(LIBRPA_VERBOSE_WARN, "Warning: reset Sigmac_c k-space matrices\n");
         this->reset_kspace();
     }
+
+    BlochEmbedding embedding;
+    collective_all_stage(comm_h, "GW self-energy projection atomic embedding", [&]
+    {
+        embedding = BlochEmbedding(symmetry_context, atbasis_wfc);
+        if (!embedding.active()) return;
+        if (atbasis_wfc.nb_total != static_cast<std::size_t>(mf.get_n_aos()))
+            throw LIBRPA_INVALID_ARGUMENT("GW self-energy embedding has inconsistent AO dimensions");
+        for (const auto &k : kfrac_target)
+            if (!std::isfinite(k.x) || !std::isfinite(k.y) || !std::isfinite(k.z))
+                throw LIBRPA_INVALID_ARGUMENT("GW self-energy embedding requires finite target k points");
+    });
 
     const int n_aos = mf.get_n_aos();
     const int n_bands = mf.get_n_bands();
@@ -2695,6 +2774,8 @@ void G0W0::build_sigc_matrix_KS_blacs(const std::map<int, std::map<int, std::map
                                 sigc_nao_nao.zero_out();
                             else
                                 collect_sigc_nao_from_ijk(sigc_nao_nao, it_sigc_ik->second);
+                            embedding.apply_bilinear(sigc_nao_nao, desc_nao_nao,
+                                                       kfrac_target[ik], false);
                             if (this->output_sigc_mat_kf)
                             {
                                 const int ifreq = this->tfg.get_freq_index(freq);
@@ -2877,6 +2958,7 @@ void G0W0::build_sigc_matrix_KS_blacs(const std::map<int, std::map<int, std::map
                                 sigc_nao_nao, desc_nao_nao,
                                 this->atbasis_wfc, this->atbasis_wfc,
                                 fourier, sigc_isp_local.at(freq));
+                            embedding.apply_bilinear(sigc_nao_nao, desc_nao_nao, kfrac, false);
                             if (this->output_sigc_mat_kf)
                             {
                                 const int ifreq = this->tfg.get_freq_index(freq);

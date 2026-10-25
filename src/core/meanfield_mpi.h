@@ -48,26 +48,30 @@ void redistribute_meanfield_eigvecs_kblacs(
 // ==================================================================
 // Density matrix and green's function calculation, MPI parallel (over k-points) version
 // User should ensure that wave function at a certain k-point exists only on one MPI process
+// The optional embedding converts AO work products to the localized-cell frame
+// without changing the supplied wavefunctions or their raw symmetry frame.
 
 std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const MpiCommHandler &comm_h);
+    const MpiCommHandler &comm_h, const BlochEmbedding* embedding = nullptr);
 
 std::map<Vector3_Order<int>, ComplexMatrix> get_dmat_cplx_Rs_kpara(
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const MpiCommHandler &comm_h);
+    const MpiCommHandler &comm_h, const BlochEmbedding* embedding = nullptr);
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {});
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {}, bool zero_time_phase = false,
+    const BlochEmbedding* embedding = nullptr);
 
 std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagtimes_Rs_kpara(
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
-    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {});
+    const std::vector<Vector3_Order<int>> &Rs, const MpiCommHandler &comm_h, const std::vector<bool> &band_mask = {},
+    const BlochEmbedding* embedding = nullptr);
 
 // ==================================================================
 // Density matrix and green's function calculation, two-level parallel (over k-points and BLACS) version.
@@ -85,12 +89,14 @@ std::map<double, std::map<Vector3_Order<int>, ComplexMatrix>> get_gf_cplx_imagti
 std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm);
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const BlochEmbedding* embedding = nullptr);
 
 std::map<Vector3_Order<int>, Matz> get_dmat_cplx_Rs_kblacs_para(
     int ispin, const MeanField &mf,
     const std::vector<Vector3_Order<double>> &kfrac_list, const std::vector<Vector3_Order<int>> &Rs,
-    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm);
+    const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
+    const BlochEmbedding* embedding = nullptr);
 
 std::map<Vector3_Order<int>, Matz> get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
     int ispin, int ispinor_bra, int ispinor_ket, const MeanField &mf,
@@ -128,7 +134,8 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
-    const std::vector<bool> &band_mask = {});
+    const std::vector<bool> &band_mask = {}, bool zero_time_phase = false,
+    const BlochEmbedding* embedding = nullptr);
 
 std::map<double, std::map<Vector3_Order<int>, Matz>>
 get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
@@ -137,7 +144,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask = {});
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask = {}, bool zero_time_phase = false);
 
 /*!
  * @brief Four-channel spinor variant of
@@ -153,7 +160,8 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para(
  * are applied after the kernel as plain unitary re-gauging factors. The four
  * channels are packed into one communication buffer, so the reduce rounds
  * are unchanged from the scalar path. Missing (bra, ket) source blocks are
- * zero-filled.
+ * zero-filled. A band mask must retain complete degenerate multiplets, as
+ * in the replicated k-star builder; it is applied before spin/orbital rotation.
  */
 std::map<double, std::map<Vector3_Order<int>, SpinorBlocks4<Matz>>>
 get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
@@ -162,7 +170,7 @@ get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
     const SymmetryContext &symmetry_context, const PeriodicBoundaryData &pbc,
-    const AtomicBasis &atbasis_wfc);
+    const AtomicBasis &atbasis_wfc, const std::vector<bool> &band_mask = {}, bool zero_time_phase = false);
 
 /*!
  * @brief Extract one (bra, ket) channel out of a four-channel spinor GF map
@@ -178,6 +186,6 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> get_gf_cplx_imagtimes_Rs_kb
     const std::vector<Vector3_Order<double>> &kfrac_list, std::vector<double> imagtimes,
     const std::vector<Vector3_Order<int>> &Rs,
     const KPointBlacsParallelContext &kblacs_ctxt, const ArrayDesc &desc_wfc, const ArrayDesc &desc_dm,
-    const std::vector<bool> &band_mask = {});
+    const std::vector<bool> &band_mask = {}, const BlochEmbedding* embedding = nullptr);
 
 }  // namespace librpa_int

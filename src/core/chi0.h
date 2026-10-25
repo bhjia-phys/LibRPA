@@ -3,6 +3,7 @@
  @brief Utlities to compute the independent response function
  */
 #pragma once
+#include <array>
 #include <complex>
 #include <cstddef>
 #include <map>
@@ -16,6 +17,7 @@
 #include "../mpi/kpoint_blacs_parallel_context.h"
 #include "atom.h"
 #include "atomic_basis.h"
+#include "bloch_embedding.h"
 #include "symmetry_context.h"
 #include "meanfield.h"
 #include "pbc.h"
@@ -30,6 +32,15 @@ bool rspace_symmetry_has_complete_band_space(const MeanField &mf, int n_bands);
 using Chi0QMap =
     std::map<double, std::map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old>>;
 
+//! Distributed ordered atom blocks in the declared raw auxiliary q frame;
+//! no frequency quadrature or pole solve.
+struct Chi0TransitionGrams
+{
+    std::vector<Vector3_Order<double>> qpoints;
+    std::map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old> positive;
+    std::map<Vector3_Order<double>, atom_mapping<ComplexMatrix>::pair_t_old> negative;
+};
+
 //! Object to handle calculation of independent repsonse function (\f$\chi_0\f$)
 class Chi0
 {
@@ -39,6 +50,13 @@ public:
 
 private:
     BandSelection band_selection_;
+    //! Raw input stays in MeanField; these compact per-build frames act only
+    //! on Green/response work buffers at the localized RI boundary.
+    BlochEmbedding wfc_embedding_;
+    std::vector<std::vector<std::complex<double>>> wfc_embedding_phases_;
+    std::map<std::array<double, 3>, std::vector<std::complex<double>>> auxiliary_embedding_phases_;
+    bool transition_gram_mode_ = false;
+    Chi0TransitionGrams transition_grams_;
     bool is_mf_eigvec_k_distributed_;
     std::size_t gf_save;
     std::size_t gf_discard;
@@ -61,7 +79,9 @@ private:
     //! Indices of G_{IJ}(R) to build, local to process, used for LibRI routing
     std::vector<std::pair<atpair_t, Vector3_Order<int>>> IJRs_gf_local;
 
-    //! chi0 data in frequency domain and reciprocal space, [omega][q]
+    //! chi0 data in frequency domain and reciprocal space, [omega][q].
+    //! SOC stores every ordered atom block of the general positive-iw matrix;
+    //! scalar responses retain the legacy upper/Hermitian representation.
     Chi0QMap chi0_q;
     SymmetryQPointView qpoint_view_;
 
@@ -142,14 +162,31 @@ public:
          const ArrayDesc &desc_wfc_in, bool is_mf_eigvec_k_distributed,
          bool use_symmetry_context_in = true);
     ~Chi0() {};
-    //! Build the independent response function in q-omega domain for ABFs on the atom pairs atpair_ABF and q-vectors in qlist
+    //! Build the independent response in q-omega space. Input atom pairs use the
+    //! usual upper-pair ownership; SOC also returns each reversed pair on the
+    //! same rank. Neither opposite blocks nor atom-diagonal blocks may be
+    //! Hermitian-completed at positive frequency in the SOC representation.
+    //! Localized contractions use physical cell G/Cs; returned q blocks use
+    //! the declared raw auxiliary frame, including after raw-U compression.
     void build(LibrpaParallelRouting routing,
                const Cs_LRI &Cs,
                const std::vector<atpair_t> &atpair_ABF,
                const AtomicBasis &abf_Cs,
                std::map<Vector3_Order<double>, ComplexMatrix> &sinvS,
                const BlacsCtxtHandler &blacs_ctxt_h);
+    //! Exact one-sided zero-time body Grams, sharing the ordinary LibRI bubble.
+    //! Uses nonzero +/- bookkeeping labels with physical phase zero; never puts
+    //! +0 and -0 in the same std::map<double,...>. Returns every full-grid q.
+    //! Call on a fresh configured object: ordinary response data are not retained.
+    Chi0TransitionGrams build_transition_grams(
+        const Cs_LRI &Cs, const std::vector<atpair_t> &atpairs_ABF,
+        const AtomicBasis &abf_Cs,
+        std::map<Vector3_Order<double>, ComplexMatrix> &sinvS,
+        const BlacsCtxtHandler &blacs_ctxt_h);
     const Chi0QMap &get_chi0_q() const { return chi0_q; }
+    //! The complex spinor route retains both frequency-parity components.
+    //! This is an operator-storage contract, not a test for physical TR.
+    bool full_frequency_matrix() const noexcept { return mf.get_n_spinor() > 1 || transition_gram_mode_; }
     //! Collective setter. An empty outer table disables selection; an all-zero
     //! table builds zero response. Endpoint weights in [0,1] multiply both f and (1-f).
     void set_band_selection(const BandSelection &selection);
@@ -179,6 +216,12 @@ public:
         atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old &Wc_q,
         const std::vector<Vector3_Order<double>> &qlist, const AtomicBasis &abf_unfold,
         const BlacsCtxtHandler &blacs_ctxt_h);
+    // Full ordered frequency blocks require independent lower-triangle data.
+    void unfold_abfs_Wc_q(
+        std::map<Vector3_Order<double>, ComplexMatrix> &sinvS,
+        atom_mapping<std::map<Vector3_Order<double>, matrix_m<complex<double>>>>::pair_t_old &Wc_q,
+        const std::vector<Vector3_Order<double>> &qlist, const AtomicBasis &abf_unfold,
+        const BlacsCtxtHandler &blacs_ctxt_h, bool full_frequency);
 };
 
 }

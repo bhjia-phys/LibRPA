@@ -232,7 +232,29 @@ LibrpaQsgwTask* librpa_create_qsgw_task(LibrpaHandler* handler, const LibrpaOpti
             initialize_symmetry_context(*ds, rotations);
         },
         [ds](const LibrpaOptions& opts, const ResponseObserver& response)
-        { api::build_gw_sigma_for_task(*ds, opts, response); }});
+        { api::build_gw_sigma_for_task(*ds, opts, response); },
+        [ds]
+        {
+            ds->note_input_change(InputChange::Spectrum | InputChange::Occupations |
+                                  InputChange::ScfWavefunctions | InputChange::Band);
+        },
+        [ds]
+        {
+            ds->retain_optical_input();
+            if (ds->direct_full_bz_optical_input &&
+                ds->mf.get_n_kpoints() != ds->pbc.get_n_cells_bvk())
+                throw LIBRPA_RUNTIME_ERROR(
+                    "QSGW retained-IBZ direct full-BZ optical input requires current-frame "
+                    "transport; the supplied payload is retained and cannot be replaced by "
+                    "representative restoration");
+            ds->p_headwing.reset();
+            ds->optical_meanfield_input.reset();
+            ds->direct_full_bz_optical_input.reset();
+            ds->optical_meanfield_layout = OpticalMeanFieldLayout{};
+            ds->optical_input_frame_stale = false;
+            ds->note_input_change(InputChange::DirectOptical | InputChange::Velocity);
+        },
+        [ds](const LibrpaOptions& opts) { ds->synchronize_input_changes(&opts); }});
     result->task = std::make_unique<Task>(std::move(context), *options, std::move(input));
     return result.release();
 }

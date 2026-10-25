@@ -774,6 +774,27 @@ void Task::run()
 
     VelocityMatrix reference_velocity;
     const auto& ao_operators = input_.ao_operators;
+    std::vector<Vector3_Order<double>> ao_centers_fractional;
+    collective_all_stage(
+        dataset->comm_h, "QSGW localized AO centers",
+        [&]
+        {
+            const bool reconstruct_hr = controls_.qsgw_export_hamiltonian_for_pyatb ||
+                                        (update_head &&
+                                         controls_.qsgw_headwing_velocity == "current_hr");
+            if (!ao_operators || !reconstruct_hr) return;
+            if (!dataset->atoms.is_frac_set() ||
+                dataset->basis_wfc.nb_total != reference.get_n_aos())
+                throw LIBRPA_INVALID_ARGUMENT(
+                    "QSGW HR reconstruction needs matching fractional atomic centers");
+            for (int ao = 0; ao < reference.get_n_aos(); ++ao)
+            {
+                const auto& center =
+                    dataset->atoms.coords_frac.at(dataset->basis_wfc.get_i_atom(ao));
+                for (int spinor = 0; spinor < reference.get_n_spinor(); ++spinor)
+                    ao_centers_fractional.emplace_back(center.x, center.y, center.z);
+            }
+        });
     if (update_head && controls_.qsgw_headwing_velocity != "current_hr")
     {
         reference_velocity = dataset->velocity_matrix;
@@ -782,7 +803,7 @@ void Task::run()
             prepare_interband_velocity(reference_velocity, reference);
             if (!dataset->p_headwing)
                 throw LIBRPA_RUNTIME_ERROR("QSGW reference velocity frame is unavailable");
-            align_distributed_velocity_to_reference_wfc(dataset->p_headwing->get_meanfield_df(),
+            align_distributed_velocity_to_reference_wfc(static_cast<const diele_func&>(*dataset->p_headwing).get_meanfield_df(),
                                                         reference, reference_velocity,
                                                         dataset->comm_h);
         }
@@ -865,7 +886,8 @@ void Task::run()
         &dataset->pbc.period,
         &dataset->pbc.latvec,
         controls_.qsgw_update_hartree ? &*input_.hartree_coulomb_q0 : nullptr,
-        controls_.qsgw_update_hartree ? &*input_.hartree_cs_raw : nullptr};
+        controls_.qsgw_update_hartree ? &*input_.hartree_cs_raw : nullptr,
+        &ao_centers_fractional};
     int starting_iteration = 0;
     IterationSummary starting_summary;
     starting_summary.fermi_energy_ev = reference.get_efermi() * HA2EV;
@@ -1138,7 +1160,7 @@ void Task::run()
             {
                 const auto exported = reconstruct_qsgw_hamiltonian(
                     reference, hamiltonian, *ao_operators, dataset->pbc.kfrac_list,
-                    dataset->pbc.period, dataset->pbc.latvec);
+                    dataset->pbc.period, dataset->pbc.latvec, ao_centers_fractional);
                 for (int spin = 0; spin < reference.get_n_spins(); ++spin)
                 {
                     output_hamiltonian(OutputKind::Hamiltonian, exported.hamiltonian.at(spin),
@@ -1199,6 +1221,10 @@ void Task::run()
                                  });
         if (update_head)
         {
+            collective_all_stage(dataset->comm_h, "QSGW optical input selection", [&]
+            {
+                if (dataset->select_live_optical_input) dataset->select_live_optical_input();
+            });
             std::optional<LiveVelocityResult> live_velocity;
             collective_all_stage(
                 dataset->comm_h, "QSGW live head/wing velocity",
@@ -1213,7 +1239,7 @@ void Task::run()
                             starting_iteration == 0 && iteration == 1 ? reference_hamiltonian
                                                                       : current_hamiltonian,
                             *ao_operators, dataset->pbc.kfrac_list, dataset->pbc.period,
-                            dataset->pbc.latvec);
+                            dataset->pbc.latvec, ao_centers_fractional);
                         dataset->velocity_matrix = std::move(velocity.velocity);
                         if (dataset->comm_h.is_root())
                             lib_printf(
@@ -1489,6 +1515,7 @@ void Task::run()
         // This is a Hartree contraction only; it does not perform another GW build.
         evaluate_hartree();
         report_hartree(iteration, "updated");
+        if (dataset->note_meanfield_updated) dataset->note_meanfield_updated();
         // Tracking is cheap and independent of the requested U-output interval.
         // The saved parent belongs to this updated state, also on restart.
         if (extension_) extension_->state_updated(*dataset, iteration);
@@ -1573,9 +1600,13 @@ void Task::run()
         if (converged) break;
     }
 
+    // The last response belongs to the entering state, while live E/C/f now
+    // belong to the last diagonalization. Prepare the selected final velocity
+    // and invalidate old derived objects without another chi/W/Sigma build.
+    prepare_optical_state(completed_iterations + 1, false, false);
+    if (dataset->synchronize_input_state) dataset->synchronize_input_state(opts);
     if (extension_)
     {
-        prepare_optical_state(completed_iterations + 1, false, false);
         extension_->evaluate_final(*dataset, opts, completed_iterations);
         collective_root_stage(dataset->comm_h, "QSGW final numerical trace",
                               [&] { flush_traces(true); });

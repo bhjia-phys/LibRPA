@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../mpi/base_mpi.h"
+#include "atomic_basis.h"
 #include "librpa_input.h"
 #include "meanfield.h"
 #include "pbc.h"
@@ -23,5 +24,6 @@ struct NativeVelocityResult
 NativeVelocityResult build_native_velocity(const MeanField &mf, const PeriodicBoundaryData &pbc,
                                            const MpiCommHandler &comm,
                                            const LibrpaNativeVelocityInput *root_input,
-                                           const SymmetryContext *symmetry = nullptr);
+                                           const SymmetryContext *symmetry = nullptr,
+                                           const AtomicBasis *basis_wfc = nullptr);
 }  // namespace librpa_int

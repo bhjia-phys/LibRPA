@@ -83,6 +83,8 @@ class Exx
             bool is_mf_eigvec_k_distributed,
             bool use_symmetry_context_in = true);
 
+        bool is_rspace_built() const { return is_rspace_built_; }
+
         //! Build and store the real-space exchange matrix
         void build(const LibrpaParallelRouting routing,
                    const AtomicBasis &atbasis_abf, const Cs_LRI &Cs,

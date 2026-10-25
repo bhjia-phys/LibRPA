@@ -637,7 +637,8 @@ static MeanField build_two_atom_full_bz_meanfield_from_kstar(
     return mf_full;
 }
 
-static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(bool masked = false, bool exclude_lowest = false)
+static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(
+    bool masked = false, bool exclude_lowest = false, bool permute_bands = false)
 {
     if (size_global < 2) return;
 
@@ -656,7 +657,7 @@ static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(bool maske
     MeanField mf_full = build_two_atom_full_bz_meanfield_from_kstar(ctx, wfc_layouts, atom_nw);
     const auto expected_dmat_R0 = mf_full.get_dmat_cplx_R(0, 0, 0, kfrac_full, Rs.front());
     const auto expected_dmat_R1 = mf_full.get_dmat_cplx_R(0, 0, 0, kfrac_full, Rs.back());
-    const std::vector<bool> mask{!exclude_lowest, !masked};
+    std::vector<bool> mask{!exclude_lowest, !masked};
     const auto expected_gf =
         mf_full.get_gf_cplx_imagtimes_Rs(0, 0, 0, kfrac_full, taus, Rs, mask);
 
@@ -674,6 +675,14 @@ static void test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(bool maske
     if (context.kpoint_blacs_root_global_rank(0) == myid_global)
     {
         set_two_atom_reduced_kstar_meanfield(mf);
+    }
+    if (permute_bands)
+    {
+        std::swap(mf.get_eigenvals()[0](0, 0), mf.get_eigenvals()[0](0, 1));
+        std::swap(mf.get_weight()[0](0, 0), mf.get_weight()[0](0, 1));
+        if (auto *wfc = mf.find_wfc(0, 0, 0))
+            for (int a = 0; a != 2; ++a) std::swap((*wfc)(0, a), (*wfc)(1, a));
+        std::reverse(mask.begin(), mask.end());
     }
 
     const auto actual_dmat = get_symmetry_restored_dmat_cplx_Rs_kblacs_para(
@@ -968,6 +977,173 @@ static void test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore()
         }
 }
 
+// The cutoff keeps whole Kramers pairs of an exactly time-reversal-covariant
+// complex spinor model. This checks the retained projector and both signs of
+// imaginary time against an explicit spectral sum, independently of restoration.
+static void test_gf_kblacs_spinor_closed_band_cutoff()
+{
+    auto ctx = build_gamma_tr_spinor_kstar_context();
+    ctx.kstars[0].k_ibz = {0.25, 0, 0};
+    ctx.kstars[0].members[0].k_bz = {0.25, 0, 0};
+    ctx.kstars[0].members[1].k_bz = {-0.25, 0, 0};
+    AtomicBasis basis({2});
+    basis.set_l_shells({{0, 0}});
+    PeriodicBoundaryData pbc;
+    const std::vector<Vector3_Order<double>> ks{{0.25, 0, 0}};
+    const std::vector<Vector3_Order<int>> Rs{{0, 0, 0}, {1, 0, 0}};
+    const std::vector<double> taus{-0.25, 0.25};
+    MeanField ref(1, 1, 4, 2, 2);
+    ref.get_efermi() = 0;
+    for (int b = 0; b < 4; ++b)
+    {
+        ref.get_eigenvals()[0](0, b) = b < 2 ? -1 : 1;
+        ref.get_weight()[0](0, b) = b < 2 ? 1 : 0;
+    }
+    for (int s = 0; s < 2; ++s) ref.get_eigenvectors()[0][s][0].create(4, 2);
+    const double c = std::cos(0.31), s = std::sin(0.31);
+    auto &up = ref.get_eigenvectors()[0][0][0];
+    auto &dn = ref.get_eigenvectors()[0][1][0];
+    up(0, 0) = c;
+    dn(0, 1) = cplxdb{0, s};
+    dn(1, 0) = c;
+    up(1, 1) = cplxdb{0, s};
+    up(2, 0) = s;
+    dn(2, 1) = cplxdb{0, -c};
+    dn(3, 0) = s;
+    up(3, 1) = cplxdb{0, -c};
+    ComplexMatrix vectors(4, 4), theta(4, 4);
+    for (int a = 0; a < 2; ++a)
+    {
+        theta(a, a + 2) = 1;
+        theta(a + 2, a) = -1;
+        for (int b = 0; b < 4; ++b)
+        {
+            vectors(a, b) = up(b, a);
+            vectors(a + 2, b) = dn(b, a);
+        }
+    }
+    ComplexMatrix identity(4, 4);
+    identity.set_as_identity_matrix();
+    assert((transpose(vectors, true) * vectors - identity).get_max_abs() < 1e-14);
+
+    KPointBlacsParallelContext context(KPointBlacsProcessShape(1, size_global, false),
+                                       MPI_COMM_WORLD, 1);
+    const auto dw = context.create_array_desc(2, 4, 2, 4);
+    const auto dg = context.create_array_desc(2, 2, 2, 2);
+    MeanField mf(1, 1, 4, 2, 2);
+    mf.get_efermi() = 0;
+    mf.get_eigenvals() = ref.get_eigenvals();
+    mf.get_weight() = ref.get_weight();
+    if (context.kpoint_blacs_root_global_rank(0) == myid_global)
+        for (int component = 0; component < 2; ++component)
+            mf.get_eigenvectors()[0][component][0] = ref.get_eigenvectors()[0][component][0];
+
+    // Explicit full-BZ input uses physical weights 1/2; reduced input above
+    // uses its whole-star weight 1. The eigenvectors are k independent.
+    const std::vector<Vector3_Order<double>> full_ks{{0.25, 0, 0}, {-0.25, 0, 0}};
+    KPointBlacsParallelContext full_context(KPointBlacsProcessShape(1, size_global, false),
+                                            MPI_COMM_WORLD, 2);
+    const auto full_dw = full_context.create_array_desc(2, 4, 2, 4);
+    const auto full_dg = full_context.create_array_desc(2, 2, 2, 2);
+    MeanField full_mf(1, 2, 4, 2, 2);
+    full_mf.get_efermi() = 0;
+    for (int k = 0; k < 2; ++k)
+    {
+        for (int band = 0; band < 4; ++band)
+        {
+            full_mf.get_eigenvals()[0](k, band) = ref.get_eigenvals()[0](0, band);
+            full_mf.get_weight()[0](k, band) = 0.5 * ref.get_weight()[0](0, band);
+        }
+        if (full_context.kpoint_blacs_root_global_rank(k) == myid_global)
+            for (int component = 0; component < 2; ++component)
+                full_mf.get_eigenvectors()[0][component][k] =
+                    ref.get_eigenvectors()[0][component][0];
+    }
+
+    for (const std::vector<bool> &mask :
+         {std::vector<bool>{}, std::vector<bool>{true, true, false, false},
+          std::vector<bool>{false, false, true, true}})
+    {
+        ComplexMatrix projector(4, 4);
+        for (int b = 0; b < 4; ++b)
+            if (mask.empty() || mask[b])
+                for (int i = 0; i < 4; ++i)
+                    for (int j = 0; j < 4; ++j)
+                        projector(i, j) += vectors(i, b) * std::conj(vectors(j, b));
+        assert((projector - theta * conj(projector) * transpose(theta, true)).get_max_abs() <
+               1e-14);
+        const auto restored = get_symmetry_restored_gf_cplx_imagtimes_Rs_kblacs_para_spinor(
+            0, mf, ks, taus, Rs, context, dw, dg, ctx, pbc, basis, mask);
+        for (int bra = 0; bra < 2; ++bra)
+            for (int ket = 0; ket < 2; ++ket)
+            {
+                const auto direct = get_gf_cplx_imagtimes_Rs_kblacs_para(
+                    0, bra, ket, full_mf, full_ks, taus, Rs, full_context, full_dw, full_dg, mask);
+                for (const double tau : taus)
+                    for (const auto &R : Rs)
+                    {
+                        const auto &all = restored.at(tau).at(R);
+                        const Matz *blocks[4]{&all.b00, &all.b01, &all.b10, &all.b11};
+                        for (int j = 0; j < dg.n_loc(); ++j)
+                            for (int i = 0; i < dg.m_loc(); ++i)
+                            {
+                                const int row = 2 * bra + dg.indx_l2g_r(i);
+                                const int col = 2 * ket + dg.indx_l2g_c(j);
+                                cplxdb exact = 0;
+                                for (int b = 0; b < 4; ++b)
+                                    if ((mask.empty() || mask[b]) && ((tau < 0) == (b < 2)))
+                                        exact += (tau > 0 ? 1 : -1) * std::exp(-std::abs(tau)) *
+                                                 vectors(row, b) * std::conj(vectors(col, b)) *
+                                                 std::cos(0.5 * std::acos(-1.0) * R.x);
+                                assert(std::abs((*blocks[2 * bra + ket])(i, j) - exact) < 1e-12);
+                                assert(std::abs(direct.at(tau).at(R)(i, j) - exact) < 1e-12);
+                            }
+                    }
+            }
+    }
+    // Same complete occupied projector, including after moving one occupied
+    // column past an empty column. The original vectors remain the oracle.
+    for (const bool permuted : {false, true})
+    {
+        if (permuted)
+            for (MeanField *state : {&mf, &full_mf})
+                for (int k = 0; k != state->get_n_kpoints(); ++k)
+                {
+                    std::swap(state->get_eigenvals()[0](k, 1), state->get_eigenvals()[0](k, 2));
+                    std::swap(state->get_weight()[0](k, 1), state->get_weight()[0](k, 2));
+                    for (int component = 0; component != 2; ++component)
+                        if (auto *wfc = state->find_wfc(0, component, k))
+                            for (int a = 0; a != 2; ++a)
+                                std::swap((*wfc)(1, a), (*wfc)(2, a));
+                }
+        const auto restored_density = get_symmetry_restored_dmat_cplx_Rs_kblacs_para_spinor(
+            0, mf, ks, Rs, context, dw, dg, ctx, pbc, basis);
+        for (int bra = 0; bra != 2; ++bra)
+            for (int ket = 0; ket != 2; ++ket)
+            {
+                const auto direct_density = get_dmat_cplx_Rs_kblacs_para(
+                    0, bra, ket, full_mf, full_ks, Rs, full_context, full_dw, full_dg);
+                for (const auto &R : Rs)
+                {
+                    const auto &all = restored_density.at(R);
+                    const Matz *blocks[4]{&all.b00, &all.b01, &all.b10, &all.b11};
+                    for (int j = 0; j != dg.n_loc(); ++j)
+                        for (int i = 0; i != dg.m_loc(); ++i)
+                        {
+                            const int row = 2 * bra + dg.indx_l2g_r(i);
+                            const int col = 2 * ket + dg.indx_l2g_c(j);
+                            cplxdb exact = 0;
+                            for (int b = 0; b != 2; ++b)
+                                exact += vectors(row, b) * std::conj(vectors(col, b)) *
+                                         std::cos(0.5 * std::acos(-1.0) * R.x);
+                            assert(std::abs((*blocks[2 * bra + ket])(i, j) - exact) < 1e-12);
+                            assert(std::abs(direct_density.at(R)(i, j) - exact) < 1e-12);
+                        }
+                }
+            }
+    }
+}
+
 static void test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore()
 {
     if (size_global < 2) return;
@@ -1085,7 +1261,9 @@ int main (int argc, char *argv[])
     test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier();
     test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(true);
     test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(false, true);
+    test_dmat_gf_kblacs_reduced_kstar_matches_full_bz_fourier(false, false, true);
     test_gf_kblacs_reduced_kstar_spinor_matches_serial_restore();
+    test_gf_kblacs_spinor_closed_band_cutoff();
     test_dmat_kblacs_reduced_kstar_spinor_matches_serial_restore();
 
 #if defined(LIBRPA_USE_CUDA) || defined(LIBRPA_USE_HIP)

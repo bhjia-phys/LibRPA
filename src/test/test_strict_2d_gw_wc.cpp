@@ -65,7 +65,7 @@ Matz collect_response(const Chi0 &response, double frequency, const Vector3_Orde
     return result;
 }
 
-void check_matrix(const Matz &actual, const Matz &expected)
+double check_matrix(const Matz &actual, const Matz &expected)
 {
     double error = 0.0;
     for (std::size_t i = 0; i != actual.size(); ++i)
@@ -83,6 +83,57 @@ void check_matrix(const Matz &actual, const Matz &expected)
                           << " expected=" << expected(i, j) << '\n';
     }
     assert(error < 1e-10);
+    return error;
+}
+
+// Independent finite-q dielectric inversion and radial integration. No native
+// Schur or strict-2D radial-integration helper enters this oracle.
+Matz direct_directional_average(const Matz &body, const Matz &head, const Matz &right,
+                                const Matz &left_adjoint, const Matz &regular_root,
+                                const std::vector<double> &qx, const std::vector<double> &qy,
+                                const std::vector<double> &weights,
+                                const std::vector<double> &qmax, const double area)
+{
+    constexpr double nodes[] = {0.18343464249564980494, 0.52553240991632898582,
+                                0.79666647741362673959, 0.96028985649753623168};
+    constexpr double radial_weights[] = {0.36268378337836198297, 0.31370664587788728734,
+                                         0.22238103445337447054, 0.10122853629037625915};
+    const int n = body.nr() + 1;
+    Matz average(n, n, MAJOR::COL);
+    for (std::size_t angle = 0; angle != qx.size(); ++angle)
+        for (int radial = 0; radial != 4; ++radial)
+            for (double sign : {-1., 1.})
+            {
+                const double q = .5 * qmax[angle] * (1. + sign * nodes[radial]);
+                const double measure = weights[angle] * .5 * qmax[angle] *
+                                       radial_weights[radial] * q / area;
+                const double direction[3] = {qx[angle], qy[angle], 0.};
+                Matz epsilon(n, n, MAJOR::COL), legs(n, n, MAJOR::COL);
+                epsilon(0, 0) = 1.;
+                legs(0, 0) = std::sqrt(TWO_PI / q);
+                for (int alpha = 0; alpha != 3; ++alpha)
+                    for (int beta = 0; beta != 3; ++beta)
+                        epsilon(0, 0) += q * direction[alpha] * direction[beta] *
+                                         (head(alpha, beta) - (alpha == beta ? 1. : 0.));
+                for (int i = 1; i != n; ++i)
+                {
+                    for (int alpha = 0; alpha != 3; ++alpha)
+                    {
+                        epsilon(i, 0) += std::sqrt(q) * right(i - 1, alpha) * direction[alpha];
+                        epsilon(0, i) += std::sqrt(q) * std::conj(left_adjoint(i - 1, alpha)) *
+                                         direction[alpha];
+                    }
+                    for (int j = 1; j != n; ++j)
+                    {
+                        epsilon(i, j) = body(i - 1, j - 1);
+                        legs(i, j) = regular_root(i - 1, j - 1);
+                    }
+                }
+                auto response = inverse(epsilon);
+                for (int i = 0; i != n; ++i) response(i, i) -= 1.;
+                average += (legs * response * legs) * measure;
+            }
+    return average;
 }
 
 void test_complete_wc(const BlacsCtxtHandler &blacs_h, const Matz &rotation, bool use_cholesky)
@@ -188,6 +239,21 @@ void test_complete_wc(const BlacsCtxtHandler &blacs_h, const Matz &rotation, boo
         auto wing = collect_matrix(reference.get_rpa_chi0v_wing(f), desc_wing);
         wing *= -1.0;
         assert(wing.absmax() > 1e-6);
+        // Independent ordered-pair relation for this fixture: both the
+        // charge transition c and velocity v are real, and Delta=1. The
+        // -i*r head vertex gives right proportional to
+        //   c*v/Delta * [1/(Delta-iw) - 1/(Delta+iw)],
+        // while left-adjoint has the reversed denominators. Thus
+        // left-adjoint=-right, not right. Each wing is purely imaginary.
+        // The former expected Schur assumed a Hermitian mixed response and
+        // used the wrong sign for its quadratic wing contribution.
+        auto left_adjoint = wing * -1.0;
+        auto native_left_adjoint = collect_matrix(
+            reference.get_rpa_chi0v_left_wing_adjoint(f), desc_wing);
+        native_left_adjoint *= -1.0;
+        check_matrix(native_left_adjoint, left_adjoint);
+        for (std::size_t i = 0; i != wing.size(); ++i)
+            assert(std::abs(wing.ptr()[i].real()) < 1e-12);
         // The velocity inputs fix y/x = 1.5 and z = 0 independently of the
         // auxiliary basis. This detects a wrong Cartesian block distribution.
         for (int i = 0; i != nbody; ++i)
@@ -212,10 +278,24 @@ void test_complete_wc(const BlacsCtxtHandler &blacs_h, const Matz &rotation, boo
                     for (int j = 0; j != nbody; ++j) body(i, j) = coulomb_epsilon(i + 1, j + 1);
                 const auto body_inv = inverse(body);
                 const auto bw = body_inv * wing;
-                const auto wb = wing.get_transpose(true) * body_inv;
-                const auto lind = head - wing.get_transpose(true) * bw;
+                const auto wb = left_adjoint.get_transpose(true) * body_inv;
+                const auto lind = head - left_adjoint.get_transpose(true) * bw;
                 auto wc = strict_2d_average_wc_coulomb_basis(body_inv, bw, wb, lind, regular_root,
                                                              qx, qy, weights, qmax, gamma_area);
+                if (f == 0 && !use_cholesky)
+                {
+                    Matz direct(naux, naux, MAJOR::COL);
+                    if (blacs_h.myid == 0)
+                        direct = direct_directional_average(body, head, wing, left_adjoint,
+                                                             regular_root, qx, qy, weights,
+                                                             qmax, gamma_area);
+                    MPI_Bcast(direct.ptr(), direct.size(), MPI_CXX_DOUBLE_COMPLEX, 0,
+                              blacs_h.comm());
+                    const double direct_error = check_matrix(wc, direct);
+                    if (blacs_h.myid == 0)
+                        std::cout << "strict-2D full dielectric radial oracle error: "
+                                  << direct_error << std::endl;
+                }
                 wc = strict_2d_transform_pw_wc_to_auxiliary_basis(
                     wc, reference.get_strict_2d_pw_to_auxiliary_scale());
                 expected[frequencies[f]][q] = rotation * wc * rotation.get_transpose(true);
@@ -235,12 +315,17 @@ void test_complete_wc(const BlacsCtxtHandler &blacs_h, const Matz &rotation, boo
         compute_Wc_freq_q_blacs(response, coulomb_blocks, wc_coulomb_blocks, 0.0, true, 3, epsmac,
                                 &headwing, blacs_h, desc, false, ".", use_cholesky);
     assert(actual.size() == frequencies.size());
+    double production_error = 0.0;
     for (const auto &frequency : expected)
     {
         assert(actual.at(frequency.first).size() == pbc.klist_coul.size());
         for (const auto &q : frequency.second)
-            check_matrix(collect_matrix(actual.at(frequency.first).at(q.first), desc), q.second);
+            production_error = std::max(production_error, check_matrix(
+                collect_matrix(actual.at(frequency.first).at(q.first), desc), q.second));
     }
+    if (blacs_h.myid == 0)
+        std::cout << "strict-2D native Wc oracle error: " << production_error
+                  << " Cholesky=" << use_cholesky << std::endl;
 }
 }  // namespace
 

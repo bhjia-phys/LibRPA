@@ -32,6 +32,14 @@ std::vector<double> compute_gamma_s_head_vector(
     const AtomicBasis &basis, const matrix_m<std::complex<double>> &coulomb,
     const ArrayDesc *desc = nullptr);
 
+// Optical callers reserve column0 for the largest Coulomb mode and trailing
+// columns for filtered modes. Normalize backend ordering without changing the
+// generic ascending eigensolver contract or the reconstructed matrix power.
+void order_optical_coulomb_eigensystem(
+    matrix_m<std::complex<double>> &vectors,
+    matrix_m<std::complex<double>> &scaled_vectors, const ArrayDesc &desc,
+    double *eigenvalues);
+
 struct CorrEnergy
 {
     enum type { RPA, MP2 };
@@ -97,7 +105,9 @@ std::map<Vector3_Order<double>, Matz> restore_symmetry_dense_wq_map(
     const SymmetryQPointView &qpoint_view, const SymmetryContext &symmetry_context,
     const AtomicBasis &atbasis_Wc, const ArrayDesc &ad_Wc);
 
-//! Fourier transform screened Coulomb in q-space to R-space, but still in frequency domain
+//! Fourier transform raw reciprocal W into the localized-cell R frame.
+//! A declared atomic embedding requires atbasis_Wc/ad_Wc. Symmetry restoration
+//! and reciprocal sewing act in the raw frame before de-embedding each sample.
 std::map<double, std::map<Vector3_Order<int>, Matz>> FT_Wc_freq_q(
     const MpiCommHandler &comm_h,
     std::map<double, std::map<Vector3_Order<double>, Matz>> &Wc_freq_q,
@@ -116,7 +126,8 @@ std::map<double, std::map<Vector3_Order<int>, Matz>> CT_FT_Wc_freq_q(
     const std::string &output_dir = ".", const ArrayDesc *ad_Wc = nullptr,
     const AtomicBasis *atbasis_Wc = nullptr,
     const SymmetryQPointView *qpoint_view = nullptr,
-    const SymmetryContext *symmetry_context = nullptr);
+    const SymmetryContext *symmetry_context = nullptr,
+    bool signed_frequency = false);
 
 //! Dense Wc(q,iw) -> real Wc(R,tau), consuming Wc_freq_q.
 std::map<double, std::map<Vector3_Order<int>, Matd>> CT_FT_Wc_freq_q_real(
@@ -131,6 +142,7 @@ std::map<double, std::map<Vector3_Order<int>, Matd>> CT_FT_Wc_freq_q_real(
 // @brief Fourier transform screened Coulomb Wc(q,w) -> Wc(R,w) -> W(R,t)
 // @details transform step by step to output Wc_freq_R, and return full atom-pair matrix
 // @attention CT_FT_Wc_freq_q only return upper atom-pair, but final Wc_libri should be same
+// An optional context declares raw embedded input; the default is cell input.
 std::map<double, atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old>
 CT_FT_Wc_q2R_freq2time(
     const MpiCommHandler &comm_h,
@@ -139,7 +151,7 @@ CT_FT_Wc_q2R_freq2time(
         atom_mapping<std::map<Vector3_Order<double>, matrix_m<cplxdb>>>::pair_t_old>
         &Wc_freq_q,  // upper atom-pair input
     const TFGrids &tfg, const PeriodicBoundaryData &pbc, const std::vector<Vector3_Order<int>> &Rlist,
-    const std::string &output_dir);
+    const std::string &output_dir, const SymmetryContext *symmetry_context = nullptr);
 
 /// @brief Wc(q,w) -> Wc(q,t)
 std::map<double, atom_mapping<std::map<Vector3_Order<double>, matrix_m<std::complex<double>>>>::pair_t_old>
@@ -150,9 +162,9 @@ CT_Wc_freq2time_q(
               atom_mapping<std::map<Vector3_Order<double>, matrix_m<cplxdb>>>::pair_t_old>
         &Wc_freq_q,
     const TFGrids &tfg, const int &n_kpoints, const std::vector<Vector3_Order<int>> &Rlist,
-    const std::vector<Vector3_Order<double>> &qlist);
+    const std::vector<Vector3_Order<double>> &qlist, bool signed_frequency = false);
 
-/// @brief Wc(q,w) -> Wc(R,w) or Wc(q,t) -> W(R,t)
+/// @brief Raw Wc(q,w) -> cell Wc(R,w), or raw Wc(q,t) -> cell W(R,t).
 atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old FT_Wc_q2R(
     const MpiCommHandler &comm_h,
     const AtomicBasis &atbasis_abf,
@@ -162,6 +174,15 @@ atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair
     const TFGrids &tfg, const PeriodicBoundaryData &pbc, const std::vector<Vector3_Order<int>> &Rlist, const bool is_freq,
     const std::string &output_dir,
     bool use_symmetry_context = true);
+
+/// Full positive-frequency matrices use dynamic antiunitary transport.
+atom_mapping<std::map<Vector3_Order<int>, matrix_m<std::complex<double>>>>::pair_t_old FT_Wc_q2R(
+    const MpiCommHandler &comm_h, const AtomicBasis &atbasis_abf,
+    const SymmetryContext &symmetry_context,
+    const atom_mapping<std::map<Vector3_Order<double>, matrix_m<cplxdb>>>::pair_t_old &Wc_q,
+    const TFGrids &tfg, const PeriodicBoundaryData &pbc,
+    const std::vector<Vector3_Order<int>> &Rlist, bool is_freq,
+    const std::string &output_dir, bool use_symmetry_context, bool full_frequency);
 
 ComplexMatrix compute_Pi_freq_q_row_ri(const AtomicBasis &atbasis_abf, const Vector3_Order<double> &ik_vec, const atom_mapping<ComplexMatrix>::pair_t_old &chi0_freq_q, const atpair_k_cplx_mat_t &Vq_loc, const std::vector<atpair_t> &local_atpair, const int &I, const Vector3_Order<double> &q);
 ComplexMatrix compute_Pi_freq_q_row(const AtomicBasis &atbasis_abf, const Vector3_Order<double> &ik_vec,
