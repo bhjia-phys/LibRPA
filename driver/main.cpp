@@ -17,6 +17,7 @@
 #include "../src/utils/profiler.h"
 #include "../src/utils/utils_mem.h"
 #include "../src/io/fs.h"
+#include "../src/mpi/collective_stage.h"
 // #include "task_qsgw.h"
 // #include "task_qsgwA.h"
 // #include "task_hf_band.h"
@@ -196,6 +197,21 @@ int main(int argc, char **argv)
 
         // Initialize LibRPA global environment and handler
         initialize_librpa(librpa_initialized);
+
+        collective_all_stage(
+            mpi_comm_global_h, "Hartree driver input routing",
+            [&]
+            {
+                if (task != task_t::Hartree &&
+                    !(task == task_t::QSGW && driver_params.qsgw_update_hartree))
+                    return;
+                if (driver::opts.parallel_routing == LIBRPA_ROUTING_AUTO)
+                    driver::opts.parallel_routing = LIBRPA_ROUTING_LIBRI;
+                if (driver::opts.parallel_routing != LIBRPA_ROUTING_LIBRI)
+                    throw std::runtime_error(
+                        "Hartree evaluation requires parallel_routing=libri (or auto); rtau and "
+                        "atompair do not supply the complete directed LibRI coefficients");
+            });
 
         // Echo input file runtime options.
         profiler.start("driver_read_params", "Driver Read Input Parameters");

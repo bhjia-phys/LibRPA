@@ -50,6 +50,11 @@ using librpa::reader::check_coulomb_file_binary;
 using librpa::reader::detect_coulomb_reader_version;
 size_t read_Vq_full(const std::string &dir_path, const std::string &vq_fprefix, bool is_cut_coulomb,
                     int reader_version = 0, bool use_shrink_basis = false);
+librpa::reader::HartreeCoulombQ0 read_hartree_coulomb_q0(const std::string& dir_path,
+                                                       const std::string& prefix,
+                                                       int reader_version, bool use_shrink_basis);
+std::vector<librpa::reader::HartreeLriBlock> read_hartree_lri_blocks(
+    const std::string& dir_path, const std::string& prefix, bool use_shrink_basis);
 size_t read_Vq_row(const std::string &dir_path, const std::string &vq_fprefix, double threshold,
                    const std::vector<librpa_int::atpair_t> &local_atpair, bool is_cut_coulomb,
                    int reader_version = 0, bool use_shrink_basis = false);

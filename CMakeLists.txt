@@ -329,6 +329,18 @@ if(LIBRPA_USE_LIBRI)
   endif()
 
   add_compile_definitions("LIBRPA_USE_LIBRI")
+  if(EXISTS "${LibRI_INCLUDE_DIR}/RI/physics/Hartree.h")
+    add_compile_definitions(LIBRPA_LIBRI_HAS_HARTREE)
+    set(LIBRPA_LIBRI_HAS_HARTREE ON)
+    message(STATUS "Official LibRI Hartree interface available")
+    file(STRINGS "${LibRI_INCLUDE_DIR}/RI/physics/Hartree.h"
+      libri_hartree_aux_marker REGEX "^#define RI_HARTREE_HAS_AUXILIARY_POTENTIAL +1")
+    if(libri_hartree_aux_marker)
+      add_compile_definitions(LIBRPA_LIBRI_HAS_HARTREE_AUX_POTENTIAL)
+      set(LIBRPA_LIBRI_HAS_HARTREE_AUX_POTENTIAL ON)
+      message(STATUS "LibRI Hartree auxiliary-potential interface available")
+    endif()
+  endif()
 
   if(NOT (LIBRPA_USE_CUDA OR LIBRPA_USE_HIP))
     # Keep probe settings local and recheck when the selected headers change.

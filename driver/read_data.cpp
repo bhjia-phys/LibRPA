@@ -48,6 +48,7 @@
 #include "../src/utils/error.h"
 #include "../src/utils/profiler.h"
 #include "../src/utils/utils_mem.h"
+#include "task.h"
 
 using std::ifstream;
 using std::string;
@@ -349,6 +350,11 @@ void read_ri(const string &dir_path, librpa::ParallelRouting &routing)
     const auto &Cs_data = pds->cs_data;
     const auto &blacs_h = pds->blacs_h;
     const bool use_shrink_abfs = driver::get_bool(driver::opts.use_shrink_abfs);
+    const bool hartree = driver::get_task(driver::driver_params.task) == driver::task_t::Hartree;
+    const auto &coulomb_prefix = hartree ? driver::driver_params.prefix_coul_hartree
+                                       : driver::driver_params.prefix_coul_full;
+    if (hartree && coulomb_prefix.empty())
+        throw std::runtime_error("task=hartree requires explicit prefix_coul_hartree");
 
     local_atpair.clear();
 
@@ -394,9 +400,12 @@ void read_ri(const string &dir_path, librpa::ParallelRouting &routing)
         auto trangular_loc_atpair = librpa_int::dispatch_upper_triangular_tasks(
             n_atoms, blacs_h.myid, blacs_h.nprows, blacs_h.npcols, blacs_h.myprow, blacs_h.mypcol);
         for (auto &iap : trangular_loc_atpair) local_atpair.push_back(iap);
-        read_Vq_row(dir_path, driver::driver_params.prefix_coul_full, driver::opts.vq_threshold,
-                    local_atpair, false, driver::driver_params.version_coul_reader,
-                    use_shrink_abfs);
+        if (hartree)
+            read_Vq_full(dir_path, coulomb_prefix, false,
+                         driver::driver_params.version_coul_reader, use_shrink_abfs);
+        else
+            read_Vq_row(dir_path, coulomb_prefix, driver::opts.vq_threshold, local_atpair, false,
+                        driver::driver_params.version_coul_reader, use_shrink_abfs);
         profiler.stop("driver_read_Vq");
     }
     else
@@ -1580,6 +1589,23 @@ void read_basis_from_Cs(const std::string &dir_path)
 {
     auto ctx = driver_reader_context();
     return librpa::reader::read_basis_from_Cs(ctx, dir_path);
+}
+
+std::vector<librpa::reader::HartreeLriBlock> read_hartree_lri_blocks(const std::string &dir_path,
+                                                                     const std::string &prefix,
+                                                                     bool use_shrink_basis)
+{
+    auto ctx = driver_reader_context();
+    return librpa::reader::read_hartree_lri_blocks(ctx, dir_path, prefix, use_shrink_basis);
+}
+
+librpa::reader::HartreeCoulombQ0 read_hartree_coulomb_q0(const std::string &dir_path,
+                                                         const std::string &prefix,
+                                                         int reader_version, bool use_shrink_basis)
+{
+    auto ctx = driver_reader_context();
+    return librpa::reader::read_hartree_coulomb_q0(ctx, dir_path, prefix, reader_version,
+                                                   use_shrink_basis);
 }
 
 size_t read_Vq_full(const std::string &dir_path, const std::string &vq_fprefix, bool is_cut_coulomb,

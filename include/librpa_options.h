@@ -730,12 +730,15 @@ typedef struct
     const char *mixer, *velocity_mode, *restart_file, *checkpoint_file;
     int output_matrices, output_qp, export_hamiltonian;
     int state_low, state_high, interband_velocity, expand_ibz;
+    /** Rebuild the Hartree density difference at each update. Default off. */
+    int update_hartree;
 } LibrpaQsgwControls;
 
 /** Defaults: min/max=1/10, unoccupied_keep=10, uncut, mixer=none,
  * beta=0.2 (used only for single-k linear mixing), shift=2 eV,
  * convergence=1e-4 eV, reference velocity, QP/HR outputs on, matrices off,
- * restart=none and checkpoint=qsgw_checkpoint.bin. Indices are zero-based. */
+ * restart=none and checkpoint=qsgw_checkpoint.bin, Hartree updates off.
+ * Indices are zero-based. */
 void librpa_init_qsgw_controls(LibrpaQsgwControls *);
 
 /** Controls for the cRPA companion attached to a QSGW task.
