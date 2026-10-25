@@ -23,6 +23,7 @@
 #include "../io/stl_io_helper.h"
 #include "../math/matrix.h"
 #include "../math/vector3_order.h"
+#include "../mpi/collective_stage.h"
 #include "../utils/constants.h"
 #include "../utils/error.h"
 #include "../utils/profiler.h"
