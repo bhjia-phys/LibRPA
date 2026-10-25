@@ -1000,10 +1000,11 @@ void Task::run()
                                 }
                             af = std::sqrt(af);
                             kf = std::sqrt(kf);
-                            const auto row = [&](const char* kind, int i, int j, cplxdb z)
+                            const auto row = [&, output_spin = spin + 1, output_k = k + 1](
+                                                 const char* kind, int i, int j, cplxdb z)
                             {
-                                out << state << ',' << phase << ',' << channel << ',' << spin + 1
-                                    << ',' << k + 1 << ',' << kind << ',' << i << ',' << j << ','
+                                out << state << ',' << phase << ',' << channel << ',' << output_spin
+                                    << ',' << output_k << ',' << kind << ',' << i << ',' << j << ','
                                     << z.real() << ',' << z.imag() << ',' << z.real() * HA2EV << ','
                                     << z.imag() * HA2EV << ',' << am << ',' << af << ',' << km
                                     << ',' << kf << ',' << kd << ',' << am * HA2EV << ','
