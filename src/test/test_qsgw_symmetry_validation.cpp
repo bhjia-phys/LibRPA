@@ -20,7 +20,7 @@ void require(const bool condition, const std::string& message)
 }
 
 template <typename Function>
-void require_rejection(Function function, const std::string& diagnostic)
+void require_rejection(Function function, const std::string& diagnostic = {})
 {
     try
     {
@@ -28,7 +28,7 @@ void require_rejection(Function function, const std::string& diagnostic)
     }
     catch (const std::exception& error)
     {
-        require(std::string(error.what()).find(diagnostic) != std::string::npos,
+        require(diagnostic.empty() || std::string(error.what()).find(diagnostic) != std::string::npos,
                 "unexpected rejection: " + std::string(error.what()));
         return;
     }
@@ -215,10 +215,10 @@ void test_legacy_frame_validation_is_not_skipped()
         {
             validate_live_symmetry_state(model.meanfield(0.31), model.basis, reduced_grid,
                                          model.symmetry, false);
-        },
-        "full-grid");
+        });
 
-    // Rectangular finite frames are outside the proven full-AO legacy route.
+    // Rectangular frames stay outside the legacy exception. Master supports
+    // a retained frame only when its span is closed under the operations.
     MeanField rectangular(1, 1, 1, 2);
     ComplexMatrix coefficients(1, 2);
     coefficients.zero_out();
@@ -231,7 +231,14 @@ void test_legacy_frame_validation_is_not_skipped()
         {
             validate_live_symmetry_state(rectangular, model.basis, model.pbc, model.symmetry, false);
         },
-        "complete replicated full-grid AO/band frames");
+        "covariance failed");
+
+    // Inversion exchanges the two AOs, so (1,1)/sqrt(2) spans a closed
+    // one-dimensional retained space. This is a numerical positive control
+    // for the retained-frame route inherited from master.
+    rectangular.get_eigenvectors()[0][0][0](0, 0) = std::sqrt(0.5);
+    rectangular.get_eigenvectors()[0][0][0](0, 1) = std::sqrt(0.5);
+    validate_live_symmetry_state(rectangular, model.basis, model.pbc, model.symmetry, false);
 }
 
 } // namespace
