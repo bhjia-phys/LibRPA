@@ -92,7 +92,7 @@ More details can be found in the documentation for
 ## Documentation
 
 See the [documentation](https://aesm-group.github.io/LibRPA/) for installation instructions, user
-guides, examples, and tutorials.
+guides, theory, examples, and tutorials.
 
 ## How to cite
 
