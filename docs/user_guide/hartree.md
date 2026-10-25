@@ -9,6 +9,23 @@ the same scalar spatial operator for both collinear spins.
 This endpoint is a one-shot build and comparison. It does not update a QSGW
 Hamiltonian or introduce a Hartree inner self-consistency loop.
 
+## Build support
+
+The bundled CPU LibRI headers include the official Hartree subset from
+`2306483` and the auxiliary-potential extension needed by QSGW paths. This
+is a scoped backport on the existing `75902f8` bundle; existing LRI/EXX
+kernels remain in place. The [bundled dependency record](../../thirdparty/LibRI/README.md#librpa-hartree-compatibility-subset)
+records the source and compatibility adaptations. No separate LibRI
+installation is needed for this configuration.
+
+With external LibRI headers, `RI/physics/Hartree.h` enables the standalone
+SCF-grid build. QSGW feedback additionally requires
+`RI_HARTREE_HAS_AUXILIARY_POTENTIAL` and
+`cal_hartree_with_auxiliary_potential`. CMake reports the detected
+capabilities. External headers without these capabilities retain ordinary
+Hartree-disabled workflows; requesting an unsupported Hartree computation
+raises an explicit error. The separate bundled GPU backend is unchanged.
+
 ## Input
 
 Use the ordinary structure, full-BZ mean-field, wave-function/auxiliary-basis,

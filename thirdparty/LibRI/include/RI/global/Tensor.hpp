@@ -183,6 +183,15 @@ Tensor<T> Tensor<T>::dagger() const
 }
 
 template<typename T>
+Tensor<T> Tensor<T>::conjugate() const
+{
+	Tensor<T> t(this->shape);
+	for (std::size_t i = 0; i < this->data->size(); ++i)
+        (*t.data)[i] = Global_Func::get_conj((*this->data)[i]);
+	return t;
+}
+
+template<typename T>
 Global_Func::To_Real_t<T> Tensor<T>::norm(const double p) const
 {
 	using T_res = Global_Func::To_Real_t<T>;

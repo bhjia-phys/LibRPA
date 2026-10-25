@@ -664,6 +664,12 @@ of 3 computes updates 2 and 3. The maximum must exceed the saved iteration;
 the minimum and stopping tolerance may also change. New traces begin at the
 restored boundary, so a separate output directory preserves earlier traces.
 
+With `qsgw_update_hartree=true`, the format adds 100 to the corresponding
+checkpoint version and checks the dedicated bare q=0 metric and unwrapped
+LRI coefficients. A restart cannot switch Hartree feedback on or off. The
+initial DFT density remains the reference; it is reconstructed from the
+original inputs before the saved live state is restored.
+
 The checkpoint retains the grid and optional band-path Hamiltonians in the
 immutable initial KS basis, live eigenvalues, wavefunctions, occupation weights,
 Fermi energy and the last iteration summary. Directly restoring wavefunctions

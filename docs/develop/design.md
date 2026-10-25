@@ -110,6 +110,14 @@ The writer currently selects versions as follows:
 | `rotate_reference` | 5 | 9 |
 | Native-baseline `current_hr` | 10 | 11 |
 
+With Hartree feedback enabled, the writer adds 100 to the version selected
+above (for example, 108 for the shifted-cut reference-velocity map). The
+additional context binds the dedicated bare q=0 metric and unwrapped LRI
+coefficients, as well as the feedback switch. Restore rejects a change in
+this context. The original DFT density is reconstructed from the immutable
+input reference before restoring the live state; it is never reset to the
+checkpoint density. See the [Hartree guide](../user_guide/hartree.md).
+
 Legacy versions 1--3 are readable only when their update context still agrees.
 Version 4 belongs to another equation/mixer branch; versions 6/7 use the
 historical cut convention and are rejected. Versions 5/9 that encode the old

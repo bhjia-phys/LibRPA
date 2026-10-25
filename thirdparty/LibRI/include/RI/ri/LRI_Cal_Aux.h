@@ -390,6 +390,112 @@ namespace LRI_Cal_Aux
 				++ptr;
 		}
 	}
+
+	// Additional k-space Hartree helper overloads from official LibRI 2306483.
+	template<typename Tdata>
+	inline void add_Ds(
+		const Tensor<Tdata> &D_add,
+		Tensor<Tdata> &D_result,
+		const Tdata scale)
+	{
+		if (D_result.empty())
+		{
+			D_result = D_add * scale;
+		}
+		else
+		{
+			Blas_Interface::axpy(scale, D_add, D_result);
+		}
+	}
+
+	template<typename Tkey, typename Tvalue, typename TComparator>
+	void add_Ds_omp_try_map(
+		std::map<Tkey, Tvalue, TComparator>& Ds_result_thread,
+		std::map<Tkey, Tvalue, TComparator>& Ds_result,
+		std::map<Tkey, omp_lock_t> &lock_Ds_result_add_map,
+		const double &fac)
+	{
+		for(auto ptr=Ds_result_thread.begin(); ptr!=Ds_result_thread.end(); )
+		{
+			const Tkey key = ptr->first;
+			if(omp_test_lock(&lock_Ds_result_add_map.at(key)))
+			{
+				LRI_Cal_Aux::add_Ds(std::move(ptr->second), Ds_result.at(key), fac);
+				omp_unset_lock(&lock_Ds_result_add_map.at(key));
+				ptr = Ds_result_thread.erase(ptr);
+			}
+			else
+			{
+				++ptr;
+			}
+		}
+	}
+
+	template<typename Tkey, typename Tvalue, typename TComparator, typename Tlock>
+	void add_Ds_omp_wait_map(
+		std::map<Tkey, Tvalue, TComparator>& Ds_result_thread,
+		std::map<Tkey, Tvalue, TComparator>& Ds_result,
+		std::map<Tkey, Tlock> &lock_Ds_result_add_map,
+		const double &fac)
+	{
+		if(Ds_result_thread.empty())
+			return;
+		while(true)
+		{
+			add_Ds_omp_try_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac);
+			if(Ds_result_thread.empty())
+				return;
+			#pragma omp taskyield
+		}
+	}
+
+	template<typename Tkey, typename Tvalue, typename TComparator>
+	std::map<Tkey, omp_lock_t> init_lock_result(
+		std::map<Tkey, Tvalue, TComparator>& Ds_result,
+		std::vector<Tkey> key_list)
+	{
+		std::map<Tkey, omp_lock_t> lock_Ds_result_add_map;
+
+		for(const Tkey &ikey : key_list)
+		{
+			Ds_result[ikey];
+			lock_Ds_result_add_map[ikey];
+		}
+
+		for(auto &lock : lock_Ds_result_add_map)
+			omp_init_lock(&lock.second);
+		return lock_Ds_result_add_map;
+	}
+
+	inline void destroy_lock(omp_lock_t &lock)
+	{
+		omp_destroy_lock(&lock);
+	}
+
+	template<typename Tkey, typename Tvalue, typename TComparator>
+	void destroy_lock(
+		std::map<Tkey, Tvalue, TComparator> &locks)
+	{
+		for(auto &lock : locks)
+			destroy_lock(lock.second);
+	}
+
+	template<typename T>
+	void destroy_Ds_result(T &Ds_result){}
+
+	template<typename Tkey, typename Tvalue, typename TComparator>
+	void destroy_Ds_result(
+		std::map<Tkey, Tvalue, TComparator> &Ds_result)
+	{
+		for(auto ptr=Ds_result.begin(); ptr!=Ds_result.end(); )
+		{
+			destroy_Ds_result(ptr->second);
+			if(ptr->second.empty())
+				ptr = Ds_result.erase(ptr);
+			else
+				++ptr;
+		}
+	}
 }
 
 }
