@@ -593,7 +593,9 @@ struct DriverParams
     //! Experimental
     double qsgw_convergence_tolerance_ev;
 
-    //! Compute cRPA U at selected entering QSGW states and at the final state.
+    //! Compute cRPA U during G0W0 (task=g0w0 or g0w0_band) or QSGW (task=qsgw).
+    //! G0W0 evaluates U once; QSGW evaluates selected entering states and the final state.
+    //! Requires crpa_analysis_only=false; use task=crpa for standalone screening.
     //! @par Default
     //! false
     //! @par Status
@@ -624,23 +626,28 @@ struct DriverParams
     //! @since Unreleased
     std::string crpa_overlap_file = "SR.csr";
     //! Explicit species labels in numeric structure-type order, separated by spaces.
+    //! Required for task=crpa, including analysis-only runs, or crpa_enabled=true.
     //! @par Default
-    //! Empty (required for task=crpa).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
     std::string crpa_species_labels;
     //! Species supplying first-radial correlated atomic trials for the declared parent frame.
+    //! Required for standalone task=crpa screening and coupled crpa_enabled=true calculations.
+    //! Not required when crpa_analysis_only=true.
     //! @par Default
-    //! Empty (required for interaction calculations with task=crpa).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
     std::string crpa_correlated_species;
     //! Species supplying the first radial p shell of a dp parent frame.
     //! Must differ from crpa_correlated_species; spectator species are not selected.
+    //! Required for standalone or coupled screening when crpa_parent_orbitals=dp.
+    //! Not required when crpa_analysis_only=true.
     //! @par Default
-    //! Empty (required when crpa_parent_orbitals=dp).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
@@ -687,30 +694,40 @@ struct DriverParams
     double crpa_tracking_min_capture = 0.99;
     //! A: inclusive absolute-Hartree lower/upper pairs selecting original KS states
     //! on both occupied and empty branches of Pd. Independent of output window B.
+    //! For screening with crpa_response_mode=bands, specify exactly one of this parameter
+    //! and crpa_response_bands. Optional in analysis-only bands mode. Must be empty for
+    //! crpa_response_mode=orbital_weights, including analysis-only runs.
     //! @par Default
-    //! Empty (specify exactly one of this parameter and crpa_response_bands).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
     std::vector<double> crpa_response_windows_ha;
     //! B: inclusive absolute-Hartree lower/upper pairs for projecting atomic trials.
     //! Does not change KS poles, occupations, or the response selection A.
+    //! For screening in either response mode, specify exactly one of this parameter
+    //! and crpa_orbital_bands. Not required when crpa_analysis_only=true.
     //! @par Default
-    //! Empty (specify exactly one of this parameter and crpa_orbital_bands).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
     std::vector<double> crpa_orbital_windows_ha;
     //! A: distinct zero-based original KS indices shared by all spin/k points.
+    //! For screening with crpa_response_mode=bands, specify exactly one of this parameter
+    //! and crpa_response_windows_ha. Optional in analysis-only bands mode. Must be empty for
+    //! crpa_response_mode=orbital_weights, including analysis-only runs.
     //! @par Default
-    //! Empty (mutually exclusive with crpa_response_windows_ha).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
     std::vector<int> crpa_response_bands;
     //! B: distinct zero-based original KS indices shared by all spin/k points.
+    //! For screening in either response mode, specify exactly one of this parameter
+    //! and crpa_orbital_windows_ha. Not required when crpa_analysis_only=true.
     //! @par Default
-    //! Empty (mutually exclusive with crpa_orbital_windows_ha).
+    //! Empty
     //! @par Status
     //! Experimental
     //! @since Unreleased
@@ -785,6 +802,7 @@ struct DriverParams
     double crpa_eta_ev = 0.05;
     //! Analyze orbital character only; skip RI/Coulomb input and screening.
     //! A/B selections and correlated species are not required in this mode.
+    //! Requires task=crpa and crpa_output_analysis=true; incompatible with crpa_enabled=true.
     //! @par Default
     //! false
     //! @par Status

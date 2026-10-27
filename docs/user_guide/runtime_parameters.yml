@@ -170,13 +170,20 @@ blocks:
     text: |
       These experimental driver parameters apply to standalone `task = crpa`
       and optional U evaluation during `task = g0w0` or `task = qsgw` with `crpa_enabled = true`.
-      `crpa_model_file` reuses an existing cRPA input, and `crpa_interval` selects
-      entering state indices; the final updated state is always evaluated.
+      `crpa_model_file` reuses an existing cRPA input. G0W0 evaluates U once;
+      during QSGW, `crpa_interval` selects entering state indices and the final
+      updated state is always evaluated.
       Orbital analysis is enabled by default for scalar and two-component spinor states;
-      `crpa_analysis_only` skips RI/Coulomb inputs and screening for window inspection.
-      A selects the original KS bands on both branches of the excluded response
-      Pd. B independently selects the band space used to construct local output
-      orbitals. Specify either energy windows or a band list for each space.
+      With standalone `task = crpa`, `crpa_analysis_only = true` skips RI/Coulomb
+      inputs and screening for window inspection; neither A nor B is required.
+      Coupled GW calculations require `crpa_analysis_only = false`.
+      For screening with `crpa_response_mode = bands`, A selects the original KS
+      bands on both branches of the excluded response Pd; specify exactly one
+      A energy-window or band-list selector. With `crpa_response_mode = orbital_weights`,
+      both A selectors must be omitted, including in analysis-only runs.
+      B independently selects the band space used to construct local output
+      orbitals; screening in either response mode requires exactly one B
+      energy-window or band-list selector.
       Calculations use scalar or spinor full-grid LIBRI and native positive imaginary
       frequencies; see [the cRPA guide](crpa.md) for supported numerical settings,
       orbital conventions and the distinction between the first node and U(0).
