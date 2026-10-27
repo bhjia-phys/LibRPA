@@ -313,6 +313,54 @@ LibrpaOpticalView librpa_get_optical_view(const LibrpaOpticalResult *result);
 /** Release a result and its arrays. Passing NULL is permitted. */
 void librpa_delete_optical_result(LibrpaOpticalResult *result);
 
+typedef enum
+{
+    LIBRPA_QSGW_ITERATIONS,
+    LIBRPA_QSGW_EIGENVALUES,
+    LIBRPA_QSGW_MATRICES,
+    LIBRPA_QSGW_QUASIPARTICLES,
+    LIBRPA_QSGW_ENERGY_QP,
+    LIBRPA_QSGW_GW_BAND,
+    LIBRPA_QSGW_KS_BAND,
+    LIBRPA_QSGW_EXX_BAND,
+    LIBRPA_QSGW_QSGW_BAND,
+    LIBRPA_QSGW_HAMILTONIAN,
+    LIBRPA_QSGW_HEAD_HAMILTONIAN
+} LibrpaQsgwOutputKind;
+/** Borrowed output on rank zero only, valid during the callback. spin is
+ * zero-based; text_size excludes the terminating zero. The callback presents
+ * output only and must not mutate or recursively use the handler/task. */
+typedef struct
+{
+    LibrpaQsgwOutputKind kind;
+    int iteration, spin, append;
+    const char *text;
+    size_t text_size;
+    const LibrpaLocalizedOperator *hamiltonian;
+} LibrpaQsgwOutput;
+typedef int (*LibrpaQsgwOutputSink)(const LibrpaQsgwOutput *, void *user_data);
+
+/** All energies are Hartree unless the field explicitly says eV. Strings and
+ * numeric inputs are copied by the call receiving them. Checkpoints preserve
+ * the immutable input eigenframe; original producer inputs remain required.
+ * Keep the handler alive until the task is deleted. After preparation keep
+ * its SCF eigenframe/grid fixed; finish band/Coulomb/velocity input before
+ * run. Do not modify or reenter the handler during run or its callbacks. Call prepare and
+ * set_input collectively before the single run call. */
+LibrpaQsgwTask *librpa_create_qsgw_task(LibrpaHandler *, const LibrpaOptions *,
+                                        const LibrpaQsgwControls *);
+/** Collective validation before ordinary numerical input is installed. */
+void librpa_prepare_qsgw_task(LibrpaQsgwTask *);
+void librpa_set_qsgw_output_sink(LibrpaQsgwTask *, LibrpaQsgwOutputSink, void *user_data);
+void librpa_run_qsgw_task(LibrpaQsgwTask *);
+void librpa_delete_qsgw_task(LibrpaQsgwTask *);
+
+/** Query the numerical dimensions needed to prepare a QSGW task's host input.
+ * band_path selects band input when nonzero. This call is noncollective.
+ */
+void librpa_get_meanfield_dimensions(const LibrpaHandler *h, int band_path, int *nspins, int *nkpts,
+                                     int *nstates, int *naos, int *nspinor);
+
 #ifdef __cplusplus
 }
 #endif

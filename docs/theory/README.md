@@ -8,3 +8,7 @@ remain in the built documentation sections.
 ## Shared numerical methods
 
 - [Padé continuation and numerical breakdown](numerical_methods/pade.md)
+
+## QSGW
+
+- [Self-energy staticization](qsgw/staticization.md)

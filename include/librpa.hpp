@@ -28,6 +28,7 @@
  */
 namespace librpa
 {
+using QsgwTask = std::unique_ptr<LibrpaQsgwTask, decltype(&librpa_delete_qsgw_task)>;
 using OpticalResult = std::unique_ptr<LibrpaOpticalResult, decltype(&librpa_delete_optical_result)>;
 
 /* Enums */
@@ -233,6 +234,8 @@ public:
      * @note Rely on free() to explicitly release resources.
      */
     ~Handler();
+
+    QsgwTask create_qsgw_task(const Options &opts, const LibrpaQsgwControls &controls) const;
 
     /* Input (set) functions */
 

@@ -560,6 +560,28 @@ void librpa_set_wfc_band_spinor_packed(LibrpaHandler* h, int ik_band, int nstate
  */
 void librpa_reset_band_data(LibrpaHandler* h);
 
+/** QSGW Vxc and native-operator input. Complex values are interleaved
+ * [real,imag]; square matrix storage follows row_major (zero: column major,
+ * one: row major). Spin and k-point indices are zero based; energies are Hartree.
+ * Buffers are supplied on handler rank zero and copied by librpa_set_qsgw_input.
+ */
+typedef struct
+{
+    int spin, kpoint, dimension, row_major;
+    const double* values_ri;
+} LibrpaQsgwMatrix;
+typedef struct
+{
+    int n_vxc, n_vxc_band;
+    const LibrpaQsgwMatrix *vxc, *vxc_band;
+    int vxc_in_ao_basis;
+    const LibrpaNativeVelocityInput* native_operators;
+    double inplane_area_bohr2, auxiliary_monopole_norm_squared;
+} LibrpaQsgwInput;
+
+/** Collective. Vxc and native operators are supplied on root; ignored elsewhere. */
+void librpa_set_qsgw_input(LibrpaQsgwTask*, const LibrpaQsgwInput* root_input);
+
 #ifdef __cplusplus
 }
 #endif

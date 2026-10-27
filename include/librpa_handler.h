@@ -28,6 +28,9 @@ typedef struct
     const int instance_id_;
 } LibrpaHandler;
 
+/** Opaque QSGW execution state; create and delete it through librpa_compute.h. */
+typedef struct LibrpaQsgwTask LibrpaQsgwTask;
+
 /**
  * @brief Create a new LibRPA handler instance.
  *
