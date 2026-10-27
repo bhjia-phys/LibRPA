@@ -582,6 +582,72 @@ typedef struct
 /** Collective. Vxc and native operators are supplied on root; ignored elsewhere. */
 void librpa_set_qsgw_input(LibrpaQsgwTask*, const LibrpaQsgwInput* root_input);
 
+    /** Numerical cRPA input. Strings and arrays remain owned by the caller.
+     * Initialize with librpa_init_crpa_input before assigning fields. All input
+     * values and array contents must be replicated identically on every rank of
+     * the handler communicator and remain valid until the collective call returns.
+     * Energy windows use inclusive absolute-Hartree lower/upper pairs.
+     * B selects the KS space used to project atomic trials. Provide exactly one
+     * B window array or explicit band list. With use_orbital_weights OFF, also
+     * provide an independent A selector for both branches of Pd. With it ON,
+     * provide no A selector: the output frame defines endpoint probabilities.
+     * Species labels follow the zero-based type indices passed to librpa_set_atoms.
+     * Scalar output uses each spin's parent frame; SOC uses one full spinor frame.
+     */
+    typedef struct
+    {
+        int n_species;
+        const char* const* species_labels;
+        const char* correlated_species;
+        const char* ligand_species;
+        const char* parent_orbitals;
+        const char* output_orbitals;
+        int n_response_edges;
+        const double* response_windows_ha;
+        int n_orbital_edges;
+        const double* orbital_windows_ha;
+        /** Zero-based indices, shared by all spin/k points. Each list replaces
+         * its respective energy window; set the unused count to zero. */
+        int n_response_bands;
+        const int* response_bands;
+        int n_orbital_bands;
+        const int* orbital_bands;
+        int n_kpoints;
+        int n_aos;
+        /** Spatial overlap [k][AO row][AO column][real/imag], full k grid.
+         * SOC lifts this internally to I_spinor tensor S; n_aos stays spatial. */
+        const double* overlap_k_ri;
+        double gram_abs;
+        double gram_rel;
+        double gram_cond_max;
+        double s_abs;
+        double s_rel;
+        double s_cond_max;
+        double residual_tol;
+        double t_roundtrip_tol;
+        /** Off by default: retain C/S/Phi in the owned result for arbitrary AO reprojection.
+         * P/H/density and the state energies/occupations are always retained. */
+        LibrpaSwitch retain_raw_model;
+        /** OFF: binary A windows/lists. ON: probabilities from the actual output
+         * frame, w_p=sum_a |Phi_a^dagger S C_p|^2/(C_p^dagger S C_p).
+         * Pd weights each original transition by w_p*w_q. No A window/list
+         * may be supplied; B and the output orbitals define the projector. */
+        LibrpaSwitch use_orbital_weights;
+        /** Optional previous metric-orthonormal parent Phi, packed as
+         * [spin][k][component-major AO][parent column][real/imag]. A positive
+         * n_previous_parent enables transport through the declared current B.
+         * The caller owns the reference; the original KS states are unchanged.
+         * A zero count retains the original atomic-trial construction. */
+        int n_previous_parent;
+        const double* previous_parent_phi_ri;
+        /** Minimum retained probability of every previous parent direction.
+         * Default 0.99. This is an additional subspace-retention gate, not a
+         * replacement or relaxation of the Gram/metric rank checks. */
+        double tracking_min_capture;
+    } LibrpaCrpaInput;
+
+    void librpa_init_crpa_input(LibrpaCrpaInput* input);
+
 #ifdef __cplusplus
 }
 #endif
