@@ -95,6 +95,7 @@ void librpa_init_qsgw_controls(LibrpaQsgwControls* controls)
                  1,
                  0,
                  2147483647,
+                 0,
                  0};
 }
 LibrpaQsgwTask* librpa_create_qsgw_task(LibrpaHandler* handler, const LibrpaOptions* options,
@@ -127,6 +128,7 @@ LibrpaQsgwTask* librpa_create_qsgw_task(LibrpaHandler* handler, const LibrpaOpti
             input.i_state_low = controls->state_low;
             input.i_state_high = controls->state_high;
             input.interband_velocity = controls->interband_velocity != 0;
+            input.expand_ibz = controls->expand_ibz != 0;
             if (input.qsgw_min_iter < 1 || input.qsgw_max_iter < input.qsgw_min_iter ||
                 input.qsgw_unoccupied_keep < 0 ||
                 (input.qsgw_cut_mode != 0 && input.qsgw_cut_mode != 1) ||
@@ -144,13 +146,33 @@ LibrpaQsgwTask* librpa_create_qsgw_task(LibrpaHandler* handler, const LibrpaOpti
     auto result = std::make_unique<LibrpaQsgwTask>();
     result->dataset = ds;
     auto context = std::make_shared<TaskContext>(TaskContext{
-        ds->atoms, ds->blacs_h, ds->comm_h, ds->is_band_calc_done, ds->kfrac_band_list,
+        ds->atoms, ds->basis_wfc, ds->blacs_h, ds->comm_h, ds->is_band_calc_done, ds->kfrac_band_list,
         ds->mf, ds->mf_band, ds->p_exx, ds->p_g0w0, ds->p_headwing, ds->pbc,
         ds->symmetry_context, ds->tfg, ds->velocity_matrix,
         [ds] { ds->invalidate_compute_objects(); },
+        [ds](int spins, int kpoints, int bands, int aos, int spinor)
+        {
+            ds->mf.set(spins, kpoints, bands, aos, spinor, 0, bands, 0, aos);
+            ds->comm_h.barrier();
+            KPointBlacsProcessShape shape;
+            shape.favor_square_blacs_grid = true;
+            auto& context = ds->scfk_blacs_ctxt;
+            context.init(shape, ds->comm_h.comm, kpoints);
+            ds->comm_h.barrier();
+            const int ao_block = get_capped_blacs_block_size(aos, wfc_gemm_block_size_opt,
+                                                             context.blacs_h);
+            const int band_block = get_capped_blacs_block_size(bands, wfc_gemm_block_size_opt,
+                                                               context.blacs_h);
+            ds->desc_wfc_kb = context.create_array_desc(aos, bands, ao_block, band_block);
+            ds->desc_wfc_kb_full = context.create_array_desc(aos, bands, aos, bands);
+        },
         [ds](const LibrpaOptions& opts) { initialize_ds_tfgrids(*ds, opts); },
         [ds](const LibrpaOptions& opts, bool wing) { initialize_ds_headwing(*ds, opts, wing); },
-        [ds](bool rotations) { initialize_symmetry_context(*ds, rotations); },
+        [ds](bool rotations)
+        {
+            reject_spinor_symmetry_speedup(*ds, "QSGW state");
+            initialize_symmetry_context(*ds, rotations);
+        },
         [ds](const LibrpaOptions& opts, const ResponseObserver& response)
         { api::build_gw_sigma_for_task(*ds, opts, response); }});
     result->task = std::make_unique<Task>(std::move(context), *options, std::move(input));

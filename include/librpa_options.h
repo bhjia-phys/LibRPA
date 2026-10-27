@@ -730,6 +730,15 @@ typedef struct
     const char *mixer, *velocity_mode, *restart_file, *checkpoint_file;
     int output_matrices, output_qp, export_hamiltonian;
     int state_low, state_high, interband_velocity;
+    /** Request expansion of IBZ SCF states to the full grid during preparation.
+     * Default 0. IBZ input is also expanded when export_hamiltonian is enabled,
+     * or when analytic head/wing uses velocity_mode="current_hr"; setting this
+     * field to 0 does not suppress those cases. Expansion requires EXX/GW/RPA
+     * symmetry, complete k stars and valid symmetry operations, including
+     * explicit magnetic spin operations for SOC. K weights are normalized
+     * star multiplicities; the source mean-field occupations must carry the
+     * same k weights. See librpa_set_wg_ekb_efermi for its input convention. */
+    int expand_ibz;
 } LibrpaQsgwControls;
 
 /** Defaults: min/max=1/10, unoccupied_keep=10, uncut, mixer=none,

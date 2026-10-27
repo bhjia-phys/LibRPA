@@ -42,7 +42,7 @@ LocalizedMatrix decode_operator(const LibrpaLocalizedOperator &input, int dimens
 
 librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
     const MeanField &mf, const PeriodicBoundaryData &pbc, const MpiCommHandler &comm,
-    const LibrpaNativeVelocityInput *root_input)
+    const LibrpaNativeVelocityInput *root_input, const SymmetryContext *symmetry)
 {
     const int n = mf.get_n_states(), nk = mf.get_n_kpoints(), ns = mf.get_n_spins();
     const int nao = mf.get_n_aos(), nspinor = mf.get_n_spinor();
@@ -70,12 +70,21 @@ librpa_int::NativeVelocityResult librpa_int::build_native_velocity(
                 throw LIBRPA_RUNTIME_ERROR(
                     "G0W0 native velocity requires matching SCF k points and weights");
             const bool reduced_grid = nk != nk_full;
-            if (reduced_grid)
-                throw LIBRPA_RUNTIME_ERROR("Native velocity requires a complete full-BZ grid");
+            if (reduced_grid &&
+                (!spinor || !symmetry || symmetry->kstars.size() != static_cast<std::size_t>(nk) ||
+                 symmetry->count_kstar_members() != static_cast<std::size_t>(nk_full) ||
+                 symmetry->spin_operations.empty()))
+                throw LIBRPA_RUNTIME_ERROR(
+                    "IBZ native SOC velocity requires magnetic k-stars covering the full mesh");
             for (int ik = 0; ik != nk; ++ik)
             {
                 const auto weight = pbc.weight_k[ik];
-                const double expected = 1.0 / nk;
+                const double expected =
+                    reduced_grid
+                        ? static_cast<double>(find_symmetry_kstar_for_ibz_kpoint(
+                                                  *symmetry, pbc.kfrac_list[ik]).members.size()) /
+                              nk_full
+                        : 1.0 / nk;
                 if (!std::isfinite(weight) || std::abs(weight - expected) > 1e-8)
                     throw LIBRPA_RUNTIME_ERROR(
                         "G0W0 native velocity k weights disagree with the full-mesh star counts");

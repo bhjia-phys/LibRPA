@@ -349,7 +349,11 @@ typedef int (*LibrpaQsgwOutputSink)(const LibrpaQsgwOutput *, void *user_data);
  * set_input collectively before the single run call. */
 LibrpaQsgwTask *librpa_create_qsgw_task(LibrpaHandler *, const LibrpaOptions *,
                                         const LibrpaQsgwControls *);
-/** Collective validation before ordinary numerical input is installed. */
+/** Collective preparation. If IBZ expansion is triggered, the handler's SCF
+ * mean field and k grid are replaced by full-grid states and existing compute
+ * objects are invalidated. Mean-field getters then expose the expanded grid.
+ * Supply Vxc for the original source grid and gauge; retain its dimensions
+ * before preparation if needed. */
 void librpa_prepare_qsgw_task(LibrpaQsgwTask *);
 void librpa_set_qsgw_output_sink(LibrpaQsgwTask *, LibrpaQsgwOutputSink, void *user_data);
 void librpa_run_qsgw_task(LibrpaQsgwTask *);
@@ -569,9 +573,10 @@ void librpa_get_meanfield_dimensions(const LibrpaHandler *h, int band_path, int 
     /** Collective calculation on the handler communicator; no input/output files.
      * All ranks must call with identical options and replicated LibrpaCrpaInput.
      * Supports scalar or two-component spinor full-grid LIBRI with replicated KS eigenvectors and
-     * native positive minimax nodes. All EXX/GW/RPA symmetry switches must be disabled.
-     * No static node or analytic continuation is added. The result is independently owned on each
-     * rank; delete it on every rank.
+     * native positive minimax nodes. With use_symmetry_rpa enabled, only q-space screening is
+     * reduced; kernels are restored before full-grid local contraction. Original full-k states
+     * are required. No static node or analytic continuation is added. Each rank owns its result
+     * independently and must delete it.
      */
     LibrpaCrpaResult* librpa_compute_crpa_window(const LibrpaHandler* h,
                                                  const LibrpaOptions* options,
@@ -580,8 +585,8 @@ void librpa_get_meanfield_dimensions(const LibrpaHandler *h, int band_path, int 
     /** Build the ordinary GW self-energy and cRPA U for the same entering state.
      * P0 is built once by GW and borrowed by cRPA; only Pd and constrained
      * screening are added. GW P0, optical data, W and self-energy conventions
-     * remain unchanged. Requires full-grid LIBRI without symmetry or a SigC
-     * file-read shortcut. Input has the same contract as the standalone call.
+     * remain unchanged. Requires full-grid LIBRI and rejects a SigC file-read shortcut.
+     * Input has the same full-grid and optional q-star screening contract as the standalone call.
      * The owned result contains bare/U; fully_screened_ri is null.
      * cRPA screens and projects with full Coulomb independently of the GW
      * eps/Wc/EXX Coulomb flags, which keep their original GW meaning.

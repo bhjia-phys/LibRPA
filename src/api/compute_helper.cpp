@@ -219,7 +219,24 @@ void librpa_prepare_native_velocity(LibrpaHandler *h, const LibrpaOptions *p_opt
                     "use_scalapack_gw_wc enabled to consume analytic wings");
         });
     const auto &opts = *p_opts;
-    auto result = build_native_velocity(ds->mf, ds->pbc, comm, root_input);
+    const SymmetryContext *symmetry = nullptr;
+    collective_all_stage(
+        comm, "Native magnetic velocity frame",
+        [&]
+        {
+            if (ds->mf.get_n_kpoints() == ds->pbc.get_n_cells_bvk()) return;
+            const bool use_symmetry = opts.use_symmetry_rpa == LIBRPA_SWITCH_ON ||
+                                      opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
+            if (ds->mf.get_n_spinor() != 2 || !use_symmetry ||
+                opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON)
+                throw LIBRPA_RUNTIME_ERROR(
+                    "IBZ native velocity requires SOC magnetic symmetry and undistributed "
+                    "AO/band WFC blocks");
+            initialize_symmetry_context(*ds, true);
+            require_symmetry_shell_layouts(*ds, "native SOC head/wing");
+            symmetry = &ds->symmetry_context;
+        });
+    auto result = build_native_velocity(ds->mf, ds->pbc, comm, root_input, symmetry);
     collective_all_stage(comm, "G0W0 native velocity setter",
                          [&]
                          {

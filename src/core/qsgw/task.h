@@ -5,6 +5,7 @@
 #include <string>
 
 #include "task_context.h"
+#include "../meanfield_mpi.h"
 #include "headwing_velocity.h"
 #include "librpa_options.h"
 #include "task_extension.h"
@@ -25,7 +26,7 @@ struct TaskControls
     std::string qsgw_restart_file = "none", qsgw_checkpoint_file = "qsgw_checkpoint.bin";
     double qsgw_convergence_tolerance_ev = 1.0e-4;
     int i_state_low = 0, i_state_high = 2147483647;
-    bool interband_velocity = false;
+    bool interband_velocity = false, expand_ibz = false;
 };
 enum class OutputKind
 {
@@ -77,6 +78,8 @@ private:
     TaskInput input_;
     std::function<void(const TaskOutput&)> sink_;
     std::shared_ptr<TaskExtension> extension_;
+    std::optional<MeanField> ibz_reference_;
+    std::optional<SymmetryExpandedMeanField> expanded_reference_;
     bool prepared_ = false, input_set_ = false, ran_ = false;
 };
 }  // namespace librpa_int::qsgw
