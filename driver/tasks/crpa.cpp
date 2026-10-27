@@ -421,8 +421,7 @@ void task_crpa()
     }
     if (opts.replace_w_head == LIBRPA_SWITCH_ON) prepare_crpa_optical_velocity();
     auto input = config.input();
-    librpa::CrpaResult result(librpa_compute_crpa_window(h.get_c_handler(), &opts, &input),
-                              librpa_delete_crpa_result);
+    auto result = h.compute_crpa_window(opts, input);
     write_crpa_state_outputs(result.get(), config, opts.output_dir, -1, -1, false, false);
     librpa_int::global::lib_printf_root("cRPA tensors and orbital analysis written to %s\n",
                                         opts.output_dir);

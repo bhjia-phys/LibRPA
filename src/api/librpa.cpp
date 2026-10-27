@@ -47,6 +47,11 @@ CrpaResult Handler::build_g0w0_sigma_crpa(const Options& opts, const LibrpaCrpaI
                       ::librpa_delete_crpa_result);
 }
 
+CrpaResult Handler::compute_crpa_window(const Options& opts, const LibrpaCrpaInput& input) const
+{
+    return CrpaResult(::librpa_compute_crpa_window(h_, &opts, &input), ::librpa_delete_crpa_result);
+}
+
 CrpaResult Handler::compute_crpa_u_window(const Options& opts, const LibrpaCrpaInput& input) const
 {
     return CrpaResult(::librpa_compute_crpa_u_window(h_, &opts, &input),

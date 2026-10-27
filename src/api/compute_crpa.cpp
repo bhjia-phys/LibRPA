@@ -43,76 +43,6 @@ void collective_error(const librpa_int::MpiCommHandler& comm, const std::string&
         throw LIBRPA_RUNTIME_ERROR("cRPA input: " +
                                    (error.empty() ? "another MPI rank failed validation" : error));
 }
-std::unique_ptr<librpa_int::diele_func> make_crpa_headwing(
-    librpa_int::Dataset& ds, const LibrpaOptions& opts, bool need_wing,
-    const librpa_int::HeadwingBandSelection* excluded)
-{
-    using namespace librpa_int;
-    if (ds.velocity_matrix.empty())
-    {
-        throw LIBRPA_RUNTIME_ERROR("analytic head/wing requested but velocity matrix is not set");
-    }
-
-    MeanField& mf = ds.mf;
-    if (!mf.initialized())
-        throw LIBRPA_RUNTIME_ERROR("analytic head/wing meanfield is not initialized");
-
-    if (static_cast<int>(ds.pbc.kfrac_list.size()) != mf.get_n_kpoints())
-        throw LIBRPA_RUNTIME_ERROR(
-            "analytic head/wing k-point list is inconsistent with meanfield");
-
-    const auto& headwing_basis_aux =
-        opts.use_shrink_abfs == LIBRPA_SWITCH_ON ? ds.basis_aux_shrink : ds.basis_aux;
-    if (!headwing_basis_aux.initialized())
-        throw LIBRPA_RUNTIME_ERROR("analytic head/wing auxiliary basis is not initialized");
-
-    const bool use_headwing_symmetry =
-        opts.use_symmetry_rpa == LIBRPA_SWITCH_ON || opts.use_symmetry_gw == LIBRPA_SWITCH_ON;
-    if (excluded && (use_headwing_symmetry || opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON ||
-                     opts.use_2d_dielectric == LIBRPA_SWITCH_ON))
-        throw LIBRPA_INVALID_ARGUMENT(
-            "constrained optical input requires replicated full BZ and 3D");
-    if (use_headwing_symmetry)
-    {
-        reject_spinor_symmetry_speedup(ds, "analytic head/wing");
-        initialize_symmetry_context(ds, true);
-        require_symmetry_shell_layouts(ds, "analytic head/wing");
-    }
-
-    const auto& freqs = ds.tfg.get_freq_nodes();
-    const bool use_kpara_eigvec = opts.use_kpara_scf_eigvec == LIBRPA_SWITCH_ON;
-    const ArrayDesc& desc_scf_wfc =
-        ds.eigvecs_kpara_2d_ready() ? ds.desc_wfc_kb : ds.desc_wfc_kb_full;
-    auto optical = std::make_unique<diele_func>(
-        mf, ds.velocity_matrix, ds.pbc.kfrac_list, ds.basis_wfc, headwing_basis_aux, freqs,
-        mf.get_n_aos(), mf.get_n_states(), mf.get_n_spins(), headwing_basis_aux.nb_total, ds.pbc,
-        ds.comm_h, ds.blacs_h, use_kpara_eigvec, &ds.scfk_blacs_ctxt, &desc_scf_wfc);
-    optical->use_2d_dielectric = opts.use_2d_dielectric == LIBRPA_SWITCH_ON;
-    optical->use_soc = mf.get_n_spinor() > 1;
-    optical->debug = global::should_output(LIBRPA_VERBOSE_DEBUG);
-    if (use_headwing_symmetry && ds.symmetry_context.available &&
-        !ds.symmetry_context.kstars.empty())
-    {
-        optical->set_symmetry_context(ds.symmetry_context);
-        optical->use_symmetry = true;
-        optical->atom_nw = ds.basis_wfc.get_atom_nb_map();
-        optical->coord_frac = ds.symmetry_context.input_coord_frac;
-    }
-    if (excluded) optical->set_excluded_band_pairs(*excluded);
-    optical->init(opts.sqrt_coulomb_threshold, ds.vq);
-    optical->cal_head();
-    optical->test_head();
-
-    if (need_wing)
-    {
-        const auto& headwing_cs =
-            opts.use_shrink_abfs == LIBRPA_SWITCH_ON ? ds.cs_data_shrink : ds.cs_data;
-        optical->cal_wing(headwing_cs, opts.sqrt_coulomb_threshold, ds.vq);
-        optical->test_wing();
-    }
-
-    return optical;
-}
 
 }  // namespace
 
@@ -132,7 +62,7 @@ std::shared_ptr<librpa_int::CrpaTaskContext> librpa_int::api::make_crpa_task_con
             initialize_ds_chi0(*ds, opts);
         },
         [ds](const LibrpaOptions& opts, bool wing, const HeadwingBandSelection* excluded)
-        { return make_crpa_headwing(*ds, opts, wing, excluded); }});
+        { return make_analytic_headwing(*ds, opts, wing, excluded); }});
 }
 
 void librpa_init_crpa_input(LibrpaCrpaInput* input)

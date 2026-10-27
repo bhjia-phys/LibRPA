@@ -740,6 +740,9 @@ public:
     /** Build GW Sigma and U from one full-response build of the current state. */
     CrpaResult build_g0w0_sigma_crpa(const Options &opts, const LibrpaCrpaInput &input);
 
+    /** Compute current-state bare/U/W; the returned snapshot owns its storage. */
+    CrpaResult compute_crpa_window(const Options &opts, const LibrpaCrpaInput &input) const;
+
     /** Compute current-state bare/U without full W or Sigma. */
     CrpaResult compute_crpa_u_window(const Options &opts, const LibrpaCrpaInput &input) const;
     //! Current frames/weights/model without response, W, or Sigma.

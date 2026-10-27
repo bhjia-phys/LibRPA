@@ -476,7 +476,9 @@ C++ method is `Handler::build_g0w0_sigma_crpa`. It returns an owned cRPA result
 while retaining the usual GW EXX and self-energy objects. The public
 `librpa_compute_crpa_u_window` / `Handler::compute_crpa_u_window` builds a
 current-state P0 and U without an additional full-W or self-energy calculation.
-The standalone `librpa_compute_crpa_window` still returns complete v/U/W.
+The standalone `librpa_compute_crpa_window` / `Handler::compute_crpa_window`
+returns complete v/U/W. The C++ wrapper owns the result through `CrpaResult`
+and releases it automatically; accessor views borrow that result's storage.
 
 ## Compute U during G0W0 or QSGW
 
