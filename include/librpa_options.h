@@ -473,7 +473,7 @@ typedef struct
      *   Requires auxiliary l-shell metadata and the ScaLAPACK Wc path.
      *   Supported for three-dimensional G0W0 and G0W0 band calculations only.
      *
-     * Standalone G0W0/QSGW drivers also accept preset 6. G0W0 differentiates
+     * Standalone G0W0/cRPA/QSGW drivers also accept preset 6. G0W0 differentiates
      * original H/S/r; QSGW differentiates its complete current native-baseline
      * Hamiltonian. Both resolve to numerical option 3 for analytic head and wing.
      * This requires replace_w_head and use_scalapack_gw_wc, and use_pyatb=false.
@@ -737,6 +737,17 @@ typedef struct
  * convergence=1e-4 eV, reference velocity, QP/HR outputs on, matrices off,
  * restart=none and checkpoint=qsgw_checkpoint.bin. Indices are zero-based. */
 void librpa_init_qsgw_controls(LibrpaQsgwControls *);
+
+/** Controls for the cRPA companion attached to a QSGW task.
+ * Initialize with librpa_init_qsgw_crpa_controls before assigning fields.
+ * Values and tracking_definition are copied by librpa_set_qsgw_crpa. */
+    typedef struct
+    {
+        int interval, track_orbitals, output_analysis;
+        const char* tracking_definition;
+    } LibrpaQsgwCrpaControls;
+
+    void librpa_init_qsgw_crpa_controls(LibrpaQsgwCrpaControls* controls);
 
 #ifdef __cplusplus
 }

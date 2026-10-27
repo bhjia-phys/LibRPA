@@ -130,3 +130,13 @@ and a Python version with `tarfile` extraction filters, such as Python 3.12+.
 For changes to native reconstruction, retain the finite-metric, native-tail
 and SOC numerical controls in `test_rpa_headwing`. These checks establish
 implementation consistency; they do not establish material convergence.
+
+## cRPA task boundary
+
+The cRPA numerical workflow and its optional QSGW companion live in
+`src/core/crpa_task` and `src/core/crpa_qsgw_extension`. They borrow the loaded
+mean fields and screening data through `CrpaTaskContext`; the API retains the
+original Dataset ownership and supplies its existing initialization operations.
+The companion consumes the resident response and owns parent-frame transport
+and checkpoint companions. Its result callback is for output only. The driver
+reads host files and presents public result snapshots.
