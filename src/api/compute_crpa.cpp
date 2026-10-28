@@ -59,7 +59,7 @@ std::shared_ptr<librpa_int::CrpaTaskContext> librpa_int::api::make_crpa_task_con
             initialize_ds_tfgrids(*ds, opts);
             initialize_ds_atpairs_local(*ds, LIBRPA_ROUTING_LIBRI);
             ds->redistribute_coulomb_blacs2ap();
-            initialize_ds_chi0(*ds, opts);
+            initialize_ds_chi0_qstar(*ds, opts);
         },
         [ds](const LibrpaOptions& opts, bool wing, const HeadwingBandSelection* excluded)
         { return make_analytic_headwing(*ds, opts, wing, excluded); }});

@@ -74,6 +74,11 @@ void librpa_set_scf_dimension(LibrpaHandler* h, int nspins, int nkpts, int nstat
  * @param[in] wg       Occupation numbers (size: nspins * nkpts * nstates).
  * @param[in] ekb      Eigenvalues (size: same as wg).
  * @param[in] efermi   Fermi level.
+ *
+ * The setter divides wg by nkpts. For an IBZ source with nkpts=N_IBZ,
+ * N_full full-grid points and star size m_i, supply
+ * wg_i = N_IBZ * (m_i / N_full) * f_i, where f_i is the occupation in the
+ * usual spin convention. The stored occupation then carries weight m_i/N_full.
  */
 void librpa_set_wg_ekb_efermi(LibrpaHandler* h, int nspins, int nkpts, int nstates,
                               const double* wg, const double* ekb, double efermi);

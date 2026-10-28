@@ -7,6 +7,7 @@
 #include "librpa_input.h"
 #include "meanfield.h"
 #include "pbc.h"
+#include "symmetry_context.h"
 
 namespace librpa_int
 {
@@ -21,5 +22,6 @@ struct NativeVelocityResult
 
 NativeVelocityResult build_native_velocity(const MeanField &mf, const PeriodicBoundaryData &pbc,
                                            const MpiCommHandler &comm,
-                                           const LibrpaNativeVelocityInput *root_input);
+                                           const LibrpaNativeVelocityInput *root_input,
+                                           const SymmetryContext *symmetry = nullptr);
 }  // namespace librpa_int

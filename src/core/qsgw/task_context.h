@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../atom.h"
+#include "../atomic_basis.h"
 #include "../chi0.h"
 #include "../dielecmodel.h"
 #include "../exx.h"
@@ -25,6 +26,7 @@ using ResponseObserver = std::function<void(const Chi0QMap&)>;
 struct TaskContext
 {
     Atoms& atoms;
+    AtomicBasis& basis_wfc;
     BlacsCtxtHandler& blacs_h;
     MpiCommHandler& comm_h;
     bool& is_band_calc_done;
@@ -40,6 +42,7 @@ struct TaskContext
     velocity_matrix_t& velocity_matrix;
 
     std::function<void()> invalidate_compute_objects;
+    std::function<void(int, int, int, int, int)> initialize_scf_dimension;
     std::function<void(const LibrpaOptions&)> initialize_tfgrids;
     std::function<void(const LibrpaOptions&, bool)> initialize_headwing;
     std::function<void(bool)> initialize_symmetry;
