@@ -10,8 +10,8 @@ This fixed-reference prescription is retained throughout iteration and restart.
 It is distinct from applying Mode B in the current eigenbasis and rotating the
 result back, even with exact analytic continuation.
 The effective Hamiltonian replaces the initial DFT exchange-correlation
-potential with exchange and a Hermitian correlation potential. Optional Hartree
-density feedback is described below. Same-grid analytic head and wing updates are supported
+potential with exchange and a Hermitian correlation potential. Hartree
+density feedback is enabled by default and described below. Same-grid analytic head and wing updates are supported
 with an explicit velocity convention; independent-grid updates are rejected.
 
 QSGW reuses the G0W0 input readers and EXX/Sigma kernels. The driver reads
@@ -21,10 +21,12 @@ Iteration, numerical state and checkpoint handling live in `src/core/qsgw`;
 the driver's output callback writes the requested tables and native CSR files.
 The task API is available without building the command-line driver.
 
-## Optional Hartree density feedback
+## Hartree density feedback
 
-`qsgw_update_hartree` defaults to `false`. To include the change in the physical
-Hartree potential on each update, supply dedicated inputs:
+`qsgw_update_hartree` defaults to `true`. Every update includes the change in
+the physical Hartree potential and requires the following dedicated inputs.
+To retain a fixed-Hartree trajectory or use inputs without these exports, set
+`qsgw_update_hartree = false` explicitly:
 
 ```ini
 qsgw_update_hartree = true
@@ -548,8 +550,10 @@ H_{\rm current}^{AO}(k_i)-H_{0,\rm native}^{AO}(k_i)
 \right](R).
 $$
 
-The correction includes any selected post-mixing cut and all high-state
-blocks; it is not merely the bare exchange-correlation potential difference.
+The correction includes the Hartree density difference together with exchange,
+correlation, DFT Vxc subtraction, any selected post-mixing cut and all high-state
+blocks. Hartree and EXX therefore pass through the same total-Hamiltonian
+reconstruction; there is no separate Hartree export or second Hartree addition.
 The original DFT H must match the loaded immutable reference on the full
 SCF grid. Every complex entry and native H/S/r support is retained; the
 existing Fourier roundtrip check still compares the complete exported

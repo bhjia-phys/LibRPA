@@ -146,7 +146,7 @@ void librpa_init_qsgw_controls(LibrpaQsgwControls* controls)
                  2147483647,
                  0,
                  0,
-                 0};
+                 1};
 }
 LibrpaQsgwTask* librpa_create_qsgw_task(LibrpaHandler* handler, const LibrpaOptions* options,
                                         const LibrpaQsgwControls* controls)

@@ -127,7 +127,8 @@ acceptance or physical convergence.
 
 The optional feedback adds `V_H[P_live - P_original_DFT]` explicitly to the
 QSGW Hamiltonian before cuts/mixing and removes the same component from the
-entering-state QP static subtraction. It is disabled by default. In addition
+entering-state QP static subtraction. It is enabled by default; set
+`qsgw_update_hartree = false` for fixed-Hartree runs. In addition
 to normal QSGW input, supply the matching bare q=0 metric and coefficients
 with **physical, unwrapped translations**:
 

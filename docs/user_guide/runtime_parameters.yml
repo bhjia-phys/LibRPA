@@ -325,7 +325,7 @@ blocks:
       original path inputs unchanged when restarting a checkpoint.
       These experimental parameters apply to `task = qsgw`.
       `qsgw_update_hartree = true` adds the physical density-difference Hartree
-      potential to each update. It defaults to false and requires separate
+      potential to each update. It defaults to true and requires separate
       `prefix_coul_hartree` and unwrapped binary-v1 `prefix_lri_coeff_hartree`
       inputs matched to the selected auxiliary basis. Ordinary GW full/cut
       Coulomb matrices and folded coefficients remain unchanged.

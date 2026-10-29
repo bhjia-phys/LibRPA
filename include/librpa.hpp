@@ -259,7 +259,7 @@ public:
     ~Handler();
 
     /** Create an owning QSGW task; numerical state and checkpoints belong to the library.
-     * controls.update_hartree defaults off. When enabled, supply dedicated raw
+     * controls.update_hartree defaults on. When enabled, supply dedicated raw
      * LRI blocks and the bare q=0 metric through LibrpaQsgwInput, leaving GW
      * input unchanged. */
     QsgwTask create_qsgw_task(const Options &opts, const LibrpaQsgwControls &controls) const;

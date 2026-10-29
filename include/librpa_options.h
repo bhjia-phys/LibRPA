@@ -740,14 +740,15 @@ typedef struct
      * star multiplicities; the source mean-field occupations must carry the
      * same k weights. See librpa_set_wg_ekb_efermi for its input convention. */
     int expand_ibz;
-    /** Rebuild the Hartree density difference at each update. Default off. */
+    /** Rebuild the Hartree density difference at each update. Default on.
+     * Requires dedicated bare q=0 metric and full-precision RI inputs. */
     int update_hartree;
 } LibrpaQsgwControls;
 
 /** Defaults: min/max=1/10, unoccupied_keep=10, uncut, mixer=none,
  * beta=0.2 (used only for single-k linear mixing), shift=2 eV,
  * convergence=1e-4 eV, reference velocity, QP/HR outputs on, matrices off,
- * restart=none and checkpoint=qsgw_checkpoint.bin, Hartree updates off.
+ * restart=none and checkpoint=qsgw_checkpoint.bin, Hartree updates on.
  * Indices are zero-based. */
 void librpa_init_qsgw_controls(LibrpaQsgwControls *);
 

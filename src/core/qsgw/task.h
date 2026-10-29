@@ -25,7 +25,7 @@ struct TaskControls
     bool qsgw_export_hamiltonian_for_pyatb = true;
     // Bare 3D q0 feedback on a Gamma-containing full regular mesh, native
     // translation-only Bloch gauge (bloch_ratom=0), with unwrapped Cs.
-    bool qsgw_update_hartree = false;
+    bool qsgw_update_hartree = true;
     std::string qsgw_headwing_velocity = "reference";
     std::string qsgw_restart_file = "none", qsgw_checkpoint_file = "qsgw_checkpoint.bin";
     double qsgw_convergence_tolerance_ev = 1.0e-4;

@@ -99,7 +99,7 @@ def check_projection(directory, coefficients):
     return error, signal
 
 
-def check_feedback(directory):
+def matrix_trace(directory, selected_channel):
     matrices = {}
     for line in (directory / "qsgw_matrices.dat").read_text().splitlines():
         if line.startswith("#"):
@@ -107,10 +107,15 @@ def check_feedback(directory):
         fields = line.split()
         state, channel, component, spin, k = (int(fields[0]), int(fields[1]),
                                              fields[2], int(fields[3]), int(fields[4]))
-        if channel != 1 or int(fields[5]) != -1:
+        if channel != selected_channel or int(fields[5]) != -1:
             continue
         block = matrices.setdefault((state, component, spin, k), np.zeros((10, 10), complex))
         block[int(fields[7]), int(fields[8])] = complex(float(fields[9]), float(fields[10]))
+    return matrices
+
+
+def check_feedback(directory):
+    matrices = matrix_trace(directory, 1)
     assembly, subtraction, signal, spectrum = 0.0, 0.0, 0.0, 0.0
     eigenvalues = np.loadtxt(directory / "qsgw_eigenvalues.dat")
     for iteration in (1, 2):
@@ -137,6 +142,57 @@ def check_feedback(directory):
         raise AssertionError((signal, assembly, subtraction, spectrum))
     return {"band_assembly_Ha": assembly, "band_QP_subtraction_Ha": subtraction,
             "band_spectrum_eV": spectrum, "nonzero_feedback_Ha": signal}
+
+
+def check_hr(directory):
+    """Check serialized HR against independently assembled grid/path AO operators.
+
+    In this 1x1x3 fixture the HR Fourier images are -1,0,+1. Comparing the complete
+    native-baseline interpolant retains nonzero Hartree and EXX terms, rather
+    than checking only eigenspectra or the exporter's own roundtrip residual.
+    """
+    matrices = matrix_trace(directory, 0)
+    native = read_csr(directory.parent / "dataset/hrs1_nao.csr")
+    overlap = read_csr(directory.parent / "dataset/srs1_nao.csr")
+
+    def fourier(blocks, q, scale=1):
+        return sum(np.exp(2j*np.pi*q*r[2]) * m * scale for r, m in blocks.items())
+
+    duals = []
+    for k in range(3):
+        c = matrices[0, "wfc_spinor0", 0, k].T
+        s = fourier(overlap, k/3)
+        s = np.triu(s) + np.triu(s, 1).conj().T
+        duals.append(s @ c @ np.linalg.inv(c.conj().T @ s @ c))
+    error, signal, assembly = 0.0, 0.0, 0.0
+    for iteration in (0, 1, 2):
+        exported = read_csr(directory / f"hrs1_nao_qsgw_iter_{iteration:04d}.csr")
+        corrections, hartree_ao = [], []
+        for k, dual in enumerate(duals):
+            h0 = matrices[0, "h0", 0, k]
+            if iteration == 0:
+                expected, delta = h0, np.zeros((10, 10), complex)
+            else:
+                delta = matrices[iteration-1, "delta_vh_entering", 0, k]
+                expected = (h0 - matrices[0, "vxc_dft", 0, k]
+                            + matrices[iteration, "exx", 0, k]
+                            + matrices[iteration, "vc", 0, k] + delta)
+                assembly = max(assembly, float(np.max(abs(
+                    expected - matrices[iteration, "mixed_h", 0, k]))))
+            corrections.append(dual @ expected @ dual.conj().T - fourier(native, k/3, .5))
+            hartree_ao.append(dual @ delta @ dual.conj().T)
+        for q in (0, 1/3, 2/3, *PATH_K):
+            weights = [(1+2*np.cos(2*np.pi*(q-k/3)))/3 for k in range(3)]
+            expected = fourier(native, q, .5) + sum(w*m for w, m in zip(weights, corrections))
+            value = fourier(exported, q, .5)
+            error = max(error, float(np.max(abs(value-expected))))
+            # Omitting Hartree must fail at the second update.
+            signal = max(signal, float(np.max(abs(sum(
+                w*m for w, m in zip(weights, hartree_ao))))))
+    if error > 2e-11 or assembly > 2e-12 or signal < 1e-5:
+        raise AssertionError(f"Hartree/EXX HR: error={error}, assembly={assembly}, signal={signal}")
+    return {"HR_grid_path_Ha": error, "HR_assembly_Ha": assembly,
+            "HR_nonzero_Hartree_Ha": signal}
 
 
 def numerical_rows(directory, filename, state=None):
@@ -174,7 +230,8 @@ def main():
     resumed = run(args.binary.resolve(), work, text, "resumed", args.ranks, 2,
                   str(first / "qsgw_checkpoint.bin"))
     error, signal = check_projection(serial, coefficients)
-    errors = {"band_projection_Ha": error, "band_signal_Ha": signal, **check_feedback(serial)}
+    errors = {"band_projection_Ha": error, "band_signal_Ha": signal,
+              **check_feedback(serial), **check_hr(serial)}
     for name, directory, state in (("MPI", parallel, None), ("restart", resumed, 2)):
         for filename in ("qsgw_eigenvalues.dat", "qsgw_qp.csv"):
             # A resumed update enters state 1 and completes state 2.

@@ -552,7 +552,7 @@ struct DriverParams
     //! Requires a dedicated prefix_coul_hartree bare 3D G=0-zero metric matching
     //! the selected auxiliary basis. Ordinary GW Coulomb inputs remain required.
     //! @par Default
-    //! false
+    //! true
     //! @par Status
     //! Experimental
     //! @since Unreleased
