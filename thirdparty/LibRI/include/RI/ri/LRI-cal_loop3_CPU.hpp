@@ -19,10 +19,10 @@ namespace RI
 {
 
 template<typename TA, typename Tcell, std::size_t Ndim, typename Tdata>
-void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
+void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3_CPU(
 	const std::vector<Label::ab_ab> &labels,
 	std::map<TA, std::map<TAC, Tensor<Tdata>>> &Ds_result,
-	const double fac_add_Ds)
+	const Tdata fac_add_Ds)
 {
 	using namespace Array_Operator;
 
@@ -1025,10 +1025,10 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
 							Tensor<Tdata> D_mul3 = Tensor_Multiply::x2y0_abx2_y0ab(D_mul2, D_mul1);
 							LRI_Cal_Aux::add_Ds(std::move(D_mul3),
 												Ds_result_thread[Aa01][Ab01]);
-						} // end for Aa01
+						} // end for Ab01
 
 						LRI_Cal_Aux::add_Ds_omp_try_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac_add_Ds);
-					} // end for Ab01
+					} // end for Aa01
 				} break; // end case a1b2_a2b1
 
 				case Label::ab_ab::a0b2_a2b0:
@@ -1090,10 +1090,10 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
 							Tensor<Tdata> D_mul3 = Tensor_Multiply::x0y2_x0ab_aby2(D_mul2, D_mul1);
 							LRI_Cal_Aux::add_Ds(std::move(D_mul3),
 												Ds_result_thread[Aa01][Ab01]);
-						} // end for Aa01
+						} // end for Ab01
 
 						LRI_Cal_Aux::add_Ds_omp_try_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac_add_Ds);
-					} // end for Ab01
+					} // end for Aa01
 				} break; // end case a0b2_a2b0
 
 				case Label::ab_ab::a0b2_a2b1:
@@ -1155,10 +1155,10 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
 							Tensor<Tdata> D_mul3 = Tensor_Multiply::x2y0_abx2_y0ab(D_mul2, D_mul1);
 							LRI_Cal_Aux::add_Ds(std::move(D_mul3),
 												Ds_result_thread[Aa01][Ab01]);
-						} // end for Aa01
+						} // end for Ab01
 
 						LRI_Cal_Aux::add_Ds_omp_try_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac_add_Ds);
-					} // end for Ab01
+					} // end for Aa01
 				} break; // end case a0b2_a2b1
 
 				case Label::ab_ab::a1b2_a2b0:
@@ -1220,10 +1220,10 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
 							Tensor<Tdata> D_mul3 = Tensor_Multiply::x0y2_x0ab_aby2(D_mul2, D_mul1);
 							LRI_Cal_Aux::add_Ds(std::move(D_mul3),
 												Ds_result_thread[Aa01][Ab01]);
-						} // end for Aa01
+						} // end for Ab01
 
 						LRI_Cal_Aux::add_Ds_omp_try_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac_add_Ds);
-					} // end for Ab01
+					} // end for Aa01
 				} break; // end case a1b2_a2b0
 
 				default:
@@ -1234,7 +1234,8 @@ void LRI<TA,Tcell,Ndim,Tdata>::cal_loop3(
 		LRI_Cal_Aux::add_Ds_omp_wait_map(Ds_result_thread, Ds_result, lock_Ds_result_add_map, fac_add_Ds);
 	} // end #pragma omp parallel
 
-	LRI_Cal_Aux::destroy_lock_result(lock_Ds_result_add_map, Ds_result);
+	LRI_Cal_Aux::destroy_lock(lock_Ds_result_add_map);
+	LRI_Cal_Aux::destroy_Ds_result(Ds_result);
 
   #ifdef __MKL_RI
 	mkl_set_num_threads(mkl_threads);
